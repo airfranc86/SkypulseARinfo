@@ -1,65 +1,85 @@
-# SkyPulse — Catálogo del Cielo
+# 🌤️ SkyPulse — Catálogo del Cielo
 
-## Qué es SkyPulse
+Un catálogo visual interactivo de nubes y fenómenos meteorológicos, diseñado para cualquier persona curiosa sobre lo que pasa en el cielo — sin necesidad de conocimiento técnico previo.
 
-SkyPulse no es un panel meteorológico tradicional.
-
-Es un sistema diseñado para transformar datos complejos en decisiones concretas. Combina:
-
-- Visualización de fenómenos atmosféricos
-- Interpretación simplificada
-- Generación de contenido narrativo estructurado
-
-La cuestión es esta: no responde solo qué está pasando, sino qué implica y qué debería hacer el usuario.
+[![Deploy con Vercel](https://img.shields.io/badge/Deploy-Vercel-black?logo=vercel)](https://skypulseinfo.vercel.app)
+[![Licencia](https://img.shields.io/badge/Licencia-MIT-blue)](LICENSE)
 
 ---
 
-## Objetivo del sistema
+## ¿Qué es SkyPulse?
 
-Convertir datos meteorológicos en información accionable.
+SkyPulse convierte la meteorología en algo accesible. Cada entrada del catálogo incluye una fotografía real de la nube o fenómeno, su nombre técnico y su nombre común, la altitud a la que se forma, qué significa para el clima, un nivel de alerta claro (verde / amarillo / naranja / rojo) y un dato curioso.
 
-Esto implica:
-
-- Reducir complejidad técnica
-- Traducir modelos y reportes a lenguaje claro
-- Generar contenido consistente y reutilizable
-- Enfocar siempre en impacto + decisión
+Además, cada nube tiene un panel expandible con su **significado aeronáutico**: qué implica para un piloto, qué peligros representa y cómo se reporta en la jerga oficial (METAR, SIGMET, PIREP).
 
 ---
 
-## Estructura conceptual
+## Contenido del catálogo
 
-SkyPulse se apoya en dos capas principales:
+El catálogo está organizado en seis categorías filtrables:
 
-### 1. Catálogo visual del cielo (UI actual)
+**Nubes altas** (sobre los 6.000 m, compuestas de cristales de hielo): Cirros, Cirrostratos y Cirrocúmulos.
 
-Representado en el HTML proporcionado.
+**Nubes medias** (entre 2.000 y 6.000 m, mezcla de agua y hielo): Altocúmulos y Altostratos.
 
-Organiza fenómenos en categorías:
+**Nubes bajas** (por debajo de los 2.000 m, principalmente agua líquida): Estrato, Estratocúmulos y Nimboestrato.
 
-- Nubes altas
-- Nubes medias
-- Nubes bajas
-- Desarrollo vertical
-- Fenómenos especiales
-- Módulo aeronáutico
+**Nubes verticales** (se desarrollan desde la superficie hasta la tropopausa): Cúmulo y Cumulonimbo.
 
-Cada elemento visual es una “unidad narrativa”.
+**Nubes especiales** (formaciones poco comunes): Nube Lenticular, Mammatus y Niebla.
+
+**Fenómenos aeronáuticos** (invisibles a simple vista pero críticos para la seguridad en vuelo): Corriente en Chorro (Jet Stream), Cizalladura del Viento (Wind Shear), Engelamiento en Vuelo (Aircraft Icing), Turbulencia en Aire Claro (CAT) y Estela Turbulenta (Wake Turbulence).
 
 ---
 
-### 2. Generación de historias meteorológicas
+## Tecnología utilizada
 
-Cada fenómeno sigue una estructura fija:
-[Nombre del fenómeno]
-Cómo se ve: Descripción visual simple.
-Qué significa: Interpretación meteorológica.
-Contexto: Cuándo aparece o qué indica.
-Decisión: Acción concreta para el usuario.
+SkyPulse es un sitio 100% estático — sin servidor, sin base de datos, sin dependencias de backend. Funciona con un único archivo HTML que carga tres recursos externos vía CDN:
 
-Esto es el núcleo del sistema.
+- **Tailwind CSS** para los estilos utilitarios.
+- **HTMX** para el patrón de expansión/colapso de los paneles aeronáuticos sin recargar la página.
+- **Google Fonts** para la tipografía (Playfair Display + DM Sans).
 
-El HTML ya implementa parcialmente esta lógica en formato visual.
+Las imágenes provienen de **Wikimedia Commons** bajo licencias Creative Commons, con un sistema de fallback automático en caso de error de carga.
+
+---
+
+## Estructura del repositorio
+
+```
+skypulse/
+├── src/
+│   └── index.html     # El catálogo completo — todo el sitio en un archivo
+├── vercel.json        # Configuración de Vercel: apunta la raíz del sitio a src/
+└── README.md          # Este archivo
+```
+
+---
+
+## Cómo hacer cambios
+
+Dado que el sitio es un archivo HTML estático, cualquier modificación se hace directamente sobre `src/index.html` desde la interfaz de GitHub (funciona perfectamente desde el celular):
+
+Para agregar una nube nueva: copiás cualquier bloque `<article class="cloud-card">` existente, cambiás los datos y pegás el nuevo bloque en la sección correspondiente.
+
+Para actualizar una imagen: buscás la URL en Wikimedia Commons (commons.wikimedia.org), copiás el enlace de la versión que quieras y lo reemplazás en el atributo `src` del `<img>` correspondiente.
+
+Cada vez que guardás un commit en GitHub, Vercel redesplega el sitio automáticamente en menos de 30 segundos.
+
+---
+
+## Fuentes y licencias
+
+Las imágenes provienen de **Wikimedia Commons** bajo diversas licencias Creative Commons. La clasificación de nubes está basada en el [Atlas Internacional de Nubes](https://cloudatlas.wmo.int) de la Organización Meteorológica Mundial (OMM).
+
+La información aeronáutica tiene fines estrictamente divulgativos. Para operaciones reales, siempre consultar la documentación oficial de OACI y la autoridad de aviación civil correspondiente.
+
+---
+
+## Licencia
+
+MIT — libre para usar, modificar y distribuir.
 
 ---
 
