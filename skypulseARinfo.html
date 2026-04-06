@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkyPulse — Catálogo del Cielo</title>
+
+<!-- Tailwind CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- HTMX -->
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<script>
+  // Tailwind config
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          serif: ['"Playfair Display"', 'serif'],
+          sans:  ['"DM Sans"', 'sans-serif'],
+        },
+        colors: {
+          sky: {
+            0: '#060d1a',
+            1: '#0b1929',
+            2: '#0f2240',
+            3: '#172f52',
+          },
+          gold: {
+            DEFAULT: '#c8a84b',
+            light:   '#e5c87a',
+            dark:    '#6e5820',
+          }
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  /* Custom CSS that Tailwind CDN can't generate dynamically */
+  :root {
+    --gold:    #c8a84b;
+    --gold-lt: #e5c87a;
+    --gold-dk: #6e5820;
+    --sky-0:   #060d1a;
+  }
+
+  body { background: var(--sky-0); }
+
+  /* Starfield */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 35% at 50% -5%, #1a4a8825 0%, transparent 60%),
+      radial-gradient(1.5px 1.5px at 12% 18%, #fff2 0%, transparent 100%),
+      radial-gradient(1px   1px   at 35% 42%, #fff1 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 61% 24%, #fff2 0%, transparent 100%),
+      radial-gradient(1px   1px   at 83% 67%, #fff1 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 92%  9%, #fff2 0%, transparent 100%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* Font overrides */
+  .font-serif  { font-family: 'Playfair Display', serif; }
+  .font-sans   { font-family: 'DM Sans', sans-serif; }
+
+  /* Eyebrow lines */
+  .eyebrow-line::before,
+  .eyebrow-line::after {
+    content: ''; display: block;
+    width: 28px; height: 1px; background: var(--gold-dk);
+  }
+
+  /* Image zoom on card hover */
+  .card-img { transition: transform .65s ease; }
+  .cloud-card:hover .card-img { transform: scale(1.05); }
+
+  /* Alert colours */
+  .alert-clear   { background:#27ae6015; border:1px solid #27ae6040; color:#3ecf7a; }
+  .alert-watch   { background:#d4870f15; border:1px solid #d4870f40; color:#f0a030; }
+  .alert-warn    { background:#c0392b15; border:1px solid #c0392b40; color:#e05545; }
+  .alert-crit    { background:#ff000018; border:1px solid #ff000040; color:#ff6b6b; }
+  .alert-neutral { background:#60708018; border:1px solid #60708045; color:#90aabb; }
+  .alert-info    { background:#2b8fd418; border:1px solid #2b8fd440; color:#5aaad8; }
+
+  /* Pill colours */
+  .pill-danger  { border-color:#ff000040; color:#ff6b6b; background:#ff000010; }
+  .pill-caution { border-color:#d4870f40; color:#f0a030; background:#d4870f10; }
+  .pill-note    { border-color:#2b8fd440; color:#5aaad8; background:#2b8fd410; }
+
+  /* HTMX detail panel animation */
+  .detail-panel {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height .4s ease;
+  }
+  .detail-panel.open {
+    max-height: 400px;
+  }
+
+  /* Filter active */
+  .filter-btn.active {
+    background: var(--gold) !important;
+    border-color: var(--gold) !important;
+    color: #060d1a !important;
+    font-weight: 500;
+  }
+
+  /* Gold border-left for curious */
+  .curious-bar { border-left: 2px solid var(--gold-dk); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0b1929; }
+  ::-webkit-scrollbar-thumb { background: #243e62; border-radius: 3px; }
+
+  @media (max-width: 700px) {
+    .card-grid { grid-template-columns: 1fr !important; }
+    .img-col   { width: 100% !important; height: 190px !important; }
+  }
+</style>
+</head>
+<body class="font-sans text-slate-200 min-h-screen overflow-x-hidden">
+
+<!-- ═══════════════════════════════════
+     HEADER
+═══════════════════════════════════ -->
+<header class="relative z-10 text-center px-6 pt-20 pb-14 border-b border-[#1c3358]">
+  <div class="eyebrow-line inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.26em] uppercase text-yellow-500 mb-5">
+    Catálogo visual del cielo
+  </div>
+  <h1 class="font-serif text-5xl md:text-7xl font-normal leading-tight text-slate-100">
+    Lo que el cielo<br><em class="text-yellow-300">te está diciendo</em>
+  </h1>
+  <p class="mt-5 text-sm text-slate-400 max-w-md mx-auto leading-7">
+    Nubes, fenómenos y señales invisibles. Todo lo que pasa allá arriba tiene nombre — y algo que contarte sobre lo que viene.
+  </p>
+</header>
+
+<!-- ═══════════════════════════════════
+     STICKY FILTER BAR
+═══════════════════════════════════ -->
+<div class="sticky top-0 z-50 bg-[#060d1af6] backdrop-blur-lg border-b border-[#1c3358] px-4 py-3 flex flex-wrap gap-2 justify-center items-center">
+  <button class="filter-btn active text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('all',this)">Todo</button>
+  <div class="w-px h-4 bg-[#243e62]"></div>
+  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('alta',this)">Nubes altas</button>
+  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('media',this)">Nubes medias</button>
+  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('baja',this)">Nubes bajas</button>
+  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('vertical',this)">Verticales</button>
+  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('especial',this)">Especiales</button>
+  <div class="w-px h-4 bg-[#243e62]"></div>
+  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('aero',this)">✈️ Aeronáutico</button>
+</div>
+
+<!-- ═══════════════════════════════════
+     MAIN
+═══════════════════════════════════ -->
+<main id="catalog" class="relative z-10 max-w-5xl mx-auto px-4 pb-24">
+
+<!-- ─── MACRO: card ──────────────────────────────────────────────────
+  Usage:
+    secHdr(title, subtitle, section_key)
+    cloudCard(family, imgUrl, imgAlt, altTag, nameCommon, nameTech,
+              altitudeMeta, compositionMeta, alertClass, alertText,
+              meaning, aeroMeaning, curiousFact, cardId)
+  ──────────────────────────────────────────────────────────────────── -->
+
+<!-- ══ NUBES ALTAS ══ -->
+<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="alta">
+  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Nubes altas</h2>
+  <p class="text-[.75rem] text-slate-600">Sobre los 6.000 m · Principalmente cristales de hielo</p>
+</div>
+
+<article class="cloud-card border-b border-[#1c3358] py-10 opacity-0 translate-y-4 animate-[fadeUp_.5s_ease_.05s_forwards]" data-family="alta" style="animation:fadeUp .5s ease .05s forwards">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <!-- Image -->
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1559825481-12a05cc00344?w=800&q=80"
+           alt="Cirros — filamentos blancos en cielo azul" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/cirrus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
+    </div>
+    <!-- Content -->
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cirros</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cirrus · Ci</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 6.000 – 12.000 m</span>
+        <span class="text-[.75rem] text-slate-400">🧊 Cristales de hielo</span>
+      </div>
+      <div class="alert-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Posible cambio de tiempo en 24–48 hs
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Líneas finas y blancas que parecen pintadas con pincel en el azul. Son puro hielo, no agua. Hoy el tiempo es bueno — pero son el primer aviso de que algo viene en camino.</p>
+      <!-- HTMX expand button -->
+      <button
+        class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors"
+        onclick="toggleDetail(this, 'cirros-detail')">
+        ✈️ Ver significado aeronáutico ▾
+      </button>
+      <!-- Detail panel (HTMX-style toggle) -->
+      <div id="cirros-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Indican corrientes de chorro cercanas y posibles zonas de CAT en crucero. Preceden frentes que afectarán rutas en las próximas 12–24 hs. Si se espesan hacia el horizonte: el deterioro se acerca.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 El nombre viene del latín <em>cirrus</em>: "mechón de pelo". La próxima vez que los veas, fijate — la semejanza es exacta.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta" style="animation:fadeUp .5s ease .09s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1501630834273-4b5604d2ee31?w=800&q=80"
+           alt="Cirrostratos — velo que produce halo" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/cirrostratus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cirrostratos</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cirrostratus · Cs</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 6.000 – 12.000 m</span>
+        <span class="text-[.75rem] text-slate-400">🧊 Velo continuo de hielo</span>
+      </div>
+      <div class="alert-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Lluvia probable en las próximas horas
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Un velo blanquecino que cubre todo el cielo. El sol produce un halo brillante — ese anillo luminoso es su sello. Cuando ves el halo: preparate para la lluvia.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'cs-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="cs-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Preceden frentes cálidos. Los pilotos los usan como referencia de deterioro: cuanto más bajo y denso el velo, más cercana la lluvia. En ruta, marcan el inicio de condiciones IFR.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 El halo de 22° ocurre todo el tiempo y casi nadie lo nota. Es luz refractándose en cristales hexagonales de hielo — física perfecta, resultado mágico.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta" style="animation:fadeUp .5s ease .13s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1583246381754-c9f3f0c86bda?w=800&q=80"
+           alt="Cirrocúmulos — escamas blancas" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/cirrocumulus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cirrocúmulos</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cirrocumulus · Cc</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 6.000 – 12.000 m</span>
+        <span class="text-[.75rem] text-slate-400">🧊 Patrón en escamas</span>
+      </div>
+      <div class="alert-neutral inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Señal transitoria — observar evolución
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Pequeñas motas blancas en filas ordenadas, como arroz esparcido en el azul. El "cielo empedrado". Raras y muy efímeras — desaparecen en minutos.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'cc-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="cc-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Pueden indicar inestabilidad en altitud y turbulencia en aire claro (CAT) a niveles de vuelo. Su corta duración los hace difíciles de anticipar en pronósticos.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Son tan efímeras que raramente duran más de minutos. Si las ves, sacá foto rápido.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ══ NUBES MEDIAS ══ -->
+<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="media">
+  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Nubes medias</h2>
+  <p class="text-[.75rem] text-slate-600">2.000 – 6.000 m · Agua y cristales de hielo</p>
+</div>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="media" style="animation:fadeUp .5s ease .17s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1530908295418-a12e326966ba?w=800&q=80"
+           alt="Altocúmulos — rollos grises a media altura" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/altocumulus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Media · 2–6 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Altocúmulos</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Altocumulus · Ac</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 2.000 – 6.000 m</span>
+        <span class="text-[.75rem] text-slate-400">💧 Agua + hielo</span>
+      </div>
+      <div class="alert-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Posible tormenta en horas cálidas
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Parches y rollos grises a media altura. Los <em>Ac castellanus</em> — con pequeñas torres — son el aviso clásico de tormenta vespertina. Si los ves a la mañana de un día caluroso, guardá el paraguas.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'ac-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="ac-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Los Ac castellanus matinales son indicador de inestabilidad convectiva: alta probabilidad de CB en horas cálidas. Los despachos los toman como señal de alerta para rutas de tarde.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Regla práctica: Ac castellanus por la mañana = tormenta vespertina casi garantizada en días calurosos.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="media" style="animation:fadeUp .5s ease .21s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1499956827185-0d63ee78a910?w=800&q=80"
+           alt="Altostratos — manta gris uniforme" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/altostratus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Media · 2–6 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Altostratos</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Altostratus · As</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 2.000 – 6.000 m</span>
+        <span class="text-[.75rem] text-slate-400">💧 Capa uniforme densa</span>
+      </div>
+      <div class="alert-warn inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Lluvia continua en camino
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Una manta gris sin forma que cubre todo. El sol se ve como a través de vidrio esmerilado — presente, pero sin sombras. El ambiente se siente cerrado y pesado. La lluvia ya viene.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'as-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="as-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Condiciones IFR en aproximación. Reduce el techo progresivamente. Precede al Ns que puede cerrar completamente la visibilidad en destino. Verificar alternados.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Diferencia clave: el Altostratos deja pasar algo de luz. Cuando desaparece del todo, ya cambió a Nimboestrato.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ══ NUBES BAJAS ══ -->
+<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="baja">
+  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Nubes bajas</h2>
+  <p class="text-[.75rem] text-slate-600">Por debajo de los 2.000 m · Principalmente agua líquida</p>
+</div>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="baja" style="animation:fadeUp .5s ease .25s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1483728642387-6c3bdd6c93e5?w=800&q=80"
+           alt="Estrato — cielo gris plano" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/stratus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Baja · 0–2 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Estrato</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Stratus · St</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 0 – 2.000 m</span>
+        <span class="text-[.75rem] text-slate-400">💧 Capa plana y uniforme</span>
+      </div>
+      <div class="alert-neutral inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Día gris — llovizna posible, sin lluvia fuerte
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">El cielo gris plano de los días sin drama. Sin forma, sin textura. A veces tan bajo que toca las copas de los árboles. Trae llovizna fina, raramente lluvia seria.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'st-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="st-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Techo bajo que puede limitar operaciones VFR. En aeródromos de montaña o valles puede cerrar completamente el acceso visual. Verificar METAR actualizado antes de salir.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 La niebla es técnicamente un Estrato que toca el suelo. Cuando sube y deja de estar a nivel de la calle, se convierte en Estrato bajo.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="baja" style="animation:fadeUp .5s ease .29s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1504608524841-42584120d1b0?w=800&q=80"
+           alt="Estratocúmulos — bloques grises agrupados" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/stratocumulus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Baja · 0–2 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Estratocúmulos</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Stratocumulus · Sc</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 0 – 2.000 m</span>
+        <span class="text-[.75rem] text-slate-400">💧 La más común del planeta</span>
+      </div>
+      <div class="alert-clear inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Sin riesgo inmediato — tiempo estable
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Bloques y rollos grises con claros de azul entre ellos. No traen mal tiempo serio. Son las nubes del "nublado parcial". Las conocés bien aunque no sabías su nombre.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'sc-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="sc-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Generalmente permiten VFR con precaución. El peligro surge cuando el techo baja a menos de 1.500 ft AGL. Atención a variaciones rápidas de base en zonas costeras.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Cubren más del 20% de la superficie oceánica en cualquier momento. Son las nubes más frecuentes y más ignoradas de la Tierra.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="baja" style="animation:fadeUp .5s ease .33s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80"
+           alt="Nimboestrato — nube oscura con lluvia continua" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/nimbostratus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Baja · 0–3 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Nimboestrato</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Nimbostratus · Ns</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 0 – 3.000 m</span>
+        <span class="text-[.75rem] text-slate-400">💧 Espesa · Lluvia activa</span>
+      </div>
+      <div class="alert-warn inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Lluvia continua — puede durar muchas horas
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Oscura, densa, sin forma, sin luz. No viene en ráfagas — viene para quedarse. Si llovió todo el día sin parar, ella es la responsable.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'ns-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="ns-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Condiciones IFR severas. Alto riesgo de engelamiento (icing) dentro de la nube. Operaciones solo IFR aprobado con alternado disponible.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 "Nimbo" viene del latín: lluvia. Cualquier nube con "nimbo" en el nombre está lloviendo activamente ahora mismo.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ══ VERTICALES ══ -->
+<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="vertical">
+  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Nubes verticales</h2>
+  <p class="text-[.75rem] text-slate-600">Desde la superficie hasta la tropopausa</p>
+</div>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="vertical" style="animation:fadeUp .5s ease .37s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1471922694854-ff1b63b20054?w=800&q=80"
+           alt="Cúmulos — nubes blancas esponjosas" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/cumulus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Vertical · base 600–2.000 m</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cúmulo</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cumulus · Cu</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 600 – 2.000 m (base)</span>
+        <span class="text-[.75rem] text-slate-400">☀️ Nube de buen tiempo</span>
+      </div>
+      <div class="alert-clear inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Buen tiempo — disfrutá el día
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">La nube de los dibujos animados. Blanca, esponjosa, base plana. Si son pequeñas: día hermoso. Si crecen verticalmente de manera notable: monitorear.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'cu-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="cu-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Humilis: VFR óptimo. Mediocris: corrientes ascendentes, turbulencia leve posible bajo ellos. Congestus: precursor directo de CB — monitorear con atención.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 La base plana marca la altura exacta donde el aire que sube se enfría hasta condensarse. Todos los cúmulos del mismo día tienen la base a la misma altitud.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="vertical" style="animation:fadeUp .5s ease .41s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1527482937786-6608f6e14c15?w=800&q=80"
+           alt="Cumulonimbo — torre con forma de yunque" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/cumulonimbus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Vertical · hasta 15 km</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cumulonimbo</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cumulonimbus · Cb</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 0 – 15.000 m</span>
+        <span class="text-[.75rem] text-slate-400">⚡ La nube de tormenta</span>
+      </div>
+      <div class="alert-crit inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Tormenta severa — alejarse y buscar refugio
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">La nube más poderosa de la atmósfera. Torre gigante con la cima aplastada en yunque. Rayos, granizo, viento fuerte, lluvia intensa — todo al mismo tiempo.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'cb-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="cb-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Prohibido penetrar en cualquier condición. Rodear por 20 NM mínimo. Genera windshear, granizo a nivel de crucero, turbulencia severa, engelamiento intenso y rayos. Reportado en SIGMET. Es la principal amenaza meteorológica para la aviación.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Un solo Cb puede contener la energía equivalente a decenas de bombas atómicas en calor latente. El yunque indica que la columna tocó la tropopausa.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ══ ESPECIALES ══ -->
+<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="especial">
+  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Nubes especiales</h2>
+  <p class="text-[.75rem] text-slate-600">Formaciones poco comunes con características únicas</p>
+</div>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="especial" style="animation:fadeUp .5s ease .45s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1518623489648-a173ef7824f3?w=800&q=80"
+           alt="Nube lenticular sobre montaña" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/lenticular/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Especial · Orográfica</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Nube Lenticular</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Altocumulus lenticularis · Ac len</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 2.000 – 8.000 m</span>
+        <span class="text-[.75rem] text-slate-400">🏔 Sobre montañas</span>
+      </div>
+      <div class="alert-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Vientos fuertes en altura — turbulencia posible
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Discos perfectamente definidos que flotan inmóviles sobre montañas. Parecen estáticas pero el viento las atraviesa constantemente. Tan perfectas que se confunden con OVNIs.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'len-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="len-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Indican ondas orográficas y turbulencia severa en el sotavento. Las mountain waves pueden extenderse cientos de km. Evitar zonas de rotor bajo las lenticulares — las roturas de aeronaves por mountain wave están bien documentadas.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Son "estacionarias" porque se forman siempre en el mismo punto de la onda de viento: el aire entra, se condensa y se evapora del otro lado — como una nube en loop permanente.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="especial" style="animation:fadeUp .5s ease .49s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80"
+           alt="Mammatus — bolsas colgantes bajo Cb" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/mammatus/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Especial · Convectiva</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Mammatus</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Mamma · bajo Cumulonimbus</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 Bajo la base del Cb</span>
+        <span class="text-[.75rem] text-slate-400">⚡ Tormenta severa activa</span>
+      </div>
+      <div class="alert-crit inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Tormenta severa en zona — no aproximarse
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Bolsas que cuelgan hacia abajo de la base de una nube, como burbujas invertidas. Espectaculares y perturbadoras. Su presencia indica un Cb muy activo en la zona.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'mam-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="mam-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Mammatus = Cb activo garantizado. Turbulencia severa, windshear y granizo son altamente probables. No aproximarse. Desviar ruta con margen generoso.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Se forman por corrientes descendentes de aire frío dentro del yunque del Cb — lo opuesto a cómo se forman la mayoría de las nubes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="especial" style="animation:fadeUp .5s ease .53s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+           src="https://images.unsplash.com/photo-1543968996-ee822b8176ba?w=800&q=80"
+           alt="Niebla sobre ciudad" loading="lazy"
+           onerror="this.src='https://picsum.photos/seed/fog/800/500'">
+      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Especial · Superficie</span>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Niebla</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Fog · FG en METAR</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 0 m — toca el suelo</span>
+        <span class="text-[.75rem] text-slate-400">💧 Visibilidad &lt; 1 km</span>
+      </div>
+      <div class="alert-warn inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Visibilidad reducida — peligro en conducción y operaciones
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Una nube que toca el suelo. Visibilidad horizontal menor a un kilómetro. Ambiente húmedo, silencioso y opaco. Típica al amanecer en valles cuando la temperatura cae al punto de rocío.</p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'fog-detail')">✈️ Ver significado aeronáutico ▾</button>
+      <div id="fog-detail" class="detail-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
+          <p class="text-[.8rem] text-slate-400 leading-6">Principal causa de cancelaciones y desvíos. Puede aparecer súbitamente (radiation fog). METAR reporta FG cuando visibilidad &lt; 1000 m. Requiere mínimas IFR muy bajas (CAT II/III). Niebla en parches en final es especialmente peligrosa.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 FG en METAR = niebla (&lt;1 km). BR = neblina (1–5 km). Misma física, distintas implicancias operativas.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</article>
+
+<!-- ══ AERONÁUTICO ══ -->
+<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="aero">
+  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Fenómenos aeronáuticos</h2>
+  <p class="text-[.75rem] text-slate-600">Lo que no se ve a simple vista pero define la seguridad en vuelo</p>
+</div>
+
+<!-- Aero cards with icon placeholder -->
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="aero" style="animation:fadeUp .5s ease .57s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="flex flex-col items-center justify-center bg-[#0f2240] border border-[#1c3358] rounded" style="width:300px;height:200px">
+      <span class="text-5xl opacity-30">🌬️</span>
+      <p class="text-[.63rem] text-slate-600 text-center mt-3 px-4">Invisible — solo detectable por instrumentos</p>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Corriente en Chorro</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Jet Stream</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 FL300 – FL390 (9–12 km)</span>
+        <span class="text-[.75rem] text-slate-400">💨 100 – 400 km/h</span>
+      </div>
+      <div class="alert-info inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Invisible — impacto directo en tiempo de vuelo y combustible
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Ríos de viento de alta velocidad que fluyen en la tropopausa. Completamente invisibles. A favor: recorta horas. En contra: agota combustible. En invierno superan los 400 km/h.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill-caution text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Turbulencia CAT</span>
+        <span class="pill-caution text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Desvío de ruta</span>
+        <span class="pill-note text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Ahorro de combustible</span>
+      </div>
+      <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Los vuelos de oeste a este sobre el Atlántico son más cortos que el regreso gracias al jet stream polar — el planeta girando a tu favor.</p>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="aero" style="animation:fadeUp .5s ease .61s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="flex flex-col items-center justify-center bg-[#0f2240] border border-[#1c3358] rounded" style="width:300px;height:200px">
+      <span class="text-5xl opacity-30">⚡</span>
+      <p class="text-[.63rem] text-slate-600 text-center mt-3 px-4">Cambio brusco de viento en corta distancia</p>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cizalladura del Viento</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Wind Shear</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 Crítico por debajo de 500 ft AGL</span>
+        <span class="text-[.75rem] text-slate-400">⚠️ Principal riesgo en fase final</span>
+      </div>
+      <div class="alert-crit inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Peligro severo — especialmente en aproximación y despegue
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Cambio brusco de velocidad o dirección del viento en corta distancia. A baja altitud puede hacer perder sustentación en segundos. Invisible — puede aparecer sin aviso.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill-danger text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Pérdida de sustentación</span>
+        <span class="pill-danger text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Accidente en aproximación</span>
+        <span class="pill-caution text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Microburst bajo CB</span>
+      </div>
+      <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 El microburst es el más peligroso: corriente descendente bajo un Cb que golpea el suelo y se expande explosivamente. Un avión en final tiene muy pocos segundos para reaccionar.</p>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="aero" style="animation:fadeUp .5s ease .65s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="flex flex-col items-center justify-center bg-[#0f2240] border border-[#1c3358] rounded" style="width:300px;height:200px">
+      <span class="text-5xl opacity-30">🧊</span>
+      <p class="text-[.63rem] text-slate-600 text-center mt-3 px-4">Acumulación de hielo sobre alas y sensores en vuelo</p>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Engelamiento en Vuelo</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Aircraft Icing</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 Dentro de nubes · 0°C a −20°C</span>
+        <span class="text-[.75rem] text-slate-400">🧊 Alas, sensores, pitot</span>
+      </div>
+      <div class="alert-warn inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Degradación aerodinámica progresiva
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Hielo que se forma sobre alas y sensores al volar dentro de nubes con agua supercooled. Cambia la forma del ala, añade peso y puede bloquear el pitot. Se acumula en minutos.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill-danger text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Pérdida de sustentación</span>
+        <span class="pill-danger text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Pérdida de indicaciones</span>
+        <span class="pill-note text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Anti-ice obligatorio</span>
+      </div>
+      <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 El "clear ice" (hielo transparente) es el más peligroso porque no se ve sobre las alas. El "rime ice" (escarcha blanca) es visible pero igualmente crítico.</p>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="aero" style="animation:fadeUp .5s ease .69s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="flex flex-col items-center justify-center bg-[#0f2240] border border-[#1c3358] rounded" style="width:300px;height:200px">
+      <span class="text-5xl opacity-30">〰️</span>
+      <p class="text-[.63rem] text-slate-600 text-center mt-3 px-4">Turbulencia sin nubes ni aviso visual previo</p>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Turbulencia en Aire Claro</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Clear Air Turbulence · CAT</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 FL250 – FL450</span>
+        <span class="text-[.75rem] text-slate-400">🌬 Cielo completamente despejado</span>
+      </div>
+      <div class="alert-warn inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Imposible de ver — ocurre sin nubes ni aviso visual
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Turbulencia en cielo completamente despejado. Sin nubes, sin indicación visual. Aparece en los bordes del jet stream. La única advertencia posible viene de PIREPs de otros pilotos.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill-danger text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Sin aviso previo</span>
+        <span class="pill-danger text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Lesiones a pasajeros</span>
+        <span class="pill-note text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">PIREPs son la clave</span>
+      </div>
+      <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 La mayoría de las lesiones graves en vuelo sin accidente son causadas por CAT. Por eso los pilotos piden mantener el cinturón abrochado incluso con cielo azul perfecto.</p>
+    </div>
+  </div>
+</article>
+
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="aero" style="animation:fadeUp .5s ease .73s forwards;opacity:0;transform:translateY(16px)">
+  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="flex flex-col items-center justify-center bg-[#0f2240] border border-[#1c3358] rounded" style="width:300px;height:200px">
+      <span class="text-5xl opacity-30">🌀</span>
+      <p class="text-[.63rem] text-slate-600 text-center mt-3 px-4">Vórtices invisibles generados por las puntas de ala</p>
+    </div>
+    <div class="pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Estela Turbulenta</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Wake Turbulence</div>
+      </div>
+      <div class="flex gap-5 flex-wrap">
+        <span class="text-[.75rem] text-slate-400">📍 Despegue y aterrizaje · crítico</span>
+        <span class="text-[.75rem] text-slate-400">🛫 Toda aeronave la genera</span>
+      </div>
+      <div class="alert-warn inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+        Crítico en separación — puede voltear una aeronave pequeña
+      </div>
+      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Todo avión genera dos vórtices invisibles en las puntas de sus alas. Se desplazan y descienden lentamente. Una aeronave pequeña que vuele en esa estela puede ser volcada.</p>
+      <div class="flex flex-wrap gap-1.5">
+        <span class="pill-danger text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Pérdida de control</span>
+        <span class="pill-caution text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Persiste hasta 3 min</span>
+        <span class="pill-note text-[.63rem] font-medium px-2.5 py-0.5 rounded-full border">Separación mínima ATC</span>
+      </div>
+      <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Las estelas de un A380 pueden voltear un avión pequeño varios minutos después de su paso. Por eso ATC aplica separaciones mínimas por categoría de peso.</p>
+    </div>
+  </div>
+</article>
+
+<div class="empty text-center py-20 text-slate-600 font-serif text-lg italic hidden" id="emptyState">
+  No hay elementos de esa categoría.
+</div>
+
+</main>
+
+<!-- FOOTER -->
+<footer class="relative z-10 text-center px-6 py-8 border-t border-[#1c3358] text-[.67rem] text-slate-600 leading-7">
+  Imágenes: <a class="underline" href="https://unsplash.com" target="_blank" rel="noopener">Unsplash</a> (licencia libre) ·
+  Clasificación basada en el <a class="underline" href="https://cloudatlas.wmo.int" target="_blank" rel="noopener">Atlas Internacional de Nubes (OMM)</a><br>
+  Información aeronáutica con fines divulgativos — consultar documentación oficial OACI/ANAC para operaciones reales.
+</footer>
+
+<style>
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+<script>
+// ── Filter ──────────────────────────────────────────────────
+function filter(family, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const cards   = document.querySelectorAll('.cloud-card');
+  const headers = document.querySelectorAll('.sec-hdr');
+  let visible   = 0;
+
+  cards.forEach(c => {
+    const show = family === 'all' || c.dataset.family === family;
+    c.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+
+  headers.forEach(h => {
+    h.style.display = (family === 'all' || h.dataset.section === family) ? 'flex' : 'none';
+  });
+
+  document.getElementById('emptyState').style.display = visible === 0 ? 'block' : 'none';
+}
+
+// ── HTMX-style detail toggle ────────────────────────────────
+// (Pure JS accordion — HTMX would handle this with hx-get on a server,
+//  here we simulate the same UX pattern client-side)
+function toggleDetail(btn, panelId) {
+  const panel = document.getElementById(panelId);
+  const isOpen = panel.classList.contains('open');
+
+  // Close all panels first
+  document.querySelectorAll('.detail-panel.open').forEach(p => {
+    p.classList.remove('open');
+  });
+  document.querySelectorAll('[onclick^="toggleDetail"]').forEach(b => {
+    b.textContent = b.textContent.replace('▴','▾');
+  });
+
+  if (!isOpen) {
+    panel.classList.add('open');
+    btn.textContent = btn.textContent.replace('▾','▴');
+  }
+}
+
+// ── Image fallback ──────────────────────────────────────────
+document.querySelectorAll('img[loading="lazy"]').forEach(img => {
+  img.addEventListener('error', () => {
+    const seed = img.alt.split(' ')[0].toLowerCase().replace(/[^a-z]/g,'');
+    img.src = `https://picsum.photos/seed/${seed}/800/500`;
+  });
+});
+</script>
+
+</body>
+</html>
