@@ -14,26 +14,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 
 <script>
-  // Tailwind config
   tailwind.config = {
     theme: {
       extend: {
         fontFamily: {
           serif: ['"Playfair Display"', 'serif'],
           sans:  ['"DM Sans"', 'sans-serif'],
-        },
-        colors: {
-          sky: {
-            0: '#060d1a',
-            1: '#0b1929',
-            2: '#0f2240',
-            3: '#172f52',
-          },
-          gold: {
-            DEFAULT: '#c8a84b',
-            light:   '#e5c87a',
-            dark:    '#6e5820',
-          }
         }
       }
     }
@@ -41,296 +27,298 @@
 </script>
 
 <style>
-  /* Custom CSS that Tailwind CDN can't generate dynamically */
-  :root {
-    --gold:    #c8a84b;
-    --gold-lt: #e5c87a;
-    --gold-dk: #6e5820;
-    --sky-0:   #060d1a;
-  }
+  /* ── Base ── */
+  body { background: #060d1a; font-family: 'DM Sans', sans-serif; }
 
-  body { background: var(--sky-0); }
-
-  /* Starfield */
+  /* ── Starfield atmosphere ── */
   body::before {
     content: '';
     position: fixed; inset: 0;
     background:
-      radial-gradient(ellipse 80% 35% at 50% -5%, #1a4a8825 0%, transparent 60%),
-      radial-gradient(1.5px 1.5px at 12% 18%, #fff2 0%, transparent 100%),
-      radial-gradient(1px   1px   at 35% 42%, #fff1 0%, transparent 100%),
-      radial-gradient(1.5px 1.5px at 61% 24%, #fff2 0%, transparent 100%),
-      radial-gradient(1px   1px   at 83% 67%, #fff1 0%, transparent 100%),
-      radial-gradient(1.5px 1.5px at 92%  9%, #fff2 0%, transparent 100%);
+      radial-gradient(ellipse 80% 35% at 50% -5%, #1a4a8822 0%, transparent 60%),
+      radial-gradient(1.5px 1.5px at 12% 18%, rgba(255,255,255,.13) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 35% 42%, rgba(255,255,255,.08) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 61% 22%, rgba(255,255,255,.11) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 84% 67%, rgba(255,255,255,.08) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 92%  9%, rgba(255,255,255,.10) 0%, transparent 100%);
     pointer-events: none; z-index: 0;
   }
 
-  /* Font overrides */
-  .font-serif  { font-family: 'Playfair Display', serif; }
-  .font-sans   { font-family: 'DM Sans', sans-serif; }
-
-  /* Eyebrow lines */
-  .eyebrow-line::before,
-  .eyebrow-line::after {
+  /* ── Eyebrow decorative lines ── */
+  .eyebrow-deco::before,
+  .eyebrow-deco::after {
     content: ''; display: block;
-    width: 28px; height: 1px; background: var(--gold-dk);
+    width: 28px; height: 1px; background: #6e5820;
   }
 
-  /* Image zoom on card hover */
+  /* ── Card image zoom ── */
   .card-img { transition: transform .65s ease; }
   .cloud-card:hover .card-img { transform: scale(1.05); }
 
-  /* Alert colours */
-  .alert-clear   { background:#27ae6015; border:1px solid #27ae6040; color:#3ecf7a; }
-  .alert-watch   { background:#d4870f15; border:1px solid #d4870f40; color:#f0a030; }
-  .alert-warn    { background:#c0392b15; border:1px solid #c0392b40; color:#e05545; }
-  .alert-crit    { background:#ff000018; border:1px solid #ff000040; color:#ff6b6b; }
-  .alert-neutral { background:#60708018; border:1px solid #60708045; color:#90aabb; }
-  .alert-info    { background:#2b8fd418; border:1px solid #2b8fd440; color:#5aaad8; }
+  /* ── Alert badge colours ── */
+  .badge-clear   { background: rgba(39,174,96,.1);  border: 1px solid rgba(39,174,96,.35);  color: #3ecf7a; }
+  .badge-watch   { background: rgba(212,135,15,.1); border: 1px solid rgba(212,135,15,.35); color: #f0a030; }
+  .badge-warn    { background: rgba(192,57,43,.1);  border: 1px solid rgba(192,57,43,.35);  color: #e05545; }
+  .badge-crit    { background: rgba(255,0,0,.09);   border: 1px solid rgba(255,0,0,.3);     color: #ff6b6b; }
+  .badge-neutral { background: rgba(96,112,128,.1); border: 1px solid rgba(96,112,128,.3);  color: #90aabb; }
+  .badge-info    { background: rgba(43,143,212,.1); border: 1px solid rgba(43,143,212,.3);  color: #5aaad8; }
 
-  /* Pill colours */
-  .pill-danger  { border-color:#ff000040; color:#ff6b6b; background:#ff000010; }
-  .pill-caution { border-color:#d4870f40; color:#f0a030; background:#d4870f10; }
-  .pill-note    { border-color:#2b8fd440; color:#5aaad8; background:#2b8fd410; }
+  /* ── Impact pills ── */
+  .pill-danger  { border-color:rgba(255,0,0,.3);   color:#ff6b6b; background:rgba(255,0,0,.06);   }
+  .pill-caution { border-color:rgba(212,135,15,.3); color:#f0a030; background:rgba(212,135,15,.06);}
+  .pill-note    { border-color:rgba(43,143,212,.3); color:#5aaad8; background:rgba(43,143,212,.06);}
 
-  /* HTMX detail panel animation */
-  .detail-panel {
+  /* ── HTMX accordion panel ── */
+  .aero-panel {
     overflow: hidden;
     max-height: 0;
-    transition: max-height .4s ease;
+    transition: max-height .4s ease, opacity .3s ease;
+    opacity: 0;
   }
-  .detail-panel.open {
-    max-height: 400px;
+  .aero-panel.open {
+    max-height: 500px;
+    opacity: 1;
   }
 
-  /* Filter active */
-  .filter-btn.active {
-    background: var(--gold) !important;
-    border-color: var(--gold) !important;
+  /* ── Active filter button ── */
+  .fbtn.active {
+    background: #c8a84b !important;
+    border-color: #c8a84b !important;
     color: #060d1a !important;
     font-weight: 500;
   }
 
-  /* Gold border-left for curious */
-  .curious-bar { border-left: 2px solid var(--gold-dk); }
+  /* ── Left-border accent for curious facts ── */
+  .curious-bar { border-left: 2px solid #5a4515; }
 
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: #0b1929; }
-  ::-webkit-scrollbar-thumb { background: #243e62; border-radius: 3px; }
-
-  @media (max-width: 700px) {
-    .card-grid { grid-template-columns: 1fr !important; }
-    .img-col   { width: 100% !important; height: 190px !important; }
+  /* ── Fade-up animation on load ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
+  .cloud-card { animation: fadeUp .5s ease both; }
+  .cloud-card:nth-child(1){animation-delay:.04s} .cloud-card:nth-child(2){animation-delay:.09s}
+  .cloud-card:nth-child(3){animation-delay:.14s} .cloud-card:nth-child(4){animation-delay:.19s}
+  .cloud-card:nth-child(5){animation-delay:.24s} .cloud-card:nth-child(6){animation-delay:.29s}
+  .cloud-card:nth-child(7){animation-delay:.34s} .cloud-card:nth-child(8){animation-delay:.39s}
+  .cloud-card:nth-child(9){animation-delay:.44s} .cloud-card:nth-child(10){animation-delay:.49s}
+  .cloud-card:nth-child(11){animation-delay:.54s}.cloud-card:nth-child(12){animation-delay:.59s}
+  .cloud-card:nth-child(13){animation-delay:.64s}.cloud-card:nth-child(14){animation-delay:.69s}
+  .cloud-card:nth-child(15){animation-delay:.74s}
+
+  /* ── Responsive: stack card on mobile ── */
+  @media (max-width: 700px) {
+    .card-layout { grid-template-columns: 1fr !important; }
+    .card-img-box { width: 100% !important; height: 200px !important; }
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #0b1929; }
+  ::-webkit-scrollbar-thumb { background: #1c3358; border-radius: 3px; }
 </style>
 </head>
-<body class="font-sans text-slate-200 min-h-screen overflow-x-hidden">
 
-<!-- ═══════════════════════════════════
-     HEADER
-═══════════════════════════════════ -->
+<body class="text-slate-200 min-h-screen overflow-x-hidden">
+
+<!-- ════════════════════════════ HEADER ════════════════════════════ -->
 <header class="relative z-10 text-center px-6 pt-20 pb-14 border-b border-[#1c3358]">
-  <div class="eyebrow-line inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.26em] uppercase text-yellow-500 mb-5">
+  <div class="eyebrow-deco inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.28em] uppercase text-yellow-500 mb-5">
     Catálogo visual del cielo
   </div>
-  <h1 class="font-serif text-5xl md:text-7xl font-normal leading-tight text-slate-100">
+  <h1 class="font-serif text-5xl md:text-7xl font-normal leading-[1.06] text-slate-100">
     Lo que el cielo<br><em class="text-yellow-300">te está diciendo</em>
   </h1>
-  <p class="mt-5 text-sm text-slate-400 max-w-md mx-auto leading-7">
+  <p class="mt-5 text-[.96rem] text-slate-400 max-w-md mx-auto leading-[1.8]">
     Nubes, fenómenos y señales invisibles. Todo lo que pasa allá arriba tiene nombre — y algo que contarte sobre lo que viene.
   </p>
 </header>
 
-<!-- ═══════════════════════════════════
-     STICKY FILTER BAR
-═══════════════════════════════════ -->
-<div class="sticky top-0 z-50 bg-[#060d1af6] backdrop-blur-lg border-b border-[#1c3358] px-4 py-3 flex flex-wrap gap-2 justify-center items-center">
-  <button class="filter-btn active text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('all',this)">Todo</button>
+<!-- ════════════════════════════ FILTER BAR ════════════════════════════ -->
+<nav class="sticky top-0 z-50 bg-[#060d1af6] backdrop-blur-lg border-b border-[#1c3358] px-4 py-3 flex flex-wrap gap-2 justify-center items-center">
+  <button class="fbtn active px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('all',this)">Todo</button>
   <div class="w-px h-4 bg-[#243e62]"></div>
-  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('alta',this)">Nubes altas</button>
-  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('media',this)">Nubes medias</button>
-  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('baja',this)">Nubes bajas</button>
-  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('vertical',this)">Verticales</button>
-  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('especial',this)">Especiales</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('alta',this)">Nubes altas</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('media',this)">Nubes medias</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('baja',this)">Nubes bajas</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('vertical',this)">Verticales</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('especial',this)">Especiales</button>
   <div class="w-px h-4 bg-[#243e62]"></div>
-  <button class="filter-btn text-[.72rem] px-4 py-1.5 rounded-full border border-[#243e62] text-slate-400 transition-all hover:border-yellow-800 hover:text-yellow-300 cursor-pointer bg-transparent" onclick="filter('aero',this)">✈️ Aeronáutico</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('aero',this)">✈️ Aeronáutico</button>
+</nav>
+
+<!-- ════════════════════════════ MAIN ════════════════════════════ -->
+<main class="relative z-10 max-w-5xl mx-auto px-4 pb-24">
+
+<!-- ─── Helper macro explained:
+     Each <article> has data-family for filtering.
+     Inside: a 300×200 image box + content column.
+     The "✈️ Ver significado aeronáutico" button uses toggleAero()
+     which adds/removes class "open" on the sibling .aero-panel — 
+     this is the HTMX accordion pattern done client-side for a static site.
+─── -->
+
+<!-- ══════════ NUBES ALTAS ══════════ -->
+<div class="flex items-baseline gap-4 mt-12 pb-3 border-b border-[#1c3358]" data-section="alta">
+  <h2 class="font-serif text-2xl italic font-normal text-slate-100">Nubes altas</h2>
+  <p class="text-[.74rem] text-slate-600">Sobre los 6.000 m · Cristales de hielo</p>
 </div>
 
-<!-- ═══════════════════════════════════
-     MAIN
-═══════════════════════════════════ -->
-<main id="catalog" class="relative z-10 max-w-5xl mx-auto px-4 pb-24">
-
-<!-- ─── MACRO: card ──────────────────────────────────────────────────
-  Usage:
-    secHdr(title, subtitle, section_key)
-    cloudCard(family, imgUrl, imgAlt, altTag, nameCommon, nameTech,
-              altitudeMeta, compositionMeta, alertClass, alertText,
-              meaning, aeroMeaning, curiousFact, cardId)
-  ──────────────────────────────────────────────────────────────────── -->
-
-<!-- ══ NUBES ALTAS ══ -->
-<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="alta">
-  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Nubes altas</h2>
-  <p class="text-[.75rem] text-slate-600">Sobre los 6.000 m · Principalmente cristales de hielo</p>
-</div>
-
-<article class="cloud-card border-b border-[#1c3358] py-10 opacity-0 translate-y-4 animate-[fadeUp_.5s_ease_.05s_forwards]" data-family="alta" style="animation:fadeUp .5s ease .05s forwards">
-  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
-    <!-- Image -->
-    <div class="img-col relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
+<!-- CIRROS -->
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta">
+  <div class="card-layout grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
+      <!-- Cirros: filamentos blancos en cielo azul — Wikimedia CC BY-SA 3.0 / Fir0002 -->
       <img class="card-img w-full h-full object-cover"
-           src="https://images.unsplash.com/photo-1559825481-12a05cc00344?w=800&q=80"
-           alt="Cirros — filamentos blancos en cielo azul" loading="lazy"
-           onerror="this.src='https://picsum.photos/seed/cirrus/800/500'">
-      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Cirrus_clouds2.jpg/1280px-Cirrus_clouds2.jpg"
+        alt="Cirros — filamentos blancos en cielo azul"
+        loading="lazy"
+        onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1559825481-12a05cc00344?w=800&q=80'">
+      <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
     </div>
-    <!-- Content -->
     <div class="pl-8 flex flex-col gap-3 justify-center">
       <div>
-        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cirros</div>
+        <div class="font-serif text-[1.85rem] font-normal text-slate-100 leading-tight">Cirros</div>
         <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cirrus · Ci</div>
       </div>
-      <div class="flex gap-5 flex-wrap">
-        <span class="text-[.75rem] text-slate-400">📍 6.000 – 12.000 m</span>
-        <span class="text-[.75rem] text-slate-400">🧊 Cristales de hielo</span>
+      <div class="flex gap-5 flex-wrap text-[.75rem] text-slate-400">
+        <span>📍 6.000 – 12.000 m</span><span>🧊 Cristales de hielo</span>
       </div>
-      <div class="alert-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
-        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+      <div class="badge-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>
         Posible cambio de tiempo en 24–48 hs
       </div>
-      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Líneas finas y blancas que parecen pintadas con pincel en el azul. Son puro hielo, no agua. Hoy el tiempo es bueno — pero son el primer aviso de que algo viene en camino.</p>
-      <!-- HTMX expand button -->
-      <button
-        class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors"
-        onclick="toggleDetail(this, 'cirros-detail')">
+      <p class="text-[.87rem] leading-[1.75] text-slate-300 opacity-85">
+        Líneas finas y blancas que parecen pintadas con un pincel en el azul del cielo. Son puro hielo, no agua. Hoy el tiempo es bueno — pero son el primer aviso de que algo viene en camino. Cuanto más se espesan y bajan, más cercano está el cambio.
+      </p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-900 rounded-sm px-3 py-1 hover:bg-sky-950 transition-colors cursor-pointer" onclick="toggleAero(this)">
         ✈️ Ver significado aeronáutico ▾
       </button>
-      <!-- Detail panel (HTMX-style toggle) -->
-      <div id="cirros-detail" class="detail-panel">
-        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
-          <p class="text-[.8rem] text-slate-400 leading-6">Indican corrientes de chorro cercanas y posibles zonas de CAT en crucero. Preceden frentes que afectarán rutas en las próximas 12–24 hs. Si se espesan hacia el horizonte: el deterioro se acerca.</p>
-          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 El nombre viene del latín <em>cirrus</em>: "mechón de pelo". La próxima vez que los veas, fijate — la semejanza es exacta.</p>
+      <div class="aero-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2 mt-1">
+          <p class="text-[.8rem] text-slate-400 leading-[1.7]">Indican corrientes de chorro cercanas y posibles zonas de CAT en crucero. Preceden frentes que afectarán rutas en las próximas 12–24 hs. Si se espesan hacia el horizonte: el deterioro se acerca.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-[1.65]">💡 El nombre viene del latín <em>cirrus</em>: "mechón de pelo". Mirá bien la próxima vez — la semejanza es exacta.</p>
         </div>
       </div>
     </div>
   </div>
 </article>
 
-<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta" style="animation:fadeUp .5s ease .09s forwards;opacity:0;transform:translateY(16px)">
-  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
-    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+<!-- CIRROSTRATOS -->
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta">
+  <div class="card-layout grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
+      <!-- Cirrostratos produciendo halo solar — Wikimedia CC BY-SA 2.0 / Marilú -->
       <img class="card-img w-full h-full object-cover"
-           src="https://images.unsplash.com/photo-1501630834273-4b5604d2ee31?w=800&q=80"
-           alt="Cirrostratos — velo que produce halo" loading="lazy"
-           onerror="this.src='https://picsum.photos/seed/cirrostratus/800/500'">
-      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Cirrostratus_clouds_with_halo.JPG/1280px-Cirrostratus_clouds_with_halo.JPG"
+        alt="Cirrostratos — velo blanquecino con halo solar"
+        loading="lazy"
+        onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Cirrostratus_nebulosus.jpg/1280px-Cirrostratus_nebulosus.jpg'">
+      <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
     </div>
     <div class="pl-8 flex flex-col gap-3 justify-center">
       <div>
-        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cirrostratos</div>
+        <div class="font-serif text-[1.85rem] font-normal text-slate-100 leading-tight">Cirrostratos</div>
         <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cirrostratus · Cs</div>
       </div>
-      <div class="flex gap-5 flex-wrap">
-        <span class="text-[.75rem] text-slate-400">📍 6.000 – 12.000 m</span>
-        <span class="text-[.75rem] text-slate-400">🧊 Velo continuo de hielo</span>
+      <div class="flex gap-5 flex-wrap text-[.75rem] text-slate-400">
+        <span>📍 6.000 – 12.000 m</span><span>🧊 Velo continuo de hielo</span>
       </div>
-      <div class="alert-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
-        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+      <div class="badge-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>
         Lluvia probable en las próximas horas
       </div>
-      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Un velo blanquecino que cubre todo el cielo. El sol produce un halo brillante — ese anillo luminoso es su sello. Cuando ves el halo: preparate para la lluvia.</p>
-      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'cs-detail')">✈️ Ver significado aeronáutico ▾</button>
-      <div id="cs-detail" class="detail-panel">
-        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
-          <p class="text-[.8rem] text-slate-400 leading-6">Preceden frentes cálidos. Los pilotos los usan como referencia de deterioro: cuanto más bajo y denso el velo, más cercana la lluvia. En ruta, marcan el inicio de condiciones IFR.</p>
-          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 El halo de 22° ocurre todo el tiempo y casi nadie lo nota. Es luz refractándose en cristales hexagonales de hielo — física perfecta, resultado mágico.</p>
+      <p class="text-[.87rem] leading-[1.75] text-slate-300 opacity-85">
+        Un velo blanquecino que cubre todo el cielo. El sol o la luna producen un halo brillante — ese anillo luminoso es su sello. Cuando aparece el halo: es hora de prepararse para la lluvia.
+      </p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-900 rounded-sm px-3 py-1 hover:bg-sky-950 transition-colors cursor-pointer" onclick="toggleAero(this)">
+        ✈️ Ver significado aeronáutico ▾
+      </button>
+      <div class="aero-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2 mt-1">
+          <p class="text-[.8rem] text-slate-400 leading-[1.7]">Preceden frentes cálidos. Los pilotos los usan como referencia de deterioro: cuanto más bajo y denso el velo, más cercana la lluvia. En ruta, marcan el inicio de condiciones IFR.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-[1.65]">💡 El halo de 22° ocurre todo el tiempo y casi nadie lo nota. Es luz solar refractándose en cristales hexagonales de hielo — física perfecta, resultado visual mágico.</p>
         </div>
       </div>
     </div>
   </div>
 </article>
 
-<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta" style="animation:fadeUp .5s ease .13s forwards;opacity:0;transform:translateY(16px)">
-  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
-    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+<!-- CIRROCÚMULOS -->
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta">
+  <div class="card-layout grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
+      <!-- Cirrocúmulos en patrón de escamas — Wikimedia CC BY-SA 3.0 -->
       <img class="card-img w-full h-full object-cover"
-           src="https://images.unsplash.com/photo-1583246381754-c9f3f0c86bda?w=800&q=80"
-           alt="Cirrocúmulos — escamas blancas" loading="lazy"
-           onerror="this.src='https://picsum.photos/seed/cirrocumulus/800/500'">
-      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Cirrocumulus2.jpg/1280px-Cirrocumulus2.jpg"
+        alt="Cirrocúmulos — pequeñas motas blancas en patrón"
+        loading="lazy"
+        onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Altocumulus_undulatus.jpg/1280px-Altocumulus_undulatus.jpg'">
+      <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
     </div>
     <div class="pl-8 flex flex-col gap-3 justify-center">
       <div>
-        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Cirrocúmulos</div>
+        <div class="font-serif text-[1.85rem] font-normal text-slate-100 leading-tight">Cirrocúmulos</div>
         <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cirrocumulus · Cc</div>
       </div>
-      <div class="flex gap-5 flex-wrap">
-        <span class="text-[.75rem] text-slate-400">📍 6.000 – 12.000 m</span>
-        <span class="text-[.75rem] text-slate-400">🧊 Patrón en escamas</span>
+      <div class="flex gap-5 flex-wrap text-[.75rem] text-slate-400">
+        <span>📍 6.000 – 12.000 m</span><span>🧊 Patrón en escamas</span>
       </div>
-      <div class="alert-neutral inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
-        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+      <div class="badge-neutral inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>
         Señal transitoria — observar evolución
       </div>
-      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Pequeñas motas blancas en filas ordenadas, como arroz esparcido en el azul. El "cielo empedrado". Raras y muy efímeras — desaparecen en minutos.</p>
-      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'cc-detail')">✈️ Ver significado aeronáutico ▾</button>
-      <div id="cc-detail" class="detail-panel">
-        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
-          <p class="text-[.8rem] text-slate-400 leading-6">Pueden indicar inestabilidad en altitud y turbulencia en aire claro (CAT) a niveles de vuelo. Su corta duración los hace difíciles de anticipar en pronósticos.</p>
-          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Son tan efímeras que raramente duran más de minutos. Si las ves, sacá foto rápido.</p>
+      <p class="text-[.87rem] leading-[1.75] text-slate-300 opacity-85">
+        Pequeñas motas blancas en filas ordenadas, como arroz esparcido en el azul. El "cielo empedrado" o "a escama de pez". Raras y muy efímeras — desaparecen en minutos.
+      </p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-900 rounded-sm px-3 py-1 hover:bg-sky-950 transition-colors cursor-pointer" onclick="toggleAero(this)">
+        ✈️ Ver significado aeronáutico ▾
+      </button>
+      <div class="aero-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2 mt-1">
+          <p class="text-[.8rem] text-slate-400 leading-[1.7]">Pueden indicar inestabilidad en altitud y turbulencia en aire claro (CAT) a niveles de vuelo. Su corta duración los hace difíciles de anticipar en pronósticos.</p>
+          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-[1.65]">💡 Son tan efímeras que raramente duran más de minutos. Si las ves, sacá foto rápido.</p>
         </div>
       </div>
     </div>
   </div>
 </article>
 
-<!-- ══ NUBES MEDIAS ══ -->
-<div class="sec-hdr flex items-baseline gap-4 max-w-5xl mx-auto mt-12 pb-3 border-b border-[#1c3358]" data-section="media">
-  <h2 class="font-serif text-2xl font-normal italic text-slate-100">Nubes medias</h2>
-  <p class="text-[.75rem] text-slate-600">2.000 – 6.000 m · Agua y cristales de hielo</p>
+<!-- ══════════ NUBES MEDIAS ══════════ -->
+<div class="flex items-baseline gap-4 mt-12 pb-3 border-b border-[#1c3358]" data-section="media">
+  <h2 class="font-serif text-2xl italic font-normal text-slate-100">Nubes medias</h2>
+  <p class="text-[.74rem] text-slate-600">2.000 – 6.000 m · Agua y cristales de hielo</p>
 </div>
 
-<article class="cloud-card border-b border-[#1c3358] py-10" data-family="media" style="animation:fadeUp .5s ease .17s forwards;opacity:0;transform:translateY(16px)">
-  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
-    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
+<!-- ALTOCÚMULOS -->
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="media">
+  <div class="card-layout grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
+      <!-- Altocúmulos castellanus — Wikimedia CC BY-SA 3.0 / Fir0002 -->
       <img class="card-img w-full h-full object-cover"
-           src="https://images.unsplash.com/photo-1530908295418-a12e326966ba?w=800&q=80"
-           alt="Altocúmulos — rollos grises a media altura" loading="lazy"
-           onerror="this.src='https://picsum.photos/seed/altocumulus/800/500'">
-      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate-300 bg-[#060d1acc] backdrop-blur px-2 py-1 rounded-sm border border-white/10">Media · 2–6 km</span>
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Altocumulus_castellanus.JPG/1280px-Altocumulus_castellanus.JPG"
+        alt="Altocúmulos castellanus — torres convectivas"
+        loading="lazy"
+        onerror="this.onerror=null;this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Altocumulus_undulatus.jpg/1280px-Altocumulus_undulatus.jpg'">
+      <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Media · 2–6 km</span>
     </div>
     <div class="pl-8 flex flex-col gap-3 justify-center">
       <div>
-        <div class="font-serif text-3xl font-normal text-slate-100 leading-tight">Altocúmulos</div>
+        <div class="font-serif text-[1.85rem] font-normal text-slate-100 leading-tight">Altocúmulos</div>
         <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Altocumulus · Ac</div>
       </div>
-      <div class="flex gap-5 flex-wrap">
-        <span class="text-[.75rem] text-slate-400">📍 2.000 – 6.000 m</span>
-        <span class="text-[.75rem] text-slate-400">💧 Agua + hielo</span>
+      <div class="flex gap-5 flex-wrap text-[.75rem] text-slate-400">
+        <span>📍 2.000 – 6.000 m</span><span>💧 Agua + hielo</span>
       </div>
-      <div class="alert-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
-        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+      <div class="badge-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium w-fit">
+        <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>
         Posible tormenta en horas cálidas
       </div>
-      <p class="text-[.87rem] leading-7 text-slate-300 opacity-85">Parches y rollos grises a media altura. Los <em>Ac castellanus</em> — con pequeñas torres — son el aviso clásico de tormenta vespertina. Si los ves a la mañana de un día caluroso, guardá el paraguas.</p>
-      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-800 rounded-sm px-3 py-1 hover:bg-sky-900/30 transition-colors" onclick="toggleDetail(this,'ac-detail')">✈️ Ver significado aeronáutico ▾</button>
-      <div id="ac-detail" class="detail-panel">
-        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col gap-2">
-          <p class="text-[.8rem] text-slate-400 leading-6">Los Ac castellanus matinales son indicador de inestabilidad convectiva: alta probabilidad de CB en horas cálidas. Los despachos los toman como señal de alerta para rutas de tarde.</p>
-          <p class="curious-bar pl-3 text-[.77rem] italic text-slate-500 leading-6">💡 Regla práctica: Ac castellanus por la mañana = tormenta vespertina casi garantizada en días calurosos.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</article>
-
-<article class="cloud-card border-b border-[#1c3358] py-10" data-family="media" style="animation:fadeUp .5s ease .21s forwards;opacity:0;transform:translateY(16px)">
-  <div class="card-grid grid gap-0" style="grid-template-columns:300px 1fr">
-    <div class="img-col relative rounded overflow-hidden bg-[#0f2240]" style="width:300px;height:200px">
-      <img class="card-img w-full h-full object-cover"
-           src="https://images.unsplash.com/photo-1499956827185-0d63ee78a910?w=800&q=80"
-           alt="Altostratos — manta gris uniforme" loading="lazy"
-           onerror="this.src='https://picsum.photos/seed/altostratus/800/500'">
-      <span class="absolute top-2 left-2 text-[.58rem] font-medium tracking-widest uppercase text-slate
+      <p class="text-[.87rem] leading-[1.75] text-slate-300 opacity-85">
+        Parches y rollos grises a media altura. Los <em>Ac castellanus</em> — los que tienen pequeñas torres hacia arriba — son el aviso clásico de tormenta vespertina. Si los ves a la mañana de un día caluroso, guardá el paraguas para la tarde.
+      </p>
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-900 rounded-sm px-3 py-1 hover:bg-sky-950 transition-colors cursor-pointer" onclick="toggleAero(this)">
+        ✈️ Ver significado aeronáutico ▾
+      </button>
+      <div class="aero-panel">
+        <div class="bg-[#0f2240] border border-[#1c3358] rounded p-4 flex flex-col ga
