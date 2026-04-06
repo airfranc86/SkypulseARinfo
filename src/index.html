@@ -3,8 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- referrer policy global: el browser NO enviará el header Referer a Wikimedia,
-     evitando que bloqueen las imágenes por hotlinking -->
+<!--
+  IMAGEN FIX — triple capa:
+  1. Esta meta tag global: el browser no envía el header Referer a ningún servidor externo.
+  2. referrerpolicy="no-referrer" en cada <img>: refuerza lo mismo a nivel de elemento.
+  3. URLs via commons.wikimedia.org/wiki/Special:FilePath/ en lugar de upload.wikimedia.org:
+     este es el endpoint oficial de Wikimedia para embedding, sin restricciones de hotlinking.
+-->
 <meta name="referrer" content="no-referrer">
 <title>SkyPulse — Catálogo del Cielo</title>
 
@@ -15,24 +20,17 @@
 
 <script>
   tailwind.config = {
-    theme: {
-      extend: {
-        fontFamily: {
-          serif: ['"Playfair Display"', 'serif'],
-          sans:  ['"DM Sans"', 'sans-serif'],
-        }
-      }
-    }
+    theme: { extend: { fontFamily: { serif: ['"Playfair Display"','serif'], sans:['"DM Sans"','sans-serif'] } } }
   }
 </script>
 
 <style>
-  body { background: #060d1a; font-family: 'DM Sans', sans-serif; }
+  /* ── Base ── */
+  body { background:#060d1a; font-family:'DM Sans',sans-serif; }
 
-  /* Starfield atmosphere */
+  /* ── Atmospheric background ── */
   body::before {
-    content: '';
-    position: fixed; inset: 0;
+    content:''; position:fixed; inset:0;
     background:
       radial-gradient(ellipse 80% 35% at 50% -5%, rgba(26,74,136,.13) 0%, transparent 60%),
       radial-gradient(1.5px 1.5px at 12% 18%, rgba(255,255,255,.13) 0%, transparent 100%),
@@ -40,36 +38,314 @@
       radial-gradient(1.5px 1.5px at 61% 22%, rgba(255,255,255,.11) 0%, transparent 100%),
       radial-gradient(1px   1px   at 84% 67%, rgba(255,255,255,.08) 0%, transparent 100%),
       radial-gradient(1.5px 1.5px at 92%  9%, rgba(255,255,255,.10) 0%, transparent 100%);
-    pointer-events: none; z-index: 0;
+    pointer-events:none; z-index:0;
   }
 
-  /* Eyebrow decorative lines */
-  .eyebrow-deco::before,
-  .eyebrow-deco::after {
-    content: ''; display: block; width: 28px; height: 1px; background: #6e5820;
+  /* ── Typography ── */
+  .font-serif { font-family:'Playfair Display',serif; }
+
+  /* ── Eyebrow decoration ── */
+  .eyebrow-deco::before,.eyebrow-deco::after {
+    content:''; display:block; width:28px; height:1px; background:#6e5820;
   }
 
-  /* Image hover zoom */
-  .card-img { transition: transform .65s ease; }
-  .cloud-card:hover .card-img { transform: scale(1.05); }
+  /* ── Image zoom on hover ── */
+  .card-img { transition:transform .65s ease; }
+  .cloud-card:hover .card-img { transform:scale(1.05); }
 
-  /* Alert badges */
-  .badge-clear   { background:rgba(39,174,96,.1);  border:1px solid rgba(39,174,96,.35);  color:#3ecf7a; }
-  .badge-watch   { background:rgba(212,135,15,.1); border:1px solid rgba(212,135,15,.35); color:#f0a030; }
-  .badge-warn    { background:rgba(192,57,43,.1);  border:1px solid rgba(192,57,43,.35);  color:#e05545; }
-  .badge-crit    { background:rgba(255,0,0,.09);   border:1px solid rgba(255,0,0,.3);     color:#ff6b6b; }
-  .badge-neutral { background:rgba(96,112,128,.1); border:1px solid rgba(96,112,128,.3);  color:#90aabb; }
-  .badge-info    { background:rgba(43,143,212,.1); border:1px solid rgba(43,143,212,.3);  color:#5aaad8; }
+  /* ── Alert badges ── */
+  .badge-clear   {background:rgba(39,174,96,.1); border:1px solid rgba(39,174,96,.35); color:#3ecf7a;}
+  .badge-watch   {background:rgba(212,135,15,.1);border:1px solid rgba(212,135,15,.35);color:#f0a030;}
+  .badge-warn    {background:rgba(192,57,43,.1); border:1px solid rgba(192,57,43,.35); color:#e05545;}
+  .badge-crit    {background:rgba(255,0,0,.09);  border:1px solid rgba(255,0,0,.3);    color:#ff6b6b;}
+  .badge-neutral {background:rgba(96,112,128,.1);border:1px solid rgba(96,112,128,.3); color:#90aabb;}
+  .badge-info    {background:rgba(43,143,212,.1);border:1px solid rgba(43,143,212,.3); color:#5aaad8;}
 
-  /* Impact pills */
-  .pill-danger  { border-color:rgba(255,0,0,.3);    color:#ff6b6b; background:rgba(255,0,0,.06);    }
-  .pill-caution { border-color:rgba(212,135,15,.3); color:#f0a030; background:rgba(212,135,15,.06); }
-  .pill-note    { border-color:rgba(43,143,212,.3); color:#5aaad8; background:rgba(43,143,212,.06); }
+  /* ── DANGER SCALE — 5-segment horizontal bar ── */
+  .danger-scale {
+    display:flex; gap:3px; align-items:center;
+    margin-top:2px;
+  }
+  .danger-scale .seg {
+    height:6px; flex:1; border-radius:2px;
+    background:#1c3358;
+    transition:background .3s ease;
+  }
+  .danger-scale[data-level="1"] .seg:nth-child(1) { background:#27ae60; }
+  .danger-scale[data-level="2"] .seg:nth-child(-n+2) { background:#f0a030; }
+  .danger-scale[data-level="3"] .seg:nth-child(-n+3) { background:#f0a030; }
+  .danger-scale[data-level="4"] .seg:nth-child(-n+4) { background:#e05545; }
+  .danger-scale[data-level="5"] .seg { background:#ff3333; }
+  .danger-label {
+    font-size:.6rem; font-weight:500; letter-spacing:.05em;
+    white-space:nowrap; margin-left:6px;
+  }
+  .lv1 { color:#3ecf7a; }
+  .lv2,.lv3 { color:#f0a030; }
+  .lv4 { color:#e05545; }
+  .lv5 { color:#ff3333; }
 
-  /* HTMX-style accordion panel */
+  /* ── Impact pills ── */
+  .pill-danger  {border-color:rgba(255,0,0,.3);   color:#ff6b6b;background:rgba(255,0,0,.06);}
+  .pill-caution {border-color:rgba(212,135,15,.3);color:#f0a030;background:rgba(212,135,15,.06);}
+  .pill-note    {border-color:rgba(43,143,212,.3);color:#5aaad8;background:rgba(43,143,212,.06);}
+
+  /* ── HTMX-style accordion ── */
   .aero-panel {
-    overflow: hidden;
-    max-height: 0;
+    overflow:hidden; max-height:0;
+    transition:max-height .4s ease, opacity .3s ease;
+    opacity:0;
+  }
+  .aero-panel.open { max-height:600px; opacity:1; }
+
+  /* ── Quick ID guide (collapsible) ── */
+  .id-guide { overflow:hidden; max-height:0; transition:max-height .5s ease; }
+  .id-guide.open { max-height:800px; }
+
+  /* ── Filter buttons ── */
+  .fbtn.active {
+    background:#c8a84b !important;
+    border-color:#c8a84b !important;
+    color:#060d1a !important;
+    font-weight:500;
+  }
+
+  /* ── Filter hide/show ── */
+  .card-hidden { display:none; }
+  .section-hidden { display:none !important; }
+
+  /* ── Curious fact accent ── */
+  .curious-bar { border-left:2px solid #5a4515; }
+
+  /* ── Best time to observe tag ── */
+  .observe-tag {
+    display:inline-flex; align-items:center; gap:.35rem;
+    font-size:.63rem; font-weight:400; color:#60819a;
+    margin-top:2px;
+  }
+
+  /* ── Card entrance animation ── */
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(18px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .cloud-card { animation:fadeUp .5s ease both; }
+  .cloud-card:nth-child(1){animation-delay:.04s} .cloud-card:nth-child(2){animation-delay:.08s}
+  .cloud-card:nth-child(3){animation-delay:.12s} .cloud-card:nth-child(4){animation-delay:.16s}
+  .cloud-card:nth-child(5){animation-delay:.20s} .cloud-card:nth-child(6){animation-delay:.24s}
+  .cloud-card:nth-child(7){animation-delay:.28s} .cloud-card:nth-child(8){animation-delay:.32s}
+  .cloud-card:nth-child(9){animation-delay:.36s} .cloud-card:nth-child(10){animation-delay:.40s}
+  .cloud-card:nth-child(11){animation-delay:.44s}.cloud-card:nth-child(12){animation-delay:.48s}
+  .cloud-card:nth-child(13){animation-delay:.52s}.cloud-card:nth-child(14){animation-delay:.56s}
+  .cloud-card:nth-child(15){animation-delay:.60s}
+
+  /* ── HEIGHT DIAGRAM (SVG labels) ── */
+  .height-diagram text { font-family:'DM Sans',sans-serif; }
+
+  /* ── Mobile responsive ── */
+  @media(max-width:700px){
+    .card-layout{grid-template-columns:1fr !important;}
+    .card-img-box{width:100% !important; height:195px !important;}
+    .card-body{padding-left:0 !important; padding-top:1.25rem;}
+    .height-diagram{display:none;}
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar{width:5px;}
+  ::-webkit-scrollbar-track{background:#0b1929;}
+  ::-webkit-scrollbar-thumb{background:#1c3358;border-radius:3px;}
+</style>
+</head>
+
+<body class="text-slate-200 min-h-screen overflow-x-hidden">
+
+<!-- ══════════════════ HEADER ══════════════════ -->
+<header class="relative z-10 text-center px-6 pt-20 pb-10 border-b border-[#1c3358]">
+  <div class="eyebrow-deco inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.28em] uppercase text-yellow-500 mb-5">
+    Catálogo visual del cielo
+  </div>
+  <h1 class="font-serif text-5xl md:text-7xl font-normal leading-[1.06] text-slate-100">
+    Lo que el cielo<br><em class="text-yellow-300">te está diciendo</em>
+  </h1>
+  <p class="mt-5 text-[.96rem] text-slate-400 max-w-md mx-auto leading-[1.8]">
+    Nubes, fenómenos y señales invisibles. Todo lo que pasa allá arriba tiene nombre — y algo que contarte sobre lo que viene.
+  </p>
+
+  <!-- ── ALTITUDE DIAGRAM ── -->
+  <div class="mt-10 flex justify-center">
+    <svg class="height-diagram" width="560" height="190" viewBox="0 0 560 190" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Ground -->
+      <line x1="60" y1="175" x2="540" y2="175" stroke="#1c3358" stroke-width="1"/>
+      <text x="30" y="179" fill="#4a6882" font-size="10" text-anchor="end">0 m</text>
+
+      <!-- 2000m line -->
+      <line x1="60" y1="130" x2="540" y2="130" stroke="#1c3358" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="30" y="134" fill="#4a6882" font-size="10" text-anchor="end">2 km</text>
+
+      <!-- 6000m line -->
+      <line x1="60" y1="75" x2="540" y2="75" stroke="#1c3358" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="30" y="79" fill="#4a6882" font-size="10" text-anchor="end">6 km</text>
+
+      <!-- 12000m line -->
+      <line x1="60" y1="20" x2="540" y2="20" stroke="#1c3358" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="30" y="24" fill="#4a6882" font-size="10" text-anchor="end">12 km</text>
+
+      <!-- NUBES ALTAS (6000-12000m) — y 20 to 75 -->
+      <rect x="70" y="22" width="52" height="50" rx="4" fill="rgba(200,168,75,.12)" stroke="rgba(200,168,75,.35)" stroke-width="1"/>
+      <text x="96" y="51" fill="#c8a84b" font-size="9" text-anchor="middle" font-weight="500">Ci · Cs · Cc</text>
+      <text x="96" y="63" fill="#8a9ab0" font-size="8" text-anchor="middle">Altas</text>
+
+      <!-- NUBES MEDIAS (2000-6000m) — y 75 to 130 -->
+      <rect x="140" y="77" width="52" height="50" rx="4" fill="rgba(43,143,212,.1)" stroke="rgba(43,143,212,.3)" stroke-width="1"/>
+      <text x="166" y="106" fill="#5aaad8" font-size="9" text-anchor="middle" font-weight="500">As · Ac</text>
+      <text x="166" y="118" fill="#8a9ab0" font-size="8" text-anchor="middle">Medias</text>
+
+      <!-- NUBES BAJAS (0-2000m) — y 130 to 175 -->
+      <rect x="210" y="132" width="52" height="40" rx="4" fill="rgba(96,112,128,.12)" stroke="rgba(96,112,128,.35)" stroke-width="1"/>
+      <text x="236" y="156" fill="#90aabb" font-size="9" text-anchor="middle" font-weight="500">St · Sc · Ns</text>
+      <text x="236" y="167" fill="#8a9ab0" font-size="8" text-anchor="middle">Bajas</text>
+
+      <!-- CÚMULO (vertical, base 600-2000m, puede llegar a ~3km) -->
+      <rect x="295" y="100" width="44" height="74" rx="4" fill="rgba(39,174,96,.1)" stroke="rgba(39,174,96,.3)" stroke-width="1"/>
+      <text x="317" y="142" fill="#3ecf7a" font-size="9" text-anchor="middle" font-weight="500">Cu</text>
+      <text x="317" y="167" fill="#8a9ab0" font-size="8" text-anchor="middle">~3 km</text>
+
+      <!-- CUMULONIMBO (vertical, 0-15000m — va al tope del diagrama) -->
+      <rect x="355" y="22" width="44" height="152" rx="4" fill="rgba(255,0,0,.08)" stroke="rgba(255,80,80,.35)" stroke-width="1"/>
+      <text x="377" y="100" fill="#ff6b6b" font-size="9" text-anchor="middle" font-weight="500">Cb</text>
+      <text x="377" y="113" fill="#8a9ab0" font-size="8" text-anchor="middle">hasta</text>
+      <text x="377" y="124" fill="#8a9ab0" font-size="8" text-anchor="middle">15 km</text>
+      <!-- Anvil top -->
+      <path d="M345 28 Q377 15 409 28" stroke="rgba(255,80,80,.5)" stroke-width="1.5" fill="none"/>
+
+      <!-- ESPECIALES — Lenticular -->
+      <rect x="420" y="55" width="50" height="30" rx="14" fill="rgba(212,135,15,.1)" stroke="rgba(212,135,15,.3)" stroke-width="1"/>
+      <text x="445" y="74" fill="#f0a030" font-size="8" text-anchor="middle" font-weight="500">Lenticular</text>
+
+      <!-- Fog at ground -->
+      <rect x="480" y="158" width="48" height="16" rx="3" fill="rgba(144,170,187,.1)" stroke="rgba(144,170,187,.25)" stroke-width="1"/>
+      <text x="504" y="170" fill="#90aabb" font-size="8" text-anchor="middle">Niebla</text>
+    </svg>
+  </div>
+
+  <!-- ── QUICK ID GUIDE TOGGLE ── -->
+  <div class="mt-6">
+    <button onclick="toggleIdGuide(this)"
+      class="text-[.72rem] font-medium text-yellow-600 border border-yellow-900 rounded-sm px-4 py-1.5 hover:bg-yellow-950 transition-colors cursor-pointer">
+      🔍 ¿Qué nube estoy viendo? — Guía rápida de identificación ▾
+    </button>
+    <div class="id-guide" id="id-guide">
+      <div class="max-w-2xl mx-auto mt-4 bg-[#0d1e38] border border-[#1c3358] rounded p-6 text-left">
+        <p class="text-[.78rem] text-slate-400 mb-4 italic">Respondé estas preguntas en orden:</p>
+
+        <div class="space-y-3">
+          <div class="border-l-2 border-yellow-800 pl-4">
+            <p class="text-[.8rem] font-medium text-slate-200">1. ¿Está muy alta y es muy fina o tenue?</p>
+            <p class="text-[.75rem] text-slate-500 mt-1">→ Sí, filamentos como mechones → <span class="text-yellow-400">Cirros</span></p>
+            <p class="text-[.75rem] text-slate-500">→ Sí, velo que produce halo → <span class="text-yellow-400">Cirrostratos</span></p>
+            <p class="text-[.75rem] text-slate-500">→ Sí, escamitas pequeñas en filas → <span class="text-yellow-400">Cirrocúmulos</span></p>
+          </div>
+
+          <div class="border-l-2 border-sky-800 pl-4">
+            <p class="text-[.8rem] font-medium text-slate-200">2. ¿Está a media altura y tiene algo de volumen?</p>
+            <p class="text-[.75rem] text-slate-500 mt-1">→ Capa uniforme, sol difuso → <span class="text-sky-400">Altostratos</span></p>
+            <p class="text-[.75rem] text-slate-500">→ Parches o rollos más definidos → <span class="text-sky-400">Altocúmulos</span></p>
+          </div>
+
+          <div class="border-l-2 border-slate-600 pl-4">
+            <p class="text-[.8rem] font-medium text-slate-200">3. ¿Es una capa baja y gris sin forma?</p>
+            <p class="text-[.75rem] text-slate-500 mt-1">→ Gris plano, llovizna fina → <span class="text-slate-400">Estrato</span></p>
+            <p class="text-[.75rem] text-slate-500">→ Oscura y lloviendo todo el día → <span class="text-slate-400">Nimboestrato</span></p>
+            <p class="text-[.75rem] text-slate-500">→ Bloques con claros de azul → <span class="text-slate-400">Estratocúmulos</span></p>
+          </div>
+
+          <div class="border-l-2 border-green-800 pl-4">
+            <p class="text-[.8rem] font-medium text-slate-200">4. ¿Tiene forma de coliflor o torre?</p>
+            <p class="text-[.75rem] text-slate-500 mt-1">→ Blanca, pequeña, base plana → <span class="text-green-400">Cúmulo</span> (buen tiempo)</p>
+            <p class="text-[.75rem] text-slate-500">→ Enorme, oscura, con yunque en la cima → <span class="text-red-400">Cumulonimbo</span> ⚡</p>
+          </div>
+
+          <div class="border-l-2 border-orange-800 pl-4">
+            <p class="text-[.8rem] font-medium text-slate-200">5. ¿Tiene una forma inusual?</p>
+            <p class="text-[.75rem] text-slate-500 mt-1">→ Disco perfecto sobre montaña → <span class="text-orange-400">Lenticular</span></p>
+            <p class="text-[.75rem] text-slate-500">→ Bolsas colgando hacia abajo → <span class="text-red-400">Mammatus</span></p>
+            <p class="text-[.75rem] text-slate-500">→ Toca el suelo, visibilidad nula → <span class="text-slate-400">Niebla</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════ FILTER BAR ══════════════════ -->
+<nav class="sticky top-0 z-50 bg-[#060d1af6] backdrop-blur-lg border-b border-[#1c3358] px-4 py-3 flex flex-wrap gap-2 justify-center items-center">
+  <button class="fbtn active px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('all',this)">Todo</button>
+  <div class="w-px h-4 bg-[#243e62]"></div>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('alta',this)">Nubes altas</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('media',this)">Nubes medias</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('baja',this)">Nubes bajas</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('vertical',this)">Verticales</button>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('especial',this)">Especiales</button>
+  <div class="w-px h-4 bg-[#243e62]"></div>
+  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('aero',this)">✈️ Aeronáutico</button>
+</nav>
+
+<!-- ══════════════════ MAIN ══════════════════ -->
+<main class="relative z-10 max-w-5xl mx-auto px-4 pb-24">
+
+<!--
+  CADA CARD SIGUE ESTA ESTRUCTURA:
+  ─ data-family="X"        → para el filtro JS
+  ─ imagen con referrerpolicy="no-referrer" y URL de Special:FilePath
+  ─ danger-scale data-level="1-5" → barra visual de peligro
+  ─ observe-tag → cuándo y cómo observarla
+  ─ botón toggleAero → panel expandible con info aeronáutica
+-->
+
+<!-- ════ NUBES ALTAS ════ -->
+<div class="sec-header flex items-baseline gap-4 mt-12 pb-3 border-b border-[#1c3358]" data-section="alta">
+  <h2 class="font-serif text-2xl italic font-normal text-slate-100">Nubes altas</h2>
+  <p class="text-[.74rem] text-slate-600">Sobre los 6.000 m · Cristales de hielo · Precursoras de cambio</p>
+</div>
+
+<!-- CIRROS -->
+<article class="cloud-card border-b border-[#1c3358] py-10" data-family="alta">
+  <div class="card-layout grid gap-0" style="grid-template-columns:300px 1fr">
+    <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
+      <img class="card-img w-full h-full object-cover"
+        referrerpolicy="no-referrer"
+        src="https://commons.wikimedia.org/wiki/Special:FilePath/Cirrus_clouds2.jpg?width=800"
+        alt="Cirros — filamentos blancos en cielo azul" loading="lazy">
+      <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
+    </div>
+    <div class="card-body pl-8 flex flex-col gap-3 justify-center">
+      <div>
+        <div class="font-serif text-[1.85rem] font-normal text-slate-100 leading-tight">Cirros</div>
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-500 mt-1">Cirrus · Ci</div>
+      </div>
+      <div class="flex gap-5 flex-wrap text-[.75rem] text-slate-400">
+        <span>📍 6.000 – 12.000 m</span><span>🧊 Cristales de hielo</span>
+      </div>
+
+      <!-- Danger scale: 2/5 — precede cambio, no peligro inmediato -->
+      <div>
+        <div class="danger-scale" data-level="2">
+          <div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="badge-watch inline-flex items-center gap-2 px-3 py-1 rounded-sm text-[.68rem] font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>Posible cambio en 24–48 hs
+          </span>
+        </div>
+      </div>
+
+      <p class="text-[.87rem] leading-[1.75] text-slate-300 opacity-85">Líneas finas y blancas que parecen pintadas con pincel en el azul. Son puro hielo, no agua. Hoy el tiempo es bueno — pero son el primer aviso de que algo viene en camino. Cuanto más se espesan y bajan, más cercano está el cambio.</p>
+
+      <div class="observe-tag">👁 Mejor observarlos: <span class="text-slate-400 ml-1">luz lateral del amanecer o el atardecer — resaltan en dorado</span></div>
+
+      <button class="self-start text-[.68rem] font-medium text-sky-400 border border-sky-900 rounded-sm px-3 py-1 hover:bg-sky-950 transition-colors cursor-pointer" onclick="toggleAero(this)">✈️ Ver significado aeronáutico ▾</button>
+      <div class="aero-panel">
+        <div class="bg-[#0f2240] border border-[    max-height: 0;
     transition: max-height .4s ease, opacity .3s ease;
     opacity: 0;
   }
