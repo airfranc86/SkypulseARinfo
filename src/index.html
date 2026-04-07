@@ -7,8 +7,8 @@
   IMAGEN FIX — triple capa:
   1. Esta meta tag global: el browser no envía el header Referer a ningún servidor externo.
   2. referrerpolicy="no-referrer" en cada <img>: refuerza lo mismo a nivel de elemento.
-  3. URLs via commons.wikimedia.org/wiki/Special:FilePath/ en lugar de upload.wikimedia.org:
-     este es el endpoint oficial de Wikimedia para embedding, sin restricciones de hotlinking.
+  3. URLs directas de upload.wikimedia.org/wikipedia/commons/thumb/ en formato 960px.
+     Son los archivos reales de imagen, no páginas de redirección.
 -->
 <meta name="referrer" content="no-referrer">
 <title>SkyPulse — Catálogo del Cielo</title>
@@ -288,7 +288,7 @@
 <!--
   CADA CARD SIGUE ESTA ESTRUCTURA:
   ─ data-family="X"        → para el filtro JS
-  ─ imagen con referrerpolicy="no-referrer" y URL de Special:FilePath
+  ─ imagen con referrerpolicy="no-referrer" y URL directa de upload.wikimedia.org/thumb/
   ─ danger-scale data-level="1-5" → barra visual de peligro
   ─ observe-tag → cuándo y cómo observarla
   ─ botón toggleAero → panel expandible con info aeronáutica
@@ -306,7 +306,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Cirrus_clouds2.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Cirrus_clouds2.jpg/960px-Cirrus_clouds2.jpg"
         alt="Cirros — filamentos blancos en cielo azul" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
     </div>
@@ -352,7 +352,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Cirrostratus_clouds_with_halo.JPG?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Cirrostratus_clouds_with_halo.JPG/960px-Cirrostratus_clouds_with_halo.JPG"
         alt="Cirrostratos con halo solar" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
     </div>
@@ -393,7 +393,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Cirrocumulus2.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Cirrocumulus2.jpg/960px-Cirrocumulus2.jpg"
         alt="Cirrocúmulos — patrón de escamas blancas" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Alta · 6–12 km</span>
     </div>
@@ -440,7 +440,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Altocumulus_castellanus.JPG?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Altocumulus_castellanus.JPG/960px-Altocumulus_castellanus.JPG"
         alt="Altocúmulos castellanus con torres convectivas" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Media · 2–6 km</span>
     </div>
@@ -481,7 +481,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Altostratus_clouds_over_Hong_Kong.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Altostratus_clouds_over_Hong_Kong.jpg/960px-Altostratus_clouds_over_Hong_Kong.jpg"
         alt="Altostratos — manta gris uniforme sin sombras" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Media · 2–6 km</span>
     </div>
@@ -528,7 +528,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/2006_01_14_-_Stratus_clouds.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/2006_01_14_-_Stratus_clouds.jpg/960px-2006_01_14_-_Stratus_clouds.jpg"
         alt="Estrato — capa gris plana y uniforme a baja altura" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Baja · 0–2 km</span>
     </div>
@@ -569,7 +569,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Stratocumulus_cloud.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Stratocumulus_cloud.jpg/960px-Stratocumulus_cloud.jpg"
         alt="Estratocúmulos — bloques grises agrupados con claros de azul" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Baja · 0–2 km</span>
     </div>
@@ -610,7 +610,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Nimbostratus.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Nimbostratus.jpg/960px-Nimbostratus.jpg"
         alt="Nimboestrato — capa oscura y densa con lluvia continua" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Baja · 0–3 km</span>
     </div>
@@ -657,7 +657,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Cumulus_clouds_panorama.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Cumulus_clouds_panorama.jpg/960px-Cumulus_clouds_panorama.jpg"
         alt="Cúmulos — nubes blancas esponjosas con base plana en cielo azul" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Vertical · base 600–2.000 m</span>
     </div>
@@ -698,7 +698,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Anvil_shaped_cumulus_panorama_edit_crop.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Anvil_shaped_cumulus_panorama_edit_crop.jpg/960px-Anvil_shaped_cumulus_panorama_edit_crop.jpg"
         alt="Cumulonimbo — torre masiva con yunque en la cúspide" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Vertical · hasta 15 km</span>
     </div>
@@ -745,7 +745,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Lenticular_cloud_above_Carmel_Valley_Village.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Lenticular_cloud_above_Carmel_Valley_Village.jpg/960px-Lenticular_cloud_above_Carmel_Valley_Village.jpg"
         alt="Nube lenticular — disco perfecto estacionario sobre montaña" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Especial · Orográfica</span>
     </div>
@@ -786,7 +786,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Mammatus_clouds_over_Tulsa,_OK_-_2.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/Mammatus_clouds_over_Tulsa%2C_OK_-_2.jpg/960px-Mammatus_clouds_over_Tulsa%2C_OK_-_2.jpg"
         alt="Mammatus — bolsas colgantes bajo la base de un Cumulonimbo" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Especial · Convectiva</span>
     </div>
@@ -827,7 +827,7 @@
     <div class="card-img-box relative rounded overflow-hidden bg-[#0f2240] flex-shrink-0" style="width:300px;height:200px">
       <img class="card-img w-full h-full object-cover"
         referrerpolicy="no-referrer"
-        src="https://commons.wikimedia.org/wiki/Special:FilePath/Fog_over_San_Francisco.jpg?width=800"
+        src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/Fog_over_San_Francisco.jpg/960px-Fog_over_San_Francisco.jpg"
         alt="Niebla sobre San Francisco — visibilidad reducida" loading="lazy">
       <span class="absolute top-2 left-2 bg-[#060d1acc] backdrop-blur text-[.58rem] font-medium tracking-widest uppercase text-slate-300 px-2 py-1 rounded-sm border border-white/10">Especial · Superficie</span>
     </div>
