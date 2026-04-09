@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>SkyPulse — Lluvias</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: { 
+        extend: { 
+          fontFamily: { 
+            serif: ['"Playfair Display"','serif'], 
+            sans:['"DM Sans"','sans-serif'] 
+          } 
+        } 
+      }
+    }
+  </script>
+
+  <style>
+    body { background:#060d1a; font-family:'DM Sans',sans-serif; color: #e2e8f0; }
+    .font-serif { font-family:'Playfair Display',serif; }
+    .hover\:bg-slate-900:hover { background:#0d1e38; }
+    .border-b { border-bottom: 1px solid #1c3358; }
+    .border-t { border-top: 1px solid #1c3358; }
+    .badge-lluvia { 
+      display: inline-flex; 
+      align-items: center; 
+      gap: .3rem; 
+      font-size: .68rem; 
+      padding: .2rem .5rem; 
+      border-radius: 4px; 
+      border: 1px solid rgba(43,143,212,.3); 
+      color: #5aaad8; 
+      background: rgba(43,143,212,.06); 
+    }
+    .danger-level-1 { border-color: rgba(39,174,96,.35); color: #3ecf7a; }
+    .danger-level-2 { border-color: rgba(212,135,15,.35); color: #f0a030; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- HEADER -->
+  <header class="relative z-10 text-center px-6 pt-20 pb-10 border-b border-[#1c3358]">
+    <div class="eyebrow-deco inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.28em] uppercase text-yellow-500 mb-5">
+      Lluvias según el cielo
+    </div>
+    <h1 class="font-serif text-5xl md:text-7xl font-normal leading-[1.06] text-slate-100">
+      Qué tipo de lluvia<br>esperar según el cielo
+    </h1>
+    <p class="mt-5 text-[.96rem] text-slate-400 max-w-md mx-auto leading-[1.8]">
+      Aquí solo se explica qué tipo de lluvia suele acompañar a cada tipo de nube visible en SkyPulse, sin tecnicismos.
+    </p>
+  </header>
+
+  <!-- TABLA DE REFERENCIA -->
+  <main class="max-w-4xl mx-auto px-6 py-10 text-slate-300">
+    <table class="w-full text-[.8rem] border-separate border-spacing-0">
+      <thead>
+        <tr class="text-slate-500 uppercase tracking-[.15em]">
+          <th class="text-left pb-3">Tipo de nube</th>
+          <th class="text-left pb-3">¿Suele llover?</th>
+          <th class="text-left pb-3">Intensidad típica</th>
+          <th class="text-left pb-3">Duración típica</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-[#1c3358]">
+        <tr class="hover:bg-slate-900">
+          <td class="py-3 font-medium">Cirros</td>
+          <td class="py-3 text-slate-500">No</td>
+          <td class="py-3 text-slate-500">Sin lluvia</td>
+          <td class="py-3 text-slate-500">—</td>
+        </tr>
+        <tr class="hover:bg-slate-900">
+          <td class="py-3 font-medium">Cirrostratos</td>
+          <td class="py-3">
+            <span class="badge-lluvia border-sky-700 text-sky-400">Sí, en 12–24 h</span>
+          </td>
+          <td class="py-3">Lluvia ligera</td>
+          <td class="py-3">Prolongada</td>
+        </tr>
+        <tr class="hover:bg-slate-900">
+          <td class="py-3 font-medium">Estratos</td>
+          <td class="py-3 text-sky-400">Sí</td>
+          <td class="py-3">Llovizna suave</td>
+          <td class="py-3">Larga</td>
+        </tr>
+        <tr class="hover:bg-slate-900">
+          <td class="py-3 font-medium">Nimboestratos</td>
+          <td class="py-3">
+            <span class="badge-lluvia danger-level-1">Sí</span>
+          </td>
+          <td class="py-3">Lluvia continua</td>
+          <td class="py-3">Muchas horas</td>
+        </tr>
+        <tr class="hover:bg-slate-900">
+          <td class="py-3 font-medium">Cúmulo</td>
+          <td class="py-3 text-yellow-400">Puede llover</td>
+          <td class="py-3">Chubasco breve</td>
+          <td class="py-3">Corta</td>
+        </tr>
+        <tr class="hover:bg-slate-900">
+          <td class="py-3 font-medium">Cumulonimbos</td>
+          <td class="py-3">
+            <span class="badge-lluvia danger-level-2">Sí</span>
+          </td>
+          <td class="py-3">Aguacero fuerte</td>
+          <td class="py-3">Corta a media</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <section class="mt-10 space-y-5">
+      <p class="text-[.9rem] leading-relaxed">
+        Las nubes <span class="font-medium text-slate-100">Cirros</span> no traen lluvia ahora, pero suelen ser el primer aviso de que el tiempo puede cambiar en las próximas horas.
+      </p>
+      <p class="text-[.9rem] leading-relaxed">
+        Con los <span class="font-medium text-slate-100">Estratos</span> se suele tener llovizna fina y continua, buena para pasear con paraguas, pero cansadora si dura todo el día.
+      </p>
+      <p class="text-[.9rem] leading-relaxed">
+        Los <span class="font-medium text-red-400">Cumulonimbos</span> dan aguaceros intensos, ráfagas de viento y truenos: es el tipo de lluvia que conviene evitar a cielo abierto y dejar en casa la planificación al aire libre.
+      </p>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-[#1c3358] px-6 py-5 text-center text-[.72rem] text-slate-500">
+    <a href="/" class="text-sky-400 hover:text-sky-300">
+      ← Volver al catálogo del cielo
+    </a>
+  </footer>
+
+</body>
+</html>
