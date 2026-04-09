@@ -1,3 +1,9 @@
 {
-  "outputDirectory": "src"
+  "outputDirectory": "src",
+  "routes": [
+    {
+      "src": "/Lluvias\\.html",
+      "dest": "/Lluvias.html"
+    }
+  ]
 }
