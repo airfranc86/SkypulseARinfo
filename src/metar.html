@@ -119,6 +119,40 @@
   .glos-panel { overflow:hidden; max-height:0; transition:max-height .4s ease, opacity .3s ease; opacity:0; }
   .glos-panel.open { max-height:800px; opacity:1; }
 
+  /* ── MODAL ICAO ── */
+  #icao-modal {
+    display:none; position:fixed; inset:0; z-index:200;
+    background:rgba(2,8,16,.85); backdrop-filter:blur(6px);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #icao-modal.open { display:flex; }
+  .modal-box {
+    background:#0d1e38; border:1px solid #243e62;
+    border-radius:10px; width:100%; max-width:640px;
+    max-height:85vh; display:flex; flex-direction:column;
+    animation:fadeIn .25s ease both;
+  }
+  .modal-header { padding:1.1rem 1.4rem; border-bottom:1px solid #1c3358; }
+  .modal-body   { padding:1rem 1.4rem; overflow-y:auto; flex:1; }
+  .modal-search {
+    width:100%; background:#060d1a; border:1px solid #243e62;
+    border-radius:5px; padding:.55rem .9rem; color:#e2e8f0;
+    font-size:.82rem; outline:none; transition:border-color .2s;
+  }
+  .modal-search:focus { border-color:#c8a84b; }
+  .tab-btn { padding:.35rem .9rem; border-radius:20px; font-size:.68rem; font-weight:500;
+    border:1px solid #243e62; color:#6b8099; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .tab-btn.active { background:#c8a84b; color:#060d1a; border-color:#c8a84b; }
+  .icao-row { display:flex; align-items:center; justify-content:space-between;
+    padding:.55rem .5rem; border-radius:5px; cursor:pointer; transition:background .15s; }
+  .icao-row:hover { background:rgba(200,168,75,.08); }
+  .icao-row .code { font-family:'JetBrains Mono',monospace; font-size:.82rem;
+    color:#c8a84b; font-weight:500; min-width:52px; }
+  .icao-row .city { font-size:.8rem; color:#c8d6e5; }
+  .icao-row .country { font-size:.68rem; color:#4a6882; }
+  .region-label { font-size:.6rem; font-weight:500; letter-spacing:.15em;
+    text-transform:uppercase; color:#2a4a70; padding:.6rem .5rem .3rem; }
+
   /* ── Scrollbar ── */
   ::-webkit-scrollbar { width:5px; }
   ::-webkit-scrollbar-track { background:#0b1929; }
@@ -135,12 +169,12 @@
 <body class="text-slate-200 min-h-screen overflow-x-hidden">
 
 <!-- ══════════════ NAV BREADCRUMB ══════════════ -->
-<nav class="relative z-10 border-b border-[#1c3358] px-6 py-3 flex items-center gap-3 text-[.72rem] text-slate-500">
-  <a href="./index.html" class="hover:text-yellow-400 transition-colors flex items-center gap-1.5">
-    <span>←</span> SkyPulse
-  </a>
+<nav class="relative z-10 border-b border-[#1c3358] px-6 py-3 flex items-center gap-3 text-[.72rem] text-slate-500 flex-wrap">
+  <a href="./index.html" class="hover:text-yellow-400 transition-colors font-medium text-yellow-600 tracking-widest uppercase text-[.65rem]">SkyPulse</a>
   <span class="text-[#1c3358]">/</span>
-  <span class="text-slate-300">METAR & TAF</span>
+  <a href="./metar.html" class="hover:text-sky-400 transition-colors text-slate-300">METAR & TAF</a>
+  <span class="text-[#1c3358] ml-auto"></span>
+  <a href="./lluvia.html" class="hover:text-blue-400 transition-colors text-slate-600">🌧 Precipitaciones</a>
 </nav>
 
 <!-- ══════════════ HEADER ══════════════ -->
@@ -175,6 +209,9 @@
         oninput="this.value = this.value.toUpperCase()"
         onkeydown="if(event.key==='Enter') fetchMETAR()"
       >
+      <button onclick="openModal()" class="border border-[#243e62] text-slate-400 hover:border-yellow-700 hover:text-yellow-300 text-[.78rem] px-4 py-2.5 rounded transition-colors cursor-pointer">
+        🔍 Ver ICAO
+      </button>
       <button
         onclick="fetchMETAR()"
         id="fetch-btn"
@@ -187,6 +224,12 @@
         </svg>
       </button>
     </div>
+
+    <!-- API notice -->
+    <p class="mt-3 text-[.67rem] text-slate-600">
+      Datos provistos por <a href="https://www.checkwx.com" target="_blank" rel="noopener" class="underline hover:text-slate-400">CheckWX</a>.
+    </p>
+  </div>
 
   <!-- RESULT AREA -->
   <div id="result-area" class="mt-6 hidden fade-in">
@@ -527,8 +570,286 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
   Información con fines educativos — consultar NOTAMs y documentación oficial OACI para operaciones reales.
 </footer>
 
+<!-- ══════════════ MODAL ICAO ══════════════ -->
+<div id="icao-modal" onclick="if(event.target===this) closeModal()">
+  <div class="modal-box">
+
+    <!-- Header -->
+    <div class="modal-header flex items-center justify-between">
+      <div>
+        <div class="font-serif text-lg font-normal text-slate-100">Códigos ICAO</div>
+        <div class="text-[.68rem] text-slate-500 mt-0.5">Hacé clic en una ciudad para cargarla</div>
+      </div>
+      <button onclick="closeModal()" class="text-slate-500 hover:text-slate-200 transition-colors text-xl leading-none cursor-pointer px-2">✕</button>
+    </div>
+
+    <!-- Buscador -->
+    <div class="px-4 pt-4 pb-2">
+      <input id="modal-search" class="modal-search" placeholder="Buscar ciudad o código ICAO…" oninput="filterModal(this.value)">
+    </div>
+
+    <!-- Tabs de región -->
+    <div class="px-4 pb-3 flex gap-2 flex-wrap" id="modal-tabs">
+      <button class="tab-btn active" onclick="setTab('all',this)">Todo</button>
+      <button class="tab-btn" onclick="setTab('AR',this)">🇦🇷 Argentina</button>
+      <button class="tab-btn" onclick="setTab('US',this)">🇺🇸 Estados Unidos</button>
+      <button class="tab-btn" onclick="setTab('EU',this)">🇪🇺 Europa</button>
+      <button class="tab-btn" onclick="setTab('UY',this)">🇺🇾 Uruguay</button>
+      <button class="tab-btn" onclick="setTab('BR',this)">🇧🇷 Brasil</button>
+      <button class="tab-btn" onclick="setTab('CL',this)">🇨🇱 Chile</button>
+      <button class="tab-btn" onclick="setTab('PE',this)">🇵🇪 Perú</button>
+      <button class="tab-btn" onclick="setTab('EC',this)">🇪🇨 Ecuador</button>
+      <button class="tab-btn" onclick="setTab('CO',this)">🇨🇴 Colombia</button>
+      <button class="tab-btn" onclick="setTab('DO',this)">🇩🇴 R. Dominicana</button>
+    </div>
+
+    <!-- Lista -->
+    <div class="modal-body" id="modal-list"></div>
+
+  </div>
+</div>
+
 <!-- ══════════════ JAVASCRIPT ══════════════ -->
 <script>
+  // ─── Base de datos ICAO ────────────────────────────────────────────────────
+  const ICAO_DB = [
+    // ARGENTINA
+    {code:'SAEZ', city:'Buenos Aires',       country:'Argentina', region:'AR', full:'Ezeiza Int\'l'},
+    {code:'SABE', city:'Buenos Aires',       country:'Argentina', region:'AR', full:'Aeroparque Jorge Newbery'},
+    {code:'SACO', city:'Córdoba',            country:'Argentina', region:'AR', full:'Aeropuerto Córdoba'},
+    {code:'SAME', city:'Mendoza',            country:'Argentina', region:'AR', full:'El Plumerillo'},
+    {code:'SARS', city:'Rosario',            country:'Argentina', region:'AR', full:'Islas Malvinas'},
+    {code:'SAMQ', city:'San Luis',           country:'Argentina', region:'AR', full:'Aeropuerto San Luis'},
+    {code:'SANL', city:'La Rioja',           country:'Argentina', region:'AR', full:'Aeropuerto La Rioja'},
+    {code:'SANT', city:'Tucumán',            country:'Argentina', region:'AR', full:'Teniente Benjamín Matienzo'},
+    {code:'SASA', city:'Salta',              country:'Argentina', region:'AR', full:'Martín Miguel de Güemes'},
+    {code:'SASJ', city:'San Juan',           country:'Argentina', region:'AR', full:'Domingo Faustino Sarmiento'},
+    {code:'SAVB', city:'Bariloche',          country:'Argentina', region:'AR', full:'Teniente Luis Candelaria'},
+    {code:'SAWC', city:'Comodoro Rivadavia', country:'Argentina', region:'AR', full:'General Enrique Mosconi'},
+    {code:'SAWG', city:'Río Gallegos',       country:'Argentina', region:'AR', full:'Piloto Civil N. Fernández'},
+    {code:'SAWO', city:'Neuquén',            country:'Argentina', region:'AR', full:'Presidente Perón'},
+    {code:'SAWH', city:'Ushuaia',            country:'Argentina', region:'AR', full:'Malvinas Argentinas'},
+    {code:'SAZR', city:'Santa Rosa (La Pampa)',country:'Argentina',region:'AR',full:'Aeropuerto Santa Rosa'},
+    {code:'SAVV', city:'Viedma',             country:'Argentina', region:'AR', full:'Gobernador Edgardo Castello'},
+    {code:'SAAC', city:'Concordia',          country:'Argentina', region:'AR', full:'Aeropuerto Concordia'},
+    {code:'SAAG', city:'Gualeguaychú',       country:'Argentina', region:'AR', full:'Aeropuerto Gualeguaychú'},
+    {code:'SAAR', city:'Paraná',             country:'Argentina', region:'AR', full:'General Justo José de Urquiza'},
+    {code:'SAAI', city:'Mar del Plata',      country:'Argentina', region:'AR', full:'Ástor Piazzolla'},
+    {code:'SAVY', city:'Mar del Plata',      country:'Argentina', region:'AR', full:'Mar del Plata'},
+    {code:'SADP', city:'Posadas',            country:'Argentina', region:'AR', full:'Libertador General San Martín'},
+    {code:'SATK', city:'Catamarca',          country:'Argentina', region:'AR', full:'Coronel Felipe Varela'},
+
+    // ESTADOS UNIDOS
+    {code:'KJFK', city:'Nueva York',      country:'Estados Unidos', region:'US', full:'John F. Kennedy Int\'l'},
+    {code:'KLGA', city:'Nueva York',      country:'Estados Unidos', region:'US', full:'LaGuardia'},
+    {code:'KEWR', city:'Newark',          country:'Estados Unidos', region:'US', full:'Newark Liberty Int\'l'},
+    {code:'KORD', city:'Chicago',         country:'Estados Unidos', region:'US', full:'O\'Hare Int\'l'},
+    {code:'KLAX', city:'Los Ángeles',     country:'Estados Unidos', region:'US', full:'Los Angeles Int\'l'},
+    {code:'KSFO', city:'San Francisco',   country:'Estados Unidos', region:'US', full:'San Francisco Int\'l'},
+    {code:'KMIA', city:'Miami',           country:'Estados Unidos', region:'US', full:'Miami Int\'l'},
+    {code:'KATL', city:'Atlanta',         country:'Estados Unidos', region:'US', full:'Hartsfield-Jackson Atlanta'},
+    {code:'KDFW', city:'Dallas',          country:'Estados Unidos', region:'US', full:'Dallas/Fort Worth Int\'l'},
+    {code:'KDEN', city:'Denver',          country:'Estados Unidos', region:'US', full:'Denver Int\'l'},
+    {code:'KLAS', city:'Las Vegas',       country:'Estados Unidos', region:'US', full:'Harry Reid Int\'l'},
+    {code:'KPHX', city:'Phoenix',         country:'Estados Unidos', region:'US', full:'Phoenix Sky Harbor'},
+    {code:'KSEA', city:'Seattle',         country:'Estados Unidos', region:'US', full:'Seattle-Tacoma Int\'l'},
+    {code:'KBOS', city:'Boston',          country:'Estados Unidos', region:'US', full:'Logan Int\'l'},
+    {code:'KIAD', city:'Washington D.C.', country:'Estados Unidos', region:'US', full:'Dulles Int\'l'},
+    {code:'KDCA', city:'Washington D.C.', country:'Estados Unidos', region:'US', full:'Reagan National'},
+    {code:'KHOU', city:'Houston',         country:'Estados Unidos', region:'US', full:'William P. Hobby'},
+    {code:'KIAH', city:'Houston',         country:'Estados Unidos', region:'US', full:'George Bush Intercontinental'},
+    {code:'KMCO', city:'Orlando',         country:'Estados Unidos', region:'US', full:'Orlando Int\'l'},
+    {code:'KPHL', city:'Filadelfia',      country:'Estados Unidos', region:'US', full:'Philadelphia Int\'l'},
+    {code:'KMSP', city:'Minneapolis',     country:'Estados Unidos', region:'US', full:'Minneapolis-Saint Paul Int\'l'},
+    {code:'KDTW', city:'Detroit',         country:'Estados Unidos', region:'US', full:'Detroit Metropolitan'},
+    {code:'KBWI', city:'Baltimore',       country:'Estados Unidos', region:'US', full:'Baltimore/Washington Int\'l'},
+    {code:'PHNL', city:'Honolulu',        country:'Estados Unidos', region:'US', full:'Daniel K. Inouye Int\'l'},
+    {code:'PANC', city:'Anchorage',       country:'Estados Unidos', region:'US', full:'Ted Stevens Anchorage Int\'l'},
+
+    // EUROPA — capitales
+    {code:'EGLL', city:'Londres',         country:'Reino Unido',   region:'EU', full:'Heathrow'},
+    {code:'LFPG', city:'París',           country:'Francia',       region:'EU', full:'Charles de Gaulle'},
+    {code:'EDDF', city:'Fráncfort',       country:'Alemania',      region:'EU', full:'Frankfurt am Main'},
+    {code:'LEMD', city:'Madrid',          country:'España',        region:'EU', full:'Adolfo Suárez Barajas'},
+    {code:'LIRF', city:'Roma',            country:'Italia',        region:'EU', full:'Fiumicino Leonardo da Vinci'},
+    {code:'EHAM', city:'Ámsterdam',       country:'Países Bajos',  region:'EU', full:'Schiphol'},
+    {code:'LOWW', city:'Viena',           country:'Austria',       region:'EU', full:'Vienna Int\'l'},
+    {code:'LSZH', city:'Zúrich',          country:'Suiza',         region:'EU', full:'Kloten'},
+    {code:'LKPR', city:'Praga',           country:'Rep. Checa',    region:'EU', full:'Václav Havel'},
+    {code:'EPWA', city:'Varsovia',        country:'Polonia',       region:'EU', full:'Chopin'},
+    {code:'EFHK', city:'Helsinki',        country:'Finlandia',     region:'EU', full:'Helsinki-Vantaa'},
+    {code:'EKCH', city:'Copenhague',      country:'Dinamarca',     region:'EU', full:'Kastrup'},
+    {code:'ENGM', city:'Oslo',            country:'Noruega',       region:'EU', full:'Gardermoen'},
+    {code:'ESMS', city:'Malmö',           country:'Suecia',        region:'EU', full:'Sturup'},
+    {code:'ESSA', city:'Estocolmo',       country:'Suecia',        region:'EU', full:'Arlanda'},
+    {code:'EBBR', city:'Bruselas',        country:'Bélgica',       region:'EU', full:'Brussels Airport'},
+    {code:'LPPT', city:'Lisboa',          country:'Portugal',      region:'EU', full:'Humberto Delgado'},
+    {code:'LGAV', city:'Atenas',          country:'Grecia',        region:'EU', full:'Eleftherios Venizelos'},
+    {code:'LHBP', city:'Budapest',        country:'Hungría',       region:'EU', full:'Ferenc Liszt'},
+    {code:'LYBE', city:'Belgrado',        country:'Serbia',        region:'EU', full:'Nikola Tesla'},
+    {code:'LDZA', city:'Zagreb',          country:'Croacia',       region:'EU', full:'Franjo Tuđman'},
+    {code:'LSGG', city:'Ginebra',         country:'Suiza',         region:'EU', full:'Ginebra Int\'l'},
+    {code:'EIDW', city:'Dublín',          country:'Irlanda',       region:'EU', full:'Dublin Airport'},
+    {code:'UUEE', city:'Moscú',           country:'Rusia',         region:'EU', full:'Sheremetyevo'},
+
+    // URUGUAY
+    {code:'SUMU', city:'Montevideo',      country:'Uruguay', region:'UY', full:'Carrasco Int\'l'},
+    {code:'SUPU', city:'Punta del Este',  country:'Uruguay', region:'UY', full:'Capitán Corbeta C. A. Curbelo'},
+    {code:'SURV', city:'Rivera',          country:'Uruguay', region:'UY', full:'Aeropuerto Rivera'},
+    {code:'SULS', city:'Salto',           country:'Uruguay', region:'UY', full:'Aeropuerto Salto'},
+
+    // BRASIL
+    {code:'SBGR', city:'São Paulo',       country:'Brasil', region:'BR', full:'Guarulhos Int\'l'},
+    {code:'SBSP', city:'São Paulo',       country:'Brasil', region:'BR', full:'Congonhas'},
+    {code:'SBRJ', city:'Río de Janeiro',  country:'Brasil', region:'BR', full:'Santos Dumont'},
+    {code:'SBGL', city:'Río de Janeiro',  country:'Brasil', region:'BR', full:'Galeão Int\'l'},
+    {code:'SBBR', city:'Brasilia',        country:'Brasil', region:'BR', full:'Presidente Juscelino Kubitschek'},
+    {code:'SBSV', city:'Salvador',        country:'Brasil', region:'BR', full:'Deputado Luís Eduardo Magalhães'},
+    {code:'SBFZ', city:'Fortaleza',       country:'Brasil', region:'BR', full:'Pinto Martins Int\'l'},
+    {code:'SBMN', city:'Manaos',          country:'Brasil', region:'BR', full:'Eduardo Gomes Int\'l'},
+    {code:'SBPO', city:'Porto Alegre',    country:'Brasil', region:'BR', full:'Salgado Filho Int\'l'},
+    {code:'SBCT', city:'Curitiba',        country:'Brasil', region:'BR', full:'Afonso Pena Int\'l'},
+    {code:'SBRF', city:'Recife',          country:'Brasil', region:'BR', full:'Guararapes Int\'l'},
+    {code:'SBFL', city:'Florianópolis',   country:'Brasil', region:'BR', full:'Hercílio Luz Int\'l'},
+
+    // CHILE
+    {code:'SCEL', city:'Santiago',        country:'Chile', region:'CL', full:'Arturo Merino Benítez'},
+    {code:'SCFA', city:'Antofagasta',     country:'Chile', region:'CL', full:'Cerro Moreno'},
+    {code:'SCIE', city:'Concepción',      country:'Chile', region:'CL', full:'Carriel Sur'},
+    {code:'SCTE', city:'Puerto Montt',    country:'Chile', region:'CL', full:'El Tepual'},
+    {code:'SCRG', city:'Osorno',          country:'Chile', region:'CL', full:'Canal Bajo Carlos Hott'},
+    {code:'SCPQ', city:'Valparaíso',      country:'Chile', region:'CL', full:'Torquemada'},
+    {code:'SCAR', city:'Arica',           country:'Chile', region:'CL', full:'Chacalluta'},
+    {code:'SCIP', city:'Isla de Pascua',  country:'Chile', region:'CL', full:'Mataveri Int\'l'},
+    {code:'SCDA', city:'Iquique',         country:'Chile', region:'CL', full:'Diego Aracena Int\'l'},
+    {code:'SCSE', city:'La Serena',       country:'Chile', region:'CL', full:'La Florida'},
+
+    // PERÚ
+    {code:'SPJC', city:'Lima',            country:'Perú', region:'PE', full:'Jorge Chávez Int\'l'},
+    {code:'SPTU', city:'Puerto Maldonado',country:'Perú', region:'PE', full:'Padre José de Aldamiz Int\'l'},
+    {code:'SPLO', city:'Ilo',             country:'Perú', region:'PE', full:'Aeropuerto de Ilo'},
+    {code:'SPAY', city:'Tarapoto',        country:'Perú', region:'PE', full:'Cadete FAP Guillermo del Castillo Paredes'},
+    {code:'SPQU', city:'Arequipa',        country:'Perú', region:'PE', full:'Rodríguez Ballón Int\'l'},
+    {code:'SPZO', city:'Cusco',           country:'Perú', region:'PE', full:'Alejandro Velasco Astete Int\'l'},
+    {code:'SPHI', city:'Chiclayo',        country:'Perú', region:'PE', full:'FAP José Abelardo Quiñones'},
+    {code:'SPTN', city:'Tacna',           country:'Perú', region:'PE', full:'Coronel FAP Carlos Ciriani'},
+
+    // ECUADOR
+    {code:'SEQM', city:'Quito',           country:'Ecuador', region:'EC', full:'Mariscal Sucre Int\'l'},
+    {code:'SEGU', city:'Guayaquil',       country:'Ecuador', region:'EC', full:'José Joaquín de Olmedo Int\'l'},
+    {code:'SENL', city:'Nueva Loja',      country:'Ecuador', region:'EC', full:'Lago Agrio'},
+    {code:'SECU', city:'Cuenca',          country:'Ecuador', region:'EC', full:'Mariscal Lamar Int\'l'},
+    {code:'SEMH', city:'Manta',           country:'Ecuador', region:'EC', full:'Eloy Alfaro Int\'l'},
+    {code:'SEIB', city:'Ibarra',          country:'Ecuador', region:'EC', full:'Aeropuerto Ibarra'},
+
+    // COLOMBIA
+    {code:'SKBO', city:'Bogotá',          country:'Colombia', region:'CO', full:'El Dorado Int\'l'},
+    {code:'SKMD', city:'Medellín',        country:'Colombia', region:'CO', full:'Olaya Herrera'},
+    {code:'SKRG', city:'Medellín',        country:'Colombia', region:'CO', full:'José María Córdova'},
+    {code:'SKCL', city:'Cali',            country:'Colombia', region:'CO', full:'Alfonso Bonilla Aragón'},
+    {code:'SKBQ', city:'Barranquilla',    country:'Colombia', region:'CO', full:'Ernesto Cortissoz Int\'l'},
+    {code:'SKCG', city:'Cartagena',       country:'Colombia', region:'CO', full:'Rafael Núñez Int\'l'},
+    {code:'SKSP', city:'San Andrés',      country:'Colombia', region:'CO', full:'Gustavo Rojas Pinilla Int\'l'},
+    {code:'SKPE', city:'Pereira',         country:'Colombia', region:'CO', full:'Matecaña Int\'l'},
+
+    // REPÚBLICA DOMINICANA
+    {code:'MDSD', city:'Santo Domingo',   country:'Rep. Dominicana', region:'DO', full:'Las Américas Int\'l'},
+    {code:'MDPP', city:'Puerto Plata',    country:'Rep. Dominicana', region:'DO', full:'Gregorio Luperón Int\'l'},
+    {code:'MDPC', city:'Punta Cana',      country:'Rep. Dominicana', region:'DO', full:'Punta Cana Int\'l'},
+    {code:'MDJB', city:'La Romana',       country:'Rep. Dominicana', region:'DO', full:'Casa de Campo Int\'l'},
+    {code:'MDCY', city:'Samaná',          country:'Rep. Dominicana', region:'DO', full:'El Catey Int\'l'},
+  ];
+
+  // ─── Modal state ──────────────────────────────────────────────────────────
+  let activeRegion = 'all';
+
+  function openModal() {
+    document.getElementById('icao-modal').classList.add('open');
+    document.getElementById('modal-search').value = '';
+    renderList();
+    setTimeout(() => document.getElementById('modal-search').focus(), 100);
+  }
+
+  function closeModal() {
+    document.getElementById('icao-modal').classList.remove('open');
+  }
+
+  function setTab(region, btn) {
+    activeRegion = region;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('modal-search').value = '';
+    renderList();
+  }
+
+  function filterModal(query) {
+    renderList(query.trim().toLowerCase());
+  }
+
+  function renderList(query = '') {
+    const list = document.getElementById('modal-list');
+
+    let items = ICAO_DB.filter(item => {
+      const matchRegion  = activeRegion === 'all' || item.region === activeRegion;
+      const matchSearch  = !query ||
+        item.code.toLowerCase().includes(query) ||
+        item.city.toLowerCase().includes(query) ||
+        item.full.toLowerCase().includes(query) ||
+        item.country.toLowerCase().includes(query);
+      return matchRegion && matchSearch;
+    });
+
+    if (items.length === 0) {
+      list.innerHTML = '<p class="text-[.78rem] text-slate-600 text-center py-8">Sin resultados</p>';
+      return;
+    }
+
+    // Group by country when showing 'all'
+    if (activeRegion === 'all' && !query) {
+      const groups = {};
+      items.forEach(item => {
+        if (!groups[item.country]) groups[item.country] = [];
+        groups[item.country].push(item);
+      });
+
+      list.innerHTML = Object.entries(groups).map(([country, airports]) => `
+        <div class="region-label">${country}</div>
+        ${airports.map(a => rowHTML(a)).join('')}
+      `).join('');
+    } else {
+      list.innerHTML = items.map(a => rowHTML(a)).join('');
+    }
+  }
+
+  function rowHTML(a) {
+    return `
+      <div class="icao-row" onclick="selectICAO('${a.code}')">
+        <div class="flex items-center gap-3">
+          <span class="code">${a.code}</span>
+          <div>
+            <div class="city">${a.city}</div>
+            <div class="country">${a.full}</div>
+          </div>
+        </div>
+        <span class="country">${a.country}</span>
+      </div>`;
+  }
+
+  function selectICAO(code) {
+    document.getElementById('icao-input').value = code;
+    closeModal();
+    fetchMETAR();
+  }
+
+  // Close on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+  });
+
+</script>
+
+</body>
+</html>
   // ─── CheckWX API ───────────────────────────────────────────────────────────
   // Plan gratuito: 10.000 requests/mes — suficiente para MVP educativo.
   // NOTA ARQUITECTURAL: para producción con tráfico real, mover la key a un
