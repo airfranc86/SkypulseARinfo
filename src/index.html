@@ -270,6 +270,8 @@
 
 <!-- ══════════════════ FILTER BAR ══════════════════ -->
 <nav class="sticky top-0 z-50 bg-[#060d1af6] backdrop-blur-lg border-b border-[#1c3358] px-4 py-3 flex flex-wrap gap-2 justify-center items-center">
+  <a href="./metar.html" class="px-4 py-1.5 rounded-full border border-sky-900 text-[.72rem] text-sky-400 bg-transparent hover:bg-sky-950 transition-all cursor-pointer no-underline">📡 METAR & TAF</a>
+  <div class="w-px h-4 bg-[#243e62]"></div>
   <button class="fbtn active px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('all',this)">Todo</button>
   <div class="w-px h-4 bg-[#243e62]"></div>
   <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('alta',this)">Nubes altas</button>
@@ -279,13 +281,6 @@
   <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('especial',this)">Especiales</button>
   <div class="w-px h-4 bg-[#243e62]"></div>
   <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('aero',this)">✈️ Aeronáutico</button>
-<!-- ══════════════ BOTÓN A SUBPÁGINA DE LLUVIAS Y NUBOSIDAD ══════════════ -->
-  <div class="w-px h-4 bg-[#243e62]"></div>
-  <a 
-  href="/Lluvias.html" 
-  class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer">
-  🌧️ Lluvias
-  </a>
 </nav>
 
 <!-- ══════════════════ MAIN ══════════════════ -->
@@ -1065,10 +1060,7 @@
 <footer class="relative z-10 text-center px-6 py-8 border-t border-[#1c3358] text-[.67rem] text-slate-600 leading-[2]">
   Imágenes: <a class="underline hover:text-slate-400 transition-colors" href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a> bajo licencias Creative Commons ·
   Clasificación basada en el <a class="underline hover:text-slate-400 transition-colors" href="https://cloudatlas.wmo.int" target="_blank" rel="noopener">Atlas Internacional de Nubes (OMM)</a><br>
-  Información aeronáutica con fines divulgativos — consultar documentación oficial OACI/ANAC para operaciones reales.<br>
-  <span class="text-slate-500">
-    Creado por Francisco A. · <a class="underline hover:text-slate-400 transition-colors" href="https://ajconsultingitwebv2.vercel.app/">ajconsultingitwebv2.vercel.app</a> · 2026 ©
-  </span>
+  Información aeronáutica con fines divulgativos — consultar documentación oficial OACI/ANAC para operaciones reales.
 </footer>
 
 <!-- ════ JAVASCRIPT ════ -->
