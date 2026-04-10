@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>SkyPulse — METAR & TAF</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          serif: ['"Playfair Display"','serif'],
+          sans:  ['"DM Sans"','sans-serif'],
+          mono:  ['"JetBrains Mono"','monospace'],
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  /* ── Base ── */
+  body { background:#060d1a; font-family:'DM Sans',sans-serif; }
+
+  /* ── Starfield (consistent with index.html) ── */
+  body::before {
+    content:''; position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse 80% 35% at 50% -5%, rgba(26,74,136,.13) 0%, transparent 60%),
+      radial-gradient(1.5px 1.5px at 12% 18%, rgba(255,255,255,.13) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 35% 42%, rgba(255,255,255,.08) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 61% 22%, rgba(255,255,255,.11) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 84% 67%, rgba(255,255,255,.08) 0%, transparent 100%);
+    pointer-events:none; z-index:0;
+  }
+
+  /* ── METAR raw text block ── */
+  .metar-raw {
+    font-family:'JetBrains Mono', monospace;
+    font-size:.82rem;
+    line-height:1.8;
+    color:#c8e6ff;
+    background:#020810;
+    border:1px solid #1c3358;
+    border-radius:6px;
+    padding:1.25rem 1.5rem;
+    overflow-x:auto;
+    white-space:pre-wrap;
+    word-break:break-all;
+  }
+
+  /* ── Flight category badges ── */
+  .cat-vfr  { background:rgba(39,174,96,.12);  border:1px solid rgba(39,174,96,.4);  color:#3ecf7a; }
+  .cat-mvfr { background:rgba(43,143,212,.12); border:1px solid rgba(43,143,212,.4); color:#5aaad8; }
+  .cat-ifr  { background:rgba(192,57,43,.12);  border:1px solid rgba(192,57,43,.4);  color:#e05545; }
+  .cat-lifr { background:rgba(128,0,128,.12);  border:1px solid rgba(128,0,128,.4);  color:#cc66ff; }
+  .cat-unkn { background:rgba(96,112,128,.12); border:1px solid rgba(96,112,128,.4); color:#90aabb; }
+
+  /* ── Field breakdown cards ── */
+  .field-card {
+    background:#0d1e38;
+    border:1px solid #1c3358;
+    border-radius:6px;
+    padding:.9rem 1.1rem;
+    transition:border-color .2s;
+  }
+  .field-card:hover { border-color:#2a4a70; }
+
+  /* ── Eyebrow deco ── */
+  .eyebrow-deco::before,.eyebrow-deco::after {
+    content:''; display:block; width:28px; height:1px; background:#6e5820;
+  }
+
+  /* ── Section dividers ── */
+  .sec-rule { border-color:#1c3358; }
+
+  /* ── Highlight spans in raw METAR ── */
+  .hl-wind    { color:#f0a030; }
+  .hl-vis     { color:#5aaad8; }
+  .hl-cloud   { color:#3ecf7a; }
+  .hl-temp    { color:#ff9966; }
+  .hl-qnh     { color:#bb88ff; }
+  .hl-phenom  { color:#ff6b6b; }
+  .hl-station { color:#c8a84b; font-weight:500; }
+  .hl-time    { color:#90aabb; }
+
+  /* ── Input focus ring ── */
+  .icao-input:focus {
+    outline:none;
+    border-color:#c8a84b;
+    box-shadow:0 0 0 2px rgba(200,168,75,.15);
+  }
+
+  /* ── Loading spinner ── */
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .spinner { animation:spin .8s linear infinite; }
+
+  /* ── Fade in for results ── */
+  @keyframes fadeIn {
+    from { opacity:0; transform:translateY(12px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .fade-in { animation:fadeIn .4s ease both; }
+
+  /* ── Example tab active ── */
+  .ex-tab.active {
+    background:#c8a84b !important;
+    color:#060d1a !important;
+    border-color:#c8a84b !important;
+  }
+
+  /* ── Glosario accordion ── */
+  .glos-panel { overflow:hidden; max-height:0; transition:max-height .4s ease, opacity .3s ease; opacity:0; }
+  .glos-panel.open { max-height:800px; opacity:1; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width:5px; }
+  ::-webkit-scrollbar-track { background:#0b1929; }
+  ::-webkit-scrollbar-thumb { background:#1c3358; border-radius:3px; }
+
+  /* ── Mobile ── */
+  @media(max-width:640px){
+    .field-grid { grid-template-columns:1fr !important; }
+    .metar-raw { font-size:.72rem; padding:.9rem 1rem; }
+  }
+</style>
+</head>
+
+<body class="text-slate-200 min-h-screen overflow-x-hidden">
+
+<!-- ══════════════ NAV BREADCRUMB ══════════════ -->
+<nav class="relative z-10 border-b border-[#1c3358] px-6 py-3 flex items-center gap-3 text-[.72rem] text-slate-500">
+  <a href="./index.html" class="hover:text-yellow-400 transition-colors flex items-center gap-1.5">
+    <span>←</span> SkyPulse
+  </a>
+  <span class="text-[#1c3358]">/</span>
+  <span class="text-slate-300">METAR & TAF</span>
+</nav>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header class="relative z-10 text-center px-6 pt-14 pb-10 border-b border-[#1c3358]">
+  <div class="eyebrow-deco inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.28em] uppercase text-yellow-500 mb-4">
+    Meteorología operacional
+  </div>
+  <h1 class="font-serif text-4xl md:text-6xl font-normal leading-[1.08] text-slate-100">
+    METAR <em class="text-yellow-300">&</em> TAF
+  </h1>
+  <p class="mt-4 text-[.93rem] text-slate-400 max-w-xl mx-auto leading-[1.8]">
+    El lenguaje cifrado del clima aeronáutico. Aprendé a leerlo campo por campo — y consultá el reporte real de cualquier aeródromo del mundo.
+  </p>
+</header>
+
+<!-- ══════════════ CONSULTA ICAO ══════════════ -->
+<section class="relative z-10 max-w-3xl mx-auto px-4 py-10">
+
+  <div class="bg-[#0d1e38] border border-[#1c3358] rounded-lg p-6">
+    <h2 class="font-serif text-xl font-normal text-slate-100 mb-1">Consultá el METAR de tu aeródromo</h2>
+    <p class="text-[.78rem] text-slate-500 mb-5">Ingresá el código ICAO de 4 letras (ej. SAEZ, LEMD, KJFK, EGLL)</p>
+
+    <div class="flex gap-3 flex-wrap">
+      <input
+        id="icao-input"
+        type="text"
+        maxlength="4"
+        placeholder="SAEZ"
+        autocomplete="off"
+        autocapitalize="characters"
+        class="icao-input flex-1 min-w-[120px] bg-[#060d1a] border border-[#243e62] rounded px-4 py-2.5 text-slate-100 font-mono text-[1rem] tracking-[.25em] uppercase placeholder-slate-600 transition-all"
+        oninput="this.value = this.value.toUpperCase()"
+        onkeydown="if(event.key==='Enter') fetchMETAR()"
+      >
+      <button
+        onclick="fetchMETAR()"
+        id="fetch-btn"
+        class="bg-yellow-600 hover:bg-yellow-500 text-[#060d1a] font-medium text-[.82rem] px-6 py-2.5 rounded transition-colors cursor-pointer flex items-center gap-2"
+      >
+        <span id="btn-label">Consultar METAR</span>
+        <svg id="btn-spinner" class="spinner hidden w-4 h-4" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- API key notice -->
+    <p class="mt-3 text-[.67rem] text-slate-600">
+      Usa la API de <a href="https://www.checkwx.com" target="_blank" rel="noopener" class="underline hover:text-slate-400">CheckWX</a>.
+      La clave de prueba incluida tiene límite de 10.000 requests/mes — suficiente para uso educativo.
+    </p>
+  </div>
+
+  <!-- RESULT AREA -->
+  <div id="result-area" class="mt-6 hidden fade-in">
+
+    <!-- Error state -->
+    <div id="result-error" class="hidden bg-[#1a0a0a] border border-red-900 rounded-lg p-5 text-[.85rem] text-red-400">
+      <span class="font-medium">No se pudo obtener el METAR.</span>
+      <span id="error-msg" class="ml-1 text-red-500/70"></span>
+      <p class="mt-2 text-[.75rem] text-red-800">Verificá el código ICAO o revisá la conexión. Se muestran ejemplos estáticos abajo.</p>
+    </div>
+
+    <!-- Success state -->
+    <div id="result-ok" class="hidden space-y-4">
+
+      <!-- Station + category -->
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <div id="res-station" class="font-serif text-2xl font-normal text-slate-100"></div>
+          <div id="res-name"    class="text-[.75rem] text-slate-500 mt-0.5"></div>
+        </div>
+        <div id="res-category" class="px-3 py-1.5 rounded text-[.75rem] font-medium tracking-wide"></div>
+      </div>
+
+      <!-- Raw METAR -->
+      <div>
+        <div class="text-[.67rem] font-medium tracking-widest uppercase text-slate-600 mb-1.5">Reporte raw</div>
+        <div id="res-raw" class="metar-raw"></div>
+      </div>
+
+      <!-- Fields breakdown -->
+      <div class="text-[.67rem] font-medium tracking-widest uppercase text-slate-600 mb-1.5 mt-2">Desglose</div>
+      <div id="res-fields" class="field-grid grid grid-cols-2 gap-3"></div>
+
+      <!-- TAF if available -->
+      <div id="taf-section" class="hidden mt-2">
+        <div class="text-[.67rem] font-medium tracking-widest uppercase text-slate-600 mb-1.5">TAF — Pronóstico</div>
+        <div id="taf-raw" class="metar-raw"></div>
+      </div>
+
+      <!-- Timestamp -->
+      <div id="res-timestamp" class="text-[.67rem] text-slate-700 text-right"></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════ SEPARADOR ══════════════ -->
+<div class="relative z-10 max-w-5xl mx-auto px-4">
+  <hr class="sec-rule border-t">
+</div>
+
+<!-- ══════════════ EDUCATIVO — QUÉ ES UN METAR ══════════════ -->
+<section class="relative z-10 max-w-5xl mx-auto px-4 py-12">
+  <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-1">¿Qué es un METAR?</h2>
+  <p class="text-[.74rem] text-slate-600 mb-8">Meteorological Aerodrome Report — reporte rutinario de condiciones actuales</p>
+
+  <div class="space-y-4">
+
+    <!-- Ejemplo anotado -->
+    <div class="metar-raw text-[.78rem]">
+<span class="hl-station">SAEZ</span> <span class="hl-time">021300Z</span> <span class="hl-wind">18015KT</span> <span class="hl-vis">9999</span> <span class="hl-cloud">FEW020 SCT060 BKN100</span> <span class="hl-temp">22/14</span> <span class="hl-qnh">Q1018</span> NOSIG
+    </div>
+
+    <!-- Leyenda de colores -->
+    <div class="flex flex-wrap gap-3 text-[.68rem] font-medium">
+      <span class="hl-station px-2.5 py-1 bg-[#0d1e38] rounded border border-[#1c3358]">🏛 Estación ICAO</span>
+      <span class="hl-time    px-2.5 py-1 bg-[#0d1e38] rounded border border-[#1c3358]">🕐 Fecha/Hora UTC</span>
+      <span class="hl-wind    px-2.5 py-1 bg-[#0d1e38] rounded border border-[#1c3358]">💨 Viento</span>
+      <span class="hl-vis     px-2.5 py-1 bg-[#0d1e38] rounded border border-[#1c3358]">👁 Visibilidad</span>
+      <span class="hl-cloud   px-2.5 py-1 bg-[#0d1e38] rounded border border-[#1c3358]">☁ Nubes</span>
+      <span class="hl-temp    px-2.5 py-1 bg-[#0d1e38] rounded border border-[#1c3358]">🌡 Temp/Rocío</span>
+      <span class="hl-qnh     px-2.5 py-1 bg-[#0d1e38] rounded border border-[#1c3358]">📏 QNH</span>
+    </div>
+
+    <!-- Campo por campo -->
+    <div class="field-grid grid grid-cols-2 gap-3 mt-6">
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-600 mb-1">Estación</div>
+        <div class="font-mono text-[.85rem] text-yellow-300 mb-1.5">SAEZ</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">Código ICAO de 4 letras del aeródromo. SAEZ = Ezeiza (Buenos Aires). LEMD = Madrid. KJFK = Nueva York JFK.</p>
+      </div>
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-sky-600 mb-1">Fecha y hora</div>
+        <div class="font-mono text-[.85rem] text-sky-300 mb-1.5">021300Z</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">Día del mes (02) + hora (1300) + Z de Zulú (UTC). Siempre en UTC, nunca hora local.</p>
+      </div>
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-orange-600 mb-1">Viento</div>
+        <div class="font-mono text-[.85rem] text-orange-300 mb-1.5">18015KT</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">Dirección (180° = Sur) + velocidad (15 nudos). Si hay ráfagas: 18015G28KT. Viento variable: VRB05KT. Calma: 00000KT.</p>
+      </div>
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-sky-600 mb-1">Visibilidad</div>
+        <div class="font-mono text-[.85rem] text-sky-300 mb-1.5">9999</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">En metros. 9999 = 10 km o más (visibilidad máxima). 0600 = 600 m. Aeropuertos USA usan millas: 10SM, 1/4SM.</p>
+      </div>
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-green-600 mb-1">Nubes</div>
+        <div class="font-mono text-[.85rem] text-green-300 mb-1.5">FEW020 SCT060 BKN100</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">
+          Cobertura + altura en centenas de pies.<br>
+          FEW = 1–2 octas · SCT = 3–4 octas · BKN = 5–7 octas · OVC = 8 octas (cubierto)<br>
+          020 = 2.000 ft AGL
+        </p>
+      </div>
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-orange-600 mb-1">Temperatura / Punto de rocío</div>
+        <div class="font-mono text-[.85rem] text-orange-300 mb-1.5">22/14</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">Temperatura actual (22°C) / Punto de rocío (14°C). Cuando se acercan → niebla inminente. M indica negativo: M03 = −3°C.</p>
+      </div>
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-purple-600 mb-1">QNH</div>
+        <div class="font-mono text-[.85rem] text-purple-300 mb-1.5">Q1018</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">Presión al nivel del mar en hPa. Crítico para la altimetría: el piloto ajusta el altímetro a este valor para leer alturas correctas.</p>
+      </div>
+
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widets uppercase text-slate-500 mb-1">Tendencia / Fenómenos</div>
+        <div class="font-mono text-[.85rem] text-slate-300 mb-1.5">NOSIG · TEMPO · BECMG</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.65]">NOSIG = sin cambio significativo. TEMPO = cambio temporal. BECMG = cambio gradual hacia X condición. TS = tormenta. FG = niebla.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ CATEGORÍAS DE VUELO ══════════════ -->
+<div class="relative z-10 max-w-5xl mx-auto px-4">
+  <hr class="sec-rule border-t">
+</div>
+
+<section class="relative z-10 max-w-5xl mx-auto px-4 py-12">
+  <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-1">Categorías de vuelo</h2>
+  <p class="text-[.74rem] text-slate-600 mb-8">Determinadas por techo de nubes y visibilidad — definen qué tipo de vuelo es posible</p>
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+    <div class="cat-vfr rounded-lg p-4 text-center">
+      <div class="font-serif text-2xl font-normal mb-1">VFR</div>
+      <div class="text-[.65rem] font-medium tracking-widest uppercase mb-3">Visual Flight Rules</div>
+      <div class="text-[.75rem] leading-[1.7]">
+        Techo &gt; 3.000 ft<br>Visib. &gt; 5 km<br>
+        <span class="opacity-70">Vuelo visual sin restricciones</span>
+      </div>
+    </div>
+
+    <div class="cat-mvfr rounded-lg p-4 text-center">
+      <div class="font-serif text-2xl font-normal mb-1">MVFR</div>
+      <div class="text-[.65rem] font-medium tracking-widest uppercase mb-3">Marginal VFR</div>
+      <div class="text-[.75rem] leading-[1.7]">
+        Techo 1.000–3.000 ft<br>Visib. 3–5 km<br>
+        <span class="opacity-70">Condiciones límite VFR</span>
+      </div>
+    </div>
+
+    <div class="cat-ifr rounded-lg p-4 text-center">
+      <div class="font-serif text-2xl font-normal mb-1">IFR</div>
+      <div class="text-[.65rem] font-medium tracking-widest uppercase mb-3">Instrument Flight Rules</div>
+      <div class="text-[.75rem] leading-[1.7]">
+        Techo 500–1.000 ft<br>Visib. 1,6–3 km<br>
+        <span class="opacity-70">Solo vuelo instrumental</span>
+      </div>
+    </div>
+
+    <div class="cat-lifr rounded-lg p-4 text-center">
+      <div class="font-serif text-2xl font-normal mb-1">LIFR</div>
+      <div class="text-[.65rem] font-medium tracking-widets uppercase mb-3">Low IFR</div>
+      <div class="text-[.75rem] leading-[1.7]">
+        Techo &lt; 500 ft<br>Visib. &lt; 1,6 km<br>
+        <span class="opacity-70">Condiciones muy severas</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════ QUÉ ES UN TAF ══════════════ -->
+<div class="relative z-10 max-w-5xl mx-auto px-4">
+  <hr class="sec-rule border-t">
+</div>
+
+<section class="relative z-10 max-w-5xl mx-auto px-4 py-12">
+  <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-1">¿Qué es un TAF?</h2>
+  <p class="text-[.74rem] text-slate-600 mb-8">Terminal Aerodrome Forecast — pronóstico de hasta 30 horas para un aeródromo</p>
+
+  <div class="metar-raw text-[.78rem] mb-6">
+TAF <span class="hl-station">SAEZ</span> <span class="hl-time">021100Z 0212/0318</span> <span class="hl-wind">19012KT</span> <span class="hl-vis">9999</span> <span class="hl-cloud">SCT030</span>
+     TEMPO <span class="hl-time">0215/0220</span> <span class="hl-vis">4000</span> <span class="hl-phenom">TSRA</span> <span class="hl-cloud">BKN015CB</span>
+     BECMG <span class="hl-time">0300/0302</span> <span class="hl-wind">24008KT</span>
+  </div>
+
+  <div class="field-grid grid grid-cols-2 gap-3">
+
+    <div class="field-card">
+      <div class="text-[.63rem] font-medium tracking-widest uppercase text-sky-600 mb-1">Período de validez</div>
+      <div class="font-mono text-[.85rem] text-sky-300 mb-1.5">0212/0318</div>
+      <p class="text-[.78rem] text-slate-400 leading-[1.65]">Día 02 a las 12Z hasta día 03 a las 18Z. El TAF siempre indica desde/hasta en UTC.</p>
+    </div>
+
+    <div class="field-card">
+      <div class="text-[.63rem] font-medium tracking-widest uppercase text-red-600 mb-1">TEMPO</div>
+      <div class="font-mono text-[.85rem] text-red-300 mb-1.5">TEMPO 0215/0220</div>
+      <p class="text-[.78rem] text-slate-400 leading-[1.65]">Cambio temporal de menos de 1 hora, durante menos de la mitad del período indicado. El peor escenario que puede ocurrir.</p>
+    </div>
+
+    <div class="field-card">
+      <div class="text-[.63rem] font-medium tracking-widest uppercase text-orange-600 mb-1">BECMG</div>
+      <div class="font-mono text-[.85rem] text-orange-300 mb-1.5">BECMG 0300/0302</div>
+      <p class="text-[.78rem] text-slate-400 leading-[1.65]">Cambio gradual y permanente hacia nuevas condiciones dentro del período indicado.</p>
+    </div>
+
+    <div class="field-card">
+      <div class="text-[.63rem] font-medium tracking-widest uppercase text-red-600 mb-1">CB en nubes</div>
+      <div class="font-mono text-[.85rem] text-red-300 mb-1.5">BKN015CB</div>
+      <p class="text-[.78rem] text-slate-400 leading-[1.65]">La sufija CB después de la altura de nube indica Cumulonimbus — la alerta más crítica en cualquier METAR o TAF.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════ EJEMPLOS ESTÁTICOS ══════════════ -->
+<div class="relative z-10 max-w-5xl mx-auto px-4">
+  <hr class="sec-rule border-t">
+</div>
+
+<section class="relative z-10 max-w-5xl mx-auto px-4 py-12">
+  <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-1">Ejemplos reales anotados</h2>
+  <p class="text-[.74rem] text-slate-600 mb-6">Tres situaciones meteorológicas distintas — leelas campo por campo</p>
+
+  <!-- Tab bar -->
+  <div class="flex gap-2 mb-5 flex-wrap">
+    <button class="ex-tab active px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent cursor-pointer transition-all" onclick="showExample('saez',this)">🇦🇷 SAEZ — Ezeiza (buen tiempo)</button>
+    <button class="ex-tab px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent cursor-pointer transition-all" onclick="showExample('egll',this)">🇬🇧 EGLL — Heathrow (niebla)</button>
+    <button class="ex-tab px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent cursor-pointer transition-all" onclick="showExample('kjfk',this)">🇺🇸 KJFK — JFK (tormenta)</button>
+  </div>
+
+  <!-- Example: SAEZ -->
+  <div id="ex-saez" class="space-y-4">
+    <div class="metar-raw text-[.78rem]">
+METAR <span class="hl-station">SAEZ</span> <span class="hl-time">021300Z</span> <span class="hl-wind">18015KT 170V210</span> <span class="hl-vis">9999</span> <span class="hl-cloud">FEW020 SCT060</span> <span class="hl-temp">22/14</span> <span class="hl-qnh">Q1018</span> NOSIG
+    </div>
+    <div class="field-grid grid grid-cols-2 gap-3">
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-yellow-600 mb-1">Viento</div><div class="font-mono text-sm text-orange-300 mb-1">18015KT 170V210</div><p class="text-[.75rem] text-slate-400">180° a 15 kt, variable entre 170° y 210°. Viento del sur moderado, sin ráfagas.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-sky-600 mb-1">Visibilidad</div><div class="font-mono text-sm text-sky-300 mb-1">9999</div><p class="text-[.75rem] text-slate-400">Excelente — más de 10 km. VFR sin restricciones.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-green-600 mb-1">Nubes</div><div class="font-mono text-sm text-green-300 mb-1">FEW020 SCT060</div><p class="text-[.75rem] text-slate-400">Pocas nubes a 2.000 ft, dispersas a 6.000 ft. Techo amplio, sin preocupación.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-green-600 mb-1">Categoría</div><div class="font-mono text-sm text-green-300 mb-1">VFR</div><p class="text-[.75rem] text-slate-400">Condiciones ideales. NOSIG indica sin cambio significativo esperado.</p></div>
+    </div>
+  </div>
+
+  <!-- Example: EGLL -->
+  <div id="ex-egll" class="space-y-4 hidden">
+    <div class="metar-raw text-[.78rem]">
+METAR <span class="hl-station">EGLL</span> <span class="hl-time">021400Z</span> <span class="hl-wind">26005KT</span> <span class="hl-vis">0600</span> <span class="hl-phenom">FG</span> <span class="hl-cloud">OVC002</span> <span class="hl-temp">09/09</span> <span class="hl-qnh">Q1024</span>
+    </div>
+    <div class="field-grid grid grid-cols-2 gap-3">
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-red-600 mb-1">Visibilidad</div><div class="font-mono text-sm text-red-300 mb-1">0600</div><p class="text-[.75rem] text-slate-400">Solo 600 metros. Condición de niebla (FG). Aproximación visual imposible.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-red-600 mb-1">Nubes</div><div class="font-mono text-sm text-red-300 mb-1">OVC002</div><p class="text-[.75rem] text-slate-400">Cielo cubierto (OVC) a 200 ft. Techo extremadamente bajo — mínimas CAT III.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-orange-600 mb-1">Temp/Rocío</div><div class="font-mono text-sm text-orange-300 mb-1">09/09</div><p class="text-[.75rem] text-slate-400">Temperatura igual al punto de rocío — saturación completa del aire. Niebla garantizada.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-purple-600 mb-1">Categoría</div><div class="font-mono text-sm text-purple-300 mb-1">LIFR</div><p class="text-[.75rem] text-slate-400">Low IFR. Heathrow solo opera con sistemas de aterrizaje automático CAT IIIb en esta condición.</p></div>
+    </div>
+  </div>
+
+  <!-- Example: KJFK -->
+  <div id="ex-kjfk" class="space-y-4 hidden">
+    <div class="metar-raw text-[.78rem]">
+METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> <span class="hl-wind">23028G45KT</span> <span class="hl-vis">2SM</span> <span class="hl-phenom">TSRA</span> <span class="hl-cloud">BKN012CB OVC030</span> <span class="hl-temp">18/16</span> <span class="hl-qnh">A2965</span>
+    </div>
+    <div class="field-grid grid grid-cols-2 gap-3">
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widets text-red-600 mb-1">Viento</div><div class="font-mono text-sm text-red-300 mb-1">23028G45KT</div><p class="text-[.75rem] text-slate-400">230° a 28 kt con ráfagas de 45 kt. Viento de tormenta severa — condición de windshear probable.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-red-600 mb-1">Fenómeno</div><div class="font-mono text-sm text-red-300 mb-1">TSRA</div><p class="text-[.75rem] text-slate-400">Thunderstorm with Rain — tormenta eléctrica con lluvia activa. La combinación más peligrosa en aproximación.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widets text-red-600 mb-1">Nubes</div><div class="font-mono text-sm text-red-300 mb-1">BKN012CB</div><p class="text-[.75rem] text-slate-400">Nubosidad rota a 1.200 ft con Cumulonimbus. CB en el METAR = máxima alerta operacional.</p></div>
+      <div class="field-card"><div class="text-[.63rem] uppercase tracking-widest text-red-600 mb-1">Categoría</div><div class="font-mono text-sm text-red-300 mb-1">IFR</div><p class="text-[.75rem] text-slate-400">Solo IFR. En condiciones de TS activa, muchos operadores aplican Hold o desvían directamente a alternado.</p></div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════ GLOSARIO ══════════════ -->
+<div class="relative z-10 max-w-5xl mx-auto px-4">
+  <hr class="sec-rule border-t">
+</div>
+
+<section class="relative z-10 max-w-5xl mx-auto px-4 py-12">
+  <button onclick="toggleGlosario(this)" class="flex items-center justify-between w-full cursor-pointer group">
+    <div class="text-left">
+      <h2 class="font-serif text-2xl italic font-normal text-slate-100 group-hover:text-yellow-300 transition-colors">Glosario de códigos frecuentes</h2>
+      <p class="text-[.74rem] text-slate-600 mt-0.5">Fenómenos, coberturas y abreviaturas más comunes ▾</p>
+    </div>
+  </button>
+
+  <div class="glos-panel open" id="glos-panel">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-6">
+
+      <!-- Fenómenos -->
+      <div class="field-card"><div class="font-mono text-[.88rem] text-red-400 mb-1">TS</div><p class="text-[.72rem] text-slate-400">Thunderstorm — tormenta eléctrica</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-red-400 mb-1">TSRA</div><p class="text-[.72rem] text-slate-400">Tormenta con lluvia</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-red-400 mb-1">GR</div><p class="text-[.72rem] text-slate-400">Granizo</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-sky-400 mb-1">FG</div><p class="text-[.72rem] text-slate-400">Fog — niebla (&lt;1000 m)</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-sky-400 mb-1">BR</div><p class="text-[.72rem] text-slate-400">Mist — neblina (1000–5000 m)</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-sky-400 mb-1">RA</div><p class="text-[.72rem] text-slate-400">Rain — lluvia</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-slate-400 mb-1">SN</div><p class="text-[.72rem] text-slate-400">Snow — nieve</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-slate-400 mb-1">DZ</div><p class="text-[.72rem] text-slate-400">Drizzle — llovizna</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-orange-400 mb-1">HZ</div><p class="text-[.72rem] text-slate-400">Haze — calima / bruma seca</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-orange-400 mb-1">SA</div><p class="text-[.72rem] text-slate-400">Sand — arena en suspensión</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-red-400 mb-1">FC</div><p class="text-[.72rem] text-slate-400">Funnel cloud — tornado/tromba</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-slate-400 mb-1">FZ</div><p class="text-[.72rem] text-slate-400">Freezing — prefijo de engelamiento (FZRA, FZFG)</p></div>
+
+      <!-- Coberturas -->
+      <div class="field-card"><div class="font-mono text-[.88rem] text-green-400 mb-1">SKC / CLR</div><p class="text-[.72rem] text-slate-400">Sky clear — cielo despejado</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-green-400 mb-1">FEW</div><p class="text-[.72rem] text-slate-400">1–2 octas de cobertura</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-yellow-400 mb-1">SCT</div><p class="text-[.72rem] text-slate-400">Scattered — 3–4 octas</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-orange-400 mb-1">BKN</div><p class="text-[.72rem] text-slate-400">Broken — 5–7 octas</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-red-400 mb-1">OVC</div><p class="text-[.72rem] text-slate-400">Overcast — 8 octas (cubierto)</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-red-400 mb-1">VV</div><p class="text-[.72rem] text-slate-400">Vertical visibility — sin techo definido (obscuración)</p></div>
+
+      <!-- Modificadores -->
+      <div class="field-card"><div class="font-mono text-[.88rem] text-sky-400 mb-1">-RA / +RA</div><p class="text-[.72rem] text-slate-400">Light / heavy rain. − = leve, + = fuerte</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-slate-400 mb-1">MI SH PR BL</div><p class="text-[.72rem] text-slate-400">Shallow / Shower / Partial / Blowing</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-green-400 mb-1">CAVOK</div><p class="text-[.72rem] text-slate-400">Ceiling And Visibility OK — sin nubes &lt;5000ft, vis &gt;10km, sin fenómenos</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-slate-400 mb-1">NOSIG</div><p class="text-[.72rem] text-slate-400">No significant change expected — sin cambios en 2 horas</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-orange-400 mb-1">WS</div><p class="text-[.72rem] text-slate-400">Wind shear — cizalladura reportada en aproximación o despegue</p></div>
+      <div class="field-card"><div class="font-mono text-[.88rem] text-red-400 mb-1">CB / TCU</div><p class="text-[.72rem] text-slate-400">Cumulonimbus / Towering Cumulus — siempre crítico cuando aparece</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ FOOTER ══════════════ -->
+<footer class="relative z-10 text-center px-6 py-8 border-t border-[#1c3358] text-[.67rem] text-slate-600 leading-[2]">
+  <a href="./index.html" class="underline hover:text-slate-400 transition-colors">← Volver al catálogo de nubes</a>
+  &nbsp;·&nbsp;
+  Información con fines educativos — consultar NOTAMs y documentación oficial OACI para operaciones reales.
+</footer>
+
+<!-- ══════════════ JAVASCRIPT ══════════════ -->
+<script>
+  // ─── CheckWX API ───────────────────────────────────────────────────────────
+  // Plan gratuito: 10.000 requests/mes — suficiente para MVP educativo.
+  // NOTA ARQUITECTURAL: para producción con tráfico real, mover la key a un
+  // proxy serverless (Vercel Edge Function / Cloudflare Worker) que la oculte.
+  // Por ahora en frontend es aceptable para un proyecto educativo/portfolio.
+  const CHECKWX_KEY = 'DEMO_KEY'; // Reemplazar con tu key de checkwx.com
+
+  async function fetchMETAR() {
+    const icao = document.getElementById('icao-input').value.trim().toUpperCase();
+    if (!icao || icao.length < 4) {
+      alert('Ingresá un código ICAO de 4 letras (ej. SAEZ)');
+      return;
+    }
+
+    setLoading(true);
+    hideResults();
+
+    try {
+      // CheckWX devuelve JSON con METAR ya desglosado por campo
+      const res = await fetch(
+        `https://api.checkwx.com/metar/${icao}/decoded`,
+        { headers: { 'X-API-Key': CHECKWX_KEY } }
+      );
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      if (!data.data || data.data.length === 0) {
+        throw new Error(`ICAO ${icao} no encontrado`);
+      }
+
+      displayMETAR(data.data[0]);
+
+      // Fetch TAF también
+      fetchTAF(icao);
+
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchTAF(icao) {
+    try {
+      if (CHECKWX_KEY === 'DEMO_KEY') return; // no hay key real
+      const res = await fetch(
+        `https://api.checkwx.com/taf/${icao}/decoded`,
+        { headers: { 'X-API-Key': CHECKWX_KEY } }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.data && data.data.length > 0 && data.data[0].raw_text) {
+        document.getElementById('taf-raw').textContent = data.data[0].raw_text;
+        document.getElementById('taf-section').classList.remove('hidden');
+      }
+    } catch (_) { /* TAF is optional */ }
+  }
+
+  function displayMETAR(m) {
+    // Station
+    document.getElementById('res-station').textContent = m.icao || '';
+    document.getElementById('res-name').textContent    = m.station?.name || '';
+
+    // Raw text
+    document.getElementById('res-raw').textContent = m.raw_text || '';
+
+    // Flight category
+    const catEl = document.getElementById('res-category');
+    const cat   = m.flight_category || 'UNKNOWN';
+    catEl.textContent = cat;
+    catEl.className   = `px-3 py-1.5 rounded text-[.75rem] font-medium tracking-wide cat-${cat.toLowerCase().replace('lifr','lifr') || 'unkn'}`;
+
+    // Fields breakdown
+    const fields = [];
+    if (m.wind) fields.push({
+      label:'Viento', color:'text-orange-400',
+      val: `${m.wind.degrees ?? 'VRB'}° / ${m.wind.speed_kts} kt${m.wind.gust_kts ? ` G${m.wind.gust_kts}` : ''}`,
+      note: m.wind.gust_kts ? `Ráfagas de ${m.wind.gust_kts} kt — atención al despegue y aterrizaje` : 'Sin ráfagas reportadas'
+    });
+    if (m.visibility) fields.push({
+      label:'Visibilidad', color:'text-sky-400',
+      val: m.visibility.meters_float >= 9999 ? '≥10 km' : `${m.visibility.meters_float} m`,
+      note: visNote(m.visibility.meters_float)
+    });
+    if (m.clouds && m.clouds.length > 0) fields.push({
+      label:'Nubes', color:'text-green-400',
+      val: m.clouds.map(c => `${c.code}${c.base_feet_agl ? c.base_feet_agl/100 + '00ft' : ''}`).join(' · '),
+      note: cloudNote(m.clouds)
+    });
+    if (m.temperature) fields.push({
+      label:'Temperatura', color:'text-orange-400',
+      val: `${m.temperature.celsius}°C / Rocío ${m.dewpoint?.celsius}°C`,
+      note: `Diferencia Temp–Rocío: ${Math.abs(m.temperature.celsius - (m.dewpoint?.celsius||0))}°C${Math.abs(m.temperature.celsius - (m.dewpoint?.celsius||0)) < 3 ? ' — riesgo de niebla' : ''}`
+    });
+    if (m.barometer) fields.push({
+      label:'QNH', color:'text-purple-400',
+      val: `${m.barometer.hpa} hPa`,
+      note: m.barometer.hpa < 980 ? 'Presión muy baja — sistema de baja activo' : m.barometer.hpa > 1030 ? 'Presión alta — tiempo estable' : 'Presión normal'
+    });
+
+    const container = document.getElementById('res-fields');
+    container.innerHTML = fields.map(f => `
+      <div class="field-card">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase ${f.color} mb-1">${f.label}</div>
+        <div class="font-mono text-[.85rem] ${f.color} mb-1.5">${f.val}</div>
+        <p class="text-[.75rem] text-slate-400 leading-[1.6]">${f.note}</p>
+      </div>
+    `).join('');
+
+    // Timestamp
+    document.getElementById('res-timestamp').textContent =
+      `Reporte emitido: ${m.observed ? new Date(m.observed).toUTCString() : 'desconocido'}`;
+
+    document.getElementById('result-ok').classList.remove('hidden');
+    document.getElementById('result-area').classList.remove('hidden');
+  }
+
+  function visNote(m) {
+    if (!m) return '';
+    if (m >= 9999) return 'Excelente visibilidad — VFR sin restricciones';
+    if (m >= 5000) return 'Buena visibilidad — VFR posible';
+    if (m >= 3000) return 'Visibilidad reducida — MVFR';
+    if (m >= 1600) return 'Visibilidad baja — condiciones IFR';
+    return 'Visibilidad muy baja — LIFR, condiciones críticas';
+  }
+
+  function cloudNote(clouds) {
+    const hasCB = clouds.some(c => c.type === 'CB');
+    const lowestBKN = clouds.find(c => c.code === 'BKN' || c.code === 'OVC');
+    if (hasCB) return '⚠️ Cumulonimbus reportado — condición crítica';
+    if (lowestBKN) return `Techo definido a ${lowestBKN.base_feet_agl} ft AGL`;
+    return 'Sin capa de techo definida';
+  }
+
+  // ─── UI helpers ───────────────────────────────────────────────────────────
+  function setLoading(on) {
+    document.getElementById('btn-spinner').classList.toggle('hidden', !on);
+    document.getElementById('btn-label').textContent = on ? 'Consultando…' : 'Consultar METAR';
+    document.getElementById('fetch-btn').disabled = on;
+  }
+
+  function hideResults() {
+    document.getElementById('result-area').classList.add('hidden');
+    document.getElementById('result-ok').classList.add('hidden');
+    document.getElementById('result-error').classList.add('hidden');
+    document.getElementById('taf-section').classList.add('hidden');
+    document.getElementById('res-fields').innerHTML = '';
+  }
+
+  function showError(msg) {
+    document.getElementById('error-msg').textContent = msg;
+    document.getElementById('result-error').classList.remove('hidden');
+    document.getElementById('result-area').classList.remove('hidden');
+  }
+
+  // ─── Example tabs ─────────────────────────────────────────────────────────
+  function showExample(id, btn) {
+    ['saez','egll','kjfk'].forEach(k => {
+      document.getElementById(`ex-${k}`).classList.toggle('hidden', k !== id);
+    });
+    document.querySelectorAll('.ex-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ─── Glosario toggle ──────────────────────────────────────────────────────
+  function toggleGlosario(btn) {
+    const panel = document.getElementById('glos-panel');
+    panel.classList.toggle('open');
+  }
+</script>
+
+</body>
+</html>
