@@ -1,143 +1,392 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="referrer" content="no-referrer">
-  <title>SkyPulse — Lluvias</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>SkyPulse — Lluvias</title>
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 
-  <!-- Fuentes -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: { extend: { fontFamily: {
+      serif: ['"Playfair Display"','serif'],
+      sans:  ['"DM Sans"','sans-serif']
+    }}}
+  }
+</script>
 
-  <script>
-    tailwind.config = {
-      theme: { 
-        extend: { 
-          fontFamily: { 
-            serif: ['"Playfair Display"','serif'], 
-            sans:['"DM Sans"','sans-serif'] 
-          } 
-        } 
-      }
-    }
-  </script>
+<style>
+  body { background:#060d1a; font-family:'DM Sans',sans-serif; }
 
-  <style>
-    body { background:#060d1a; font-family:'DM Sans',sans-serif; color: #e2e8f0; }
-    .font-serif { font-family:'Playfair Display',serif; }
-    .hover\:bg-slate-900:hover { background:#0d1e38; }
-    .border-b { border-bottom: 1px solid #1c3358; }
-    .border-t { border-top: 1px solid #1c3358; }
-    .badge-lluvia { 
-      display: inline-flex; 
-      align-items: center; 
-      gap: .3rem; 
-      font-size: .68rem; 
-      padding: .2rem .5rem; 
-      border-radius: 4px; 
-      border: 1px solid rgba(43,143,212,.3); 
-      color: #5aaad8; 
-      background: rgba(43,143,212,.06); 
-    }
-    .danger-level-1 { border-color: rgba(39,174,96,.35); color: #3ecf7a; }
-    .danger-level-2 { border-color: rgba(212,135,15,.35); color: #f0a030; }
-  </style>
+  /* Starfield — igual que index.html y metar.html */
+  body::before {
+    content:''; position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse 80% 35% at 50% -5%, rgba(26,74,136,.13) 0%, transparent 60%),
+      radial-gradient(1.5px 1.5px at 12% 18%, rgba(255,255,255,.13) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 35% 42%, rgba(255,255,255,.08) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 61% 22%, rgba(255,255,255,.11) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 84% 67%, rgba(255,255,255,.08) 0%, transparent 100%);
+    pointer-events:none; z-index:0;
+  }
+
+  /* Eyebrow */
+  .eyebrow-deco::before,.eyebrow-deco::after {
+    content:''; display:block; width:28px; height:1px; background:#6e5820;
+  }
+
+  /* Tabla */
+  .rain-table tr { border-bottom:1px solid #1c3358; }
+  .rain-table tr:last-child { border-bottom:none; }
+  .rain-table tr:hover td { background:rgba(13,30,56,.5); }
+  .rain-table td, .rain-table th { padding:.85rem .75rem; }
+
+  /* Badges de lluvia */
+  .badge { display:inline-flex; align-items:center; gap:.3rem; font-size:.68rem; padding:.25rem .65rem; border-radius:4px; border:1px solid; font-weight:500; }
+  .badge-no    { border-color:rgba(96,112,128,.3);  color:#90aabb; background:rgba(96,112,128,.06); }
+  .badge-maybe { border-color:rgba(212,135,15,.35); color:#f0a030; background:rgba(212,135,15,.06); }
+  .badge-yes   { border-color:rgba(43,143,212,.35); color:#5aaad8; background:rgba(43,143,212,.06); }
+  .badge-heavy { border-color:rgba(192,57,43,.35);  color:#e05545; background:rgba(192,57,43,.06); }
+  .badge-crit  { border-color:rgba(255,0,0,.35);    color:#ff6b6b; background:rgba(255,0,0,.06); }
+
+  /* Intensidad dots */
+  .intensity { display:flex; gap:3px; align-items:center; }
+  .intensity .dot { width:7px; height:7px; border-radius:50%; background:#1c3358; }
+  .intensity[data-level="0"] .dot { background:#1c3358; }
+  .intensity[data-level="1"] .dot:nth-child(-n+1) { background:#5aaad8; }
+  .intensity[data-level="2"] .dot:nth-child(-n+2) { background:#f0a030; }
+  .intensity[data-level="3"] .dot:nth-child(-n+3) { background:#e05545; }
+  .intensity[data-level="4"] .dot { background:#ff3333; }
+
+  /* Card explicativo */
+  .rain-card {
+    background:#0d1e38;
+    border:1px solid #1c3358;
+    border-radius:6px;
+    padding:1.1rem 1.25rem;
+    border-left-width:3px;
+    transition:border-color .2s;
+  }
+  .rain-card:hover { border-color:#2a4a70; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{width:5px}
+  ::-webkit-scrollbar-track{background:#0b1929}
+  ::-webkit-scrollbar-thumb{background:#1c3358;border-radius:3px}
+
+  /* Mobile */
+  @media(max-width:640px){
+    .rain-table th:nth-child(4),
+    .rain-table td:nth-child(4) { display:none; }
+    .grid-cards { grid-template-columns:1fr !important; }
+  }
+</style>
 </head>
-<body class="min-h-screen">
 
-  <!-- HEADER -->
-  <header class="relative z-10 text-center px-6 pt-20 pb-10 border-b border-[#1c3358]">
-    <div class="eyebrow-deco inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.28em] uppercase text-yellow-500 mb-5">
-      Lluvias según el cielo
-    </div>
-    <h1 class="font-serif text-5xl md:text-7xl font-normal leading-[1.06] text-slate-100">
-      Qué tipo de lluvia<br>esperar según el cielo
-    </h1>
-    <p class="mt-5 text-[.96rem] text-slate-400 max-w-md mx-auto leading-[1.8]">
-      Aquí solo se explica qué tipo de lluvia suele acompañar a cada tipo de nube visible en SkyPulse, sin tecnicismos.
-    </p>
-  </header>
+<body class="text-slate-200 min-h-screen overflow-x-hidden">
 
-  <!-- TABLA DE REFERENCIA -->
-  <main class="max-w-4xl mx-auto px-6 py-10 text-slate-300">
-    <table class="w-full text-[.8rem] border-separate border-spacing-0">
-      <thead>
-        <tr class="text-slate-500 uppercase tracking-[.15em]">
-          <th class="text-left pb-3">Tipo de nube</th>
-          <th class="text-left pb-3">¿Suele llover?</th>
-          <th class="text-left pb-3">Intensidad típica</th>
-          <th class="text-left pb-3">Duración típica</th>
+<!-- NAV -->
+<nav class="relative z-10 border-b border-[#1c3358] px-6 py-3 flex items-center gap-3 text-[.72rem] text-slate-500">
+  <a href="./index.html" class="hover:text-yellow-400 transition-colors flex items-center gap-1.5">← SkyPulse</a>
+  <span class="text-[#1c3358]">/</span>
+  <span class="text-slate-300">Lluvias</span>
+</nav>
+
+<!-- HEADER -->
+<header class="relative z-10 text-center px-6 pt-16 pb-10 border-b border-[#1c3358]">
+  <div class="eyebrow-deco inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.28em] uppercase text-yellow-500 mb-5">
+    Lluvias según el cielo
+  </div>
+  <h1 class="font-serif text-4xl md:text-6xl font-normal leading-[1.06] text-slate-100">
+    Qué lluvia esperar<br><em class="text-yellow-300">según las nubes</em>
+  </h1>
+  <p class="mt-5 text-[.96rem] text-slate-400 max-w-lg mx-auto leading-[1.8]">
+    Cada tipo de nube produce un tipo de lluvia distinto — o ninguna. Aprendé a leer el cielo antes de que llueva.
+  </p>
+</header>
+
+<!-- TABLA -->
+<main class="relative z-10 max-w-4xl mx-auto px-4 py-12">
+
+  <div class="overflow-x-auto rounded-lg border border-[#1c3358]">
+    <table class="rain-table w-full text-[.8rem]">
+      <thead class="bg-[#0d1e38]">
+        <tr>
+          <th class="text-left text-[.65rem] font-medium tracking-[.15em] uppercase text-slate-500">Tipo de nube</th>
+          <th class="text-left text-[.65rem] font-medium tracking-[.15em] uppercase text-slate-500">¿Llueve?</th>
+          <th class="text-left text-[.65rem] font-medium tracking-[.15em] uppercase text-slate-500">Intensidad</th>
+          <th class="text-left text-[.65rem] font-medium tracking-[.15em] uppercase text-slate-500">Duración típica</th>
+          <th class="text-left text-[.65rem] font-medium tracking-[.15em] uppercase text-slate-500">Cuándo aparece</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-[#1c3358]">
-        <tr class="hover:bg-slate-900">
-          <td class="py-3 font-medium">Cirros</td>
-          <td class="py-3 text-slate-500">No</td>
-          <td class="py-3 text-slate-500">Sin lluvia</td>
-          <td class="py-3 text-slate-500">—</td>
-        </tr>
-        <tr class="hover:bg-slate-900">
-          <td class="py-3 font-medium">Cirrostratos</td>
-          <td class="py-3">
-            <span class="badge-lluvia border-sky-700 text-sky-400">Sí, en 12–24 h</span>
+      <tbody>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Cirros</a>
           </td>
-          <td class="py-3">Lluvia ligera</td>
-          <td class="py-3">Prolongada</td>
-        </tr>
-        <tr class="hover:bg-slate-900">
-          <td class="py-3 font-medium">Estratos</td>
-          <td class="py-3 text-sky-400">Sí</td>
-          <td class="py-3">Llovizna suave</td>
-          <td class="py-3">Larga</td>
-        </tr>
-        <tr class="hover:bg-slate-900">
-          <td class="py-3 font-medium">Nimboestratos</td>
-          <td class="py-3">
-            <span class="badge-lluvia danger-level-1">Sí</span>
+          <td><span class="badge badge-no">No</span></td>
+          <td>
+            <div class="intensity" data-level="0">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
           </td>
-          <td class="py-3">Lluvia continua</td>
-          <td class="py-3">Muchas horas</td>
+          <td class="text-slate-500">—</td>
+          <td class="text-slate-400">Todo el año, especialmente antes de frentes</td>
         </tr>
-        <tr class="hover:bg-slate-900">
-          <td class="py-3 font-medium">Cúmulo</td>
-          <td class="py-3 text-yellow-400">Puede llover</td>
-          <td class="py-3">Chubasco breve</td>
-          <td class="py-3">Corta</td>
-        </tr>
-        <tr class="hover:bg-slate-900">
-          <td class="py-3 font-medium">Cumulonimbos</td>
-          <td class="py-3">
-            <span class="badge-lluvia danger-level-2">Sí</span>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Cirrostratos</a>
           </td>
-          <td class="py-3">Aguacero fuerte</td>
-          <td class="py-3">Corta a media</td>
+          <td><span class="badge badge-yes">En 12–24 h</span></td>
+          <td>
+            <div class="intensity" data-level="1">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Prolongada</td>
+          <td class="text-slate-400">Preceden frentes cálidos</td>
         </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Cirrocúmulos</a>
+          </td>
+          <td><span class="badge badge-no">No directa</span></td>
+          <td>
+            <div class="intensity" data-level="0">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-500">—</td>
+          <td class="text-slate-400">Efímeros, señal de inestabilidad</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Altocúmulos</a>
+          </td>
+          <td><span class="badge badge-maybe">Posible</span></td>
+          <td>
+            <div class="intensity" data-level="1">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Breve</td>
+          <td class="text-slate-400">Mañanas cálidas con Ac castellanus</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Altostratos</a>
+          </td>
+          <td><span class="badge badge-yes">Sí</span></td>
+          <td>
+            <div class="intensity" data-level="2">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Prolongada</td>
+          <td class="text-slate-400">Siguen a los cirrostratos en frentes</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Estrato</a>
+          </td>
+          <td><span class="badge badge-yes">Sí</span></td>
+          <td>
+            <div class="intensity" data-level="1">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Larga, persistente</td>
+          <td class="text-slate-400">Días fríos y húmedos, zonas costeras</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Estratocúmulos</a>
+          </td>
+          <td><span class="badge badge-maybe">Llovizna posible</span></td>
+          <td>
+            <div class="intensity" data-level="1">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Breve</td>
+          <td class="text-slate-400">Muy comunes, raramente llueven fuerte</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Nimboestrato</a>
+          </td>
+          <td><span class="badge badge-heavy">Sí — continua</span></td>
+          <td>
+            <div class="intensity" data-level="3">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Muchas horas o días</td>
+          <td class="text-slate-400">Frentes activos, invierno y otoño</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Cúmulo</a>
+          </td>
+          <td><span class="badge badge-maybe">Solo si crecen</span></td>
+          <td>
+            <div class="intensity" data-level="2">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Breve (chubasco)</td>
+          <td class="text-slate-400">Tardes cálidas de verano</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Cumulonimbo</a>
+          </td>
+          <td><span class="badge badge-crit">Sí — severa</span></td>
+          <td>
+            <div class="intensity" data-level="4">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Corta pero intensa</td>
+          <td class="text-slate-400">Verano, tarde-noche, zonas tropicales</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">
+            <a href="./index.html" class="hover:text-yellow-300 transition-colors">Mammatus</a>
+          </td>
+          <td><span class="badge badge-crit">Tormenta activa</span></td>
+          <td>
+            <div class="intensity" data-level="4">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Variable, muy intensa</td>
+          <td class="text-slate-400">Bajo el yunque de un Cb severo</td>
+        </tr>
+
+        <tr>
+          <td class="font-medium text-slate-100">Niebla</td>
+          <td><span class="badge badge-yes">Llovizna fina</span></td>
+          <td>
+            <div class="intensity" data-level="1">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+          </td>
+          <td class="text-slate-400">Hasta que sube el sol</td>
+          <td class="text-slate-400">Madrugada y amanecer en valles</td>
+        </tr>
+
       </tbody>
     </table>
+  </div>
 
-    <section class="mt-10 space-y-5">
-      <p class="text-[.9rem] leading-relaxed">
-        Las nubes <span class="font-medium text-slate-100">Cirros</span> no traen lluvia ahora, pero suelen ser el primer aviso de que el tiempo puede cambiar en las próximas horas.
-      </p>
-      <p class="text-[.9rem] leading-relaxed">
-        Con los <span class="font-medium text-slate-100">Estratos</span> se suele tener llovizna fina y continua, buena para pasear con paraguas, pero cansadora si dura todo el día.
-      </p>
-      <p class="text-[.9rem] leading-relaxed">
-        Los <span class="font-medium text-red-400">Cumulonimbos</span> dan aguaceros intensos, ráfagas de viento y truenos: es el tipo de lluvia que conviene evitar a cielo abierto y dejar en casa la planificación al aire libre.
-      </p>
-    </section>
-  </main>
+  <!-- Leyenda intensidad -->
+  <div class="flex items-center gap-6 mt-4 text-[.68rem] text-slate-600 flex-wrap px-1">
+    <span class="flex items-center gap-2">
+      <span class="flex gap-1"><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span></span>
+      Sin lluvia
+    </span>
+    <span class="flex items-center gap-2">
+      <span class="flex gap-1"><span class="w-2 h-2 rounded-full bg-[#5aaad8]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span></span>
+      Llovizna
+    </span>
+    <span class="flex items-center gap-2">
+      <span class="flex gap-1"><span class="w-2 h-2 rounded-full bg-[#f0a030]"></span><span class="w-2 h-2 rounded-full bg-[#f0a030]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span></span>
+      Moderada
+    </span>
+    <span class="flex items-center gap-2">
+      <span class="flex gap-1"><span class="w-2 h-2 rounded-full bg-[#e05545]"></span><span class="w-2 h-2 rounded-full bg-[#e05545]"></span><span class="w-2 h-2 rounded-full bg-[#e05545]"></span><span class="w-2 h-2 rounded-full bg-[#1c3358]"></span></span>
+      Intensa
+    </span>
+    <span class="flex items-center gap-2">
+      <span class="flex gap-1"><span class="w-2 h-2 rounded-full bg-[#ff3333]"></span><span class="w-2 h-2 rounded-full bg-[#ff3333]"></span><span class="w-2 h-2 rounded-full bg-[#ff3333]"></span><span class="w-2 h-2 rounded-full bg-[#ff3333]"></span></span>
+      Severa
+    </span>
+  </div>
 
-  <!-- FOOTER -->
-  <footer class="border-t border-[#1c3358] px-6 py-5 text-center text-[.72rem] text-slate-500">
-    <a href="/" class="text-sky-400 hover:text-sky-300">
-      ← Volver al catálogo del cielo
-    </a>
-  </footer>
+  <!-- SECCIÓN EDUCATIVA -->
+  <div class="mt-14 space-y-4">
+
+    <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-6">Cómo leer el cielo antes de que llueva</h2>
+
+    <div class="grid grid-cards grid-cols-2 gap-4" style="grid-template-columns:1fr 1fr">
+
+      <div class="rain-card" style="border-left-color:#c8a84b">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-600 mb-2">La secuencia clásica de un frente</div>
+        <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+          El ciclo más predecible: primero aparecen <strong class="text-slate-200">Cirros</strong> — aviso de 24–48 h. Luego el cielo se cubre con <strong class="text-slate-200">Cirrostratos</strong> y su halo. Bajan a <strong class="text-slate-200">Altostratos</strong> y el sol desaparece. Finalmente llega el <strong class="text-slate-200">Nimboestrato</strong> — lluvia continua que dura horas.
+        </p>
+      </div>
+
+      <div class="rain-card" style="border-left-color:#e05545">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-red-600 mb-2">La tormenta convectiva</div>
+        <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+          El ciclo más violento y más rápido: <strong class="text-slate-200">Cúmulos</strong> crecen en torres durante la tarde. Si el ambiente es inestable, se convierten en <strong class="text-slate-200">Cumulonimbos</strong> en minutos. La lluvia es breve pero extrema — granizo, ráfagas y rayos. Sin aviso previo de horas.
+        </p>
+      </div>
+
+      <div class="rain-card" style="border-left-color:#5aaad8">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-sky-600 mb-2">El día gris sin drama</div>
+        <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+          El escenario más cotidiano: <strong class="text-slate-200">Estratocúmulos</strong> o <strong class="text-slate-200">Estratos</strong> cubren el cielo sin traer lluvia seria. A lo sumo una llovizna fina. El día es gris, la luz plana y el ambiente húmedo — pero sin riesgo real. El paraguas es opcional.
+        </p>
+      </div>
+
+      <div class="rain-card" style="border-left-color:#90aabb">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-slate-500 mb-2">Lo que las nubes no dicen</div>
+        <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+          Las nubes muestran lo que pasa ahora, no necesariamente lo que viene en horas. Un cielo con <strong class="text-slate-200">Cirros</strong> puede seguir despejado un día entero. Un <strong class="text-slate-200">Nimboestrato</strong> puede terminar antes de lo esperado. Usar las nubes como pista, no como pronóstico exacto.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- REGLA PRÁCTICA -->
+  <div class="mt-10 bg-[#0d1e38] border border-[#1c3358] rounded-lg p-6">
+    <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-600 mb-3">Regla práctica rápida</div>
+    <div class="grid grid-cols-3 gap-4 text-center text-[.78rem]">
+      <div>
+        <div class="text-2xl mb-2">🌤</div>
+        <div class="font-medium text-slate-200 mb-1">Nubes finas y altas</div>
+        <div class="text-slate-500">Cirros, cirrostratos — sin lluvia hoy, monitorear mañana</div>
+      </div>
+      <div>
+        <div class="text-2xl mb-2">🌧</div>
+        <div class="font-medium text-slate-200 mb-1">Capas grises y bajas</div>
+        <div class="text-slate-500">Estrato, nimboestrato — llevá paraguas, va a durar</div>
+      </div>
+      <div>
+        <div class="text-2xl mb-2">⛈</div>
+        <div class="font-medium text-slate-200 mb-1">Torres que crecen</div>
+        <div class="text-slate-500">Cúmulos en expansión — buscá refugio antes de las 3 hs</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- FOOTER -->
+<footer class="relative z-10 text-center px-6 py-8 border-t border-[#1c3358] text-[.67rem] text-slate-600 leading-[2]">
+  <a href="./index.html" class="underline hover:text-slate-400 transition-colors">← Volver al catálogo de nubes</a>
+  &nbsp;·&nbsp;
+  <a href="./metar.html" class="underline hover:text-slate-400 transition-colors">METAR & TAF →</a>
+</footer>
 
 </body>
 </html>
