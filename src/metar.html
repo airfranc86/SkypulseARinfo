@@ -534,7 +534,7 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
   // NOTA ARQUITECTURAL: para producción con tráfico real, mover la key a un
   // proxy serverless (Vercel Edge Function / Cloudflare Worker) que la oculte.
   // Por ahora en frontend es aceptable para un proyecto educativo/portfolio.
-  const CHECKWX_KEY = '4dbbe1f0cb6646fdae7dc193a000d735'; // Reemplazar con tu key de checkwx.com
+  const CHECKWX_KEY = 'DEMO_KEY'; // Reemplazar con tu key de checkwx.com
 
   async function fetchMETAR() {
     const icao = document.getElementById('icao-input').value.trim().toUpperCase();
@@ -606,24 +606,42 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
     const fields = [];
     if (m.wind) fields.push({
       label:'Viento', color:'text-orange-400',
-      val: `${m.wind.degrees ?? 'VRB'}° / ${m.wind.speed_kts} kt${m.wind.gust_kts ? ` G${m.wind.gust_kts}` : ''}`,
+      val: `${m.wind.degrees ?? m.wind.direction ?? 'VRB'}° / ${m.wind.speed_kts ?? m.wind.speed ?? '?'} kt${m.wind.gust_kts ? ` G${m.wind.gust_kts}` : ''}`,
       note: m.wind.gust_kts ? `Ráfagas de ${m.wind.gust_kts} kt — atención al despegue y aterrizaje` : 'Sin ráfagas reportadas'
     });
-    if (m.visibility) fields.push({
-      label:'Visibilidad', color:'text-sky-400',
-      val: m.visibility.meters_float >= 9999 ? '≥10 km' : `${m.visibility.meters_float} m`,
-      note: visNote(m.visibility.meters_float)
-    });
+    if (m.visibility) {
+      // CheckWX uses different field names depending on the station region:
+      // meters_float (most stations), meters (LATAM/metric), miles_float (US stations)
+      const visM = m.visibility.meters_float
+                ?? m.visibility.meters
+                ?? (m.visibility.miles_float ? Math.round(m.visibility.miles_float * 1609) : null);
+      const visDisplay = visM === null
+        ? (m.visibility.text || 'N/D')
+        : visM >= 9999 ? '≥10 km' : `${visM} m`;
+      fields.push({
+        label:'Visibilidad', color:'text-sky-400',
+        val: visDisplay,
+        note: visNote(visM)
+      });
+    }
     if (m.clouds && m.clouds.length > 0) fields.push({
       label:'Nubes', color:'text-green-400',
       val: m.clouds.map(c => `${c.code}${c.base_feet_agl ? c.base_feet_agl/100 + '00ft' : ''}`).join(' · '),
       note: cloudNote(m.clouds)
     });
-    if (m.temperature) fields.push({
-      label:'Temperatura', color:'text-orange-400',
-      val: `${m.temperature.celsius}°C / Rocío ${m.dewpoint?.celsius}°C`,
-      note: `Diferencia Temp–Rocío: ${Math.abs(m.temperature.celsius - (m.dewpoint?.celsius||0))}°C${Math.abs(m.temperature.celsius - (m.dewpoint?.celsius||0)) < 3 ? ' — riesgo de niebla' : ''}`
-    });
+    if (m.temperature) {
+      const tempC  = m.temperature.celsius ?? m.temperature.value ?? '?';
+      const dewC   = m.dewpoint?.celsius   ?? m.dewpoint?.value   ?? '?';
+      const diff   = (typeof tempC === 'number' && typeof dewC === 'number')
+                     ? Math.abs(tempC - dewC) : null;
+      fields.push({
+        label:'Temperatura', color:'text-orange-400',
+        val: `${tempC}°C / Rocío ${dewC}°C`,
+        note: diff !== null
+          ? `Diferencia Temp–Rocío: ${diff}°C${diff < 3 ? ' — riesgo de niebla' : ''}`
+          : 'Temperatura registrada'
+      });
+    }
     if (m.barometer) fields.push({
       label:'QNH', color:'text-purple-400',
       val: `${m.barometer.hpa} hPa`,
