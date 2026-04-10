@@ -541,7 +541,7 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
   // NOTA ARQUITECTURAL: para producción con tráfico real, mover la key a un
   // proxy serverless (Vercel Edge Function / Cloudflare Worker) que la oculte.
   // Por ahora en frontend es aceptable para un proyecto educativo/portfolio.
-  const CHECKWX_KEY = 'DEMO_KEY'; // Reemplazar con tu key de checkwx.com
+  const CHECKWX_KEY = '4dbbe1f0cb6646fdae7dc193a000d735'; // Reemplazar con tu key de checkwx.com
 
   async function fetchMETAR() {
     const icao = document.getElementById('icao-input').value.trim().toUpperCase();
