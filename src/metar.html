@@ -116,8 +116,8 @@
   }
 
   /* ── Glosario accordion ── */
-  .glos-panel { overflow:hidden; max-height:0; transition:max-height .4s ease, opacity .3s ease; opacity:0; }
-  .glos-panel.open { max-height:800px; opacity:1; }
+  .glos-panel { overflow:hidden; max-height:0; transition:max-height .6s ease, opacity .4s ease; opacity:0; }
+  .glos-panel.open { max-height:9999px; opacity:1; }
 
   /* ── MODAL ICAO ── */
   #icao-modal {
@@ -523,11 +523,11 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
   <button onclick="toggleGlosario(this)" class="flex items-center justify-between w-full cursor-pointer group">
     <div class="text-left">
       <h2 class="font-serif text-2xl italic font-normal text-slate-100 group-hover:text-yellow-300 transition-colors">Glosario de códigos frecuentes</h2>
-      <p class="text-[.74rem] text-slate-600 mt-0.5">Fenómenos, coberturas y abreviaturas más comunes ▾</p>
+      <p class="text-[.74rem] text-slate-600 mt-0.5">Fenómenos, coberturas y abreviaturas más comunes <span class="glos-arrow">▾</span></p>
     </div>
   </button>
 
-  <div class="glos-panel open" id="glos-panel">
+  <div class="glos-panel" id="glos-panel">
     <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-6">
 
       <!-- Fenómenos -->
@@ -1028,7 +1028,9 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
   // ─── Glosario toggle ──────────────────────────────────────────────────────
   function toggleGlosario(btn) {
     const panel = document.getElementById('glos-panel');
-    panel.classList.toggle('open');
+    const isOpen = panel.classList.toggle('open');
+    const arrow = btn.querySelector('.glos-arrow');
+    if (arrow) arrow.textContent = isOpen ? '▴' : '▾';
   }
 </script>
 
