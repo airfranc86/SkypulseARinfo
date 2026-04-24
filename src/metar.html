@@ -847,8 +847,7 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
     if (e.key === 'Escape') closeModal();
   });
 
-  // ─── CheckWX API ───────────────────────────────────────────────────────────
-  const CHECKWX_KEY = '4dbbe1f0cb6646fdae7dc193a000d735'; // Reemplazar con tu key de checkwx.com
+  // ─── Proxy API (server-side, evita CORS y protege la key) ─────────────────
 
   async function fetchMETAR() {
     const icao = document.getElementById('icao-input').value.trim().toUpperCase();
@@ -861,11 +860,7 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
     hideResults();
 
     try {
-      // CheckWX devuelve JSON con METAR ya desglosado por campo
-      const res = await fetch(
-        `https://api.checkwx.com/metar/${icao}/decoded`,
-        { headers: { 'X-API-Key': CHECKWX_KEY } }
-      );
+      const res = await fetch(`/api/metar?icao=${icao}`);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -888,11 +883,7 @@ METAR <span class="hl-station">KJFK</span> <span class="hl-time">151845Z</span> 
 
   async function fetchTAF(icao) {
     try {
-      if (CHECKWX_KEY === '4dbbe1f0cb6646fdae7dc193a000d735') return; // no hay key real
-      const res = await fetch(
-        `https://api.checkwx.com/taf/${icao}/decoded`,
-        { headers: { 'X-API-Key': CHECKWX_KEY } }
-      );
+      const res = await fetch(`/api/metar?icao=${icao}&type=taf`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.data && data.data.length > 0 && data.data[0].raw_text) {
