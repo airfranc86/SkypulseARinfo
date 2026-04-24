@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const { icao, type = 'metar' } = req.query;
 
   if (!icao || icao.length < 4) {
@@ -25,4 +25,4 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(502).json({ error: `Error al contactar CheckWX: ${err.message}` });
   }
-}
+};
