@@ -1,10 +1,6 @@
 {
   "outputDirectory": "src",
-  "functions": {
-    "api/metar.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
+  "buildCommand": "echo build",
   "rewrites": [
     {
       "source": "/Lluvias.html",
