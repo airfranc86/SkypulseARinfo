@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>SkyPulse — Radar & Satélite</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: { extend: { fontFamily: {
+      serif: ['"Playfair Display"','serif'],
+      sans:  ['"DM Sans"','sans-serif']
+    }}}
+  }
+</script>
+
+<style>
+  /* ── Base ── */
+  body { background:#060d1a; font-family:'DM Sans',sans-serif; }
+
+  /* ── Starfield — idéntico al resto de páginas ── */
+  body::before {
+    content:''; position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse 80% 35% at 50% -5%, rgba(26,74,136,.13) 0%, transparent 60%),
+      radial-gradient(1.5px 1.5px at 12% 18%, rgba(255,255,255,.13) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 35% 42%, rgba(255,255,255,.08) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 61% 22%, rgba(255,255,255,.11) 0%, transparent 100%),
+      radial-gradient(1px   1px   at 84% 67%, rgba(255,255,255,.08) 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 92%  9%, rgba(255,255,255,.10) 0%, transparent 100%);
+    pointer-events:none; z-index:0;
+  }
+
+  /* ── Typography ── */
+  .font-serif { font-family:'Playfair Display',serif; }
+
+  /* ── Eyebrow decoration ── */
+  .eyebrow-deco::before,.eyebrow-deco::after {
+    content:''; display:block; width:28px; height:1px; background:#6e5820;
+  }
+
+  /* ── Info cards ── */
+  .info-card {
+    background:#0d1e38;
+    border:1px solid #1c3358;
+    border-radius:6px;
+    padding:1.25rem 1.4rem;
+    border-left-width:3px;
+  }
+
+  /* ── Radar color row ── */
+  .radar-row {
+    display:flex; align-items:center; gap:1rem;
+    padding:.75rem 1rem;
+    border-bottom:1px solid #1c3358;
+  }
+  .radar-row:last-child { border-bottom:none; }
+  .radar-row:hover { background:rgba(13,30,56,.5); }
+  .color-swatch {
+    width:36px; height:36px; border-radius:5px; flex-shrink:0;
+    box-shadow:0 0 10px rgba(0,0,0,.4);
+  }
+
+  /* ── Satellite band rows ── */
+  .sat-row {
+    display:flex; align-items:center; gap:1rem;
+    padding:.7rem 1rem;
+    border-bottom:1px solid #1c3358;
+  }
+  .sat-row:last-child { border-bottom:none; }
+  .sat-row:hover { background:rgba(13,30,56,.5); }
+  .tone-swatch {
+    width:36px; height:36px; border-radius:5px; flex-shrink:0;
+    border:1px solid #1c3358;
+  }
+
+  /* ── Exercise cards ── */
+  .exercise-card {
+    background:#0d1e38;
+    border:1px solid #1c3358;
+    border-radius:6px;
+    overflow:hidden;
+  }
+  .exercise-q {
+    padding:1rem 1.25rem;
+    cursor:pointer;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:1rem;
+    transition:background .15s;
+  }
+  .exercise-q:hover { background:rgba(255,255,255,.03); }
+  .exercise-answer {
+    display:none;
+    padding:.9rem 1.25rem 1.1rem;
+    border-top:1px solid #1c3358;
+    background:rgba(0,0,0,.2);
+  }
+  .exercise-answer.open { display:block; }
+  .toggle-icon { font-size:.85rem; transition:transform .2s; flex-shrink:0; margin-top:.1rem; }
+  .toggle-icon.open { transform:rotate(45deg); }
+
+  /* ── Rec cards ── */
+  .rec-card {
+    background:#0d1e38;
+    border:1px solid #1c3358;
+    border-radius:6px;
+    padding:1.25rem;
+    text-align:center;
+    border-top-width:3px;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar{width:5px}
+  ::-webkit-scrollbar-track{background:#0b1929}
+  ::-webkit-scrollbar-thumb{background:#1c3358;border-radius:3px}
+
+  /* ── Mobile ── */
+  @media(max-width:640px){
+    .two-col { grid-template-columns:1fr !important; }
+    .three-col { grid-template-columns:1fr !important; }
+  }
+</style>
+</head>
+
+<body class="text-slate-200 min-h-screen overflow-x-hidden">
+
+<!-- ══════════════════ NAV ══════════════════ -->
+<nav class="relative z-10 border-b border-[#1c3358] px-6 py-3 flex items-center gap-3 text-[.72rem] text-slate-500 flex-wrap">
+  <a href="./index.html" class="hover:text-yellow-400 transition-colors flex items-center gap-1.5">← SkyPulse</a>
+  <span class="text-[#1c3358]">/</span>
+  <span class="text-slate-300">Radar &amp; Satélite</span>
+  <span class="text-[#1c3358] ml-auto"></span>
+  <a href="./lluvias.html"   class="hover:text-blue-400  transition-colors text-slate-600">🌧 Lluvias</a>
+  <a href="./metar.html"     class="hover:text-sky-400   transition-colors text-slate-600">📡 METAR</a>
+  <a href="./desastres.html" class="hover:text-red-400   transition-colors text-slate-600">🌪 Desastres</a>
+</nav>
+
+<!-- ══════════════════ HEADER ══════════════════ -->
+<header class="relative z-10 text-center px-6 pt-16 pb-10 border-b border-[#1c3358]">
+  <div class="eyebrow-deco inline-flex items-center gap-3 text-[.62rem] font-medium tracking-[.28em] uppercase text-yellow-500 mb-5">
+    Leer el cielo digital
+  </div>
+  <h1 class="font-serif text-4xl md:text-6xl font-normal leading-[1.06] text-slate-100">
+    Radar y satélite<br><em class="text-yellow-300">en lenguaje simple</em>
+  </h1>
+  <p class="mt-5 text-[.96rem] text-slate-400 max-w-lg mx-auto leading-[1.8]">
+    No hace falta ser meteorólogo para leer un radar o una imagen satelital. Dos herramientas, un idioma.
+  </p>
+</header>
+
+<!-- ══════════════════ MAIN ══════════════════ -->
+<main class="relative z-10 max-w-4xl mx-auto px-4 py-12 space-y-14">
+
+  <!-- ─── 1. INTRO ─── -->
+  <section>
+    <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-6">¿Qué mide cada uno?</h2>
+    <div class="grid two-col grid-cols-2 gap-4" style="grid-template-columns:1fr 1fr">
+
+      <div class="info-card" style="border-left-color:#4ade80">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-green-500 mb-2">Radar meteorológico</div>
+        <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+          Emite pulsos de microondas y mide la energía que <strong class="text-slate-200">rebotan las gotas de lluvia</strong> al recibirse de vuelta. Cuanto más intensa la reflexión, más agua hay en el aire — y el mapa lo muestra con colores más intensos. Ve lo que está pasando <em>ahora mismo</em>.
+        </p>
+      </div>
+
+      <div class="info-card" style="border-left-color:#7dd3fc">
+        <div class="text-[.63rem] font-medium tracking-widest uppercase text-sky-400 mb-2">Satélite meteorológico</div>
+        <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+          Fotografía las nubes desde 36 000 km de altura. En modo <strong class="text-slate-200">infrarrojo (IR)</strong> mide la temperatura de la cima de las nubes: las más frías y brillantes son las más altas — y suelen ser las más peligrosas. En modo visible mide la luz solar reflejada, como una foto.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── 2. ESCALA RADAR ─── -->
+  <section>
+    <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-2">La escala de colores del radar</h2>
+    <p class="text-[.82rem] text-slate-500 mb-6">Del color más tenue al más intenso — la regla es simple: <strong class="text-slate-300">más saturado = más peligroso</strong>.</p>
+
+    <div class="rounded-lg border border-[#1c3358] overflow-hidden">
+
+      <div class="radar-row">
+        <div class="color-swatch" style="background:#4ade80;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Verde claro</div>
+          <div class="text-[.78rem] text-slate-400">Lluvia ligera — menos de 5 mm/h. Paraguas alcanza. Sin riesgo de vuelo.</div>
+        </div>
+        <div class="text-[.7rem] text-slate-600 text-right hidden sm:block">&lt; 5 mm/h</div>
+      </div>
+
+      <div class="radar-row">
+        <div class="color-swatch" style="background:#a3e635;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Verde intenso / amarillo verdoso</div>
+          <div class="text-[.78rem] text-slate-400">Lluvia moderada — 5 a 20 mm/h. Se moja fácil. Vuelo VFR empieza a ser incómodo.</div>
+        </div>
+        <div class="text-[.7rem] text-slate-600 text-right hidden sm:block">5–20 mm/h</div>
+      </div>
+
+      <div class="radar-row">
+        <div class="color-swatch" style="background:#facc15;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Amarillo</div>
+          <div class="text-[.78rem] text-slate-400">Lluvia moderada a intensa — 20 a 35 mm/h. Visibilidad reducida. Evitar salir a volar.</div>
+        </div>
+        <div class="text-[.7rem] text-slate-600 text-right hidden sm:block">20–35 mm/h</div>
+      </div>
+
+      <div class="radar-row">
+        <div class="color-swatch" style="background:#f97316;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Naranja</div>
+          <div class="text-[.78rem] text-slate-400">Lluvia intensa — 35 a 50 mm/h. Posibles ráfagas y rayos. Riesgo real en tierra y en vuelo.</div>
+        </div>
+        <div class="text-[.7rem] text-slate-600 text-right hidden sm:block">35–50 mm/h</div>
+      </div>
+
+      <div class="radar-row">
+        <div class="color-swatch" style="background:#ef4444;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Rojo</div>
+          <div class="text-[.78rem] text-slate-400">Lluvia muy intensa o granizo — más de 50 mm/h. Tormentas severas. No salir.</div>
+        </div>
+        <div class="text-[.7rem] text-slate-600 text-right hidden sm:block">&gt; 50 mm/h</div>
+      </div>
+
+      <div class="radar-row" style="background:rgba(168,85,247,.05)">
+        <div class="color-swatch" style="background:#a855f7;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Morado / violeta</div>
+          <div class="text-[.78rem] text-slate-400">Granizo grande confirmado o reflectividad extrema. Núcleo severo de tormenta. Peligro máximo.</div>
+        </div>
+        <div class="text-[.7rem] text-red-600 text-right hidden sm:block font-medium">Granizo</div>
+      </div>
+
+    </div>
+
+    <!-- Gradiente visual -->
+    <div class="mt-4 rounded-md overflow-hidden h-4" style="background:linear-gradient(to right, #4ade80, #a3e635, #facc15, #f97316, #ef4444, #a855f7)"></div>
+    <div class="flex justify-between text-[.62rem] text-slate-600 mt-1 px-0.5">
+      <span>Sin riesgo</span>
+      <span>Riesgo moderado</span>
+      <span>Peligro máximo</span>
+    </div>
+  </section>
+
+  <!-- ─── 3. SATÉLITE IR ─── -->
+  <section>
+    <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-2">Cómo leer el satélite infrarrojo</h2>
+    <p class="text-[.82rem] text-slate-500 mb-6">En el satélite IR: <strong class="text-slate-300">más blanco = nube más alta y más fría = más peligrosa</strong>. Lo negro es tierra o mar despejado.</p>
+
+    <div class="rounded-lg border border-[#1c3358] overflow-hidden">
+
+      <div class="sat-row">
+        <div class="tone-swatch" style="background:#ffffff;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Blanco brillante</div>
+          <div class="text-[.78rem] text-slate-400">Nubes muy altas y frías: cumulonimbos, yunques. Tormentas activas. Alta probabilidad de lluvia fuerte, granizo y rayos.</div>
+        </div>
+        <div class="text-[.7rem] text-red-500 text-right hidden sm:block font-medium">≥ 12 km</div>
+      </div>
+
+      <div class="sat-row">
+        <div class="tone-swatch" style="background:#d4d4d4; border-color:#2a4a70;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Gris claro</div>
+          <div class="text-[.78rem] text-slate-400">Nubes medias: altostratos, altocúmulos. Lluvia posible pero no severa. Sin peligro inminente.</div>
+        </div>
+        <div class="text-[.7rem] text-slate-600 text-right hidden sm:block">5–8 km</div>
+      </div>
+
+      <div class="sat-row">
+        <div class="tone-swatch" style="background:#737373; border-color:#2a4a70;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Gris medio / oscuro</div>
+          <div class="text-[.78rem] text-slate-400">Nubes bajas: estratos, estratocúmulos. Cielo cubierto, llovizna posible. Sin tormenta.</div>
+        </div>
+        <div class="text-[.7rem] text-slate-600 text-right hidden sm:block">1–3 km</div>
+      </div>
+
+      <div class="sat-row">
+        <div class="tone-swatch" style="background:#1a1a2e; border-color:#2a4a70;"></div>
+        <div class="flex-1">
+          <div class="text-[.82rem] font-medium text-slate-100 mb-0.5">Negro / muy oscuro</div>
+          <div class="text-[.78rem] text-slate-400">Cielo despejado o superficie terrestre. Sin nubes en ese punto. Temperatura alta.</div>
+        </div>
+        <div class="text-[.7rem] text-green-600 text-right hidden sm:block font-medium">Despejado</div>
+      </div>
+
+    </div>
+
+    <!-- Gradiente visual satélite -->
+    <div class="mt-4 rounded-md overflow-hidden h-4" style="background:linear-gradient(to right, #111827, #6b7280, #d1d5db, #ffffff)"></div>
+    <div class="flex justify-between text-[.62rem] text-slate-600 mt-1 px-0.5">
+      <span>Despejado</span>
+      <span>Nubes bajas</span>
+      <span>Nubes altas / peligro</span>
+    </div>
+  </section>
+
+  <!-- ─── 4. MINI-EJERCICIO ─── -->
+  <section>
+    <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-2">¿Qué ves en este escenario?</h2>
+    <p class="text-[.82rem] text-slate-500 mb-6">Leé cada caso y hacé clic para ver la interpretación.</p>
+
+    <div class="space-y-3">
+
+      <!-- Caso 1 -->
+      <div class="exercise-card">
+        <div class="exercise-q" onclick="toggleExercise(this)">
+          <div>
+            <div class="text-[.63rem] font-medium tracking-widest uppercase text-orange-500 mb-1">Caso 1 — Radar</div>
+            <p class="text-[.82rem] text-slate-300 leading-[1.7]">
+              El radar muestra una mancha <strong>naranja-roja</strong> con un núcleo morado en el centro, moviéndose hacia tu ciudad. Velocidad estimada: 40 km/h. Llegada: 30 minutos.
+            </p>
+          </div>
+          <span class="toggle-icon text-slate-500">＋</span>
+        </div>
+        <div class="exercise-answer">
+          <div class="text-[.63rem] font-medium tracking-widest uppercase text-red-500 mb-2">Interpretación</div>
+          <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+            Tormenta severa en camino. El naranja indica lluvia muy intensa; el núcleo morado confirma <strong class="text-slate-200">granizo probable</strong>. Tenés unos 30 minutos para buscar refugio sólido. Suspendé cualquier actividad al aire libre y posponé cualquier vuelo sin excepción. No esperes a que llegue para actuar.
+          </p>
+        </div>
+      </div>
+
+      <!-- Caso 2 -->
+      <div class="exercise-card">
+        <div class="exercise-q" onclick="toggleExercise(this)">
+          <div>
+            <div class="text-[.63rem] font-medium tracking-widest uppercase text-sky-400 mb-1">Caso 2 — Satélite IR</div>
+            <p class="text-[.82rem] text-slate-300 leading-[1.7]">
+              El satélite infrarrojo muestra una espiral de <strong>blanco brillante</strong> con un ojo oscuro en el centro, sobre el Atlántico, a 400 km de la costa. El sistema tiene 600 km de diámetro.
+            </p>
+          </div>
+          <span class="toggle-icon text-slate-500">＋</span>
+        </div>
+        <div class="exercise-answer">
+          <div class="text-[.63rem] font-medium tracking-widest uppercase text-sky-400 mb-2">Interpretación</div>
+          <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+            Sistema tropical bien organizado — probablemente <strong class="text-slate-200">huracán o tormenta tropical</strong>. El blanco brillante en espiral indica nubes muy altas y frías con convección intensa. El ojo oscuro confirma estructura ciclónica definida. Consultá el NHC o SMN para trayectoria: a 400 km puede impactar en 12–24 horas según la velocidad de traslación.
+          </p>
+        </div>
+      </div>
+
+      <!-- Caso 3 -->
+      <div class="exercise-card">
+        <div class="exercise-q" onclick="toggleExercise(this)">
+          <div>
+            <div class="text-[.63rem] font-medium tracking-widest uppercase text-green-500 mb-1">Caso 3 — Radar + Satélite</div>
+            <p class="text-[.82rem] text-slate-300 leading-[1.7]">
+              El radar muestra manchas <strong>verde claro dispersas</strong> en la zona. El satélite IR muestra <strong>gris suave</strong> sin ningún blanco brillante. Temperatura en tierra: 18 °C.
+            </p>
+          </div>
+          <span class="toggle-icon text-slate-500">＋</span>
+        </div>
+        <div class="exercise-answer">
+          <div class="text-[.63rem] font-medium tracking-widest uppercase text-green-500 mb-2">Interpretación</div>
+          <p class="text-[.82rem] text-slate-400 leading-[1.75]">
+            Situación tranquila. El verde claro en el radar indica <strong class="text-slate-200">llovizna o lluvia ligera</strong>, no tormenta. El gris suave en IR confirma que las nubes son bajas y débiles — sin desarrollo convectivo. Un día gris y húmedo, posiblemente con llovizna intermitente. Paraguas útil, sin riesgo de tormenta ni granizo. Vuelo VFR posible con revisión de visibilidad.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── 5. RECOMENDACIONES ─── -->
+  <section>
+    <h2 class="font-serif text-2xl italic font-normal text-slate-100 mb-6">Qué hacer según lo que ves</h2>
+
+    <div class="grid three-col grid-cols-3 gap-4" style="grid-template-columns:1fr 1fr 1fr">
+
+      <div class="rec-card" style="border-top-color:#a855f7">
+        <div class="text-3xl mb-3">🟣</div>
+        <div class="text-[.75rem] font-medium tracking-wide uppercase text-purple-400 mb-2">Morado en radar</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.7]">
+          Granizo grande confirmado. Buscá refugio sólido inmediatamente. Protegé vehículos. Prohibición total de vuelo. No salgas hasta que el color desaparezca del radar.
+        </p>
+      </div>
+
+      <div class="rec-card" style="border-top-color:#ffffff">
+        <div class="text-3xl mb-3">⬜</div>
+        <div class="text-[.75rem] font-medium tracking-wide uppercase text-slate-200 mb-2">Blanco en satélite IR</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.7]">
+          Inestabilidad activa con nubes muy altas. Controlá el radar en paralelo. Si el blanco crece y se organiza, hay tormenta en desarrollo. Posponer actividades al aire libre.
+        </p>
+      </div>
+
+      <div class="rec-card" style="border-top-color:#4ade80">
+        <div class="text-3xl mb-3">🟢</div>
+        <div class="text-[.75rem] font-medium tracking-wide uppercase text-green-400 mb-2">Verde claro + gris suave</div>
+        <p class="text-[.78rem] text-slate-400 leading-[1.7]">
+          Situación tranquila. Lluvia ligera posible, sin tormenta ni granizo. Paraguas suficiente. Vuelo VFR viable con revisión de visibilidad en el aeródromo.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── NOTA FINAL ─── -->
+  <div class="bg-[#0d1e38] border border-[#1c3358] rounded-lg p-5">
+    <div class="text-[.63rem] font-medium tracking-widest uppercase text-yellow-600 mb-2">Regla de oro</div>
+    <p class="text-[.83rem] text-slate-400 leading-[1.8]">
+      Radar y satélite son complementarios: el radar muestra <strong class="text-slate-200">dónde llueve ahora</strong>, el satélite muestra <strong class="text-slate-200">qué están haciendo las nubes</strong>. Usados juntos dan la imagen más completa. Si el satélite muestra blanco brillante pero el radar todavía no muestra rojo, la tormenta está <em class="text-yellow-300">creciendo</em> — y el rojo llega en minutos.
+    </p>
+  </div>
+
+</main>
+
+<!-- ══════════════════ FOOTER ══════════════════ -->
+<footer class="relative z-10 text-center px-6 py-8 border-t border-[#1c3358] text-[.67rem] text-slate-600 leading-[2]">
+  <p>
+    SkyPulse ·
+    <a href="./index.html"    class="underline hover:text-slate-400 transition-colors">Nubes</a> ·
+    <a href="./lluvias.html"  class="underline hover:text-slate-400 transition-colors">Lluvias</a> ·
+    <a href="./metar.html"    class="underline hover:text-slate-400 transition-colors">METAR & TAF</a> ·
+    <a href="./desastres.html" class="underline hover:text-slate-400 transition-colors">Desastres</a>
+  </p>
+  <p class="text-slate-500 mt-1">
+    Información con fines divulgativos — consultar fuentes oficiales para operaciones reales ·
+    Creado por Francisco A. · <a class="underline hover:text-slate-400 transition-colors" href="https://ajconsultingitwebv2.vercel.app/">ajconsultingitwebv2.vercel.app</a> · 2026 ©
+  </p>
+</footer>
+
+<script>
+  function toggleExercise(btn) {
+    const answer = btn.nextElementSibling;
+    const icon = btn.querySelector('.toggle-icon');
+    const isOpen = answer.classList.contains('open');
+    answer.classList.toggle('open', !isOpen);
+    icon.classList.toggle('open', !isOpen);
+    icon.textContent = isOpen ? '＋' : '×';
+  }
+</script>
+
+</body>
+</html>
