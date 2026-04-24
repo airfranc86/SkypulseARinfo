@@ -129,14 +129,13 @@
 <body class="text-slate-200 min-h-screen overflow-x-hidden">
 
 <!-- ══════════════════ NAV ══════════════════ -->
-<nav class="relative z-10 border-b border-[#1c3358] px-6 py-3 flex items-center gap-3 text-[.72rem] text-slate-500 flex-wrap">
-  <a href="./index.html" class="hover:text-yellow-400 transition-colors flex items-center gap-1.5">← SkyPulse</a>
-  <span class="text-[#1c3358]">/</span>
-  <span class="text-slate-300">Radar &amp; Satélite</span>
-  <span class="text-[#1c3358] ml-auto"></span>
-  <a href="./lluvias.html"   class="hover:text-blue-400  transition-colors text-slate-600">🌧 Lluvias</a>
-  <a href="./metar.html"     class="hover:text-sky-400   transition-colors text-slate-600">📡 METAR</a>
-  <a href="./desastres.html" class="hover:text-red-400   transition-colors text-slate-600">🌪 Desastres</a>
+<nav class="sticky top-0 z-50 bg-[#060d1af6] backdrop-blur-lg border-b border-[#1c3358] px-4 py-3 flex flex-wrap gap-2 justify-center items-center">
+  <a href="./index.html" class="text-[.72rem] font-medium text-yellow-500 tracking-widest uppercase px-1 hover:text-yellow-300 transition-colors no-underline">SkyPulse</a>
+  <div class="w-px h-4 bg-[#243e62]"></div>
+  <a href="./metar.html"     class="px-4 py-1.5 rounded-full border border-sky-900   text-[.72rem] text-sky-400   bg-transparent hover:bg-sky-950   transition-all no-underline">📡 METAR & TAF</a>
+  <a href="./lluvias.html"   class="px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all no-underline">🌧 Lluvias</a>
+  <a href="./desastres.html" class="px-4 py-1.5 rounded-full border border-red-900   text-[.72rem] text-red-400   bg-transparent hover:bg-red-950    transition-all no-underline">🌪 Desastres</a>
+  <span                      class="px-4 py-1.5 rounded-full border border-blue-700  text-[.72rem] text-blue-200  bg-blue-950   cursor-default">🛰 Radar</span>
 </nav>
 
 <!-- ══════════════════ HEADER ══════════════════ -->
