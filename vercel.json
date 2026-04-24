@@ -1,6 +1,4 @@
 {
-  "outputDirectory": "src",
-  "buildCommand": "echo build",
   "rewrites": [
     {
       "source": "/Lluvias.html",
