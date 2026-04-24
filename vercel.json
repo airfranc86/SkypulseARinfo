@@ -1,5 +1,10 @@
 {
   "outputDirectory": "src",
+  "functions": {
+    "api/metar.js": {
+      "runtime": "nodejs20.x"
+    }
+  },
   "rewrites": [
     {
       "source": "/Lluvias.html",
