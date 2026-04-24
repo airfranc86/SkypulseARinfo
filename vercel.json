@@ -1,9 +1,9 @@
 {
   "outputDirectory": "src",
-  "routes": [
+  "rewrites": [
     {
-      "src": "/Lluvias\\.html",
-      "dest": "/Lluvias.html"
+      "source": "/Lluvias.html",
+      "destination": "/Lluvias.html"
     }
   ]
 }
