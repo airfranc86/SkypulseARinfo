@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkyPulse — Previsión del clima</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  body { background: #060d1a; font-family: 'DM Sans', sans-serif; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 35% at 50% -5%, rgba(26,74,136,.13) 0%, transparent 60%),
+      radial-gradient(1.5px 1.5px at 12% 18%, rgba(255,255,255,.13) 0%, transparent 100%),
+      radial-gradient(1px 1px at 61% 22%, rgba(255,255,255,.11) 0%, transparent 100%);
+    pointer-events: none; z-index: 0;
+  }
+  .font-serif { font-family: 'Playfair Display', serif; }
+  @keyframes pulse-slow { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+  .animate-pulse-slow { animation: pulse-slow 3s ease-in-out infinite; }
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center px-6 relative z-10">
+
+  <!-- Back link -->
+  <a href="/" class="absolute top-6 left-6 flex items-center gap-2 text-sm text-slate-500 hover:text-yellow-400 transition-colors no-underline">
+    ← SkyPulse
+  </a>
+
+  <!-- Main content -->
+  <div class="text-center max-w-md">
+
+    <!-- Code -->
+    <p class="text-[5rem] font-bold font-serif leading-none text-transparent bg-clip-text"
+       style="background-image: linear-gradient(135deg, #c8a84b, #f0d060)">
+      503
+    </p>
+
+    <!-- Icon -->
+    <p class="text-5xl mt-2 animate-pulse-slow">🏗️</p>
+
+    <!-- Title -->
+    <h1 class="font-serif text-2xl text-slate-100 mt-4 font-semibold">
+      En construcción
+    </h1>
+
+    <!-- Subtitle -->
+    <p class="text-slate-400 text-sm mt-3 leading-relaxed">
+      La previsión meteorológica interactiva está siendo desarrollada.<br>
+      Próximamente disponible.
+    </p>
+
+    <!-- Divider -->
+    <div class="w-12 h-px bg-yellow-800 mx-auto mt-6"></div>
+
+    <!-- Footer note -->
+    <p class="text-slate-600 text-xs mt-4">
+      SkyPulse · Meteorología Argentina
+    </p>
+
+  </div>
+
+  <!--
+    INTENT: Este link y página son placeholders mientras se finaliza el deploy de la
+    app React en herramientas.skypulseinfo.vercel.app.
+    Cuando el deploy esté activo, actualizar el href en index.html línea ~279 a:
+    href="https://herramientas.skypulseinfo.vercel.app"
+  -->
+
+</body>
+</html>
