@@ -28,6 +28,8 @@ class ToolResult(BaseModel):
     humidity: float | None = None
     wind_speed: float | None = None
     precip: float | None = None
+    # Origen del forecast usado: "windy_gfs" | "openmeteo_fallback" | "unknown"
+    source: str = "unknown"
 
 
 class FeelsLikeResponse(BaseModel):
@@ -49,6 +51,8 @@ class SnowLevelResponse(BaseModel):
     temp_c: float
     station_altitude_m: float
     description: str
+    # Origen del temp_850hPa usado: "windy_gfs" | "openmeteo_fallback" | "unavailable"
+    source: str = "unknown"
 
 
 class CarWashDay(BaseModel):
@@ -70,6 +74,8 @@ class CarWashDay(BaseModel):
 class CarWashForecastResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
     days: list[CarWashDay]
+    # Origen del forecast: "windy_gfs" | "openmeteo_fallback"
+    source: str = "unknown"
 
 
 class LaundryDay(BaseModel):

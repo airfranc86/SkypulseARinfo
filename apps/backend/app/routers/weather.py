@@ -1,4 +1,13 @@
-"""Router para datos meteorológicos actuales y dashboard completo."""
+"""Router para datos meteorológicos actuales y dashboard completo.
+
+Jerarquía de fuentes:
+    1. SMN — observación actual (vía `aggregate_current`).
+    2. Windy GFS — pronósticos horarios y diarios (temp, humedad, viento, precip).
+    3. Open-Meteo — fallback de pronósticos. SIEMPRE se usa para:
+       - weather_code (WMO) → único origen confiable para los íconos.
+       - uv_index → no provisto por Windy GFS gratuito.
+       - sunrise/sunset/daylight_duration → cálculo astronómico de Open-Meteo.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -8,6 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.schemas.weather import (
     CurrentDetailedSchema,
@@ -27,6 +37,13 @@ from app.services.openmeteo import (
     DailyForecastDataExt,
     MultiModelDailyData,
     HourlyForecastExt,
+)
+from app.services.windy import (
+    WindyDailyEntry,
+    WindyHourlyEntry,
+    WindyNotConfiguredError,
+    get_daily_forecast as windy_get_daily_forecast,
+    get_hourly_forecast as windy_get_hourly_forecast,
 )
 from app.utils.moon_phase import compute_moon_phase
 from app.utils.wmo_codes import describe_wmo
@@ -54,6 +71,11 @@ _MONTHS_ES = [
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
 
+# Etiquetas de fuentes para `forecast_source`.
+SOURCE_WINDY = "windy_gfs"
+SOURCE_OPENMETEO = "openmeteo_fallback"
+SOURCE_MIXED = "mixed"  # Windy para datos, Open-Meteo para weather codes / uv / sun
+
 
 # ---------------------------------------------------------------------------
 # GET /current
@@ -79,6 +101,34 @@ async def get_current_weather(
 
 
 # ---------------------------------------------------------------------------
+# Wrappers Windy con fallback a None
+# ---------------------------------------------------------------------------
+
+async def _safe_windy_hourly(lat: float, lon: float) -> list[WindyHourlyEntry] | None:
+    if not settings.windy_api_key:
+        return None
+    try:
+        return await windy_get_hourly_forecast(lat, lon)
+    except WindyNotConfiguredError:
+        return None
+    except Exception as exc:
+        logger.warning("Windy hourly failed in /dashboard: %s", exc)
+        return None
+
+
+async def _safe_windy_daily(lat: float, lon: float, days: int) -> list[WindyDailyEntry] | None:
+    if not settings.windy_api_key:
+        return None
+    try:
+        return await windy_get_daily_forecast(lat, lon, days=days)
+    except WindyNotConfiguredError:
+        return None
+    except Exception as exc:
+        logger.warning("Windy daily failed in /dashboard: %s", exc)
+        return None
+
+
+# ---------------------------------------------------------------------------
 # GET /dashboard
 # ---------------------------------------------------------------------------
 
@@ -87,8 +137,9 @@ async def get_current_weather(
     response_model=WeatherDashboardResponse,
     summary="Dashboard meteorológico completo",
     description=(
-        "Retorna condiciones actuales, pronóstico horario 48h, pronóstico 7 días "
-        "con consenso ECMWF+GFS+ICON, fase lunar, arco solar y pronóstico de lluvia."
+        "Retorna condiciones actuales (SMN), pronóstico horario 48h (Windy GFS), "
+        "pronóstico 7 días (Windy GFS con weather codes/uv/sunrise/sunset desde Open-Meteo), "
+        "fase lunar, arco solar y pronóstico de lluvia."
     ),
 )
 @limiter.limit("30/minute")
@@ -101,13 +152,20 @@ async def get_dashboard(
 
     now = datetime.now(timezone.utc)
 
-    # Fetch en paralelo: condiciones actuales + multi-model + horario
+    # Fetch en paralelo:
+    #   - current (SMN/OM): bloqueante.
+    #   - multi-model Open-Meteo: SIEMPRE — provee weather_code/uv/sunrise/sunset.
+    #   - Windy hourly + daily: best-effort.
+    #   - Open-Meteo hourly_ext: fallback de horario si Windy falla.
     current_task = aggregate_current(lat, lon)
-    daily_task = get_multi_model_daily(lat, lon, days=7)
-    hourly_task = get_hourly_forecast_ext(lat, lon, days=2)
+    om_daily_task = get_multi_model_daily(lat, lon, days=7)
+    om_hourly_task = get_hourly_forecast_ext(lat, lon, days=2)
+    windy_hourly_task = _safe_windy_hourly(lat, lon)
+    windy_daily_task = _safe_windy_daily(lat, lon, days=7)
 
-    current, daily_multi, hourly = await asyncio.gather(
-        current_task, daily_task, hourly_task,
+    (current, daily_multi, om_hourly, windy_hourly, windy_daily) = await asyncio.gather(
+        current_task, om_daily_task, om_hourly_task,
+        windy_hourly_task, windy_daily_task,
         return_exceptions=True,
     )
 
@@ -116,17 +174,27 @@ async def get_dashboard(
         logger.error("aggregate_current falló en /dashboard: %s", current)
         raise HTTPException(status_code=503, detail="current_unavailable")
 
-    # daily_multi es obligatorio para el pronóstico de 7 días
+    # daily_multi es obligatorio (provee weather_code/uv/sunrise/sunset y el armazón
+    # de 7 días). Si falla, no podemos armar el dashboard.
     if isinstance(daily_multi, Exception) or daily_multi is None:
         logger.error("get_multi_model_daily falló en /dashboard: %s", daily_multi)
         raise HTTPException(status_code=503, detail="forecast_unavailable")
 
-    # hourly es opcional — no bloquea el dashboard
-    hourly_data: HourlyForecastExt | None = None
-    if not isinstance(hourly, Exception):
-        hourly_data = hourly
+    # hourly Open-Meteo es opcional
+    om_hourly_data: HourlyForecastExt | None = (
+        om_hourly if not isinstance(om_hourly, Exception) else None
+    )
+    windy_hourly_data: list[WindyHourlyEntry] | None = (
+        windy_hourly if not isinstance(windy_hourly, Exception) else None
+    )
+    windy_daily_data: list[WindyDailyEntry] | None = (
+        windy_daily if not isinstance(windy_daily, Exception) else None
+    )
 
-    # Referencia: primer modelo disponible (para sunrise/sunset/daylight)
+    # Determinar fuente del pronóstico
+    forecast_source = SOURCE_MIXED if windy_hourly_data or windy_daily_data else SOURCE_OPENMETEO
+
+    # Referencia: primer modelo Open-Meteo disponible (para sunrise/sunset/daylight)
     ref_daily: DailyForecastDataExt = next(iter(daily_multi.models.values()))
 
     # =========================================================================
@@ -152,7 +220,7 @@ async def get_dashboard(
     weather_code_current = _get_weather_code_from_current(current)
     desc, icon = describe_wmo(weather_code_current, is_day_now)
 
-    # UV: del primer día del pronóstico (el daily actual)
+    # UV: del primer día del pronóstico (Open-Meteo, único origen disponible)
     uv_index = ref_daily.uv_max[0] if ref_daily.uv_max else None
 
     current_detailed = CurrentDetailedSchema(
@@ -171,11 +239,10 @@ async def get_dashboard(
     # =========================================================================
     # DayArcSchema
     # =========================================================================
-    # Fallback: total del día desde el daily forecast
     daylight_sec = float(ref_daily.daylight_seconds[0]) if ref_daily.daylight_seconds else 0.0
     _h_total = int(daylight_sec // 3600)
     _m_total = int((daylight_sec % 3600) // 60)
-    daylight_label = f"{_h_total}h {_m_total:02d}m de luz"  # fallback estático
+    daylight_label = f"{_h_total}h {_m_total:02d}m de luz"
 
     position_pct = 0.5
     try:
@@ -186,24 +253,20 @@ async def get_dashboard(
         if total_sec > 0:
             position_pct = max(0.0, min(1.5, elapsed_sec / total_sec))
 
-        # Label dinámico: refleja el momento actual del día
         if now < sr_dt2:
-            # Antes del amanecer → cuánto falta para que salga el sol
             secs_to_sr = (sr_dt2 - now).total_seconds()
             h = int(secs_to_sr // 3600)
             m = int((secs_to_sr % 3600) // 60)
             daylight_label = f"Sale en {h}h {m:02d}m" if h > 0 else f"Sale en {m}m"
         elif now < ss_dt2:
-            # Durante el día → luz restante hasta el ocaso
             remaining = (ss_dt2 - now).total_seconds()
             h = int(remaining // 3600)
             m = int((remaining % 3600) // 60)
             daylight_label = f"{h}h {m:02d}m de luz"
         else:
-            # Después del ocaso → total del día como dato histórico
             daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
     except Exception:
-        pass  # mantiene el fallback estático
+        pass
 
     day_arc = DayArcSchema(
         sunrise=sunrise_today,
@@ -230,29 +293,49 @@ async def get_dashboard(
     try:
         from app.services.calculators import compute_cota_de_nieve
         if current.temp_c is not None:
+            # Si tenemos Windy hourly con temp_850, lo usamos. Caso contrario, None.
+            temp_850 = None
+            if windy_hourly_data:
+                for h in windy_hourly_data:
+                    if h.temp_850_c is not None:
+                        temp_850 = h.temp_850_c
+                        break
+
             snow_result = compute_cota_de_nieve(
                 temp_c=current.temp_c,
                 station_altitude_m=500.0,   # altitud genérica; mejorable con elevation API
-                temp_850_hpa=None,
+                temp_850_hpa=temp_850,
             )
             snow_level_m = snow_result.average_m
     except Exception as exc:
         logger.warning("compute_cota_de_nieve falló en /dashboard: %s", exc)
 
     # =========================================================================
-    # RainForecastSchema
+    # RainForecastSchema — usa Windy hourly si disponible, OM como fallback
     # =========================================================================
-    rain_today = _build_rain_forecast(hourly_data, current)
+    rain_today = _build_rain_forecast(
+        windy_hourly=windy_hourly_data,
+        om_hourly=om_hourly_data,
+        current=current,
+    )
 
     # =========================================================================
-    # HourlyConsensusSchema
+    # HourlyConsensusSchema — Windy primary, OM fallback
     # =========================================================================
-    hourly_schema = _build_hourly_schema(hourly_data)
+    hourly_schema = _build_hourly_schema(
+        windy_hourly=windy_hourly_data,
+        om_hourly=om_hourly_data,
+        is_day_default=is_day_now,
+    )
 
     # =========================================================================
-    # 7-day forecast
+    # 7-day forecast — Windy daily para datos, Open-Meteo para weather_codes/snow
     # =========================================================================
-    forecast_7d = _build_7d_forecast(daily_multi, snow_level_m)
+    forecast_7d = _build_7d_forecast(
+        daily_multi=daily_multi,
+        windy_daily=windy_daily_data,
+        snow_level_m=snow_level_m,
+    )
 
     return WeatherDashboardResponse(
         location={"lat": lat, "lon": lon, "city": None},
@@ -264,6 +347,7 @@ async def get_dashboard(
         hourly=hourly_schema,
         forecast_7d=forecast_7d,
         fetched_at=now,
+        forecast_source=forecast_source,
     )
 
 
@@ -277,14 +361,25 @@ def _get_weather_code_from_current(current: WeatherCurrentResponse) -> int | Non
 
 
 def _build_rain_forecast(
-    hourly: HourlyForecastExt | None,
+    windy_hourly: list[WindyHourlyEntry] | None,
+    om_hourly: HourlyForecastExt | None,
     current: WeatherCurrentResponse,
 ) -> RainForecastSchema:
     """
-    Construye RainForecastSchema buscando la mejor franja seca de las próximas 24h
-    y evaluando las condiciones de secado de ropa.
+    Construye RainForecastSchema. Prefiere Windy GFS para precipitación; cae a
+    Open-Meteo si Windy no está disponible. Evalúa condiciones de secado.
     """
-    if hourly is None or not hourly.precipitations:
+    # Determinar fuente y arrays de precipitación + etiquetas de hora
+    if windy_hourly:
+        # Tomar próximos ~24h ≈ 8 slots de 3h
+        slots = windy_hourly[:8]
+        next_precip = [s.precip_3h_mm or 0.0 for s in slots]
+        next_hours = [s.hour_label for s in slots]
+    elif om_hourly is not None and om_hourly.precipitations:
+        n = min(24, len(om_hourly.precipitations))
+        next_precip = [om_hourly.precipitations[i] or 0.0 for i in range(n)]
+        next_hours = om_hourly.hour_labels[:n]
+    else:
         return RainForecastSchema(
             status_text="Sin datos de lluvia",
             confidence_label="baja",
@@ -298,18 +393,15 @@ def _build_rain_forecast(
             drying_reason=None,
         )
 
-    n = min(24, len(hourly.precipitations))
-    next_24_precip = [hourly.precipitations[i] or 0.0 for i in range(n)]
-    next_24_hours = hourly.hour_labels[:n]
-    has_rain = any(p > 0.1 for p in next_24_precip)
+    has_rain = any(p > 0.1 for p in next_precip)
 
-    # Mejor franja seca consecutiva de al menos 1h
+    # Mejor franja seca consecutiva
     best_start: int | None = None
     best_end: int | None = None
     best_len = 0
     run_start: int | None = None
 
-    for i, p in enumerate(next_24_precip):
+    for i, p in enumerate(next_precip):
         if p <= 0.05:
             if run_start is None:
                 run_start = i
@@ -321,10 +413,7 @@ def _build_rain_forecast(
         else:
             run_start = None
 
-    if has_rain:
-        status_text = "Lluvia esperada hoy"
-    else:
-        status_text = "Sin lluvia esperada"
+    status_text = "Lluvia esperada hoy" if has_rain else "Sin lluvia esperada"
 
     # Condiciones de secado de ropa
     is_ideal_drying = False
@@ -358,8 +447,8 @@ def _build_rain_forecast(
         status_text=status_text,
         confidence_label="alta",
         has_rain_today=has_rain,
-        best_window_start=next_24_hours[best_start] if best_start is not None else None,
-        best_window_end=next_24_hours[best_end] if best_end is not None else None,
+        best_window_start=next_hours[best_start] if best_start is not None else None,
+        best_window_end=next_hours[best_end] if best_end is not None else None,
         best_window_label="Sin lluvia" if best_start is not None else None,
         is_ideal_for_drying=is_ideal_drying,
         drying_label=drying_label,
@@ -368,92 +457,187 @@ def _build_rain_forecast(
     )
 
 
-def _build_hourly_schema(hourly: HourlyForecastExt | None) -> HourlyConsensusSchema:
-    """Convierte HourlyForecastExt al schema del dashboard."""
-    if hourly is None:
+def _build_hourly_schema(
+    windy_hourly: list[WindyHourlyEntry] | None,
+    om_hourly: HourlyForecastExt | None,
+    is_day_default: bool,
+) -> HourlyConsensusSchema:
+    """
+    Construye HourlyConsensusSchema.
+
+    Estrategia:
+        - Si Windy GFS está disponible: usa Windy para temp/precip/wind y Open-Meteo
+          como overlay opcional para weather_codes + is_day por slot. La búsqueda de
+          weather_code se hace por timestamp más cercano.
+        - Si Windy no está: cae a Open-Meteo tal como antes (compatibilidad).
+    """
+    # Si no hay Windy, comportamiento legacy con OM puro
+    if not windy_hourly:
+        if om_hourly is None:
+            return HourlyConsensusSchema(
+                entries=[],
+                rain_consensus_label="Sin datos",
+                rain_probability_pct=0.0,
+            )
+
+        entries = [
+            HourlyEntrySchema(
+                timestamp=om_hourly.timestamps[i],
+                hour_label=om_hourly.hour_labels[i],
+                date=om_hourly.dates[i],
+                temp_c=om_hourly.temps_c[i],
+                precip_mm=om_hourly.precipitations[i],
+                precip_prob=om_hourly.precip_probs[i],
+                weather_code=om_hourly.weather_codes[i],
+                icon=describe_wmo(
+                    om_hourly.weather_codes[i],
+                    om_hourly.is_day[i] if i < len(om_hourly.is_day) else True,
+                )[1],
+                is_day=om_hourly.is_day[i] if i < len(om_hourly.is_day) else True,
+            )
+            for i in range(len(om_hourly.timestamps))
+        ]
+
+        next_24_probs = [
+            om_hourly.precip_probs[i] for i in range(min(24, len(om_hourly.precip_probs)))
+        ]
+        valid_probs = [p for p in next_24_probs if p is not None]
+        max_prob = max(valid_probs, default=0.0)
         return HourlyConsensusSchema(
-            entries=[],
-            rain_consensus_label="Sin datos",
-            rain_probability_pct=0.0,
+            entries=entries,
+            rain_consensus_label=_rain_label(max_prob),
+            rain_probability_pct=round(max_prob, 1),
         )
 
-    entries: list[HourlyEntrySchema] = [
-        HourlyEntrySchema(
-            timestamp=hourly.timestamps[i],
-            hour_label=hourly.hour_labels[i],
-            date=hourly.dates[i],
-            temp_c=hourly.temps_c[i],
-            precip_mm=hourly.precipitations[i],
-            precip_prob=hourly.precip_probs[i],
-            weather_code=hourly.weather_codes[i],
-            icon=describe_wmo(
-                hourly.weather_codes[i],
-                hourly.is_day[i] if i < len(hourly.is_day) else True,
-            )[1],
-            is_day=hourly.is_day[i] if i < len(hourly.is_day) else True,
+    # Camino Windy: enriquecer con weather_code/is_day desde Open-Meteo por timestamp
+    om_index: dict[int, tuple[int | None, bool]] = {}
+    if om_hourly is not None:
+        for i, ts in enumerate(om_hourly.timestamps):
+            wc = om_hourly.weather_codes[i] if i < len(om_hourly.weather_codes) else None
+            idy = om_hourly.is_day[i] if i < len(om_hourly.is_day) else True
+            om_index[ts] = (wc, idy)
+
+    def _closest_om(ts: int) -> tuple[int | None, bool]:
+        """Encuentra el weather_code/is_day OM más cercano a `ts` (±90 min)."""
+        if not om_index:
+            return None, is_day_default
+        # Búsqueda lineal (max 48 entradas) — el bucket es pequeño
+        best_diff = 10**9
+        best_val = (None, is_day_default)
+        for ts_om, val in om_index.items():
+            diff = abs(ts_om - ts)
+            if diff < best_diff:
+                best_diff = diff
+                best_val = val
+        # Permitir hasta 90 min de tolerancia
+        return best_val if best_diff <= 5400 else (None, is_day_default)
+
+    entries = []
+    precip_probs: list[float] = []
+    for h in windy_hourly:
+        wc, idy = _closest_om(h.timestamp_s)
+        _, icon = describe_wmo(wc, idy)
+        # Aproximar precip_prob por slot: 100 si llueve, 0 si no
+        slot_prob = 100.0 if (h.precip_3h_mm or 0.0) > 0.1 else 0.0
+        precip_probs.append(slot_prob)
+        entries.append(
+            HourlyEntrySchema(
+                timestamp=h.timestamp_s,
+                hour_label=h.hour_label,
+                date=h.date,
+                temp_c=h.temp_c,
+                precip_mm=h.precip_3h_mm,
+                precip_prob=slot_prob,
+                weather_code=wc,
+                icon=icon,
+                is_day=idy,
+            )
         )
-        for i in range(len(hourly.timestamps))
-    ]
 
-    # Probabilidad máxima de lluvia en próximas 24h
-    next_24_probs = [hourly.precip_probs[i] for i in range(min(24, len(hourly.precip_probs)))]
-    valid_probs = [p for p in next_24_probs if p is not None]
-    max_prob = max(valid_probs, default=0.0)
-
-    if max_prob < 10:
-        rain_label = "Ningún modelo predice lluvia"
-    elif max_prob < 30:
-        rain_label = "Lluvia poco probable"
-    elif max_prob < 60:
-        rain_label = "Lluvia posible"
-    else:
-        rain_label = "Alta probabilidad de lluvia"
+    # Probabilidad max en próximas ~24h ≈ 8 slots de 3h
+    next_24_probs = precip_probs[:8]
+    max_prob = max(next_24_probs, default=0.0)
 
     return HourlyConsensusSchema(
         entries=entries,
-        rain_consensus_label=rain_label,
+        rain_consensus_label=_rain_label(max_prob),
         rain_probability_pct=round(max_prob, 1),
     )
 
 
+def _rain_label(max_prob: float) -> str:
+    if max_prob < 10:
+        return "Ningún modelo predice lluvia"
+    if max_prob < 30:
+        return "Lluvia poco probable"
+    if max_prob < 60:
+        return "Lluvia posible"
+    return "Alta probabilidad de lluvia"
+
+
 def _build_7d_forecast(
     daily_multi: MultiModelDailyData,
+    windy_daily: list[WindyDailyEntry] | None,
     snow_level_m: float | None,
 ) -> list[DailyEntrySchema]:
     """
-    Combina los 3 modelos: promedio de temperaturas, máximo de precip_prob,
-    promedio de viento, código WMO más frecuente.
+    Combina:
+        - Windy GFS daily para temp/precip/wind/humidity (cuando disponible).
+        - Open-Meteo multi-model para weather_codes, confidence_pct y armazón.
     """
     from datetime import date as date_cls
     from app.services.openmeteo import _DAY_LABELS_ES
 
     ref = next(iter(daily_multi.models.values()))
     today = date_cls.today()
+
+    # Indexar Windy por fecha
+    windy_by_date: dict[str, WindyDailyEntry] = {}
+    if windy_daily:
+        for d in windy_daily:
+            windy_by_date[d.date] = d
+
     entries: list[DailyEntrySchema] = []
+    models_list = list(daily_multi.models.values())
 
     for i in range(len(ref.dates)):
-        models_list = list(daily_multi.models.values())
+        date_str = ref.dates[i]
 
-        def _vals(attr: str, idx: int) -> list[float]:
+        # ---------- Datos meteorológicos: Windy primario, OM fallback ----------
+        w = windy_by_date.get(date_str)
+
+        def _om_vals(attr: str) -> list[float]:
             result = []
             for m in models_list:
                 lst = getattr(m, attr)
-                if idx < len(lst) and lst[idx] is not None:
-                    result.append(lst[idx])
+                if i < len(lst) and lst[i] is not None:
+                    result.append(lst[i])
             return result
 
-        temps_max = _vals("temp_max", i)
-        temps_min = _vals("temp_min", i)
-        precips = _vals("precip_sum", i)
-        precip_probs = _vals("precip_prob_max", i)
-        winds = _vals("wind_speed_max", i)
+        if w is not None:
+            temp_max = w.temp_max_c
+            temp_min = w.temp_min_c
+            precip_sum = w.precip_sum_mm
+            precip_prob = w.precip_prob
+            wind_max = w.wind_speed_max_kmh
+        else:
+            temps_max_om = _om_vals("temp_max")
+            temps_min_om = _om_vals("temp_min")
+            precips_om = _om_vals("precip_sum")
+            precip_probs_om = _om_vals("precip_prob_max")
+            winds_om = _om_vals("wind_speed_max")
+            temp_max = round(sum(temps_max_om) / len(temps_max_om), 1) if temps_max_om else None
+            temp_min = round(sum(temps_min_om) / len(temps_min_om), 1) if temps_min_om else None
+            precip_sum = round(sum(precips_om) / len(precips_om), 1) if precips_om else None
+            precip_prob = max(precip_probs_om) if precip_probs_om else None
+            wind_max = round(sum(winds_om) / len(winds_om), 1) if winds_om else None
 
+        # ---------- Weather code: SIEMPRE Open-Meteo (Windy no lo provee) ----------
         codes: list[int] = []
         for m in models_list:
             if i < len(m.weather_codes) and m.weather_codes[i] is not None:
                 codes.append(m.weather_codes[i])  # type: ignore[arg-type]
 
-        date_str = ref.dates[i]
         date_obj = date_cls.fromisoformat(date_str)
         days_ahead = (date_obj - today).days
 
@@ -490,11 +674,11 @@ def _build_7d_forecast(
                 date=date_str,
                 day_label=day_label,
                 day_label_long=day_label_long,
-                temp_max=round(sum(temps_max) / len(temps_max), 1) if temps_max else None,
-                temp_min=round(sum(temps_min) / len(temps_min), 1) if temps_min else None,
-                precip_sum=round(sum(precips) / len(precips), 1) if precips else None,
-                precip_prob=max(precip_probs) if precip_probs else None,
-                wind_speed_max=round(sum(winds) / len(winds), 1) if winds else None,
+                temp_max=temp_max,
+                temp_min=temp_min,
+                precip_sum=precip_sum,
+                precip_prob=precip_prob,
+                wind_speed_max=wind_max,
                 snow_level_m=snow_level_m,
                 weather_code=most_common_code,
                 icon=icon,

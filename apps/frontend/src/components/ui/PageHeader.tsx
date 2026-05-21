@@ -7,10 +7,12 @@ interface PageHeaderProps {
   subtitle?: string
   /** Hex accent color — drives icon background + border. Defaults to primary gold. */
   accentColor?: string
+  /** Optional ModelBadge — shown inline next to the subtitle. */
+  modelBadge?: ReactNode
 }
 
 /**
- * Shared page header: icon square + h1 title + optional subtitle.
+ * Shared page header: icon square + h1 title + optional subtitle + optional model badge.
  * Replaces the copy-pasted <header> block present in every page.
  */
 export function PageHeader({
@@ -18,6 +20,7 @@ export function PageHeader({
   title,
   subtitle,
   accentColor = '#c8a84b',
+  modelBadge,
 }: PageHeaderProps) {
   return (
     <header className="mb-8 flex items-start gap-4">
@@ -37,10 +40,15 @@ export function PageHeader({
         >
           {title}
         </h1>
-        {subtitle && (
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
-            {subtitle}
-          </p>
+        {(subtitle || modelBadge) && (
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            {subtitle && (
+              <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+                {subtitle}
+              </p>
+            )}
+            {modelBadge}
+          </div>
         )}
       </div>
     </header>

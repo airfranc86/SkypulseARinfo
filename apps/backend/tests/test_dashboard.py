@@ -18,6 +18,7 @@ from app.services.openmeteo import (
     HourlyForecastExt,
     MultiModelDailyData,
 )
+from app.services.windy import WindyDailyEntry, WindyHourlyEntry
 
 
 # ---------------------------------------------------------------------------
@@ -399,3 +400,127 @@ async def test_dashboard_single_model_available(async_client: AsyncClient):
 
     assert response.status_code == 200
     assert len(response.json()["forecast_7d"]) == 7
+
+
+# ---------------------------------------------------------------------------
+# Windy GFS integration tests
+# ---------------------------------------------------------------------------
+
+def _make_windy_hourly_ext() -> list[WindyHourlyEntry]:
+    base_ts_ms = 1716220800 * 1000  # alineado con _make_hourly()
+    out: list[WindyHourlyEntry] = []
+    for i in range(16):  # 16 slots de 3h ≈ 48h
+        ts_ms = base_ts_ms + i * 3 * 3600 * 1000
+        out.append(
+            WindyHourlyEntry(
+                timestamp_ms=ts_ms,
+                timestamp_s=ts_ms // 1000,
+                date="2026-05-20" if i < 8 else "2026-05-21",
+                hour_label=f"{(i * 3) % 24:02d}:00",
+                temp_c=19.0,
+                humidity=58.0,
+                wind_speed_kmh=14.0,
+                wind_gust_kmh=22.0,
+                wind_dir_deg=180.0,
+                wind_dir_cardinal="S",
+                precip_3h_mm=0.0,
+                cloud_cover_pct=25.0,
+                dewpoint_c=11.0,
+                temp_850_c=5.0,
+            )
+        )
+    return out
+
+
+def _make_windy_daily_ext() -> list[WindyDailyEntry]:
+    dates = [
+        "2026-05-20", "2026-05-21", "2026-05-22",
+        "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26",
+    ]
+    return [
+        WindyDailyEntry(
+            date=d,
+            temp_max_c=23.0,
+            temp_min_c=11.0,
+            humidity_mean=58.0,
+            wind_speed_max_kmh=18.0,
+            wind_speed_mean_kmh=12.0,
+            wind_gust_max_kmh=27.0,
+            wind_dir_cardinal="S",
+            precip_sum_mm=0.0,
+            precip_prob=0.0,
+            cloud_cover_mean=25.0,
+        )
+        for d in dates
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_uses_windy_when_available(
+    async_client: AsyncClient, monkeypatch
+):
+    """Cuando Windy GFS está disponible, forecast_source debe reflejarlo."""
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+    windy_hourly = _make_windy_hourly_ext()
+    windy_daily = _make_windy_daily_ext()
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_make_multi_model()),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_make_hourly()),
+        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=windy_hourly),
+        patch("app.routers.weather.windy_get_daily_forecast", new_callable=AsyncMock, return_value=windy_daily),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    assert response.status_code == 200
+    data = response.json()
+    # Con Windy disponible la fuente es 'mixed' (Windy datos + OM weather codes)
+    assert data["forecast_source"] == "mixed"
+    # El temp_max de los días debe coincidir con Windy (23.0), no con OM (22.0)
+    assert data["forecast_7d"][0]["temp_max"] == pytest.approx(23.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_falls_back_to_openmeteo_when_windy_fails(
+    async_client: AsyncClient, monkeypatch
+):
+    """Si Windy falla, el dashboard usa Open-Meteo como pronóstico."""
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_make_multi_model()),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_make_hourly()),
+        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, side_effect=RuntimeError("windy 500")),
+        patch("app.routers.weather.windy_get_daily_forecast", new_callable=AsyncMock, side_effect=RuntimeError("windy 500")),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["forecast_source"] == "openmeteo_fallback"
+    # OM temp_max = 22.0
+    assert data["forecast_7d"][0]["temp_max"] == pytest.approx(22.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_default_source_is_openmeteo_when_windy_not_configured(
+    async_client: AsyncClient,
+):
+    """Sin API key Windy, el dashboard usa Open-Meteo."""
+    # disable_windy_by_default ya pone windy_api_key vacío
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_make_multi_model()),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_make_hourly()),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    assert response.status_code == 200
+    assert response.json()["forecast_source"] == "openmeteo_fallback"

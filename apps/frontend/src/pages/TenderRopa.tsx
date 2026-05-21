@@ -4,8 +4,17 @@ import type { LocationState } from '@/hooks/useLocation'
 import { LaundryDayCard } from '@/components/ui/LaundryDayCard'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ModelBadge } from '@/components/ui/ModelBadge'
+import type { ModelKey } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
+
+function sourceToModel(source?: string): ModelKey {
+  if (source === 'windy_gfs') return 'gfs'
+  if (source === 'windy_ecmwf') return 'windy_ecmwf'
+  if (source?.startsWith('openmeteo')) return 'openmeteo'
+  return 'gfs' // default esperado
+}
 
 export function TenderRopa({ location }: Props) {
   const { data, isLoading, error } = useLaundryForecast(
@@ -22,6 +31,12 @@ export function TenderRopa({ location }: Props) {
         title="Tender ropa"
         subtitle={location.label}
         accentColor="#3ecf7a"
+        modelBadge={
+          <ModelBadge
+            model={data ? sourceToModel(data.source) : 'gfs'}
+            variant="header"
+          />
+        }
       />
 
       {isLoading && <PageSkeleton />}
@@ -31,13 +46,6 @@ export function TenderRopa({ location }: Props) {
           {data.days.map((day, i) => (
             <LaundryDayCard key={day.date} day={day} index={i} />
           ))}
-          <p
-            className="text-xs text-center mt-2"
-            style={{ color: 'var(--color-muted-foreground)' }}
-          >
-            Fuente: {data.source === 'windy_ecmwf' ? 'Windy ECMWF' : 'Open-Meteo (respaldo)'}
-            · Fiabilidad según NOAA
-          </p>
         </div>
       )}
     </div>
@@ -53,4 +61,3 @@ function PageSkeleton() {
     </div>
   )
 }
-

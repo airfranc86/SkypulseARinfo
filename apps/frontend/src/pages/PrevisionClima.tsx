@@ -10,6 +10,7 @@ import { Forecast7d } from '@/components/clima/Forecast7d'
 import { SportBlock } from '@/components/clima/SportBlock'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ModelBadge } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
 
@@ -20,20 +21,21 @@ export function PrevisionClima({ location }: Props) {
 
   return (
     <div>
+      {/* PrevisionClima mezcla SMN (actual) + GFS (pronóstico) — badge "mixed" */}
       <PageHeader
         icon={<CloudSun className="size-8" style={{ color: '#c8a84b' }} />}
         title="Previsión del clima"
         subtitle={location.label}
+        modelBadge={<ModelBadge model="mixed" variant="header" />}
       />
 
       {isLoading && <PageSkeleton />}
       {error && <ErrorMessage message={(error as Error).message} />}
 
-
       {data && (
         <FadeContent>
           <div className="space-y-5">
-            {/* Hero + Arc side-by-side on md+ */}
+            {/* Hero (SMN) + Arc — WeatherHero ya tiene su badge inline */}
             <div className="grid grid-cols-1 md:grid-cols-[1fr_280px] gap-5">
               <WeatherHero
                 current={data.current}
@@ -54,13 +56,19 @@ export function PrevisionClima({ location }: Props) {
               hourlyEntries={data.hourly.entries.slice(0, 12)}
             />
 
-            {/* Hourly 48h */}
-            <HourlyStrip hourly={data.hourly} />
+            {/* Hourly 48h — GFS */}
+            <div style={{ position: 'relative' }}>
+              <ModelBadge model="gfs" variant="inline" />
+              <HourlyStrip hourly={data.hourly} />
+            </div>
 
-            {/* 7-day forecast */}
-            <Forecast7d days={data.forecast_7d} />
+            {/* 7-day forecast — GFS */}
+            <div style={{ position: 'relative' }}>
+              <ModelBadge model="gfs" variant="inline" />
+              <Forecast7d days={data.forecast_7d} />
+            </div>
 
-            {/* Rain today — al final, complementa el pronóstico */}
+            {/* Rain today — GFS, al final */}
             <RainForecastCard rain={data.rain_today} />
           </div>
         </FadeContent>
@@ -82,4 +90,3 @@ function PageSkeleton() {
     </div>
   )
 }
-

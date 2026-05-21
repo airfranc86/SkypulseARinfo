@@ -1,6 +1,16 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { BorderGlow } from '@/components/animated/BorderGlow'
+import { ModelBadge } from '@/components/ui/ModelBadge'
+import type { ModelKey } from '@/components/ui/ModelBadge'
 import type { CurrentDetailed } from '@/lib/api'
+
+function sourceToModel(source: string | undefined): ModelKey {
+  if (source === 'smn') return 'smn'
+  if (source === 'openmeteo' || source === 'openmeteo_fallback') return 'openmeteo'
+  if (source === 'windy_gfs') return 'gfs'
+  if (source === 'windy_ecmwf') return 'windy_ecmwf'
+  return 'smn' // default
+}
 
 interface Props {
   current: CurrentDetailed
@@ -23,22 +33,8 @@ export function WeatherHero({ current, locationLabel }: Props) {
       className="rounded-2xl p-6"
       style={{ position: 'relative', background: 'var(--color-card)' }}
     >
-      {current.source && (
-        <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
-          <span
-            className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-            style={{
-              background: current.source === 'smn'
-                ? 'rgba(62,207,122,0.12)'
-                : 'rgba(200,168,75,0.12)',
-              color: current.source === 'smn' ? '#3ecf7a' : '#c8a84b',
-              border: `1px solid ${current.source === 'smn' ? '#3ecf7a44' : '#c8a84b44'}`,
-            }}
-          >
-            {current.source === 'smn' ? '● SMN' : current.source === 'openmeteo' ? '● Open-Meteo' : `● ${current.source}`}
-          </span>
-        </div>
-      )}
+      {/* Source badge — usa ModelBadge para consistencia visual y popover informativo */}
+      <ModelBadge model={sourceToModel(current.source)} variant="inline" />
       {/* Top row: icon + temp + description */}
       <div className="flex items-start gap-5">
         <WeatherIcon code={current.icon} size={72} />

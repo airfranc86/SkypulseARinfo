@@ -246,6 +246,7 @@ class TestGetLaundryForecast:
              ):
             mock_settings.windy_api_key = "test-key-123"
             mock_settings.windy_base_url = "https://api.windy.com/api/point-forecast/v2"
+            mock_settings.windy_model = "gfs"
 
             result = await get_laundry_forecast(-34.6, -58.4)
 
@@ -273,6 +274,7 @@ class TestGetLaundryForecast:
              ):
             mock_settings.windy_api_key = "test-key-456"
             mock_settings.windy_base_url = "https://api.windy.com/api/point-forecast/v2"
+            mock_settings.windy_model = "gfs"
 
             await get_laundry_forecast(-34.6, -58.4)
 

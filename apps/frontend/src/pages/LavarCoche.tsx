@@ -6,6 +6,7 @@ import { FadeContent } from '@/components/animated/FadeContent'
 import { GlowCard } from '@/components/animated/GlowCard'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ModelBadge } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
 
@@ -117,6 +118,7 @@ export function LavarCoche({ location }: Props) {
         title="¿Cuándo lavar el auto?"
         subtitle={location.label}
         accentColor="#5aaad8"
+        modelBadge={<ModelBadge model="gfs" variant="header" />}
       />
 
       {isLoading && <PageSkeleton />}

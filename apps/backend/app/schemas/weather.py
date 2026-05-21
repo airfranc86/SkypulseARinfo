@@ -202,3 +202,5 @@ class WeatherDashboardResponse(BaseModel):
     hourly: HourlyConsensusSchema
     forecast_7d: list[DailyEntrySchema]
     fetched_at: datetime
+    # Origen del pronóstico principal: "windy_gfs" | "openmeteo_fallback" | "mixed"
+    forecast_source: str = "unknown"

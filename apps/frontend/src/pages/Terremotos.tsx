@@ -6,6 +6,7 @@ import { StatCard } from '@/components/ui/StatCard'
 import { DataTable } from '@/components/ui/DataTable'
 import { MagnitudeScaleBar } from '@/components/ui/MagnitudeScaleBar'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ModelBadge } from '@/components/ui/ModelBadge'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { ElectricBorder } from '@/components/animated/ElectricBorder'
 import { FallingText } from '@/components/animated/FallingText'
@@ -107,9 +108,12 @@ export function Terremotos({ location }: Props) {
               />
             </div>
           </div>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
-            {location.label} · radio 500 km
-          </p>
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+              {location.label} · radio 500 km
+            </p>
+            <ModelBadge model="usgs" variant="header" />
+          </div>
         </div>
       </header>
 

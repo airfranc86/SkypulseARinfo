@@ -7,6 +7,7 @@ import { FadeContent } from '@/components/animated/FadeContent'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ModelBadge } from '@/components/ui/ModelBadge'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export function CotaDeNieve({ location }: Props) {
         title="Cota de nieve"
         subtitle={location.label}
         accentColor="#90aabb"
+        modelBadge={<ModelBadge model="gfs" variant="header" />}
       />
 
       {isLoading && <PageSkeleton />}

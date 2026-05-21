@@ -94,7 +94,7 @@ class TestLaundryForecastWindy:
         data = response.json()
         assert "days" in data
         assert "source" in data
-        assert data["source"] == "windy_ecmwf"
+        assert data["source"] == "windy_gfs"
 
     @pytest.mark.asyncio
     @pytest.mark.integration

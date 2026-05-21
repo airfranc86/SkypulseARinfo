@@ -8,6 +8,11 @@ from httpx import AsyncClient
 
 from app.schemas.weather import WeatherCurrentResponse, SourceMeta
 from app.services.openmeteo import HourlyForecastData
+from app.services.windy import (
+    WindyDailyEntry,
+    WindyHourlyEntry,
+    WindyNotConfiguredError,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -518,3 +523,292 @@ class TestRateLimiting:
                 responses.append(r.status_code)
 
         assert 429 in responses
+
+
+# ---------------------------------------------------------------------------
+# Helpers: factories de Windy
+# ---------------------------------------------------------------------------
+
+def _make_windy_hourly(n: int = 12) -> list[WindyHourlyEntry]:
+    """Slots horarios sintéticos de Windy con condiciones favorables."""
+    base_ts_ms = 1747742400000  # 2026-05-20 12:00 UTC
+    out: list[WindyHourlyEntry] = []
+    for i in range(n):
+        ts_ms = base_ts_ms + i * 3 * 3600 * 1000  # cada 3h
+        out.append(
+            WindyHourlyEntry(
+                timestamp_ms=ts_ms,
+                timestamp_s=ts_ms // 1000,
+                date="2026-05-20" if i < 5 else "2026-05-21",
+                hour_label=f"{(9 + i * 3) % 24:02d}:00",
+                temp_c=20.0,
+                humidity=55.0,
+                wind_speed_kmh=12.0,
+                wind_gust_kmh=20.0,
+                wind_dir_deg=180.0,
+                wind_dir_cardinal="S",
+                precip_3h_mm=0.0,
+                cloud_cover_pct=20.0,
+                dewpoint_c=10.0,
+                temp_850_c=5.0,
+            )
+        )
+    return out
+
+
+def _make_windy_daily(n: int = 5) -> list[WindyDailyEntry]:
+    """Días sintéticos de Windy con condiciones favorables para lavar coche."""
+    from datetime import date, timedelta
+    base = date(2026, 5, 20)
+    out: list[WindyDailyEntry] = []
+    for i in range(n):
+        out.append(
+            WindyDailyEntry(
+                date=(base + timedelta(days=i)).isoformat(),
+                temp_max_c=24.0,
+                temp_min_c=14.0,
+                humidity_mean=55.0,
+                wind_speed_max_kmh=18.0,
+                wind_speed_mean_kmh=12.0,
+                wind_gust_max_kmh=28.0,
+                wind_dir_cardinal="S",
+                precip_sum_mm=0.0,
+                precip_prob=0.0,
+                cloud_cover_mean=20.0,
+            )
+        )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Tests: Windy primary path para hacer-deporte, lavar-coche, cota-de-nieve
+# ---------------------------------------------------------------------------
+
+class TestHacerDeporteWindyPath:
+    """Cuando Windy GFS está disponible, los endpoints deben preferirlo."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_uses_windy_when_available(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        windy_hourly = _make_windy_hourly(12)
+        with patch(
+            "app.routers.tools.windy_get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=windy_hourly,
+        ):
+            response = await async_client.get(
+                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "windy_gfs"
+        assert data["tool"] == "hacer-deporte"
+        assert len(data["hourly"]) <= 12
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_falls_back_to_openmeteo_when_windy_errors(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        forecast = _make_hourly_forecast(temp_c=20.0, humidity=50.0, precip=0.0)
+        with patch(
+            "app.routers.tools.windy_get_hourly_forecast",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("windy down"),
+        ), patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        assert response.json()["source"] == "openmeteo_fallback"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_uses_openmeteo_when_windy_not_configured(
+        self, async_client: AsyncClient
+    ):
+        # disable_windy_by_default ya garantiza windy_api_key vacío
+        forecast = _make_hourly_forecast(temp_c=20.0, humidity=50.0, precip=0.0)
+        with patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        assert response.json()["source"] == "openmeteo_fallback"
+
+
+class TestLavarCocheWindyPath:
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_uses_windy_when_available(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        windy_daily = _make_windy_daily(5)
+        with patch(
+            "app.routers.tools.windy_get_daily_forecast",
+            new_callable=AsyncMock,
+            return_value=windy_daily,
+        ):
+            response = await async_client.get(
+                "/api/tools/lavar-coche?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "windy_gfs"
+        assert len(data["days"]) == 5
+        # Exactamente un día marcado como best
+        best = [d for d in data["days"] if d["is_best"]]
+        assert len(best) == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_falls_back_to_openmeteo_when_windy_errors(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        from app.services.openmeteo import DailyForecastData
+        daily = DailyForecastData(
+            dates=["2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24"],
+            day_labels=["miércoles", "jueves", "viernes", "sábado", "domingo"],
+            temp_max=[22.0] * 5,
+            temp_min=[12.0] * 5,
+            precip_sum=[0.0] * 5,
+            wind_speed_max=[15.0] * 5,
+            humidity_mean=[55.0] * 5,
+        )
+        with patch(
+            "app.routers.tools.windy_get_daily_forecast",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("windy 500"),
+        ), patch(
+            "app.routers.tools.get_daily_forecast",
+            new_callable=AsyncMock,
+            return_value=daily,
+        ):
+            response = await async_client.get(
+                "/api/tools/lavar-coche?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        assert response.json()["source"] == "openmeteo_fallback"
+
+
+class TestCotaDeNieveWindyPath:
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_uses_windy_for_temp_850(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        forecast = _make_hourly_forecast(temp_850=None, elevation_m=750.0)
+        weather = _make_weather_response(temp_c=10.0)
+        with patch(
+            "app.routers.tools.windy_get_temp_850",
+            new_callable=AsyncMock,
+            return_value=4.5,
+        ), patch(
+            "app.routers.tools.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=weather,
+        ), patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0"
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "windy_gfs"
+        assert data["m850_hpa_m"] is not None
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_falls_back_to_openmeteo_when_windy_errors(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        forecast = _make_hourly_forecast(temp_850=5.0, elevation_m=750.0)
+        weather = _make_weather_response(temp_c=10.0)
+        with patch(
+            "app.routers.tools.windy_get_temp_850",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("windy timeout"),
+        ), patch(
+            "app.routers.tools.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=weather,
+        ), patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0"
+            )
+
+        assert response.status_code == 200
+        assert response.json()["source"] == "openmeteo_fallback"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_source_unavailable_when_temp_850_missing(
+        self, async_client: AsyncClient
+    ):
+        """Sin Windy y sin temp_850 en OM → source = unavailable."""
+        forecast = _make_hourly_forecast(temp_850=None, elevation_m=750.0)
+        # temp_850 None se replica vía dataclasses.replace para evitar list[None]
+        import dataclasses
+        forecast = dataclasses.replace(forecast, temps_850hpa=[None] * len(forecast.temps_850hpa))
+        weather = _make_weather_response(temp_c=10.0)
+        with patch(
+            "app.routers.tools.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=weather,
+        ), patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0"
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        # Sin temp_850 disponible → source unavailable
+        assert data["source"] == "unavailable"
+        assert data["m850_hpa_m"] is None
