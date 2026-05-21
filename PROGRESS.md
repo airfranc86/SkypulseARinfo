@@ -1,0 +1,522 @@
+# Progress Log
+
+Per-session progress entries for this project. Latest entries at the top.
+Written by the `/progress-save` skill after each completed task.
+
+---
+
+## 2026-05-21 — Fase 6g: Pre-deploy audit paralelo + fixes bloqueantes
+
+**Done:**
+- 4 agentes paralelos: Mobile Audit (6.5/10), Click Path, API Security (6/10), Pre-Deploy (PASS-WITH-WARNINGS)
+- B1 CRÍTICO: `.gitignore` raíz actualizado — `.env`, `.venv`, `__pycache__`, `node_modules`, `dist` protegidos
+- B2: `allow_credentials=False` en CORS (API pública sin auth)
+- I1: `/docs` + `/openapi.json` ocultados en `ENV=prod`
+- I3: Security headers middleware (X-Content-Type-Options, HSTS, Referrer-Policy, CORP)
+- I4: `ReactQueryDevtools` solo en `import.meta.env.DEV`
+- I4: Warning `VITE_API_BASE_URL` no configurada en prod build
+- CP-001: `<a href="/">` → `<Link to="/">` (eliminado full page reload en logo)
+- CP-002: `geoError` con mensaje específico al denegar permiso de geolocalización
+- Mobile: WeatherHero `text-7xl` → `text-6xl sm:text-7xl`, icon `size={88}` → `size={72}`
+- Mobile: NavLinks `minHeight: 44px` + `padding: 10px 14px` (WCAG 2.5.5)
+- Mobile: LocationPicker `max-w-sm` → `max-w-full`
+
+**Files changed:**
+- `.gitignore` — protección completa de secrets y artifacts
+- `apps/backend/app/main.py` — allow_credentials, docs gate, security headers
+- `apps/frontend/src/App.tsx` — Link logo, NavLink touch targets, DevTools guard
+- `apps/frontend/src/components/clima/WeatherHero.tsx` — responsive text + icon size
+- `apps/frontend/src/components/LocationPicker.tsx` — max-w-full
+- `apps/frontend/src/hooks/useLocation.ts` — geoError on PERMISSION_DENIED
+- `apps/frontend/src/lib/api.ts` — VITE_API_BASE_URL prod warning
+
+**Tests:**
+- `pnpm build` → ✓ 643ms, 0 errores
+- `pytest --tb=no -q` → 308 passed
+
+**Next:**
+- Commit `apps/` en rama `feature/herramientas` + push
+- Crear proyecto Vercel herramientas.skypulseinfo.vercel.app (rootDirectory: apps/frontend)
+- Deploy backend en Render (con ENV=prod + WINDY_API_KEY)
+- Post-deploy: nav fade hint, Forecast7dCards scroll-snap, SVG fontSize 8.5, páginas huérfanas archivadas
+
+---
+
+## 2026-05-21 — Fase 6f: UX audit + /optimize + /adapt + /distill + daylight_label fix
+
+**Done:**
+- Auditoría UX/UI completa (agente Opus): score 10/20, 3 críticos P0, 8 importantes P1, 6 menores P2
+- BorderGlow redistribuido: removido de WeatherHero, DayArc, Forecast7dCards, Landing (5 cards) → 15+ instancias → 4 selectivas (SportBlock verde, RainForecastCard sin lluvia, CotaDeNieve stat, LaundryDayCard mejor día)
+- Landing: hover border+shadow liviano reemplaza 5 BorderGlow animados
+- Forecast7dCards: border coloreado por confianza reemplaza BorderGlow
+- `--color-muted-foreground` #64748b → #94a3b8 (ratio 3.8:1 → 5.5:1 WCAG AA) — afecta toda la app
+- `/optimize`: `SplashCursor` gated por `pointer:fine + CPU≥4`, `Threads` gated por `prefers-reduced-motion` — sin GPU en móvil
+- `/optimize`: header 375px fix (`flex-1 min-w-0`), NavLink touch targets 26px → 34px
+- `/adapt`: grid Terremotos `grid-cols-3` → `grid-cols-2 sm:grid-cols-3` con "Sismos" col-span-2 en mobile
+- `/adapt`: `<h1 class="sr-only">` en Terremotos — FallingText queda aria-hidden (a11y + SEO)
+- `/adapt`: HourlyStrip scroll-snap-type + scroll-snap-align + fade mask derecho
+- `/distill`: `PageHeader` componente extraído — 4 páginas unificadas, headers per-color
+- `/distill`: `ErrorMessage` componente extraído con `role="alert"` — 5 páginas unificadas
+- Backend fix: `daylight_label` dinámico ("Sale en Xh Ym" / "Xh Ym de luz" / "Hoy: Xh Ym de luz")
+
+**Files changed:**
+- `apps/frontend/src/App.tsx` — useMotionPreferences hook, header layout, NavLink padding
+- `apps/frontend/src/index.css` — --color-muted-foreground mejorado
+- `apps/frontend/src/components/clima/WeatherHero.tsx` — BorderGlow removido
+- `apps/frontend/src/components/clima/DayArc.tsx` — BorderGlow removido
+- `apps/frontend/src/components/clima/Forecast7dCards.tsx` — BorderGlow → border coloreado
+- `apps/frontend/src/components/clima/HourlyStrip.tsx` — scroll-snap + fade mask
+- `apps/frontend/src/pages/Landing.tsx` — 5 BorderGlow → hover border liviano
+- `apps/frontend/src/pages/Terremotos.tsx` — grid responsive + h1.sr-only + ErrorMessage import
+- `apps/frontend/src/pages/PrevisionClima.tsx` — PageHeader + ErrorMessage
+- `apps/frontend/src/pages/TenderRopa.tsx` — PageHeader + ErrorMessage
+- `apps/frontend/src/pages/LavarCoche.tsx` — PageHeader + ErrorMessage
+- `apps/frontend/src/pages/CotaDeNieve.tsx` — PageHeader + ErrorMessage
+- `apps/frontend/src/components/ui/PageHeader.tsx` — nuevo componente
+- `apps/frontend/src/components/ui/ErrorMessage.tsx` — nuevo componente
+- `apps/backend/app/routers/weather.py` — daylight_label dinámico por momento del día
+
+**Tests:**
+- `pnpm build` → ✓ 0 errores TypeScript (646ms)
+- `pytest tests/test_dashboard.py` → 17 passed
+
+**Next:**
+- Commit rama `feature/herramientas` con todo el trabajo de `apps/`
+- Crear proyecto Vercel herramientas.skypulseinfo.vercel.app
+- Migrar endpoints a Windy como fuente primaria (Open-Meteo solo dev fallback)
+- Terremotos: DataTable columna Fecha mobile-responsive (pendiente del brainstorming anterior)
+- Integrar MagnitudeScaleBar con dos cambios pendientes (tick padding mobile + integración en Terremotos ✅ ya integrado)
+
+---
+
+## 2026-05-21 — Fase 6e: BorderGlow expansión + RainForecastCard + terremotos mejoras
+
+**Done:**
+- BorderGlow aplicado a: WeatherHero (gold), DayArc (celeste), Forecast7dCards (día 0 + ALTA confianza), Landing (6 tools per-color), CotaDeNieve (celeste-blanco), SportBlock (green), RainForecastCard (sin lluvia)
+- Nav rediseñado: pills `rounded-full` con colores por sección, borde activo = tint, emojis
+- RainForecastCard: título dinámico (☀️ "Sin lluvia esperada" / 🌧️ "Lluvia prevista"), ventana expandida con badge "Xh continuas", `windowDurationHours()` helper
+- PrevisionClima reordenado: WeatherHero+Arc → SportBlock → HourlyStrip → Forecast7d → RainForecastCard (último)
+- `src/index.html`: dropdown "Nubes ▾", link ⛅ → `preview.html` con TODO comment
+- `src/preview.html`: página "503 En construcción 🏗️" con gradient gold — pushed a origin/main
+- MagnitudeScaleBar: barra educativa Mw M2→M7+ con comparaciones domésticas (pendiente integración Terremotos)
+- Build limpio: `✓ built in 638ms`, 0 errores TypeScript
+
+**Files changed:**
+- `apps/frontend/src/components/clima/WeatherHero.tsx` — BorderGlow gold animated
+- `apps/frontend/src/components/clima/DayArc.tsx` — BorderGlow celeste
+- `apps/frontend/src/components/clima/Forecast7dCards.tsx` — BorderGlow días destacados
+- `apps/frontend/src/components/clima/RainForecastCard.tsx` — título dinámico + ventana expandida + BorderGlow
+- `apps/frontend/src/components/clima/SportBlock.tsx` — BorderGlow green
+- `apps/frontend/src/components/animated/BorderGlow.tsx` — componente nuevo
+- `apps/frontend/src/components/animated/BorderGlow.css` — estilos CSS port
+- `apps/frontend/src/pages/Landing.tsx` — BorderGlow en 6 tool cards + colores per-item
+- `apps/frontend/src/pages/PrevisionClima.tsx` — reordenamiento cards
+- `apps/frontend/src/pages/CotaDeNieve.tsx` — BorderGlow celeste-blanco
+- `apps/frontend/src/App.tsx` — nav pills redesign
+- `apps/frontend/src/components/ui/MagnitudeScaleBar.tsx` — componente nuevo (pendiente integrar)
+- `src/index.html` — Nubes dropdown + link preview.html
+- `src/preview.html` — página 503 nueva
+
+**Tests:**
+- `npm run build` → ✓ 0 errores
+
+**Next:**
+- Integrar MagnitudeScaleBar en página Terremotos (debajo del DataTable)
+- Fix columna "Fecha" DataTable mobile-responsive
+- Commit `apps/` en rama `feature/herramientas` + push
+- Crear proyecto Vercel para herramientas.skypulseinfo.vercel.app
+- Migrar endpoints a Windy como fuente primaria (sesión separada)
+- ADR-001 monorepo strategy (resultado agente Opus pendiente)
+
+---
+
+## 2026-05-21 — Fase 6d: Fórmula tender ropa + SportBlock indicadores + nav cleanup
+
+**Done:**
+- `score_tender_ropa` reescrito: curvas continuas, umbral temp 12°C, humedad 65-70%, dirección viento (S×1.0 / O-NO×0.7), precip+prob combinados, bonus punto de rocío
+- `LaundryDayRaw` + `_aggregate_to_daily`: agrega dirección cardinal desde u/v de Windy
+- SportBlock v2: indicadores accionables (humedad>80%, UV>7, viento>35, extremos térmicos, lluvia 2h), "✅ Condiciones favorables" si todo OK
+- `CurrentDetailedSchema` expone `source` → badge ● SMN / ● Open-Meteo en WeatherHero
+- Sensación Térmica removida del nav + landing → redirect /prevision
+- Hacer Deporte removido del nav + landing → redirect /prevision (integrado en PrevisionClima)
+- `cities-ar.ts`: búsqueda normaliza tildes (Cordoba → Córdoba)
+- `vite.config.ts`: `host: true` permanente
+
+**Files changed:**
+- `apps/backend/app/services/calculators.py` — fórmula continua
+- `apps/backend/app/services/windy.py` — wind_dir_cardinal en LaundryDayRaw
+- `apps/backend/app/routers/tools.py` — pasa wind_dir_cardinal + precip_prob
+- `apps/backend/app/schemas/weather.py` — source en CurrentDetailedSchema
+- `apps/backend/app/routers/weather.py` — source=current.meta.source
+- `apps/frontend/src/components/clima/SportBlock.tsx` — v2 indicadores
+- `apps/frontend/src/components/clima/WeatherHero.tsx` — badge source top-right
+- `apps/frontend/src/pages/Landing.tsx` — sin Sensación Térmica ni Hacer Deporte
+- `apps/frontend/src/App.tsx` — nav limpio + redirects
+
+**Tests:**
+- `python -m pytest` → **308 passed, 0 failed**
+- `pnpm build` → **0 errores TS**, 645ms
+
+**Next:**
+- Migrar endpoints existentes a Windy primario / Open-Meteo solo en dev
+- UV index null — investigar pipeline dashboard
+- Deploy: Render (backend) + Vercel (frontend)
+
+---
+
+## 2026-05-21 — Fase 6c: UI polish — Terremotos scale, LavarCoche, Landing, Header, feels_like fix
+
+**Done:**
+- `MagnitudeScaleBar` — barra estática educativa M2→M7+ con comparaciones domésticas, grid 2/3/6 cols responsive
+- Terremotos: fecha en 2 líneas (día + hora), Prof/Distancia ocultas en mobile, `closestDistance` con Math.min
+- `LavarCoche`: score pill gradiente, chips condición, badge label, GlowCard glowSize=280, badges derecha eliminados
+- `Landing`: íconos Lucide → emojis (🌤️🌡️🏃🫧🌋⛷️), header centrado, logo `rounded-full`
+- `WeatherHero`: chip Sensación con subtítulo "humedad · viento · rocío", col-span-2 en mobile
+- Backend: `feels_like_c` ya no es null cuando SMN es fuente — calculado con `compute_sensacion_termica`
+- `cities-ar.ts`: búsqueda normaliza tildes (Cordoba → Córdoba)
+- `vite.config.ts`: `host: true` permanente (sin necesidad de `--host` flag)
+- Open-Meteo: se mantiene en dev/preview, eliminado en producción (decisión guardada en memoria)
+
+**Files changed:**
+- `apps/frontend/src/components/ui/MagnitudeScaleBar.tsx` — NUEVO
+- `apps/frontend/src/pages/Terremotos.tsx` — date format, hidden cols, MagnitudeScaleBar
+- `apps/frontend/src/pages/LavarCoche.tsx` — score pill, chips, badge, GlowCard
+- `apps/frontend/src/pages/Landing.tsx` — emojis en vez de Lucide
+- `apps/frontend/src/App.tsx` — header centrado, logo rounded-full
+- `apps/frontend/src/components/clima/WeatherHero.tsx` — Sensación chip expandido
+- `apps/frontend/src/lib/cities-ar.ts` — normalize() para búsqueda sin tildes
+- `apps/frontend/vite.config.ts` — host: true permanente
+- `apps/backend/app/services/weather_aggregator.py` — feels_like_c calculado desde SMN
+
+**Tests:**
+- `pnpm build` → **0 errores TS**, built in 665ms
+- `python -m pytest` → **287 passed, 0 failed**
+
+**Next:**
+- Migrar endpoints existentes a Windy primario / Open-Meteo fallback solo en dev
+- HacerDeporte: revisión visual pendiente (foto Snowball)
+- UV index null — investigar pipeline dashboard
+
+---
+
+## 2026-05-21 — Fase 6b: ModelStatusBar + regla compact/progress-save
+
+**Done:**
+- `ModelStatusContext` — useReducer + sessionStorage persistence, dispatch bridge via `dispatchRef` para QueryCache callbacks
+- `ModelStatusBar` — badges minimalistas en footer: dot verde+glow activo, dot rojo error; solo muestra modelos vistos en sesión
+- `App.tsx` — QueryCache onSuccess/onError → dispatch, ModelStatusProvider wrapper, footer reemplazado
+- Regla guardada en memoria: fases >4h → Compact primero, Progress-save después
+
+**Files changed:**
+- `apps/frontend/src/contexts/ModelStatusContext.tsx` — NUEVO
+- `apps/frontend/src/components/ui/ModelStatusBar.tsx` — NUEVO
+- `apps/frontend/src/App.tsx` — QueryCache + dispatchRef + footer
+
+**Tests:**
+- `pnpm build` → **0 errores TS**, built in 665ms
+- `python -m pytest` → **287 passed, 0 failed**
+
+**Next:**
+- Migrar endpoints existentes a Windy primario / Open-Meteo fallback (sesión separada)
+- WeatherDashboardResponse no tiene campo `source` aún — se llena cuando se migre el dashboard
+- Sensación térmica + UV null → investigar backend
+- HacerDeporte: revisión visual pendiente
+
+---
+
+## 2026-05-20 — Fase 6a: UX fixes + TenderRopa 7d + GlowCard
+
+**Done:**
+- ElectricBorder: nueva prop `displacement` (default 60), Terremotos reducido a 25 + speed 0.5
+- Terremotos: sort por fecha descendente (más reciente arriba)
+- Geolocalización: refactor null-safe — localStorage persistence, queries bloqueadas hasta resolver, banner "Detectando..." / "Usando Buenos Aires como referencia"
+- TenderRopa: redesign completo a 7 días — Windy ECMWF primario + Open-Meteo fallback, confianza NOAA por día, `LaundryDayCard` (mini gauge + chips + badge confianza + best-day gold border)
+- LavarCoche: reemplazado `ElectricBorder` por `GlowCard` (spotlight cursor, React Bits style)
+
+**Files changed:**
+- `apps/frontend/src/components/animated/ElectricBorder.tsx` — prop displacement
+- `apps/frontend/src/components/animated/GlowCard.tsx` — NUEVO
+- `apps/frontend/src/components/ui/LaundryDayCard.tsx` — NUEVO
+- `apps/frontend/src/hooks/useLocation.ts` — null-safe + localStorage
+- `apps/frontend/src/hooks/useWeather.ts` — enabled guards + useLaundryForecast
+- `apps/frontend/src/lib/api.ts` — LaundryDay + LaundryForecastResponse + laundryForecast()
+- `apps/frontend/src/pages/TenderRopa.tsx` — reescritura completa
+- `apps/frontend/src/pages/LavarCoche.tsx` — ElectricBorder → GlowCard
+- `apps/frontend/src/pages/Terremotos.tsx` — sort fecha + null-safe
+- `apps/frontend/src/App.tsx` — locationResolved + banner geo
+- `apps/backend/app/core/config.py` — windy_api_key + windy_base_url
+- `apps/backend/app/services/windy.py` — NUEVO (TTLCache + aggregation + fallback)
+- `apps/backend/app/schemas/tools.py` — LaundryDay + LaundryForecastResponse
+- `apps/backend/app/routers/tools.py` — GET /tender-ropa/forecast
+- `apps/backend/tests/test_windy.py` — NUEVO, 17 tests
+- `apps/backend/tests/test_laundry_forecast_router.py` — NUEVO, 17 tests
+- `docs/plans/2026-05-20-tender-ropa-7d-design.md` — NUEVO
+
+**Tests:**
+- `python -m pytest` → **287 passed, 0 failed** | coverage 82%
+- `pnpm build` → **0 errores TS**, built in 649ms
+
+**Next:**
+- Migrar endpoints existentes a Windy primario / Open-Meteo fallback (sesión separada)
+- Footer: modelo activo por endpoint + barra de certeza
+- Sensación térmica + UV null → investigar backend dashboard endpoint
+- HacerDeporte: pendiente revisión visual (foto Snowball del usuario)
+
+---
+
+## 2026-05-20 — Fase 5b: React Bits completo + bugs backend + nueva tool + refinamiento UI
+
+**Done:**
+- `ElectricBorder` reescrito con Perlin noise canvas real (color/speed/chaos/borderRadius props). Default: `#c09c2b`, speed=0.5, chaos=0.1, borderRadius=35
+- `SplashCursor` reescrito con WebGL fluid simulation completo (10 shaders GLSL). Config: `COLOR=#9d7a0f`, `SPLAT_FORCE=12500`, `CURL=11`, rainbow=false
+- `FallingText` nuevo componente Matter.js. Trigger hover en TenderRopa/HacerDeporte, click en Terremotos (gravity=0.30, mouseConstraintStiffness=1)
+- `Threads` nuevo componente OGL (background animado, color gold `[0.753,0.612,0.169]`, amplitude=2, distance=0.3)
+- Favicon → `Logo.png`. Header → imagen del logo
+- Bug SMN resuelto: campos anidados bajo `station["weather"]` (no en raíz)
+- Bug Open-Meteo resuelto: `ecmwf_ifs04` tiene delay → removido, usa `best_match`
+- Schema mismatch resuelto: frontend usaba campos inventados vs. `ToolResult` real del backend
+- Auto-geolocalización en `useLocation` (fallback silencioso a Buenos Aires)
+- Canvas SplashCursor `background: transparent` (eliminó flash negro)
+- `LavarCoche` (nueva tool): backend (calculator + schema + endpoint daily 5d) + frontend (página lista vertical, mejor día con ElectricBorder). Ruta `/lavar-auto`
+- ElectricBorder quitado de TenderRopa/SensacionTermica/CotaDeNieve/HacerDeporte, mantenido en Terremotos + LavarCoche
+- Hero Landing → "Previsión Meteorológica" + nuevo subtítulo. Landing grid actualizada con 6 tools
+- Orden nav: Tender · Sensación · Hacer deporte · Lavar el auto · Terremotos · Cota de nieve (al final)
+- H1 Opción B: "Ropa al sol" · "Temperatura real" · "Salir a entrenar" · "Próximos 5 días" · "Sismos en Argentina"
+- Pill "☁ Nubes ▾" dropdown en `src/index.html` (reemplaza 5 botones). Link "⛅ Pronóstico del tiempo" agregado al nav
+
+**Files changed:**
+- `apps/frontend/src/components/animated/ElectricBorder.tsx` — reescritura total (canvas Perlin)
+- `apps/frontend/src/components/animated/SplashCursor.tsx` — reescritura total (WebGL fluid)
+- `apps/frontend/src/components/animated/FallingText.tsx` — NUEVO
+- `apps/frontend/src/components/animated/Threads.tsx` — NUEVO
+- `apps/frontend/src/pages/{TenderRopa,SensacionTermica,CotaDeNieve,HacerDeporte,Terremotos,LavarCoche,Landing}.tsx` — actualizadas
+- `apps/frontend/src/App.tsx` — logo, Threads, SplashCursor config, nav order, rutas
+- `apps/frontend/src/lib/api.ts` — schemas reales del backend + CarWashDay/CarWashForecastResponse
+- `apps/frontend/src/hooks/useLocation.ts` — auto-geolocation
+- `apps/backend/app/services/smn.py` — fix campos bajo `weather` key
+- `apps/backend/app/services/openmeteo.py` — remove ecmwf_ifs04 current, add get_daily_forecast
+- `apps/backend/app/services/calculators.py` — score_lavar_coche
+- `apps/backend/app/schemas/tools.py` — CarWashDay + CarWashForecastResponse
+- `apps/backend/app/routers/tools.py` — GET /lavar-coche endpoint
+- `apps/backend/tests/{conftest,test_smn,test_openmeteo}.py` — mocks actualizados
+- `src/index.html` — pill Nubes dropdown, link Pronóstico del tiempo
+
+**Tests:**
+- `cd apps/backend && python -m pytest` → **148 passed, 0 failed**
+- `cd apps/frontend && pnpm build` → **0 errores TS, 1892 modules, 488KB**
+
+**Next:**
+- Refinar páginas "Tender ropa" y "Hacer deporte" (usuario tiene ideas pendientes)
+- Fase 6 — Deploy: Render (backend) + Vercel (frontend) + VITE_API_BASE_URL
+
+---
+
+## 2026-05-19 — Fase 5: Herramientas UI + React Bits + páginas con datos reales
+
+**Done:**
+- 5 componentes UI creados en `components/ui/`:
+  - `IndexGauge` — gauge SVG semicircular coloreado (rojo/amarillo/verde según score)
+  - `HourlyTimeline` — banner con ventana horaria óptima, retorna null si no hay datos
+  - `StatCard` — tarjeta de métrica con variante `highlight` (borde violet)
+  - `DataTable` — tabla genérica con scroll horizontal, render functions, filas alternadas
+  - `TrendChart` — barras horizontales proporcionales SVG-free, empty state si todos null
+- 4 componentes animados creados en `components/animated/`:
+  - `FadeContent` — fade-in con translateY al montar, delay configurable
+  - `ElectricBorder` — borde con conic-gradient rotatorio via requestAnimationFrame
+  - `SplashCursor` — ripple global en clicks (createElement + cleanup en 600ms)
+  - `Dither` — overlay fixed con feTurbulence SVG, pointer-events none
+- 6 páginas reescritas con datos reales:
+  - `TenderRopa` — ElectricBorder+IndexGauge, StatCards con units inferidas, HourlyTimeline
+  - `SensacionTermica` — StatCard highlight, grid stats, badge de método en español
+  - `CotaDeNieve` — TrendChart 3 métodos (alcaidé/gradiente/850hPa), StatCards
+  - `HacerDeporte` — mismo patrón que TenderRopa
+  - `Terremotos` — 3 StatCards summary + DataTable con columnas tipadas
+  - `Landing` — Dither + FadeContent
+- `App.tsx` — SplashCursor global en RootLayout
+
+**Files changed:**
+- `apps/frontend/src/components/ui/` — 5 archivos NUEVOS
+- `apps/frontend/src/components/animated/` — 4 archivos NUEVOS
+- `apps/frontend/src/pages/{TenderRopa,SensacionTermica,CotaDeNieve,HacerDeporte,Terremotos,Landing}.tsx` — reescritos
+- `apps/frontend/src/App.tsx` — SplashCursor añadido
+
+**Tests:**
+- `pnpm build` — ✓ 1824 modules transformed, 0 errores TypeScript, 406ms
+
+**Next:**
+- Fase 6 — Deploy: configurar Vercel (frontend) + Render (backend) + dominio + env vars
+
+---
+
+## 2026-05-19 — Fase 4: Frontend scaffold
+
+**Done:**
+- `apps/frontend/` creado con Vite 8 + React 19 + TypeScript 6 + Tailwind v4
+- shadcn/ui configurado manualmente (components.json, cn util, clsx/tw-merge/cva/lucide-react)
+- React Router v7 con 5 rutas + Navigate + NavLink activo
+- TanStack Query v5 (`staleTime: 10min`, devtools, retry 2)
+- `LocationPicker` — búsqueda autocomplete + botón geolocalización, accesible (ARIA combobox)
+- `lib/cities-ar.ts` — 50 ciudades AR con lat/lon + `searchCities()`
+- `lib/api.ts` — cliente fetch tipado para los 5 endpoints + proxy Vite → localhost:8000
+- `hooks/useWeather.ts` — 6 hooks TanStack Query (uno por endpoint)
+- `hooks/useLocation.ts` — estado de ciudad con geolocation API
+- 6 páginas: `Landing`, `TenderRopa`, `SensacionTermica`, `CotaDeNieve`, `HacerDeporte`, `Terremotos`
+- Tavily MCP configurado (`claude mcp add --transport http --scope user`) — listo para Fase 5
+
+**Files changed:**
+- `apps/frontend/` — NUEVO, scaffold completo
+- `apps/frontend/vite.config.ts` — @tailwindcss/vite plugin + path alias @/ + proxy /api
+- `apps/frontend/tsconfig.app.json` — path aliases + ignoreDeprecations 6.0
+- `apps/frontend/components.json` — shadcn config manual (Vite + violet + cssVariables)
+- `apps/frontend/src/index.css` — Tailwind v4 @theme + dark mode + CSS vars SkyPulse
+- `apps/frontend/src/App.tsx` — RootLayout + BrowserRouter + QueryClientProvider
+- `apps/frontend/src/lib/{utils,api,cities-ar}.ts` — NUEVOS
+- `apps/frontend/src/hooks/{useLocation,useWeather}.ts` — NUEVOS
+- `apps/frontend/src/components/LocationPicker.tsx` — NUEVO
+- `apps/frontend/src/pages/{Landing,TenderRopa,SensacionTermica,CotaDeNieve,HacerDeporte,Terremotos}.tsx` — NUEVOS
+
+**Tests:**
+- `pnpm build` — ✓ 1815 modules transformed, 0 errors, 366ms
+- TypeScript check — ✓ 0 errores
+
+**Next:**
+- Fase 5 — Herramientas UI: `IndexGauge` (SVG), `HourlyTimeline`, `StatCard`, `DataTable`, `TrendChart` + React Bits (ElectricBorder, SplashCursor, Dither, FadeContent) + 5 páginas con datos reales
+
+---
+
+## 2026-05-19 23:15 — Fase 3: USGS terremotos
+
+**Done:**
+- `schemas/earthquakes.py` — `EarthquakeEvent` + `EarthquakesResponse` (frozen ConfigDict)
+- `services/usgs.py` — USGS FDSN client con TTLCache + asyncio.Lock + `_parse_event` GeoJSON + degradación controlada (error→lista vacía, no 503)
+- `routers/earthquakes.py` — `GET /api/earthquakes/recent?lat&lon&radius_km=500` (bbox AR, 50-2000 km)
+- `main.py` actualizado con earthquakes router en `/api/earthquakes`
+- Reutilización de `haversine` desde `smn.py`, mismos patrones de cache y error handling
+- Fix flaky test `test_smn_age_exactly_90_uses_smn`: timing race con boundary exacto → cambiado a 89 min
+
+**Files changed:**
+- `apps/backend/app/schemas/earthquakes.py` — NUEVO
+- `apps/backend/app/services/usgs.py` — NUEVO
+- `apps/backend/app/routers/earthquakes.py` — NUEVO
+- `apps/backend/app/main.py` — include_router earthquakes
+- `apps/backend/tests/test_usgs.py` — NUEVO, 18 tests (parse + service)
+- `apps/backend/tests/test_earthquakes_router.py` — NUEVO, 10 tests integración
+- `apps/backend/tests/test_weather_aggregator.py` — fix flaky boundary test
+
+**Tests:**
+- `cd apps/backend && python -m pytest --cov=app --cov-report=term`
+- Result: **148 passed, 0 failed** | coverage **92% total**
+- usgs.py 97%, earthquakes router 100%, schemas 100%
+
+**Next:**
+- Fase 4 — Frontend scaffold: `apps/frontend/` con Vite + React 19 + Tailwind + shadcn/ui + React Bits
+
+---
+
+## 2026-05-19 22:30 — Fase 2: Calculadores + 4 endpoints de tools
+
+**Done:**
+- `calculators.py` implementado con 4 funciones puras: `score_tender_ropa`, `compute_sensacion_termica`, `compute_cota_de_nieve`, `score_hacer_deporte`
+- Heat Index Rothfusz (calor) + Wind Chill Canadian (frío) + cota de nieve 3 métodos (Alcaide, gradiente térmico 6.5°C/km, 850 hPa)
+- `HourlyForecastData` + `get_hourly_forecast` agregados a `openmeteo.py` (48h pronóstico horario incluye temperature_850hPa)
+- `routers/tools.py` con 4 endpoints: `/tender-ropa` (24h), `/sensacion-termica`, `/cota-de-nieve`, `/hacer-deporte` (12h)
+- Schemas expandidos en `schemas/tools.py`: `FeelsLikeResponse`, `SnowLevelResponse` con frozen ConfigDict
+- Rate limiting 30/min en todos los endpoints, bbox AR, logging %.2f, 503 ante fuentes no disponibles
+- `main.py` actualizado para incluir tools router en `/api/tools`
+- `docs/Patrocinadores.docx` creado con pitch 1 página + 15 candidatos + tabla de seguimiento
+
+**Files changed:**
+- `apps/backend/app/services/calculators.py` — NUEVO
+- `apps/backend/app/services/openmeteo.py` — agregado HourlyForecastData + get_hourly_forecast
+- `apps/backend/app/schemas/tools.py` — reescrito con frozen + FeelsLikeResponse + SnowLevelResponse
+- `apps/backend/app/routers/tools.py` — NUEVO, 4 endpoints
+- `apps/backend/app/main.py` — include_router tools
+- `apps/backend/tests/test_calculators.py` — NUEVO, 50 tests puros
+- `apps/backend/tests/test_tools_router.py` — NUEVO, 24 tests integración
+- `docs/Patrocinadores.docx` — NUEVO
+
+**Tests:**
+- `cd apps/backend && python -m pytest --cov=app --cov-report=term`
+- Result: **120 passed, 0 failed** | coverage **91% total**
+- routers/tools.py 96%, schemas/tools.py 100%, calculators.py 99%
+
+**Next:**
+- Fase 3 — USGS terremotos: `services/usgs.py` + `routers/earthquakes.py` + `schemas/earthquakes.py`
+- Fase 4 — Frontend scaffold (Vite + React 19 + Tailwind + shadcn/ui + React Bits)
+
+---
+
+## 2026-05-19 19:28 — Fase 1b: Hardening backend
+
+**Done:**
+- 18 items de hardening aplicados sobre Fase 1 (CRITICAL/HIGH/MEDIUM/LOW del review paralelo).
+- Rate limiting con slowapi (30/min por IP), NaN/Inf guard, CORS restringido, logging dictConfig estructurado.
+- Refactor DRY: `app/utils/parsing.py` con `parse_float` compartido entre smn y openmeteo.
+- httpx shared client (`app/core/http_client.py` + lifespan), rate limiter aislado (`app/core/rate_limit.py`).
+- Modernización: `Optional[X]` → `X | None`, frozen ConfigDict en ForecastHour/Response, `Final` constants.
+- 17 tests nuevos agregados: bordes inclusive (lat/lon=-55/-21/-74/-53), NaN/Inf, CORS preflight, temp/humidity=0 falsy, umbrales distance=80/age=90, `_parse_observed_at` UTC, `/healthz`.
+
+**Files changed:**
+- `apps/backend/app/main.py` — slowapi + setup_logging dictConfig + _is_nan_or_inf guard
+- `apps/backend/app/core/http_client.py` — NUEVO, client compartido con lifespan
+- `apps/backend/app/core/rate_limit.py` — NUEVO, Limiter singleton
+- `apps/backend/app/utils/parsing.py` — NUEVO, parse_float DRY
+- `apps/backend/app/schemas/weather.py` — X | None, frozen ForecastHour/Response, rename model→forecast_model
+- `apps/backend/app/services/smn.py` — Final constants, parse_float import, X | None
+- `apps/backend/app/services/openmeteo.py` — parse_float import, X | None
+- `apps/backend/app/routers/weather.py` — @limiter.limit("30/minute"), Request param
+- `apps/backend/requirements.txt` — slowapi agregado, dev deps removidos
+- `apps/backend/requirements-dev.txt` — NUEVO, pytest/respx/cov separados
+- `apps/backend/render.yaml` — healthCheckPath: /healthz
+- `apps/backend/tests/test_healthz.py` — NUEVO
+- `apps/backend/tests/{test_smn,test_weather_aggregator,test_weather_router}.py` — extendidos
+
+**Tests:**
+- `cd apps/backend && python -m pytest --cov=app --cov-report=term`
+- Result: **47 passed, 0 failed** | coverage **86% total** (91% en código de Fase 1 productivo, excluyendo http_client.py que solo corre en lifespan y schemas/tools.py de scaffolding Fase 2)
+
+**Next:**
+- Fase 2 — calculadores (tender-ropa, sensacion-termica, cota-de-nieve, hacer-deporte) + 4 endpoints `/api/tools/*`
+- (alternativas: Fase 3 USGS terremotos, Fase 4 frontend scaffold)
+- Awaiting user direction
+
+---
+
+## 2026-05-19 18:42 — Fase 1: Backend scaffold + endpoint /api/weather/current
+
+**Done:**
+- Plan actualizado V.2 en `docs/plans/plan.md`: 5 tools, fuentes 100% públicas (SMN + Open-Meteo + USGS), sin Windy, sin keys, sin IA, deploy en subdominio Vercel + Render.
+- React Bits + componentes Tarjeta/Tabla/Gráfico documentados para Fase 4-5.
+- Diseño del contrato API hecho por architect agent (Opus): schema WeatherCurrentResponse con `meta.source` + `meta.station` + reglas SMN↔Open-Meteo (80km / 90min thresholds).
+- Implementación delegada a fastapi-python agent con TDD strict: schemas Pydantic v2 frozen, services con dataclass frozen interno, weather_aggregator con árbol de decisión, router con bbox AR validation.
+- Bug encontrado en verificación local (Open-Meteo 200 con todos null → 503) → fix aplicado en aggregator.
+- Code review paralelo lanzado: python-reviewer + security-reviewer + api-qa-specialist (3 agents en fresh context).
+- 4 fixes CRITICAL aplicados post-review:
+  1. `_parse_observed_at` UTC offset inverso (era 6h off, rompía lógica stale)
+  2. `validation_exception_handler` confundía rango con parsing (devolvía outside_argentina cuando era invalid_coordinates)
+  3. TTLCache race condition (asyncio.Lock + CancelledError re-raise)
+  4. PII leakage en logs (lat/lon redondeado a 2 decimales)
+
+**Files changed:**
+- `docs/plans/plan.md` — reescrito V.2 con catálogo final + React Bits sección
+- `apps/backend/app/main.py` — NUEVO, FastAPI + CORS + exception_handler + lifespan
+- `apps/backend/app/core/config.py` — eliminados WINDY_* keys, agregados smn/openmeteo/usgs URLs + thresholds
+- `apps/backend/app/schemas/weather.py` — reescrito según diseño architect (WeatherCurrentResponse + StationMeta + SourceMeta + ErrorResponse)
+- `apps/backend/app/services/smn.py` — NUEVO, fetch + TTLCache + haversine + _parse_observed_at
+- `apps/backend/app/services/openmeteo.py` — NUEVO, ECMWF default + GFS/ICON, parse current weather
+- `apps/backend/app/services/weather_aggregator.py` — NUEVO, árbol de decisión SMN↔OM + degrees_to_cardinal
+- `apps/backend/app/routers/weather.py` — NUEVO, GET /api/weather/current con bbox AR validation
+- `apps/backend/render.yaml` — eliminadas envVars Windy
+- `apps/backend/requirements.txt` — agregados cachetools, respx, pytest-cov
+- `apps/backend/pytest.ini` — NUEVO, config asyncio + coverage
+- `apps/backend/tests/{conftest,test_smn,test_openmeteo,test_weather_aggregator,test_weather_router}.py` — NUEVOS, 30 tests con respx mocks
+
+**Tests:**
+- `cd apps/backend && python -m pytest --cov=app --cov-report=term-missing`
+- Result: **30 passed, 0 failed** | coverage **86% total** | módulos clave: weather_aggregator 100%, weather schema 100%, smn 90%, openmeteo 82%
+- Verificación local: `uvicorn app.main:app` + curl `/healthz` (200) + `/api/weather/current?lat=-34.6&lon=-58.4` (200 con fallback Open-Meteo)
+
+**Next:**
+- Fase 1b — Hardening (review findings: rate limiting, NaN guard, httpx shared, boundary tests)
+
+---

@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/* ── Google Fonts preloaded in index.html ── */
+
+@theme {
+  /* ── Brand palette — dark-only, azul nocturno + dorado ── */
+  --color-background:        #060d1a;
+  --color-surface:           #0d1e38;
+  --color-foreground:        #e2e8f0;
+  --color-foreground-muted:  #94a3b8;
+
+  --color-card:              #0d1e38;
+  --color-card-foreground:   #e2e8f0;
+  --color-popover:           #0d1e38;
+  --color-popover-foreground: #e2e8f0;
+
+  /* Accent dorado — reemplaza violet */
+  --color-primary:           #c8a84b;
+  --color-primary-foreground: #060d1a;
+
+  --color-secondary:         #1c3358;
+  --color-secondary-foreground: #e2e8f0;
+
+  --color-muted:             #1c3358;
+  --color-muted-foreground:  #94a3b8;
+
+  --color-accent:            #1c3358;
+  --color-accent-foreground: #e2e8f0;
+
+  --color-border:            #1c3358;
+  --color-input:             #0d1e38;
+  --color-ring:              #c8a84b;
+
+  /* Semantic — danger scale (mismo sistema que el HTML viejo) */
+  --color-safe:              #3ecf7a;
+  --color-watch:             #f0a030;
+  --color-warn:              #e05545;
+  --color-crit:              #ff3333;
+  --color-info:              #5aaad8;
+
+  /* Destructive */
+  --color-destructive:       #e05545;
+  --color-destructive-foreground: #fef2f2;
+
+  --radius: 0.625rem;
+
+  /* Typography tokens */
+  --font-serif: 'Playfair Display', serif;
+  --font-sans:  'DM Sans', sans-serif;
+  --font-mono:  'JetBrains Mono', monospace;
+}
+
+/* ── No dark variant needed — dark-only ── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-color: var(--color-border);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Atmospheric starfield background — identical to HTML viejo ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 35% at 50% -5%, rgba(26, 74, 136, 0.13) 0%, transparent 60%),
+    radial-gradient(1.5px 1.5px at 12% 18%, rgba(255, 255, 255, 0.13) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 35% 42%, rgba(255, 255, 255, 0.08) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 61% 22%, rgba(255, 255, 255, 0.11) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 84% 67%, rgba(255, 255, 255, 0.08) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 92%  9%, rgba(255, 255, 255, 0.10) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Scrollbar — idéntica al HTML viejo ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #0b1929; }
+::-webkit-scrollbar-thumb { background: #1c3358; border-radius: 3px; }
+
+/* ── Eyebrow decoration — mismo sistema que HTML viejo ── */
+.eyebrow-deco::before,
+.eyebrow-deco::after {
+  content: '';
+  display: block;
+  width: 28px;
+  height: 1px;
+  background: #6e5820;
+}
+
+/* ── Card entrance animation ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ── Skeleton shimmer ── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #1c3358 25%,
+    #243e62 50%,
+    #1c3358 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
