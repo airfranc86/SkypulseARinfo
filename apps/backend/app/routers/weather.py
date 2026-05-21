@@ -3,16 +3,19 @@
 Jerarquía de fuentes:
     1. SMN — observación actual (vía `aggregate_current`).
     2. Windy GFS — pronósticos horarios y diarios (temp, humedad, viento, precip).
-    3. Open-Meteo — fallback de pronósticos. SIEMPRE se usa para:
-       - weather_code (WMO) → único origen confiable para los íconos.
+    3. Open-Meteo — fallback de pronósticos. Provee:
+       - weather_code (WMO) → íconos y descripciones.
        - uv_index → no provisto por Windy GFS gratuito.
-       - sunrise/sunset/daylight_duration → cálculo astronómico de Open-Meteo.
+       - sunrise/sunset/daylight_duration → cálculo astronómico.
+       Si Open-Meteo falla (ej. 429 rate-limit), el dashboard usa un fallback
+       sintético construido a partir de Windy GFS + fórmula astronómica local.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+import math
+from datetime import datetime, timezone, timedelta, date as _Date
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -37,6 +40,7 @@ from app.services.openmeteo import (
     DailyForecastDataExt,
     MultiModelDailyData,
     HourlyForecastExt,
+    _DAY_LABELS_ES,
 )
 from app.services.windy import (
     WindyDailyEntry,
@@ -51,6 +55,113 @@ from app.utils.wmo_codes import describe_wmo
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Helpers: sunrise/sunset + fallback sintético cuando Open-Meteo falla
+# ---------------------------------------------------------------------------
+
+def _compute_sun_times(lat: float, lon: float, target_date: _Date) -> tuple[datetime, datetime]:
+    """
+    Calcula amanecer/atardecer aproximados (±15 min) mediante fórmula NOAA simplificada.
+    Retorna datetimes en UTC (timezone-aware). Válido para |lat| < 60°.
+    """
+    doy = target_date.timetuple().tm_yday
+    # Declinación solar
+    declination = 23.45 * math.sin(math.radians(360 / 365 * (doy - 81)))
+    lat_r = math.radians(lat)
+    dec_r = math.radians(declination)
+    cos_ha = max(-1.0, min(1.0, -math.tan(lat_r) * math.tan(dec_r)))
+    ha_deg = math.degrees(math.acos(cos_ha))
+    # Ecuación del tiempo (minutos)
+    b_r = math.radians(360 / 365 * (doy - 81))
+    eot_min = 9.87 * math.sin(2 * b_r) - 7.53 * math.cos(b_r) - 1.5 * math.sin(b_r)
+    solar_noon_utc = 12.0 - lon / 15.0 - eot_min / 60.0
+    half_day_h = ha_deg / 15.0
+    base = datetime(target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc)
+    return (
+        base + timedelta(hours=solar_noon_utc - half_day_h),
+        base + timedelta(hours=solar_noon_utc + half_day_h),
+    )
+
+
+def _wmo_from_windy_daily(w: WindyDailyEntry) -> int:
+    """Aproxima el código WMO desde datos Windy (precip + nubosidad). Heurística simple."""
+    precip = w.precip_sum_mm or 0.0
+    cloud  = w.cloud_cover_mean or 0.0
+    if precip > 10.0:
+        return 63   # lluvia moderada
+    if precip > 2.0:
+        return 61   # lluvia leve
+    if precip > 0.5:
+        return 51   # llovizna
+    if cloud > 80.0:
+        return 3    # nublado
+    if cloud > 50.0:
+        return 2    # parcialmente nublado
+    if cloud > 20.0:
+        return 1    # principalmente despejado
+    return 0        # despejado
+
+
+def _build_synthetic_daily_multi(
+    windy_daily: list[WindyDailyEntry],
+    lat: float,
+    lon: float,
+) -> MultiModelDailyData:
+    """
+    Construye un MultiModelDailyData sintético desde Windy GFS cuando Open-Meteo
+    no está disponible (ej. rate-limited 429). Usa fórmula astronómica para
+    sunrise/sunset y heurística para weather_codes.
+    """
+    from datetime import date as _date_cls
+    dates = [w.date for w in windy_daily]
+    today_dt = _date_cls.today()
+    day_labels: list[str] = []
+    sunrise_list: list[str] = []
+    sunset_list: list[str] = []
+    daylight_secs: list[float | None] = []
+
+    for d_str in dates:
+        d = _date_cls.fromisoformat(d_str)
+        days_ahead = (d - today_dt).days
+        if days_ahead == 0:
+            day_labels.append("Hoy")
+        elif days_ahead == 1:
+            day_labels.append("Mañana")
+        else:
+            day_labels.append(_DAY_LABELS_ES[d.weekday()])
+        sr, ss = _compute_sun_times(lat, lon, d)
+        sunrise_list.append(sr.isoformat())
+        sunset_list.append(ss.isoformat())
+        daylight_secs.append((ss - sr).total_seconds())
+
+    synthetic = DailyForecastDataExt(
+        dates=dates,
+        day_labels=day_labels,
+        temp_max=[w.temp_max_c for w in windy_daily],
+        temp_min=[w.temp_min_c for w in windy_daily],
+        precip_sum=[w.precip_sum_mm for w in windy_daily],
+        precip_prob_max=[w.precip_prob for w in windy_daily],
+        wind_speed_max=[w.wind_speed_max_kmh for w in windy_daily],
+        wind_gusts_max=[w.wind_gust_max_kmh for w in windy_daily],
+        humidity_mean=[w.humidity_mean for w in windy_daily],
+        uv_max=[None] * len(windy_daily),
+        weather_codes=[_wmo_from_windy_daily(w) for w in windy_daily],
+        sunrise=sunrise_list,
+        sunset=sunset_list,
+        daylight_seconds=daylight_secs,
+    )
+    consensus_labels = [
+        "all_agree_dry" if (w.precip_sum_mm or 0.0) < 0.5 else "all_agree_rain"
+        for w in windy_daily
+    ]
+    return MultiModelDailyData(
+        models={"windy_gfs": synthetic},
+        consensus_pct_per_day=[100.0] * len(windy_daily),
+        rain_consensus_per_day=consensus_labels,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Parámetros compartidos
@@ -174,13 +285,7 @@ async def get_dashboard(
         logger.error("aggregate_current falló en /dashboard: %s", current)
         raise HTTPException(status_code=503, detail="current_unavailable")
 
-    # daily_multi es obligatorio (provee weather_code/uv/sunrise/sunset y el armazón
-    # de 7 días). Si falla, no podemos armar el dashboard.
-    if isinstance(daily_multi, Exception) or daily_multi is None:
-        logger.error("get_multi_model_daily falló en /dashboard: %s", daily_multi)
-        raise HTTPException(status_code=503, detail="forecast_unavailable")
-
-    # hourly Open-Meteo es opcional
+    # Resolver datos opcionales ANTES del check de daily_multi (necesarios para fallback)
     om_hourly_data: HourlyForecastExt | None = (
         om_hourly if not isinstance(om_hourly, Exception) else None
     )
@@ -190,6 +295,22 @@ async def get_dashboard(
     windy_daily_data: list[WindyDailyEntry] | None = (
         windy_daily if not isinstance(windy_daily, Exception) else None
     )
+
+    # daily_multi provee weather_code/uv/sunrise/sunset.
+    # Si Open-Meteo falla (ej. 429), intentar fallback sintético desde Windy GFS.
+    if isinstance(daily_multi, Exception) or daily_multi is None:
+        if windy_daily_data:
+            logger.warning(
+                "get_multi_model_daily falló (%s) — usando fallback sintético desde Windy GFS",
+                daily_multi,
+            )
+            daily_multi = _build_synthetic_daily_multi(windy_daily_data, lat, lon)
+        else:
+            logger.error(
+                "get_multi_model_daily falló y Windy no disponible — sin datos para armar el dashboard: %s",
+                daily_multi,
+            )
+            raise HTTPException(status_code=503, detail="forecast_unavailable")
 
     # Determinar fuente del pronóstico
     forecast_source = SOURCE_MIXED if windy_hourly_data or windy_daily_data else SOURCE_OPENMETEO

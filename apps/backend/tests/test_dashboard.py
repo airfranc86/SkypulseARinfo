@@ -321,7 +321,9 @@ async def test_dashboard_503_when_current_fails(async_client: AsyncClient):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_dashboard_503_when_forecast_unavailable(async_client: AsyncClient):
+async def test_dashboard_503_when_om_and_windy_both_fail(async_client: AsyncClient):
+    """503 solo cuando TANTO Open-Meteo COMO Windy fallan (sin datos de pronóstico)."""
+    # disable_windy_by_default fixture deja windy_api_key="" → _safe_windy_daily devuelve None
     with (
         patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
         patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=None),
@@ -330,6 +332,37 @@ async def test_dashboard_503_when_forecast_unavailable(async_client: AsyncClient
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
 
     assert response.status_code == 503
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_200_when_om_fails_but_windy_available(
+    async_client: AsyncClient, monkeypatch
+):
+    """Cuando Open-Meteo falla (ej. 429) pero Windy está disponible, debe retornar 200
+    usando el fallback sintético (weather codes heurísticos + sunrise/sunset astronómico)."""
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+    windy_daily = _make_windy_daily_ext()
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=None),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=None),
+        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_make_windy_hourly_ext()),
+        patch("app.routers.weather.windy_get_daily_forecast", new_callable=AsyncMock, return_value=windy_daily),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["forecast_7d"]) == 7
+    # Fallback sintético: temp_max viene de Windy (23.0)
+    assert data["forecast_7d"][0]["temp_max"] == pytest.approx(23.0)
+    # DayArc debe tener sunrise/sunset calculados astronómicamente
+    assert "sunrise" in data["day_arc"]
+    assert "sunset" in data["day_arc"]
+    assert "h" in data["day_arc"]["daylight_label"]
 
 
 # ---------------------------------------------------------------------------

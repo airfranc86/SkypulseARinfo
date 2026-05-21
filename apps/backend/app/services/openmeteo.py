@@ -338,11 +338,11 @@ async def get_multi_model_daily(
     days: int = 7,
 ) -> MultiModelDailyData | None:
     """
-    Llama 3 modelos en paralelo: ecmwf_ifs025, gfs_seamless, icon_seamless.
-    Si alguno falla, lo omite.
-    Si todos fallan, retorna None.
+    Llama 1 modelo de Open-Meteo (gfs_seamless) para obtener weather_code/uv/sunrise/sunset.
+    Reducido de 3 → 1 modelo para evitar rate-limiting en el plan gratuito de Open-Meteo.
+    Si falla, retorna None (el dashboard usará fallback sintético desde Windy GFS).
     """
-    model_names = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
+    model_names = ["gfs_seamless"]
     tasks = [get_daily_forecast_ext(lat, lon, days, m) for m in model_names]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
