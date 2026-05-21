@@ -287,14 +287,31 @@
   <a href="./lluvias.html" class="px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer no-underline">🌧 Lluvias</a>
   <a href="./desastres.html" class="px-4 py-1.5 rounded-full border border-red-900 text-[.72rem] text-red-400 bg-transparent hover:bg-red-950 transition-all cursor-pointer no-underline">🌪 Desastres</a>
   <a href="./radar.html" class="px-4 py-1.5 rounded-full border border-blue-900 text-[.72rem] text-blue-400 bg-transparent hover:bg-blue-950 transition-all cursor-pointer no-underline">🛰 Radar</a>
+  <a href="https://herramientas.skypulseinfo.vercel.app" target="_blank" rel="noopener noreferrer" class="px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer no-underline">⛅ Previsión del clima</a>
   <div class="w-px h-4 bg-[#243e62]"></div>
   <button class="fbtn active px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('all',this)">Todo</button>
   <div class="w-px h-4 bg-[#243e62]"></div>
-  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('alta',this)">Nubes altas</button>
-  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('media',this)">Nubes medias</button>
-  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('baja',this)">Nubes bajas</button>
-  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('vertical',this)">Verticales</button>
-  <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('especial',this)">Especiales</button>
+
+  <!-- ☁ Nubes — dropdown pill -->
+  <div class="relative" id="nubes-dd">
+    <button
+      id="nubes-pill"
+      class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer flex items-center gap-1"
+      onclick="toggleNubesMenu(event)"
+    >☁ Nubes ▾</button>
+    <div
+      id="nubes-menu"
+      class="hidden absolute top-full left-0 mt-1.5 z-[60] min-w-[148px] rounded-xl overflow-hidden shadow-2xl"
+      style="background:#0d1e38;border:1px solid #1c3358"
+    >
+      <button class="block w-full text-left px-4 py-2 text-[.72rem] text-slate-400 hover:bg-[#1c3358] hover:text-yellow-300 transition-colors" onclick="selectNubes('alta','Altas')">Nubes altas</button>
+      <button class="block w-full text-left px-4 py-2 text-[.72rem] text-slate-400 hover:bg-[#1c3358] hover:text-yellow-300 transition-colors" onclick="selectNubes('media','Medias')">Nubes medias</button>
+      <button class="block w-full text-left px-4 py-2 text-[.72rem] text-slate-400 hover:bg-[#1c3358] hover:text-yellow-300 transition-colors" onclick="selectNubes('baja','Bajas')">Nubes bajas</button>
+      <button class="block w-full text-left px-4 py-2 text-[.72rem] text-slate-400 hover:bg-[#1c3358] hover:text-yellow-300 transition-colors" onclick="selectNubes('vertical','Verticales')">Verticales</button>
+      <button class="block w-full text-left px-4 py-2 text-[.72rem] text-slate-400 hover:bg-[#1c3358] hover:text-yellow-300 transition-colors" onclick="selectNubes('especial','Especiales')">Especiales</button>
+    </div>
+  </div>
+
   <div class="w-px h-4 bg-[#243e62]"></div>
   <button class="fbtn px-4 py-1.5 rounded-full border border-[#243e62] text-[.72rem] text-slate-400 bg-transparent hover:border-yellow-900 hover:text-yellow-300 transition-all cursor-pointer" onclick="filterCards('aero',this)">✈️ Aeronáutico</button>
 </nav>
@@ -1081,6 +1098,42 @@
 
 <!-- ════ JAVASCRIPT ════ -->
 <script>
+  // ── Nubes dropdown ─────────────────────────────────────────────────────────
+  // Dropdown pill that wraps the 5 cloud-family filter buttons.
+  // Delegates active-state management to filterCards via the #nubes-pill button.
+
+  function toggleNubesMenu(e) {
+    e.stopPropagation();
+    document.getElementById('nubes-menu').classList.toggle('hidden');
+  }
+
+  function selectNubes(family, label) {
+    document.getElementById('nubes-menu').classList.add('hidden');
+    var pill = document.getElementById('nubes-pill');
+    pill.textContent = '☁ ' + label + ' ▾';
+    filterCards(family, pill);
+  }
+
+  // Reset pill label when "Todo" or other top-level filters clear the nubes state
+  var _origFilterCards = null;
+  document.addEventListener('DOMContentLoaded', function() {
+    // Close dropdown on outside click
+    document.addEventListener('click', function(e) {
+      var dd = document.getElementById('nubes-dd');
+      if (dd && !dd.contains(e.target)) {
+        document.getElementById('nubes-menu').classList.add('hidden');
+      }
+    });
+
+    // Patch fbtn clicks that aren't nubes to reset pill label
+    document.querySelectorAll('.fbtn:not(#nubes-pill)').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var pill = document.getElementById('nubes-pill');
+        if (pill) pill.textContent = '☁ Nubes ▾';
+      });
+    });
+  });
+
   // ── filterCards ────────────────────────────────────────────────────────────
   // Filters .cloud-card elements by data-family attribute.
   // Also shows/hides .sec-header elements by data-section attribute.
