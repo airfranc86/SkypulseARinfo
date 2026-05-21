@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     windy_api_key: str = ""
     windy_base_url: str = "https://api.windy.com/api/point-forecast/v2"
+    windy_model: str = "gfs"  # ecmwf requiere plan pago; gfs disponible en plan gratuito
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

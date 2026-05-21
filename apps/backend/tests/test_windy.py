@@ -278,7 +278,9 @@ class TestGetLaundryForecast:
 
         call_kwargs = mock_client.post.call_args
         payload = call_kwargs[1]["json"] if call_kwargs[1] else call_kwargs.kwargs["json"]
-        assert payload["model"] == "ecmwf"
+        assert payload["model"] == "gfs"  # ecmwf requiere plan pago — gfs disponible en free plan
         assert "temp" in payload["parameters"]
         assert "rh" in payload["parameters"]
+        assert "wind" in payload["parameters"]   # "wind" retorna wind_u + wind_v
+        assert "precip" in payload["parameters"] # "precip" → past3hprecip-surface en respuesta
         assert payload["key"] == "test-key-456"

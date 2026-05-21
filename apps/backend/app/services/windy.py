@@ -85,8 +85,8 @@ async def _fetch_and_aggregate(lat: float, lon: float) -> list[LaundryDayRaw]:
     payload = {
         "lat": lat,
         "lon": lon,
-        "model": "ecmwf",
-        "parameters": ["temp", "rh", "wind_u-surface", "wind_v-surface", "past3hprecip"],
+        "model": "gfs",        # ecmwf requiere plan pago — gfs disponible en plan gratuito
+        "parameters": ["temp", "rh", "wind", "precip"],  # "wind" retorna wind_u + wind_v; "precip" → past3hprecip-surface
         "levels": ["surface"],
         "key": settings.windy_api_key,
     }

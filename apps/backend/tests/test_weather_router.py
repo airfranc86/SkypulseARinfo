@@ -237,7 +237,7 @@ async def test_cors_preflight_returns_correct_headers(async_client: AsyncClient)
     response = await async_client.options(
         "/api/weather/current",
         headers={
-            "Origin": "https://herramientas.skypulseinfo.vercel.app",
+            "Origin": "https://skypulse-ar.vercel.app",
             "Access-Control-Request-Method": "GET",
         },
     )
