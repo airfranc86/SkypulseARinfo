@@ -1,4 +1,4 @@
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const { icao, type = 'metar' } = req.query
 
   if (!icao || icao.length < 4) {
