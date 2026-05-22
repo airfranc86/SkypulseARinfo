@@ -1,5 +1,4 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
-import { BorderGlow } from '@/components/animated/BorderGlow'
 import type { DayArcInfo, MoonPhaseInfo } from '@/lib/api'
 
 interface Props {
@@ -32,19 +31,9 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
   const isAfterSunset = dayArc.current_position_pct > 1
 
   return (
-    <BorderGlow
-      animated
-      glowColor="205 62 60"
-      colors={['#5aaad8', '#c8a84b', '#3ecf7a']}
-      borderRadius={16}
-      glowRadius={32}
-      glowIntensity={0.8}
-      fillOpacity={0.25}
-      backgroundColor="#0d1625"
-    >
     <div
       className="rounded-2xl p-5"
-      style={{ background: 'var(--color-card)' }}
+      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
     >
       {/* SVG arc */}
       <svg viewBox="0 0 200 126" className="w-full" style={{ maxHeight: '140px' }}>
@@ -166,6 +155,5 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         )}
       </div>
     </div>
-    </BorderGlow>
   )
 }
