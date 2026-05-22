@@ -30,18 +30,36 @@ const columns = [
       </span>
     ),
   },
-  { key: 'place', header: 'Lugar', className: 'min-w-[160px]' },
+  {
+    key: 'place',
+    header: 'Lugar',
+    render: (v: unknown) => (
+      <span
+        className="block"
+        style={{
+          maxWidth: 'min(150px, 38vw)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={String(v ?? '')}
+      >
+        {String(v ?? '—')}
+      </span>
+    ),
+  },
   {
     key: 'occurred_at',
     header: 'Fecha',
+    className: 'w-[72px]',
     render: (v: unknown) => {
       if (!v) return '—'
       const d = new Date(String(v))
       if (isNaN(d.getTime())) return String(v)
       const fecha = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-      const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+      const hora  = d.toLocaleTimeString('es-AR',  { hour: '2-digit', minute: '2-digit' })
       return (
-        <span className="flex flex-col">
+        <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <span className="text-xs font-medium">{fecha}</span>
           <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>{hora}</span>
         </span>
