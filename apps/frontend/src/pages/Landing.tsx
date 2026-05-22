@@ -19,6 +19,13 @@ const GUIDES: Array<{
     color: '#c8a84b',
   },
   {
+    to: '/metar',
+    emoji: '📡',
+    title: 'METAR & TAF',
+    desc: 'Consultá el reporte real de cualquier aeródromo del mundo.',
+    color: '#5aaad8',
+  },
+  {
     to: '/lluvias',
     emoji: '🌧️',
     title: 'Lluvias según las nubes',

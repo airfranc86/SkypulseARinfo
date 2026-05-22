@@ -23,6 +23,7 @@ import { Lluvias } from '@/pages/Lluvias'
 import { Radar } from '@/pages/Radar'
 import { Desastres } from '@/pages/Desastres'
 import { Nubes } from '@/pages/Nubes'
+import { Metar } from '@/pages/Metar'
 import { PrevisionClima } from '@/pages/PrevisionClima'
 
 // ── queryKey → ModelCategory map ─────────────────────────────────────────────
@@ -275,6 +276,7 @@ function RootLayout() {
           <Route path="/radar" element={<Radar />} />
           <Route path="/desastres" element={<Desastres />} />
           <Route path="/nubes" element={<Nubes />} />
+          <Route path="/metar" element={<Metar />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
