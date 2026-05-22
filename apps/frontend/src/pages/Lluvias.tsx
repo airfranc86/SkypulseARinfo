@@ -1,0 +1,263 @@
+import { FadeContent } from '@/components/animated/FadeContent'
+import { Dither } from '@/components/animated/Dither'
+
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
+
+type BadgeVariant = 'no' | 'maybe' | 'yes' | 'heavy' | 'crit'
+type IntensityLevel = 0 | 1 | 2 | 3 | 4
+
+interface CloudRow {
+  name: string
+  badge: BadgeVariant
+  badgeLabel: string
+  intensity: IntensityLevel
+  duration: string
+  when: string
+}
+
+const CLOUDS: CloudRow[] = [
+  { name: 'Cirros',         badge: 'no',    badgeLabel: 'No',             intensity: 0, duration: '—',                     when: 'Todo el año, especialmente antes de frentes' },
+  { name: 'Cirrostratos',   badge: 'yes',   badgeLabel: 'En 12–24 h',     intensity: 1, duration: 'Prolongada',            when: 'Preceden frentes cálidos' },
+  { name: 'Cirrocúmulos',   badge: 'no',    badgeLabel: 'No directa',     intensity: 0, duration: '—',                     when: 'Efímeros, señal de inestabilidad' },
+  { name: 'Altocúmulos',    badge: 'maybe', badgeLabel: 'Posible',        intensity: 1, duration: 'Breve',                 when: 'Mañanas cálidas con Ac castellanus' },
+  { name: 'Altostratos',    badge: 'yes',   badgeLabel: 'Sí',             intensity: 2, duration: 'Prolongada',            when: 'Siguen a los cirrostratos en frentes' },
+  { name: 'Estrato',        badge: 'yes',   badgeLabel: 'Sí',             intensity: 1, duration: 'Larga, persistente',    when: 'Días fríos y húmedos, zonas costeras' },
+  { name: 'Estratocúmulos', badge: 'maybe', badgeLabel: 'Llovizna posible', intensity: 1, duration: 'Breve',              when: 'Muy comunes, raramente llueven fuerte' },
+  { name: 'Nimboestrato',   badge: 'heavy', badgeLabel: 'Sí — continua',  intensity: 3, duration: 'Muchas horas o días',  when: 'Frentes activos, invierno y otoño' },
+  { name: 'Cúmulo',         badge: 'maybe', badgeLabel: 'Solo si crecen', intensity: 2, duration: 'Breve (chubasco)',      when: 'Tardes cálidas de verano' },
+  { name: 'Cumulonimbo',    badge: 'crit',  badgeLabel: 'Sí — severa',    intensity: 4, duration: 'Corta pero intensa',   when: 'Verano, tarde-noche, zonas tropicales' },
+  { name: 'Mammatus',       badge: 'crit',  badgeLabel: 'Tormenta activa', intensity: 4, duration: 'Variable, muy intensa', when: 'Bajo el yunque de un Cb severo' },
+  { name: 'Niebla',         badge: 'yes',   badgeLabel: 'Llovizna fina',  intensity: 1, duration: 'Hasta que sube el sol', when: 'Madrugada y amanecer en valles' },
+]
+
+const BADGE_STYLES: Record<BadgeVariant, { color: string; bg: string; border: string }> = {
+  no:    { color: '#90aabb', bg: 'rgba(96,112,128,.07)',  border: 'rgba(96,112,128,.28)'  },
+  maybe: { color: '#f0a030', bg: 'rgba(212,135,15,.07)',  border: 'rgba(212,135,15,.32)'  },
+  yes:   { color: '#5aaad8', bg: 'rgba(43,143,212,.07)',  border: 'rgba(43,143,212,.32)'  },
+  heavy: { color: '#e05545', bg: 'rgba(192,57,43,.07)',   border: 'rgba(192,57,43,.32)'   },
+  crit:  { color: '#ff6b6b', bg: 'rgba(255,0,0,.07)',     border: 'rgba(255,0,0,.32)'     },
+}
+
+const INTENSITY_COLORS: Record<IntensityLevel, string> = {
+  0: 'transparent',
+  1: '#5aaad8',
+  2: '#f0a030',
+  3: '#e05545',
+  4: '#ff3333',
+}
+
+const INTENSITY_LEGEND = [
+  { color: 'var(--color-border)', label: 'Sin lluvia' },
+  { color: '#5aaad8', label: 'Llovizna' },
+  { color: '#f0a030', label: 'Moderada' },
+  { color: '#e05545', label: 'Intensa' },
+  { color: '#ff3333', label: 'Severa' },
+]
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function Badge({ variant, label }: { variant: BadgeVariant; label: string }) {
+  const s = BADGE_STYLES[variant]
+  return (
+    <span
+      className="inline-flex items-center text-[.68rem] font-medium px-2 py-0.5 rounded"
+      style={{ color: s.color, background: s.bg, border: `1px solid ${s.border}` }}
+    >
+      {label}
+    </span>
+  )
+}
+
+function IntensityDots({ level }: { level: IntensityLevel }) {
+  const activeColor = INTENSITY_COLORS[level]
+  return (
+    <div className="flex items-center gap-1">
+      {([0, 1, 2, 3] as const).map(i => (
+        <span
+          key={i}
+          className="inline-block w-2 h-2 rounded-full"
+          style={{
+            background: i < level ? activeColor : 'var(--color-border)',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export function Lluvias() {
+  return (
+    <div className="relative">
+      <Dither opacity={0.03} />
+
+      <FadeContent>
+        {/* Header */}
+        <div className="mb-10 text-center">
+          <p
+            className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4"
+            style={{ color: '#c8a84b' }}
+          >
+            Lluvias según el cielo
+          </p>
+          <h1
+            className="text-4xl sm:text-5xl font-semibold leading-tight mb-4"
+            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
+          >
+            Qué lluvia esperar{' '}
+            <em style={{ color: '#c8a84b', fontStyle: 'italic' }}>según las nubes</em>
+          </h1>
+          <p className="text-sm max-w-lg mx-auto leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+            Cada tipo de nube produce un tipo de lluvia distinto — o ninguna.
+            Aprendé a leer el cielo antes de que llueva.
+          </p>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: 'var(--color-card)' }}>
+                {['Tipo de nube', '¿Llueve?', 'Intensidad', 'Duración típica', 'Cuándo aparece'].map(h => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-[.65rem] font-medium uppercase tracking-wide"
+                    style={{ color: 'var(--color-muted-foreground)' }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {CLOUDS.map((row) => (
+                <tr
+                  key={row.name}
+                  className="border-t transition-colors hover:bg-white/[.02]"
+                  style={{ borderColor: 'var(--color-border)' }}
+                >
+                  <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-foreground)' }}>
+                    {row.name}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={row.badge} label={row.badgeLabel} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <IntensityDots level={row.intensity} />
+                  </td>
+                  <td
+                    className="px-4 py-3 hidden sm:table-cell text-xs"
+                    style={{ color: row.duration === '—' ? 'var(--color-muted-foreground)' : 'var(--color-foreground)' }}
+                  >
+                    {row.duration}
+                  </td>
+                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                    {row.when}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Intensity legend */}
+        <div className="flex flex-wrap gap-4 mt-3 px-1">
+          {INTENSITY_LEGEND.map(({ color, label }) => (
+            <span key={label} className="flex items-center gap-1.5 text-[.67rem]" style={{ color: 'var(--color-muted-foreground)' }}>
+              <span className="flex gap-0.5">
+                {[0, 1, 2, 3].map(i => (
+                  <span key={i} className="w-2 h-2 rounded-full inline-block" style={{ background: color }} />
+                ))}
+              </span>
+              {label}
+            </span>
+          ))}
+        </div>
+
+        {/* Educational cards */}
+        <div className="mt-12">
+          <h2
+            className="text-xl font-semibold italic mb-6"
+            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
+          >
+            Cómo leer el cielo antes de que llueva
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              {
+                accent: '#c8a84b',
+                title: 'La secuencia clásica de un frente',
+                body: <>El ciclo más predecible: primero aparecen <strong style={{ color: 'var(--color-foreground)' }}>Cirros</strong> — aviso de 24–48 h. Luego el cielo se cubre con <strong style={{ color: 'var(--color-foreground)' }}>Cirrostratos</strong> y su halo. Bajan a <strong style={{ color: 'var(--color-foreground)' }}>Altostratos</strong> y el sol desaparece. Finalmente llega el <strong style={{ color: 'var(--color-foreground)' }}>Nimboestrato</strong> — lluvia continua que dura horas.</>,
+              },
+              {
+                accent: '#e05545',
+                title: 'La tormenta convectiva',
+                body: <>El ciclo más violento y más rápido: <strong style={{ color: 'var(--color-foreground)' }}>Cúmulos</strong> crecen en torres durante la tarde. Si el ambiente es inestable, se convierten en <strong style={{ color: 'var(--color-foreground)' }}>Cumulonimbos</strong> en minutos. La lluvia es breve pero extrema — granizo, ráfagas y rayos. Sin aviso previo de horas.</>,
+              },
+              {
+                accent: '#5aaad8',
+                title: 'El día gris sin drama',
+                body: <>El escenario más cotidiano: <strong style={{ color: 'var(--color-foreground)' }}>Estratocúmulos</strong> o <strong style={{ color: 'var(--color-foreground)' }}>Estratos</strong> cubren el cielo sin traer lluvia seria. A lo sumo una llovizna fina. El día es gris, la luz plana y el ambiente húmedo — pero sin riesgo real. El paraguas es opcional.</>,
+              },
+              {
+                accent: '#90aabb',
+                title: 'Lo que las nubes no dicen',
+                body: <>Las nubes muestran lo que pasa ahora, no necesariamente lo que viene en horas. Un cielo con <strong style={{ color: 'var(--color-foreground)' }}>Cirros</strong> puede seguir despejado un día entero. Un <strong style={{ color: 'var(--color-foreground)' }}>Nimboestrato</strong> puede terminar antes de lo esperado. Usar las nubes como pista, no como pronóstico exacto.</>,
+              },
+            ].map(({ accent, title, body }) => (
+              <div
+                key={title}
+                className="rounded-xl p-5"
+                style={{
+                  background: 'var(--color-card)',
+                  border: `1px solid var(--color-border)`,
+                  borderLeftColor: accent,
+                  borderLeftWidth: '3px',
+                }}
+              >
+                <p className="text-[.63rem] font-medium tracking-widest uppercase mb-2" style={{ color: accent }}>
+                  {title}
+                </p>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+                  {body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick rule */}
+        <div
+          className="mt-8 rounded-xl p-6"
+          style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+        >
+          <p className="text-[.63rem] font-medium tracking-widest uppercase mb-4" style={{ color: '#c8a84b' }}>
+            Regla práctica rápida
+          </p>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            {[
+              { emoji: '🌤', title: 'Nubes finas y altas',   desc: 'Cirros, cirrostratos — sin lluvia hoy, monitorear mañana' },
+              { emoji: '🌧', title: 'Capas grises y bajas',  desc: 'Estrato, nimboestrato — llevá paraguas, va a durar' },
+              { emoji: '⛈', title: 'Torres que crecen',     desc: 'Cúmulos en expansión — buscá refugio antes de las 3 hs' },
+            ].map(({ emoji, title, desc }) => (
+              <div key={title}>
+                <div className="text-2xl mb-2">{emoji}</div>
+                <div className="text-xs font-medium mb-1" style={{ color: 'var(--color-foreground)' }}>{title}</div>
+                <div className="text-[.72rem]" style={{ color: 'var(--color-muted-foreground)' }}>{desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </FadeContent>
+    </div>
+  )
+}
