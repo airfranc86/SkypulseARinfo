@@ -57,10 +57,10 @@ export function PrevisionClima({ location }: Props) {
             />
 
             {/* Hourly 48h — GFS */}
-            <HourlyStrip hourly={data.hourly} badge={<ModelBadge model="gfs" variant="header" />} />
+            <HourlyStrip hourly={data.hourly} />
 
             {/* 7-day forecast — GFS */}
-            <Forecast7d days={data.forecast_7d} badge={<ModelBadge model="gfs" variant="header" />} />
+            <Forecast7d days={data.forecast_7d} />
 
             {/* Rain today — GFS, al final */}
             <RainForecastCard rain={data.rain_today} />
