@@ -214,6 +214,7 @@ export interface CurrentDetailed {
   icon: string
   is_day: boolean
   source?: string  // "smn" | "openmeteo" | "unknown"
+  observed_at?: string  // ISO datetime of the SMN observation
 }
 
 export interface HourlyConsensus {

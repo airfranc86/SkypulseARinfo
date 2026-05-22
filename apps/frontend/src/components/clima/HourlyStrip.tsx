@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react'
+import type { ReactNode } from 'react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { cn } from '@/lib/utils'
 import type { HourlyConsensus, HourlyEntry } from '@/lib/api'
 
 interface Props {
   hourly: HourlyConsensus
+  badge?: ReactNode
 }
 
 /** Group entries by date */
@@ -24,7 +26,7 @@ function dateTabLabel(date: string, index: number): string {
   return d.toLocaleDateString('es-AR', { weekday: 'short' })
 }
 
-export function HourlyStrip({ hourly }: Props) {
+export function HourlyStrip({ hourly, badge }: Props) {
   const groups = useMemo(() => groupByDate(hourly.entries), [hourly.entries])
   const dates = Object.keys(groups)
   const [activeDate, setActiveDate] = useState(dates[0] ?? '')
@@ -42,11 +44,14 @@ export function HourlyStrip({ hourly }: Props) {
         className="px-5 py-3 flex items-center justify-between gap-3"
         style={{ borderBottom: '1px solid var(--color-border)' }}
       >
-        <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
-          Pronóstico por hora
-        </p>
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="text-sm font-medium shrink-0" style={{ color: 'var(--color-foreground)' }}>
+            Pronóstico por hora
+          </p>
+          {badge}
+        </div>
         <span
-          className="text-xs px-2.5 py-1 rounded-full font-medium"
+          className="text-xs px-2.5 py-1 rounded-full font-medium shrink-0"
           style={{
             background: rainPct < 20
               ? 'rgba(62,207,122,0.12)'

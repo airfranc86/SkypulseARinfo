@@ -180,6 +180,7 @@ class CurrentDetailedSchema(BaseModel):
     icon: str
     is_day: bool
     source: str = "unknown"  # "smn" | "openmeteo" | "unknown"
+    observed_at: datetime | None = None  # timestamp de la última observación SMN
 
 
 class HourlyConsensusSchema(BaseModel):

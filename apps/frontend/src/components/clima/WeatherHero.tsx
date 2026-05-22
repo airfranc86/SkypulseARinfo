@@ -4,6 +4,15 @@ import { ModelBadge } from '@/components/ui/ModelBadge'
 import type { ModelKey } from '@/components/ui/ModelBadge'
 import type { CurrentDetailed } from '@/lib/api'
 
+function minutesAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const mins = Math.round(diffMs / 60_000)
+  if (mins < 2) return 'Ahora'
+  if (mins < 60) return `Hace ${mins} min`
+  const h = Math.floor(mins / 60)
+  return `Hace ${h}h`
+}
+
 function sourceToModel(source: string | undefined): ModelKey {
   if (source === 'smn') return 'smn'
   if (source === 'openmeteo' || source === 'openmeteo_fallback') return 'openmeteo'
@@ -58,6 +67,14 @@ export function WeatherHero({ current, locationLabel }: Props) {
           >
             {locationLabel}
           </p>
+          {current.observed_at && (
+            <p
+              className="text-[10px] mt-0.5"
+              style={{ color: 'rgba(200,168,75,0.45)' }}
+            >
+              {minutesAgo(current.observed_at)}
+            </p>
+          )}
         </div>
       </div>
 

@@ -355,6 +355,7 @@ async def get_dashboard(
         icon=icon,
         is_day=is_day_now,
         source=current.meta.source,
+        observed_at=current.meta.station.observed_at if current.meta.station else None,
     )
 
     # =========================================================================

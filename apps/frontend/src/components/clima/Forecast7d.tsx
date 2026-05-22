@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Forecast7dCards } from './Forecast7dCards'
 import { Forecast7dTable } from './Forecast7dTable'
@@ -7,6 +8,7 @@ import type { DailyEntry } from '@/lib/api'
 
 interface Props {
   days: DailyEntry[]
+  badge?: ReactNode
 }
 
 type View = 'cards' | 'table' | 'chart'
@@ -17,7 +19,7 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'chart', label: 'Gráfico' },
 ]
 
-export function Forecast7d({ days }: Props) {
+export function Forecast7d({ days, badge }: Props) {
   const [view, setView] = useState<View>('cards')
 
   return (
@@ -30,15 +32,18 @@ export function Forecast7d({ days }: Props) {
         className="px-5 py-4 flex items-center justify-between gap-3"
         style={{ borderBottom: '1px solid var(--color-border)' }}
       >
-        <h2
-          className="text-base font-semibold"
-          style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
-        >
-          Pronóstico 7 días
-        </h2>
+        <div className="flex items-center gap-2 min-w-0">
+          <h2
+            className="text-base font-semibold shrink-0"
+            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
+          >
+            Pronóstico 7 días
+          </h2>
+          {badge}
+        </div>
 
         <div
-          className="flex p-0.5 rounded-lg gap-0.5"
+          className="flex p-0.5 rounded-lg gap-0.5 shrink-0"
           style={{ background: 'rgba(200,168,75,0.06)', border: '1px solid rgba(200,168,75,0.12)' }}
         >
           {VIEWS.map(({ id, label }) => (

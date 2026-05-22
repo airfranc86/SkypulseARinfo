@@ -57,16 +57,10 @@ export function PrevisionClima({ location }: Props) {
             />
 
             {/* Hourly 48h — GFS */}
-            <div style={{ position: 'relative' }}>
-              <ModelBadge model="gfs" variant="inline" />
-              <HourlyStrip hourly={data.hourly} />
-            </div>
+            <HourlyStrip hourly={data.hourly} badge={<ModelBadge model="gfs" variant="header" />} />
 
             {/* 7-day forecast — GFS */}
-            <div style={{ position: 'relative' }}>
-              <ModelBadge model="gfs" variant="inline" />
-              <Forecast7d days={data.forecast_7d} />
-            </div>
+            <Forecast7d days={data.forecast_7d} badge={<ModelBadge model="gfs" variant="header" />} />
 
             {/* Rain today — GFS, al final */}
             <RainForecastCard rain={data.rain_today} />
