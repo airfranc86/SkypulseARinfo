@@ -78,15 +78,26 @@ export function useLocation() {
     setGeoError(null)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const loc: LocationState = {
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          label: 'Mi ubicación',
-        }
-        setLocation(loc)
+        // Round to 4 decimal places (~11m precision) to suppress GPS jitter
+        const newLat = Math.round(pos.coords.latitude  * 10000) / 10000
+        const newLon = Math.round(pos.coords.longitude * 10000) / 10000
+
+        setLocation(prev => {
+          // If already have a location within ~100m, keep the same object reference
+          // so React bails out (no re-render) and TanStack Query sees no key change
+          if (
+            prev &&
+            Math.abs(prev.lat - newLat) < 0.001 &&
+            Math.abs(prev.lon - newLon) < 0.001
+          ) {
+            return prev
+          }
+          const loc: LocationState = { lat: newLat, lon: newLon, label: 'Mi ubicación' }
+          saveLocation(loc)
+          return loc
+        })
         setLocationResolved(true)
         setGeoLoading(false)
-        saveLocation(loc)
       },
       (err) => {
         // Set user-visible error message based on error code
