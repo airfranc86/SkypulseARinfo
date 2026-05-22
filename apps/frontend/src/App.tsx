@@ -184,23 +184,6 @@ function RootLayout() {
               SkyPulse
             </span>
           </Link>
-          {/* Volver a la página informativa */}
-          <a
-            href="https://skypulseinfo.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Ir a SkyPulse Info"
-            className="shrink-0 hidden sm:inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded-full transition-opacity hover:opacity-100"
-            style={{
-              background: 'rgba(200,168,75,0.07)',
-              color: 'rgba(200,168,75,0.55)',
-              border: '1px solid rgba(200,168,75,0.16)',
-              opacity: 0.75,
-              textDecoration: 'none',
-            }}
-          >
-            ↗ Info
-          </a>
           <div className="flex-1 min-w-0">
             <LocationPicker
               label="Buscar ciudad..."
@@ -238,26 +221,6 @@ function RootLayout() {
               {label}
             </NavLink>
           ))}
-          {/* Link a sitio informativo — visible en mobile via scroll horizontal del nav */}
-          <a
-            href="https://skypulseinfo.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="sm:hidden flex items-center gap-1.5 whitespace-nowrap shrink-0"
-            style={{
-              padding: '10px 14px',
-              borderRadius: '9999px',
-              fontSize: '0.72rem',
-              fontWeight: 400,
-              border: '1px solid rgba(200,168,75,0.25)',
-              background: 'transparent',
-              color: 'rgba(200,168,75,0.5)',
-              minHeight: '44px',
-              textDecoration: 'none',
-            }}
-          >
-            ↗ Info
-          </a>
         </nav>
       </header>
 
