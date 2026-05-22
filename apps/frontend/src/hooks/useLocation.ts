@@ -1,5 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { City } from '@/lib/cities-ar'
+import { AR_CITIES } from '@/lib/cities-ar'
+
+/** Returns the name of the nearest city within ~80 km, or 'Mi ubicación'. */
+function nearestCityLabel(lat: number, lon: number): string {
+  let best = ''
+  let minDist = Infinity
+  for (const city of AR_CITIES) {
+    // Euclidean approximation — good enough for label resolution
+    const d = Math.sqrt((city.lat - lat) ** 2 + (city.lon - lon) ** 2)
+    if (d < minDist) { minDist = d; best = city.name }
+  }
+  return minDist < 0.72 ? best : 'Mi ubicación'  // 0.72° ≈ 80 km
+}
 
 export interface LocationState {
   lat: number
@@ -92,7 +105,11 @@ export function useLocation() {
           ) {
             return prev
           }
-          const loc: LocationState = { lat: newLat, lon: newLon, label: 'Mi ubicación' }
+          const loc: LocationState = {
+            lat: newLat,
+            lon: newLon,
+            label: nearestCityLabel(newLat, newLon),
+          }
           saveLocation(loc)
           return loc
         })

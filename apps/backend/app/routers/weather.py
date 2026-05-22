@@ -339,7 +339,10 @@ async def get_dashboard(
     # CurrentDetailedSchema
     # =========================================================================
     weather_code_current = _get_weather_code_from_current(current)
-    desc, icon = describe_wmo(weather_code_current, is_day_now)
+    wmo_desc, icon = describe_wmo(weather_code_current, is_day_now)
+    # Prefer the original source description (SMN text / OM derived).
+    # Fall back to WMO-derived only when the source has no description.
+    desc = current.description or wmo_desc
 
     # UV: del primer día del pronóstico (Open-Meteo, único origen disponible)
     uv_index = ref_daily.uv_max[0] if ref_daily.uv_max else None
