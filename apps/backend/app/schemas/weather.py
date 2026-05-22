@@ -51,6 +51,7 @@ class WeatherCurrentResponse(BaseModel):
     precip_1h_mm: float | None = Field(None, ge=0)
     cloud_cover: float | None = Field(None, ge=0, le=100)
     description: str | None = None
+    weather_code: int | None = None   # WMO code — usado por el router para descripción/ícono
     meta: SourceMeta
 
     @field_validator("lat", "lon")

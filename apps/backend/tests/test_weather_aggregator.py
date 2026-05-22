@@ -44,6 +44,7 @@ def _make_openmeteo() -> OpenMeteoCurrent:
         pressure_hpa=1014.2,
         precip_1h_mm=0.0,
         cloud_cover=10.0,
+        weather_code=0,
         description=None,
         fetched_at=datetime.now(timezone.utc),
     )

@@ -38,7 +38,8 @@ class OpenMeteoCurrent:
     pressure_hpa: float | None
     precip_1h_mm: float | None
     cloud_cover: float | None
-    description: str | None  # derivada del weather_code en fases futuras
+    weather_code: int | None   # WMO code — el router lo mapea a descripción/ícono
+    description: str | None    # siempre None aquí; el router usa describe_wmo(weather_code)
     fetched_at: datetime
 
 
@@ -74,6 +75,8 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
 
     try:
         current = data["current"]
+        wc_raw = current.get("weather_code")
+        weather_code = int(wc_raw) if wc_raw is not None else None
         return OpenMeteoCurrent(
             temp_c=parse_float(current.get("temperature_2m")),
             feels_like_c=parse_float(current.get("apparent_temperature")),
@@ -83,6 +86,7 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
             pressure_hpa=parse_float(current.get("surface_pressure")),
             precip_1h_mm=parse_float(current.get("precipitation")),
             cloud_cover=parse_float(current.get("cloud_cover")),
+            weather_code=weather_code,
             description=None,
             fetched_at=datetime.now(timezone.utc),
         )

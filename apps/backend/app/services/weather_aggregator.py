@@ -141,5 +141,6 @@ async def aggregate_current(lat: float, lon: float) -> WeatherCurrentResponse:
         precip_1h_mm=om.precip_1h_mm,
         cloud_cover=om.cloud_cover,
         description=om.description,
+        weather_code=om.weather_code,
         meta=meta,
     )
