@@ -67,11 +67,16 @@ def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def _parse_observed_at(date_str: str) -> datetime:
     """
     Convierte el campo 'date' de SMN (formato local UTC-3) a datetime UTC.
-    SMN envía: '2024-01-15 14:00'
+    SMN envía: '2024-01-15 14:00' o '2024-01-15 14:00:00' (con segundos).
     Argentina = UTC-3, por lo tanto UTC = local + 3 horas.
     """
-    local_dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M")
-    return (local_dt + timedelta(hours=3)).replace(tzinfo=timezone.utc)
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+        try:
+            local_dt = datetime.strptime(date_str.strip(), fmt)
+            return (local_dt + timedelta(hours=3)).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    raise ValueError(f"Formato de fecha SMN desconocido: {date_str!r}")
 
 
 async def _fetch_stations(url: str) -> list[dict]:
@@ -135,8 +140,15 @@ async def get_nearest_observation(lat: float, lon: float) -> SmnObservation | No
     try:
         observed_at = _parse_observed_at(best.get("date", ""))
     except (ValueError, TypeError):
-        logger.warning("SMN: no se pudo parsear 'date' de la estación %s", best.get("name"))
-        observed_at = datetime.now(timezone.utc)
+        # Fecha no parseable → no sabemos cuándo se observó → marcar como siempre vencido.
+        # El aggregator lo rechazará por stale y caerá a Windy GFS.
+        # NUNCA usar now() aquí: haría que datos desconocidamente viejos pasen el check.
+        logger.warning(
+            "SMN: no se pudo parsear 'date' de la estación %s (valor=%r) — se trata como dato vencido",
+            best.get("name"),
+            best.get("date"),
+        )
+        observed_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
     # Los campos meteo están anidados bajo la clave "weather" en la API actual del SMN.
     # Ejemplo: {"name": "...", "weather": {"temp": 21.2, "humidity": 81, ...}}
