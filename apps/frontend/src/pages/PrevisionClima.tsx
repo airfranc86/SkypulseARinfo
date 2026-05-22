@@ -1,6 +1,7 @@
 import { CloudSun } from 'lucide-react'
 import { useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
+import type { ModelKey } from '@/components/ui/ModelBadge'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
 import { DayArc } from '@/components/clima/DayArc'
@@ -14,19 +15,27 @@ import { ModelBadge } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
 
+/** Derives the page-level badge from the actual current observation source. */
+function pageModel(source: string | undefined): ModelKey {
+  if (source === 'smn') return 'mixed'       // SMN actual + GFS pronóstico
+  return 'gfs'                                // solo GFS/OM cuando SMN no disponible
+}
+
 export function PrevisionClima({ location }: Props) {
   const { data, isLoading, error } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null)
 
   if (location === null) return <PageSkeleton />
 
+  // Badge dinámico: 'mixed' cuando SMN está activo, 'gfs' cuando cae a Open-Meteo
+  const badgeModel = pageModel(data?.current?.source)
+
   return (
     <div>
-      {/* PrevisionClima mezcla SMN (actual) + GFS (pronóstico) — badge "mixed" */}
       <PageHeader
         icon={<CloudSun className="size-8" style={{ color: '#c8a84b' }} />}
         title="Previsión del clima"
         subtitle={location.label}
-        modelBadge={<ModelBadge model="mixed" variant="header" />}
+        modelBadge={<ModelBadge model={badgeModel} variant="header" />}
       />
 
       {isLoading && <PageSkeleton />}

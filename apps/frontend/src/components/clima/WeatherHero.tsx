@@ -1,7 +1,5 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { BorderGlow } from '@/components/animated/BorderGlow'
-import { ModelBadge } from '@/components/ui/ModelBadge'
-import type { ModelKey } from '@/components/ui/ModelBadge'
 import type { CurrentDetailed } from '@/lib/api'
 
 function minutesAgo(iso: string): string {
@@ -11,14 +9,6 @@ function minutesAgo(iso: string): string {
   if (mins < 60) return `Hace ${mins} min`
   const h = Math.floor(mins / 60)
   return `Hace ${h}h`
-}
-
-function sourceToModel(source: string | undefined): ModelKey {
-  if (source === 'smn') return 'smn'
-  if (source === 'openmeteo' || source === 'openmeteo_fallback') return 'openmeteo'
-  if (source === 'windy_gfs') return 'gfs'
-  if (source === 'windy_ecmwf') return 'windy_ecmwf'
-  return 'smn' // default
 }
 
 interface Props {
@@ -42,8 +32,6 @@ export function WeatherHero({ current, locationLabel }: Props) {
       className="rounded-2xl p-6"
       style={{ position: 'relative', background: 'var(--color-card)' }}
     >
-      {/* Source badge — usa ModelBadge para consistencia visual y popover informativo */}
-      <ModelBadge model={sourceToModel(current.source)} variant="inline" />
       {/* Top row: icon + temp + description */}
       <div className="flex items-start gap-5">
         <WeatherIcon code={current.icon} size={72} />
