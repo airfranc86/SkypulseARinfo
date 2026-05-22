@@ -12,6 +12,13 @@ const GUIDES: Array<{
   color: string
 }> = [
   {
+    to: '/nubes',
+    emoji: '☁️',
+    title: 'Catálogo del cielo',
+    desc: '13 tipos de nubes + 5 fenómenos aeronáuticos con escalas de peligro.',
+    color: '#c8a84b',
+  },
+  {
     to: '/lluvias',
     emoji: '🌧️',
     title: 'Lluvias según las nubes',
