@@ -25,6 +25,13 @@ const GUIDES: Array<{
     desc: 'Cómo leer colores de radar e imágenes satelitales IR.',
     color: '#7dd3fc',
   },
+  {
+    to: '/desastres',
+    emoji: '🌋',
+    title: 'Desastres naturales',
+    desc: '7 fenómenos globales: datos históricos, fuentes y qué hacer.',
+    color: '#e05545',
+  },
 ]
 
 const TOOLS: Array<{

@@ -21,6 +21,7 @@ import { LavarCoche } from '@/pages/LavarCoche'
 import { Landing } from '@/pages/Landing'
 import { Lluvias } from '@/pages/Lluvias'
 import { Radar } from '@/pages/Radar'
+import { Desastres } from '@/pages/Desastres'
 import { PrevisionClima } from '@/pages/PrevisionClima'
 
 // ── queryKey → ModelCategory map ─────────────────────────────────────────────
@@ -271,6 +272,7 @@ function RootLayout() {
           <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
           <Route path="/lluvias" element={<Lluvias />} />
           <Route path="/radar" element={<Radar />} />
+          <Route path="/desastres" element={<Desastres />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
