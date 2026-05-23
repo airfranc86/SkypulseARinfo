@@ -146,6 +146,28 @@ export interface EarthquakesResponse {
   radius_km: number
 }
 
+// ── Volcanes schemas ──────────────────────────────────────────────────────────
+
+export type AlertLevel = 'verde' | 'amarillo' | 'naranja' | 'rojo'
+
+export interface Volcan {
+  id: number
+  name: string
+  province: string
+  alert_level: AlertLevel
+  alert_color_hex: string
+  lat: number
+  lon: number
+  segemar_url: string
+  ranking: number | null
+}
+
+export interface VolcanesResponse {
+  total: number
+  has_active_alert: boolean
+  volcanes: Volcan[]
+}
+
 // ── Dashboard schemas ─────────────────────────────────────────────────────────
 
 export interface MoonPhaseInfo {
@@ -264,4 +286,7 @@ export const api = {
 
   laundryForecast: (lat: number, lon: number) =>
     request<LaundryForecastResponse>('/api/tools/tender-ropa/forecast', { lat, lon }),
+
+  volcanes: () =>
+    request<VolcanesResponse>('/api/volcanes'),
 }

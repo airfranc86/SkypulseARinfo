@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 
 const STALE = 10 * 60 * 1000
 const STALE_EARTHQUAKES = 6 * 60 * 60 * 1000  // 6 horas
+const STALE_VOLCANES    = 2 * 60 * 60 * 1000  // 2 horas
 
 export function useWeatherCurrent(lat: number | null, lon: number | null) {
   return useQuery({
@@ -74,6 +75,15 @@ export function useWeatherDashboard(lat: number | null, lon: number | null) {
     queryFn: () => api.weatherDashboard(lat!, lon!),
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
+  })
+}
+
+export function useVolcanes() {
+  return useQuery({
+    queryKey: ['volcanes'],
+    queryFn: () => api.volcanes(),
+    staleTime: STALE_VOLCANES,
+    refetchInterval: STALE_VOLCANES,
   })
 }
 

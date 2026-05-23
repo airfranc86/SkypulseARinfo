@@ -25,6 +25,8 @@ import { Desastres } from '@/pages/Desastres'
 import { Nubes } from '@/pages/Nubes'
 import { Metar } from '@/pages/Metar'
 import { PrevisionClima } from '@/pages/PrevisionClima'
+import { Volcanes } from '@/pages/Volcanes'
+import { useVolcanes } from '@/hooks/useWeather'
 
 // ── queryKey → ModelCategory map ─────────────────────────────────────────────
 
@@ -153,6 +155,10 @@ function RootLayout() {
     useLocationState()
 
   const { enableHeavyEffects, enableAnimations } = useMotionPreferences()
+  const { data: volcanesData } = useVolcanes()
+  const volcanAlertColor = volcanesData?.volcanes.some(v => v.alert_level === 'rojo')
+    ? '#ff3333'
+    : '#e05545'
 
   usePageTracking()
 
@@ -254,6 +260,45 @@ function RootLayout() {
             </NavLink>
           ))}
 
+          {/* Volcanes — nav item con badge de alerta */}
+          <NavLink
+            to="/volcanes"
+            className="flex items-center gap-1.5 whitespace-nowrap transition-all duration-200"
+            style={({ isActive }) => ({
+              padding: '10px 14px',
+              borderRadius: '9999px',
+              fontSize: '0.72rem',
+              fontWeight: isActive ? 600 : 400,
+              border: `1px solid ${isActive ? '#e05545' : '#e0554555'}`,
+              background: isActive ? '#e0554518' : 'transparent',
+              color: isActive ? '#e05545' : 'var(--color-muted-foreground)',
+              minHeight: '44px',
+              display: 'flex',
+              alignItems: 'center',
+              position: 'relative',
+            })}
+          >
+            <span role="img" aria-hidden="true">🌋</span>
+            <span style={{ position: 'relative' }}>
+              Volcanes
+              {volcanesData?.has_active_alert && (
+                <span
+                  aria-label="Alerta volcánica activa"
+                  style={{
+                    position: 'absolute',
+                    top: '-5px',
+                    right: '-7px',
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    background: volcanAlertColor,
+                    animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
+                  }}
+                />
+              )}
+            </span>
+          </NavLink>
+
           {/* Separator */}
           <div
             aria-hidden="true"
@@ -302,6 +347,7 @@ function RootLayout() {
           <Route path="/cota-de-nieve" element={<CotaDeNieve location={location} />} />
           <Route path="/hacer-deporte" element={<Navigate to="/prevision" replace />} />
           <Route path="/terremotos" element={<Terremotos location={location} />} />
+          <Route path="/volcanes"   element={<Volcanes />} />
           <Route path="/lavar-auto" element={<LavarCoche location={location} />} />
           <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
           <Route path="/lluvias" element={<Lluvias />} />

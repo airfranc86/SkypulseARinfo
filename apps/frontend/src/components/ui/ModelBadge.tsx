@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Info } from 'lucide-react'
 
-export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'windy_ecmwf' | 'openmeteo' | 'mixed'
+export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'windy_ecmwf' | 'openmeteo' | 'mixed' | 'segemar'
 type Variant = 'pill' | 'inline' | 'header'
 
 interface ModelMeta {
@@ -53,6 +53,14 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     description: 'Fuente de respaldo. Los datos pueden diferir de las otras fuentes.',
     reliability: 'Variable',
     updateFreq: 'Cada hora',
+  },
+  segemar: {
+    label: 'OAVV',
+    org: 'SEGEMAR',
+    color: '#e05545',
+    description: 'Observatorio Argentino de Vigilancia Volcánica del Servicio Geológico Minero Argentino.',
+    reliability: 'Fuente oficial Argentina',
+    updateFreq: 'Caché 2h',
   },
   mixed: {
     label: 'SMN + GFS',
