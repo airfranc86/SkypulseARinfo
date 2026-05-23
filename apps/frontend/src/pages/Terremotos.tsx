@@ -13,6 +13,23 @@ import { FallingText } from '@/components/animated/FallingText'
 
 interface Props { location: LocationState | null }
 
+/** Traduce el campo `place` de USGS al español.
+ *  Formato típico: "10km NW of San Juan, Argentina"
+ *  → "10 km NO de San Juan, Argentina"
+ */
+function translatePlace(raw: string): string {
+  return raw
+    // Dirección compuesta primero (orden importa: NW antes de W)
+    .replace(/\bNW\b/g, 'NO')
+    .replace(/\bSW\b/g, 'SO')
+    .replace(/\bNE\b/g, 'NE')
+    .replace(/\bSE\b/g, 'SE')
+    // Cardinales simples: solo W→O (N, S, E son iguales en español)
+    .replace(/\bW\b/g, 'O')
+    // "of" → "de"
+    .replace(/\bof\b/g, 'de')
+}
+
 function magnitudeStyle(mag: number): CSSProperties {
   if (mag >= 6)   return { color: '#ff6b6b', fontWeight: 700 }
   if (mag >= 4.5) return { color: '#f0a030', fontWeight: 600 }
@@ -42,9 +59,9 @@ const columns = [
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
         }}
-        title={String(v ?? '')}
+        title={translatePlace(String(v ?? ''))}
       >
-        {String(v ?? '—')}
+        {translatePlace(String(v ?? '—'))}
       </span>
     ),
   },
