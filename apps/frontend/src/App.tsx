@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, Navigate, Link, useLocation as useRouterLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation as useRouterLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useLocation as useLocationState } from '@/hooks/useLocation'
@@ -13,6 +13,7 @@ import {
   type ModelStatusAction,
 } from '@/contexts/ModelStatusContext'
 import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
+import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
 
 import { TenderRopa } from '@/pages/TenderRopa'
 import { CotaDeNieve } from '@/pages/CotaDeNieve'
@@ -130,23 +131,24 @@ function usePageTracking() {
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
-/** Live-data tools — require location + backend */
-const NAV_TOOLS = [
-  { to: '/prevision',     label: 'Previsión',    emoji: '⛅', color: '#c8a84b' },
-  { to: '/tender-ropa',   label: 'Tender ropa',  emoji: '🌤️', color: '#3ecf7a' },
-  { to: '/lavar-auto',    label: 'Lavar el auto', emoji: '🫧',  color: '#5aaad8' },
-  { to: '/terremotos',    label: 'Terremotos',   emoji: '🌋', color: '#e05545' },
+/** Live-data tools — require location + backend (Row 1, scrolls ←) */
+const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
+  { to: '/prevision',     label: 'Previsión',     emoji: '⛅', color: '#c8a84b' },
+  { to: '/tender-ropa',   label: 'Tender ropa',   emoji: '🌤️', color: '#3ecf7a' },
+  { to: '/lavar-auto',    label: 'Lavar el auto',  emoji: '🫧',  color: '#5aaad8' },
+  { to: '/terremotos',    label: 'Terremotos',    emoji: '🌍', color: '#e05545' },
   { to: '/cota-de-nieve', label: 'Cota de nieve', emoji: '⛷️', color: '#90aabb' },
-] as const
+  { to: '/volcanes',      label: 'Volcanes',      emoji: '🌋', color: '#e05545' },
+]
 
-/** Static catalog pages — no backend dependency */
-const NAV_CATALOG = [
-  { to: '/nubes',      label: 'Nubes',     emoji: '☁️', color: '#7ea8c4' },
-  { to: '/metar',      label: 'METAR',     emoji: '✈️', color: '#8b9fc4' },
-  { to: '/desastres',  label: 'Desastres', emoji: '🌊', color: '#c47e5a' },
-  { to: '/lluvias',    label: 'Lluvias',   emoji: '🌧️', color: '#7ab5c4' },
-  { to: '/radar',      label: 'Radar',     emoji: '📡', color: '#9a9ac4' },
-] as const
+/** Static catalog pages — no backend dependency (Row 2, scrolls →) */
+const NAV_CATALOG: NavRailItem[] = [
+  { to: '/nubes',     label: 'Nubes',     emoji: '☁️', color: '#7ea8c4' },
+  { to: '/metar',     label: 'METAR',     emoji: '✈️', color: '#8b9fc4' },
+  { to: '/desastres', label: 'Desastres', emoji: '🌊', color: '#c47e5a' },
+  { to: '/lluvias',   label: 'Lluvias',   emoji: '🌧️', color: '#7ab5c4' },
+  { to: '/radar',     label: 'Radar',     emoji: '📡', color: '#9a9ac4' },
+]
 
 // ── RootLayout — wired to the ModelStatusProvider ─────────────────────────────
 
@@ -159,6 +161,30 @@ function RootLayout() {
   const volcanAlertColor = volcanesData?.volcanes.some(v => v.alert_level === 'rojo')
     ? '#ff3333'
     : '#e05545'
+
+  // Inject reactive Volcanes badge into the tools row
+  const navTools = NAV_TOOLS_BASE.map(item =>
+    item.to === '/volcanes' && volcanesData?.has_active_alert
+      ? {
+          ...item,
+          badge: (
+            <span
+              aria-label="Alerta volcánica activa"
+              style={{
+                position: 'absolute' as const,
+                top: '-5px',
+                right: '-7px',
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: volcanAlertColor,
+                animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
+              }}
+            />
+          ),
+        }
+      : item
+  )
 
   usePageTracking()
 
@@ -231,111 +257,7 @@ function RootLayout() {
             />
           </div>
         </div>
-        <nav
-          aria-label="Navegación principal"
-          className="max-w-5xl mx-auto px-4 py-2 flex items-center gap-2 overflow-x-auto"
-          style={{ scrollbarWidth: 'none' }}
-        >
-          {/* Group: live-data tools */}
-          {NAV_TOOLS.map(({ to, label, emoji, color }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className="flex items-center gap-1.5 whitespace-nowrap transition-all duration-200"
-              style={({ isActive }) => ({
-                padding: '10px 14px',
-                borderRadius: '9999px',
-                fontSize: '0.72rem',
-                fontWeight: isActive ? 600 : 400,
-                border: `1px solid ${isActive ? color : `${color}55`}`,
-                background: isActive ? `${color}18` : 'transparent',
-                color: isActive ? color : 'var(--color-muted-foreground)',
-                minHeight: '44px',
-                display: 'flex',
-                alignItems: 'center',
-              })}
-            >
-              <span role="img" aria-hidden="true">{emoji}</span>
-              {label}
-            </NavLink>
-          ))}
-
-          {/* Volcanes — nav item con badge de alerta */}
-          <NavLink
-            to="/volcanes"
-            className="flex items-center gap-1.5 whitespace-nowrap transition-all duration-200"
-            style={({ isActive }) => ({
-              padding: '10px 14px',
-              borderRadius: '9999px',
-              fontSize: '0.72rem',
-              fontWeight: isActive ? 600 : 400,
-              border: `1px solid ${isActive ? '#e05545' : '#e0554555'}`,
-              background: isActive ? '#e0554518' : 'transparent',
-              color: isActive ? '#e05545' : 'var(--color-muted-foreground)',
-              minHeight: '44px',
-              display: 'flex',
-              alignItems: 'center',
-              position: 'relative',
-            })}
-          >
-            <span role="img" aria-hidden="true">🌋</span>
-            <span style={{ position: 'relative' }}>
-              Volcanes
-              {volcanesData?.has_active_alert && (
-                <span
-                  aria-label="Alerta volcánica activa"
-                  style={{
-                    position: 'absolute',
-                    top: '-5px',
-                    right: '-7px',
-                    width: '7px',
-                    height: '7px',
-                    borderRadius: '50%',
-                    background: volcanAlertColor,
-                    animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
-                  }}
-                />
-              )}
-            </span>
-          </NavLink>
-
-          {/* Separator */}
-          <div
-            aria-hidden="true"
-            className="shrink-0 self-center"
-            style={{
-              width: '1px',
-              height: '20px',
-              background: 'var(--color-border)',
-              marginInline: '4px',
-              opacity: 0.6,
-            }}
-          />
-
-          {/* Group: static catalog */}
-          {NAV_CATALOG.map(({ to, label, emoji, color }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className="flex items-center gap-1.5 whitespace-nowrap transition-all duration-200"
-              style={({ isActive }) => ({
-                padding: '10px 14px',
-                borderRadius: '9999px',
-                fontSize: '0.72rem',
-                fontWeight: isActive ? 600 : 400,
-                border: `1px solid ${isActive ? color : `${color}44`}`,
-                background: isActive ? `${color}15` : 'transparent',
-                color: isActive ? color : 'var(--color-muted-foreground)',
-                minHeight: '44px',
-                display: 'flex',
-                alignItems: 'center',
-              })}
-            >
-              <span role="img" aria-hidden="true">{emoji}</span>
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+        <InfiniteNavRail tools={navTools} catalog={NAV_CATALOG} />
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
