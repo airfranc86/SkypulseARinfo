@@ -181,6 +181,15 @@ def _best_hour_label(hourly: list[HourlyScore], min_score: int = 40) -> str | No
     return f"A las {best.hour_label}"
 
 
+def _filter_future(hourly: list[HourlyScore], grace_s: int = 1800) -> list[HourlyScore]:
+    """
+    Filtra entradas claramente pasadas.
+    grace_s: margen de gracia (default 30 min) para incluir el slot activo actual.
+    """
+    now_ts = int(datetime.now().timestamp())
+    return [h for h in hourly if h.timestamp >= now_ts - grace_s]
+
+
 # ---------------------------------------------------------------------------
 # Helpers de fallback Windy → Open-Meteo
 # ---------------------------------------------------------------------------
@@ -255,7 +264,8 @@ async def get_tender_ropa(
 
     hourly = _build_hourly_scores(forecast, _score_fn, hours=24)
     hourly = _mark_best(hourly)
-    best_window = _best_window_consecutive(hourly, min_score=70)
+    future_hourly_tr = _filter_future(hourly)
+    best_window = _best_window_consecutive(future_hourly_tr, min_score=70)
 
     return ToolResult(
         tool="tender-ropa",
@@ -455,7 +465,8 @@ async def get_hacer_deporte(
         # 12 entradas (~36h en GFS, suficiente para tomar la mejor "hora" del día)
         hourly_scores = _build_hourly_scores_from_windy(windy_hourly, _score_fn, hours=12)
         hourly_scores = _mark_best(hourly_scores)
-        best_window = _best_hour_label(hourly_scores, min_score=40)
+        future_scores = _filter_future(hourly_scores)
+        best_window = _best_hour_label(future_scores, min_score=40)
 
         return ToolResult(
             tool="hacer-deporte",
@@ -500,7 +511,8 @@ async def get_hacer_deporte(
 
     hourly = _build_hourly_scores(forecast, _score_fn, hours=12)
     hourly = _mark_best(hourly)
-    best_window = _best_hour_label(hourly, min_score=40)
+    future_hourly = _filter_future(hourly)
+    best_window = _best_hour_label(future_hourly, min_score=40)
 
     return ToolResult(
         tool="hacer-deporte",

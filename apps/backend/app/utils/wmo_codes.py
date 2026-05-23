@@ -36,10 +36,11 @@ WMO_CODE_MAP: dict[int, dict[str, str]] = {
 def describe_wmo(code: int | None, is_day: bool = True) -> tuple[str, str]:
     """
     Retorna (description, icon) para un código WMO.
-    Fallback a ('Sin datos', 'clear-day') para códigos no mapeados o None.
+    Fallback contextual: 'clear-day' de día, 'clear-night' de noche.
     """
     if code is None or code not in WMO_CODE_MAP:
-        return ("Sin datos", "clear-day")
+        fallback_icon = "clear-day" if is_day else "clear-night"
+        return ("Sin datos", fallback_icon)
     entry = WMO_CODE_MAP[code]
     icon_key = "icon_day" if is_day else "icon_night"
     return entry["description"], entry[icon_key]

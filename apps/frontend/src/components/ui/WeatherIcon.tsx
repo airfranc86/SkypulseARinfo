@@ -88,10 +88,12 @@ interface WeatherIconProps {
   code: string
   size?: number
   className?: string
+  /** Used only as fallback when code is unknown — defaults to true (day) */
+  isDay?: boolean
 }
 
-export function WeatherIcon({ code, size = 48, className }: WeatherIconProps) {
-  const IconComponent = ICON_MAP[code] ?? ClearDay
+export function WeatherIcon({ code, size = 48, className, isDay = true }: WeatherIconProps) {
+  const IconComponent = ICON_MAP[code] ?? (isDay ? ClearDay : ClearNight)
 
   return (
     <IconComponent

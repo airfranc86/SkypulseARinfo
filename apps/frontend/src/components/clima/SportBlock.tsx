@@ -194,12 +194,20 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
             </div>
           )}
 
-          {/* Best window */}
+          {/* Best window — solo se muestra cuando hay una hora futura recomendada */}
           {data.best_window && (
-            <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-              🕐 Mejor hora:{' '}
-              <span style={{ color: 'var(--color-foreground)' }}>{data.best_window}</span>
-            </p>
+            <div
+              className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+              style={{ background: 'rgba(200,168,75,0.07)', border: '1px solid rgba(200,168,75,0.15)' }}
+            >
+              <span className="text-xs" style={{ color: 'var(--color-primary)', opacity: 0.8 }}>🕐</span>
+              <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                Mejor ventana:{' '}
+                <span className="font-medium" style={{ color: 'var(--color-foreground)' }}>
+                  {data.best_window}
+                </span>
+              </p>
+            </div>
           )}
         </>
       )}

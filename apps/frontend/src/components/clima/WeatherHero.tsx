@@ -34,7 +34,7 @@ export function WeatherHero({ current, locationLabel }: Props) {
     >
       {/* Top row: icon + temp + description */}
       <div className="flex items-start gap-5">
-        <WeatherIcon code={current.icon} size={72} />
+        <WeatherIcon code={current.icon} size={72} isDay={current.is_day} />
 
         <div className="flex-1 min-w-0">
           <p

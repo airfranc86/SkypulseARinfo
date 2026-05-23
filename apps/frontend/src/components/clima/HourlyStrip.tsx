@@ -130,7 +130,7 @@ function HourCard({ entry }: { entry: HourlyEntry }) {
       <span className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
         {entry.hour_label}
       </span>
-      <WeatherIcon code={entry.icon} size={28} />
+      <WeatherIcon code={entry.icon} size={28} isDay={entry.is_day} />
       <span className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
         {entry.temp_c !== null ? `${Math.round(entry.temp_c)}°` : '—'}
       </span>
