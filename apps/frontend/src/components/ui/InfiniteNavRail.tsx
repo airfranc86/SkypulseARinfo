@@ -181,7 +181,10 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
     totalDragDelta.current = 0
     dragStartX.current = e.clientX
     dragStartPos.current = posRef.current
-    containerRef.current?.setPointerCapture(e.pointerId)
+    // NOTE: intentionally NOT calling setPointerCapture — pointer capture redirects
+    // pointerup to the container, which prevents the browser from synthesising a
+    // click event on the child NavLink elements (pills stop being clickable).
+    // Dragging outside the container is handled by onPointerLeave → onPointerUp.
     setCursor('grabbing')
   }, [])
 

@@ -5,7 +5,25 @@ import svgr from 'vite-plugin-svgr'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [svgr(), react(), tailwindcss()],
+  plugins: [
+    // Unique-ify SVG IDs per file so Meteocons gradients don't collide when
+    // multiple icons are rendered on the same page (id="a", id="b" conflicts).
+    // @svgr/plugin-svgo runs SVGO before JSX transform; prefixIds makes every
+    // gradient/symbol/filter ID unique based on the filename hash.
+    svgr({
+      svgrOptions: {
+        plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
+        svgoConfig: {
+          plugins: [
+            { name: 'preset-default' },
+            { name: 'prefixIds' },
+          ],
+        },
+      },
+    }),
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
