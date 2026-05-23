@@ -1,8 +1,9 @@
 {
-  "rewrites": [
+  "redirects": [
     {
-      "source": "/Lluvias.html",
-      "destination": "/Lluvias.html"
+      "source": "/(.*)",
+      "destination": "https://skypulse-ar.vercel.app/$1",
+      "permanent": true
     }
   ]
 }
