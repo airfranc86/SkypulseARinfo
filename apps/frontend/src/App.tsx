@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, Navigate, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, Navigate, Link, useLocation as useRouterLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useLocation as useLocationState } from '@/hooks/useLocation'
@@ -107,15 +107,44 @@ function useMotionPreferences() {
   }, [])
 }
 
+// ── GA4 — page-view tracking for React Router SPA ────────────────────────────
+
+declare global {
+  interface Window {
+    gtag: (...args: unknown[]) => void
+  }
+}
+
+function usePageTracking() {
+  const { pathname, search } = useRouterLocation()
+  useEffect(() => {
+    if (typeof window.gtag !== 'function') return
+    window.gtag('event', 'page_view', {
+      page_path: pathname + search,
+      page_title: document.title,
+    })
+  }, [pathname, search])
+}
+
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
-  { to: '/prevision',     label: 'Previsión del clima', emoji: '⛅', color: '#c8a84b' },
-  { to: '/tender-ropa',   label: 'Tender ropa',         emoji: '🌤️', color: '#3ecf7a' },
-  { to: '/lavar-auto',    label: 'Lavar el auto',        emoji: '🫧',  color: '#5aaad8' },
-  { to: '/terremotos',    label: 'Terremotos',           emoji: '🌋', color: '#e05545' },
-  { to: '/cota-de-nieve', label: 'Cota de nieve',        emoji: '⛷️', color: '#90aabb' },
-]
+/** Live-data tools — require location + backend */
+const NAV_TOOLS = [
+  { to: '/prevision',     label: 'Previsión',    emoji: '⛅', color: '#c8a84b' },
+  { to: '/tender-ropa',   label: 'Tender ropa',  emoji: '🌤️', color: '#3ecf7a' },
+  { to: '/lavar-auto',    label: 'Lavar el auto', emoji: '🫧',  color: '#5aaad8' },
+  { to: '/terremotos',    label: 'Terremotos',   emoji: '🌋', color: '#e05545' },
+  { to: '/cota-de-nieve', label: 'Cota de nieve', emoji: '⛷️', color: '#90aabb' },
+] as const
+
+/** Static catalog pages — no backend dependency */
+const NAV_CATALOG = [
+  { to: '/nubes',      label: 'Nubes',     emoji: '☁️', color: '#7ea8c4' },
+  { to: '/metar',      label: 'METAR',     emoji: '✈️', color: '#8b9fc4' },
+  { to: '/desastres',  label: 'Desastres', emoji: '🌊', color: '#c47e5a' },
+  { to: '/lluvias',    label: 'Lluvias',   emoji: '🌧️', color: '#7ab5c4' },
+  { to: '/radar',      label: 'Radar',     emoji: '📡', color: '#9a9ac4' },
+] as const
 
 // ── RootLayout — wired to the ModelStatusProvider ─────────────────────────────
 
@@ -124,6 +153,8 @@ function RootLayout() {
     useLocationState()
 
   const { enableHeavyEffects, enableAnimations } = useMotionPreferences()
+
+  usePageTracking()
 
   // Wire dispatch into the shared ref so QueryCache callbacks can reach it
   const dispatch = useModelStatusDispatch()
@@ -195,11 +226,12 @@ function RootLayout() {
           </div>
         </div>
         <nav
-          aria-label="Previsión Meteorológica"
-          className="max-w-5xl mx-auto px-4 py-2 flex gap-2 overflow-x-auto"
+          aria-label="Navegación principal"
+          className="max-w-5xl mx-auto px-4 py-2 flex items-center gap-2 overflow-x-auto"
           style={{ scrollbarWidth: 'none' }}
         >
-          {NAV_ITEMS.map(({ to, label, emoji, color }) => (
+          {/* Group: live-data tools */}
+          {NAV_TOOLS.map(({ to, label, emoji, color }) => (
             <NavLink
               key={to}
               to={to}
@@ -211,6 +243,43 @@ function RootLayout() {
                 fontWeight: isActive ? 600 : 400,
                 border: `1px solid ${isActive ? color : `${color}55`}`,
                 background: isActive ? `${color}18` : 'transparent',
+                color: isActive ? color : 'var(--color-muted-foreground)',
+                minHeight: '44px',
+                display: 'flex',
+                alignItems: 'center',
+              })}
+            >
+              <span role="img" aria-hidden="true">{emoji}</span>
+              {label}
+            </NavLink>
+          ))}
+
+          {/* Separator */}
+          <div
+            aria-hidden="true"
+            className="shrink-0 self-center"
+            style={{
+              width: '1px',
+              height: '20px',
+              background: 'var(--color-border)',
+              marginInline: '4px',
+              opacity: 0.6,
+            }}
+          />
+
+          {/* Group: static catalog */}
+          {NAV_CATALOG.map(({ to, label, emoji, color }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className="flex items-center gap-1.5 whitespace-nowrap transition-all duration-200"
+              style={({ isActive }) => ({
+                padding: '10px 14px',
+                borderRadius: '9999px',
+                fontSize: '0.72rem',
+                fontWeight: isActive ? 600 : 400,
+                border: `1px solid ${isActive ? color : `${color}44`}`,
+                background: isActive ? `${color}15` : 'transparent',
                 color: isActive ? color : 'var(--color-muted-foreground)',
                 minHeight: '44px',
                 display: 'flex',
