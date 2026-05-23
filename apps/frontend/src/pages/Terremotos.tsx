@@ -50,7 +50,7 @@ const columns = [
   {
     key: 'place',
     header: 'Lugar',
-    style: { textAlign: 'center' },
+    style: { textAlign: 'center' as const },
     render: (v: unknown) => (
       <span
         className="block"
