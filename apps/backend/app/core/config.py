@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     smn_max_distance_km: float = 80.0
     smn_max_age_minutes: int = 90
     http_timeout_seconds: float = 5.0
-    cache_ttl_seconds: int = 600  # 10 minutos
+    cache_ttl_seconds: int = 600           # 10 minutos — clima SMN
+    cache_ttl_earthquakes_seconds: int = 21600  # 6 horas — USGS sismos
     log_level: str = "INFO"
     cors_origins: list[str] = [
         "http://localhost:5173",

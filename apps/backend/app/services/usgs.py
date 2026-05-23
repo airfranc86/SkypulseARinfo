@@ -16,7 +16,7 @@ from app.services.smn import haversine
 logger = logging.getLogger(__name__)
 
 _CACHE_KEY: Final = "usgs_ar_recent"
-_event_cache: TTLCache = TTLCache(maxsize=1, ttl=settings.cache_ttl_seconds)
+_event_cache: TTLCache = TTLCache(maxsize=1, ttl=settings.cache_ttl_earthquakes_seconds)
 _cache_lock = asyncio.Lock()
 
 _AR_BBOX = {

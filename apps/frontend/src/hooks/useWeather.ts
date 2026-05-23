@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 const STALE = 10 * 60 * 1000
+const STALE_EARTHQUAKES = 6 * 60 * 60 * 1000  // 6 horas
 
 export function useWeatherCurrent(lat: number | null, lon: number | null) {
   return useQuery({
@@ -52,7 +53,8 @@ export function useEarthquakes(lat: number | null, lon: number | null, radius_km
   return useQuery({
     queryKey: ['earthquakes', lat, lon, radius_km],
     queryFn: () => api.earthquakes(lat!, lon!, radius_km),
-    staleTime: STALE,
+    staleTime: STALE_EARTHQUAKES,
+    refetchInterval: STALE_EARTHQUAKES,
     enabled: lat !== null && lon !== null,
   })
 }
