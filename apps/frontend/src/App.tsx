@@ -14,6 +14,7 @@ import {
 } from '@/contexts/ModelStatusContext'
 import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
+import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 
 import { TenderRopa } from '@/pages/TenderRopa'
 import { CotaDeNieve } from '@/pages/CotaDeNieve'
@@ -284,6 +285,8 @@ function RootLayout() {
       <footer className="border-t border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-muted-foreground)]">
         <ModelStatusBar />
       </footer>
+
+      <ScrollToTopBubble />
     </div>
   )
 }
