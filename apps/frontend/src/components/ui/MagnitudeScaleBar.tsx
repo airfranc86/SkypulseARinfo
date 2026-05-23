@@ -1,3 +1,17 @@
+function getActiveLevelIndex(mag: number): number {
+  if (mag >= 7) return 5
+  if (mag >= 6) return 4
+  if (mag >= 5) return 3
+  if (mag >= 4) return 2
+  if (mag >= 3) return 1
+  return 0
+}
+
+interface MagnitudeScaleBarProps {
+  /** Highlight the band corresponding to this magnitude value */
+  activeMagnitude?: number
+}
+
 const LEVELS = [
   {
     label: 'M2',
@@ -44,8 +58,9 @@ const LEVELS = [
   },
 ] as const
 
-export function MagnitudeScaleBar() {
+export function MagnitudeScaleBar({ activeMagnitude }: MagnitudeScaleBarProps) {
   const n = LEVELS.length
+  const activeIdx = activeMagnitude != null ? getActiveLevelIndex(activeMagnitude) : -1
 
   return (
     <div
@@ -73,6 +88,25 @@ export function MagnitudeScaleBar() {
               'linear-gradient(to right, #3ecf7a, #a8d060, #f0d060, #f0a030, #e05545, #aa2222)',
           }}
         />
+
+        {/* Active magnitude dot on the bar */}
+        {activeIdx >= 0 && (
+          <div
+            aria-label={`Magnitud activa: ${LEVELS[activeIdx].label}`}
+            style={{
+              position: 'absolute',
+              left: `${(activeIdx / (n - 1)) * 100}%`,
+              top: '-5px',
+              transform: 'translateX(-50%)',
+              width: '12px',
+              height: '12px',
+              borderRadius: '50%',
+              background: LEVELS[activeIdx].color,
+              boxShadow: `0 0 8px 2px ${LEVELS[activeIdx].color}88`,
+              border: '2px solid var(--color-background)',
+            }}
+          />
+        )}
 
         {/* Tick marks + labels debajo */}
         {LEVELS.map((level, i) => {
@@ -116,13 +150,17 @@ export function MagnitudeScaleBar() {
 
       {/* Level chips */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        {LEVELS.map((level) => (
+        {LEVELS.map((level, i) => {
+          const isActive = i === activeIdx
+          return (
           <div
             key={level.label}
             className="rounded-lg px-2 py-2 flex flex-col gap-0.5"
             style={{
-              background: `${level.color}14`,
-              border: `1px solid ${level.color}33`,
+              background: isActive ? `${level.color}28` : `${level.color}14`,
+              border: `1px solid ${isActive ? level.color : `${level.color}33`}`,
+              outline: isActive ? `1px solid ${level.color}55` : undefined,
+              outlineOffset: isActive ? '1px' : undefined,
             }}
           >
             <div className="flex items-center gap-1">
@@ -144,7 +182,8 @@ export function MagnitudeScaleBar() {
               {level.comparison}
             </span>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

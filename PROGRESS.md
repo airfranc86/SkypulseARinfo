@@ -5,6 +5,75 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-23 18:00 — Terremotos: MagnitudeScaleBar indicator + Fecha column
+
+**Done:**
+- `MagnitudeScaleBar`: prop `activeMagnitude?: number` — dot indicator on gradient bar + chip highlight for the active level
+- `Terremotos.tsx`: `maxMagNum` computed separately (number) and passed to `<MagnitudeScaleBar activeMagnitude={maxMagNum} />`
+- Fecha column ya tenía el `style: { width: '76px' }` inline y formato 2 líneas (fecha/hora) — confirmado OK
+- METAR endpoint confirmado operativo en producción (skypulse-ar.vercel.app)
+
+**Files changed:**
+- `apps/frontend/src/components/ui/MagnitudeScaleBar.tsx` — `activeMagnitude` prop, `getActiveLevelIndex`, dot + chip highlight
+- `apps/frontend/src/pages/Terremotos.tsx` — `maxMagNum` number + prop pass
+
+**Tests:**
+- `pnpm run build` — BUILD OK (0 errores TS)
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-05-23 — Nav: 2-row infinite marquee (InfiniteNavRail)
+
+**Done:**
+- Nuevo componente `InfiniteNavRail`: 2 filas con CSS marquee
+  - Fila 1 (tools + volcanes) scrolls ←, Fila 2 (catalog) scrolls →
+  - Pausa on hover/focus-within, degradado en bordes, loop seamless
+- `index.css`: `@keyframes nav-marquee` agregado
+- `App.tsx`: nav viejo (overflow-x) reemplazado por `InfiniteNavRail`
+- Volcanes alert badge sigue funcionando reactivamente
+- Sin nuevas dependencias
+
+**Files changed:**
+- `apps/frontend/src/index.css` — @keyframes nav-marquee
+- `apps/frontend/src/components/ui/InfiniteNavRail.tsx` — nuevo componente
+- `apps/frontend/src/App.tsx` — usa InfiniteNavRail, elimina NavLink inline
+
+**Tests:**
+- `pnpm run build` — OK (2509 módulos, 0 errores TS) commit 73ed6b2
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-05-23 — Meteocons animated icons + volcanes scraper fixes
+
+**Done:**
+- Fix `_detect_alert_level`: sampleo franja top 10-25% (no `h//2` que era fondo gris)
+- Umbrales recalibrados con datos reales — Planchón-Peteroa detecta amarillo correctamente
+- Fix slug `isla-deception` → `isla-decepcion` (URL devuelve 200 OK)
+- Instalado `vite-plugin-svgr` + `@iconify/react` + `@iconify-json/meteocons`
+- `WeatherIcon.tsx` reescrito: imports `?url` → `?react` (SVG inline, animaciones CSS activas)
+- 27/35 iconos Meteocons con animaciones ahora funcionan en browser
+
+**Files changed:**
+- `apps/backend/app/services/oavv.py` — algoritmo color + slug isla-decepcion
+- `apps/frontend/vite.config.ts` — plugin svgr() agregado
+- `apps/frontend/src/declarations.d.ts` — nuevo, referencia vite-plugin-svgr/client
+- `apps/frontend/src/components/ui/WeatherIcon.tsx` — ?url → ?react, type SvgComponent
+
+**Tests:**
+- `pnpm run build` — OK (2508 módulos, 0 errores TS) commit 383dafd
+- Validación Python: 6/6 volcanes detectan nivel correcto (Planchón-Peteroa = amarillo)
+
+**Next:**
+- Awaiting user direction
+
+---
+
 ## 2026-05-23 — Investigación iconos animados (Meteocons seleccionado)
 
 **Done:**

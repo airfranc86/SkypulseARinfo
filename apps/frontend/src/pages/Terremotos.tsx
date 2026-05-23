@@ -106,9 +106,10 @@ export function Terremotos({ location }: Props) {
   const events = [...(data?.events ?? [])].sort(
     (a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()
   )
-  const maxMagnitude = events.length > 0
-    ? Math.max(...events.map(e => e.magnitude)).toFixed(1)
-    : '—'
+  const maxMagNum = events.length > 0
+    ? Math.max(...events.map(e => e.magnitude))
+    : undefined
+  const maxMagnitude = maxMagNum != null ? maxMagNum.toFixed(1) : '—'
   const closestDistance = events.length > 0
     ? Math.min(...events.map(e => e.distance_km)).toFixed(0)
     : '—'
@@ -187,7 +188,7 @@ export function Terremotos({ location }: Props) {
               emptyMessage="Sin sismos registrados en el área."
             />
             <div className="mt-2">
-              <MagnitudeScaleBar />
+              <MagnitudeScaleBar activeMagnitude={maxMagNum} />
             </div>
           </div>
         </FadeContent>
