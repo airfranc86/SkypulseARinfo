@@ -7,6 +7,10 @@
  *
  * Auto-scroll is JS-driven (requestAnimationFrame) so drag and auto-scroll
  * share the same transform — no CSS animation conflicts.
+ *
+ * Edge blur: two overlay divs with pointer-events:none and a gradient from
+ * var(--color-background) → transparent. More compatible than maskImage
+ * (Safari has bugs with maskImage + overflow:hidden).
  */
 import {
   useRef,
@@ -60,6 +64,33 @@ function pillStyle(color: string, isActive: boolean): CSSProperties {
 /** px per frame (~60 fps) — matches the feel of the original 55 s CSS loop */
 const AUTO_SCROLL_SPEED = 0.32
 
+/** Width of the frosted-glass edge overlay on each side, in pixels */
+const EDGE_BLUR_WIDTH = 72
+
+/**
+ * Build the CSS for a single edge overlay div.
+ * Direction controls which side fades to transparent.
+ */
+function edgeOverlayStyle(side: 'left' | 'right'): CSSProperties {
+  const gradientDir = side === 'left' ? 'to right' : 'to left'
+  return {
+    position: 'absolute',
+    top: 0,
+    [side]: 0,
+    width: EDGE_BLUR_WIDTH,
+    height: '100%',
+    background: `linear-gradient(${gradientDir}, var(--color-background, #000) 0%, transparent 100%)`,
+    // Slight blur on the fading content — enhances the frosted-glass feel
+    backdropFilter: 'blur(2px)',
+    WebkitBackdropFilter: 'blur(2px)',
+    // The gradient mask scopes the blur to the fade area
+    maskImage: `linear-gradient(${gradientDir}, black 0%, transparent 100%)`,
+    WebkitMaskImage: `linear-gradient(${gradientDir}, black 0%, transparent 100%)`,
+    pointerEvents: 'none',
+    zIndex: 10,
+  }
+}
+
 function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) {
   // Items are doubled for the seamless wrap-around loop
   const doubled = [...items, ...items]
@@ -95,7 +126,6 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
 
   useEffect(() => {
     measureHalfWidth()
-    // Re-measure if container resizes (font scaling, layout shifts)
     const ro = new ResizeObserver(measureHalfWidth)
     if (containerRef.current) ro.observe(containerRef.current)
     return () => ro.disconnect()
@@ -107,15 +137,29 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
     }
   }, [])
 
+  /**
+   * Normalise posRef into the [−half, 0) window so the loop is seamless.
+   * Calling this after every drag move prevents visible jumps at the boundary.
+   */
   const wrapPosition = useCallback(() => {
     const half = halfWidthRef.current
     if (!half) return
-    // Wrap so the loop feels infinite in both directions
     if (posRef.current <= -half) posRef.current += half
     else if (posRef.current > 0) posRef.current -= half
   }, [])
 
+  /**
+   * RAF callback.
+   * Guard: if halfWidth hasn't been measured yet (first frame after mount),
+   * we skip the tick and retry via setTimeout so we never start from a broken
+   * position that could cause a visible jump on the first wrap.
+   */
   const animate = useCallback(() => {
+    if (!halfWidthRef.current) {
+      // Measurement not ready — wait one frame and retry
+      rafRef.current = requestAnimationFrame(animate)
+      return
+    }
     if (!isDragging.current) {
       posRef.current += speed
       wrapPosition()
@@ -141,14 +185,18 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
     setCursor('grabbing')
   }, [])
 
-  const onPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!isDragging.current) return
-    const delta = e.clientX - dragStartX.current
-    totalDragDelta.current = Math.abs(delta)
-    posRef.current = dragStartPos.current + delta
-    wrapPosition()
-    applyTransform()
-  }, [wrapPosition, applyTransform])
+  const onPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isDragging.current) return
+      const delta = e.clientX - dragStartX.current
+      totalDragDelta.current = Math.abs(delta)
+      posRef.current = dragStartPos.current + delta
+      // Wrap during drag so releasing near a boundary never produces a jump
+      wrapPosition()
+      applyTransform()
+    },
+    [wrapPosition, applyTransform],
+  )
 
   const onPointerUp = useCallback(() => {
     isDragging.current = false
@@ -161,20 +209,16 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
       role="list"
       aria-label={ariaLabel}
       className="relative overflow-hidden"
-      style={{
-        cursor,
-        // Fade edges so the loop feels infinite rather than hard-clipping
-        maskImage:
-          'linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%)',
-        WebkitMaskImage:
-          'linear-gradient(to right, transparent 0%, black 6%, black 94%, transparent 100%)',
-      }}
+      style={{ cursor }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
       onPointerCancel={onPointerUp}
     >
+      {/* Frosted-glass left edge — pointer-events:none so drag still works */}
+      <div style={edgeOverlayStyle('left')} aria-hidden="true" />
+
       <div
         ref={trackRef}
         className="flex gap-2 w-max py-1"
@@ -203,6 +247,9 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
           </NavLink>
         ))}
       </div>
+
+      {/* Frosted-glass right edge — pointer-events:none so drag still works */}
+      <div style={edgeOverlayStyle('right')} aria-hidden="true" />
     </div>
   )
 }
