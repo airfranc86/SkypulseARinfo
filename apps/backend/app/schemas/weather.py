@@ -45,7 +45,7 @@ class WeatherCurrentResponse(BaseModel):
     feels_like_c: float | None = None
     humidity: float | None = Field(None, ge=0, le=100)
     wind_speed_kmh: float | None = Field(None, ge=0)
-    wind_dir_deg: float | None = Field(None, ge=0, lt=360)
+    wind_dir_deg: float | None = Field(None, ge=0, le=360)
     wind_dir_cardinal: str | None = None
     pressure_hpa: float | None = None
     precip_1h_mm: float | None = Field(None, ge=0)

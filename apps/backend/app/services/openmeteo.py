@@ -82,7 +82,9 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
             feels_like_c=parse_float(current.get("apparent_temperature")),
             humidity=parse_float(current.get("relative_humidity_2m")),
             wind_speed_kmh=parse_float(current.get("wind_speed_10m")),
-            wind_dir_deg=parse_float(current.get("wind_direction_10m")),
+            wind_dir_deg=(lambda d: d % 360 if d is not None else None)(
+                parse_float(current.get("wind_direction_10m"))
+            ),
             pressure_hpa=parse_float(current.get("surface_pressure")),
             precip_1h_mm=parse_float(current.get("precipitation")),
             cloud_cover=parse_float(current.get("cloud_cover")),

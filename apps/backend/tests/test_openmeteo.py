@@ -94,3 +94,24 @@ async def test_get_current_sends_wind_speed_in_kmh():
     assert captured_request is not None
     params = dict(httpx.URL(str(captured_request.url)).params)
     assert params.get("wind_speed_unit") == "kmh"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_get_current_normalizes_wind_dir_360_to_0():
+    """Regresión: Open-Meteo devuelve 360.0 (Norte) que el schema rechazaba con lt=360.
+    Debe normalizarse a 0.0 antes de llegar al schema."""
+    import copy
+    payload = copy.deepcopy(OPENMETEO_SAMPLE_PAYLOAD)
+    payload["current"]["wind_direction_10m"] = 360.0
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://api.open-meteo.com/v1/forecast").mock(
+            return_value=httpx.Response(200, json=payload)
+        )
+        result = await get_current(-31.4, -64.2)
+
+    assert result is not None
+    assert result.wind_dir_deg == pytest.approx(0.0), (
+        "360° debe normalizarse a 0° (Norte meteorológico)"
+    )
