@@ -122,20 +122,8 @@ body::before {
   100% { background-position:  200% 0; }
 }
 
-/* ── Nav marquee — infinite horizontal loop ── */
-@keyframes nav-marquee {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
-
-.nav-marquee-track {
-  animation: nav-marquee 55s linear infinite;
-}
-
-.nav-marquee-track:hover,
-.nav-marquee-track:focus-within {
-  animation-play-state: paused;
-}
+/* ── Nav marquee — JS-driven (InfiniteNavRail uses requestAnimationFrame) ── */
+/* CSS animation removed; transform is applied directly via JS */
 
 /* ── Skeleton shimmer ── */
 .skeleton {
