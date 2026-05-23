@@ -5,6 +5,90 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-23 — Investigación iconos animados (Meteocons seleccionado)
+
+**Done:**
+- Revisión comparativa de librerías de iconos animados vía NLM notebook `6265ecdb`
+- Meteocons seleccionado: SVG animado + Lottie, 500+ iconos clima, MIT, npm installable
+- Plan de integración: `vite-plugin-svgr` + SVGs animados + wrapper `WeatherIcon`
+
+**Files changed:**
+- (ninguno — decisión de arquitectura)
+
+**Next:**
+- Integrar Meteocons: `pnpm add -D vite-plugin-svgr`, descargar SVGs, crear `WeatherIcon`
+
+---
+
+## 2026-05-23 — Volcanes: sección completa (Fases 1+2+3)
+
+**Done:**
+- Backend: `schemas/volcanes.py`, `services/oavv.py` (Pillow color detection), `routers/volcanes.py`
+- Frontend: `pages/Volcanes.tsx`, `useVolcanes` hook, `ModelBadge` segemar, nav badge + route
+- Configuración: TTL separado `cache_ttl_volcanes_seconds = 7200` (2h)
+- Pillow agregado a `requirements.txt`
+
+**Files changed:**
+- `apps/backend/app/schemas/volcanes.py` — nuevo schema
+- `apps/backend/app/services/oavv.py` — scraping + color detection
+- `apps/backend/app/routers/volcanes.py` — GET /api/volcanes
+- `apps/backend/app/main.py` — router incluido
+- `apps/backend/app/core/config.py` — `cache_ttl_volcanes_seconds`
+- `apps/backend/requirements.txt` — Pillow>=11.0.0
+- `apps/frontend/src/lib/api.ts` — tipos + api.volcanes()
+- `apps/frontend/src/hooks/useWeather.ts` — useVolcanes
+- `apps/frontend/src/pages/Volcanes.tsx` — página completa
+- `apps/frontend/src/components/ui/ModelBadge.tsx` — segemar key
+- `apps/frontend/src/App.tsx` — ruta + nav badge
+
+**Tests:**
+- Build Vercel: OK (commit d34fecd)
+
+**Next:**
+- Integrar Meteocons animated icons
+
+---
+
+## 2026-05-23 — Terremotos: columna LUGAR + refresh 6h
+
+**Done:**
+- Columna `Lugar` ya no trunca texto (eliminado `overflow/ellipsis/nowrap`)
+- Texto centrado con `textAlign: 'center' as const` (fix TS2322 en build)
+- Backend: TTL separado `cache_ttl_earthquakes_seconds = 21600` (6h) para USGS
+- Frontend: `staleTime` y `refetchInterval` de `useEarthquakes` → 6h
+
+**Files changed:**
+- `apps/frontend/src/pages/Terremotos.tsx` — columna place: wrap + center + as const
+- `apps/backend/app/core/config.py` — nuevo `cache_ttl_earthquakes_seconds`
+- `apps/backend/app/services/usgs.py` — usa el nuevo TTL
+- `apps/frontend/src/hooks/useWeather.ts` — `STALE_EARTHQUAKES` + `refetchInterval`
+
+**Tests:**
+- Build Vercel: OK tras fix `as const` (commit 0511313)
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-05-23 — Traducción columna "Lugar" en Terremotos
+
+**Done:**
+- Columna `place` de USGS traducida al español con función `translatePlace()`
+- Convierte: NW→NO, SW→SO, W→O, `of`→`de` (NE/SE/N/S/E sin cambio)
+- Aplicado tanto al texto visible como al `title` del tooltip
+
+**Files changed:**
+- `apps/frontend/src/pages/Terremotos.tsx` — añadida `translatePlace()`, usada en render y title
+
+**Tests:**
+- `pnpm run build` — OK (2507 módulos, 0 errores TypeScript)
+
+**Next:**
+- Awaiting user direction
+
+---
+
 ## 2026-05-22 — METAR fix verificado + TODO-FIX-DEBUG planificado
 
 **Done:**
