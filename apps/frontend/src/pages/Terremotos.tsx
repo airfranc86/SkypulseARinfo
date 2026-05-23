@@ -50,16 +50,16 @@ const columns = [
   {
     key: 'place',
     header: 'Lugar',
+    style: { textAlign: 'center' },
     render: (v: unknown) => (
       <span
         className="block"
         style={{
-          maxWidth: 'min(150px, 38vw)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          textAlign: 'center',
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+          lineHeight: '1.35',
         }}
-        title={translatePlace(String(v ?? ''))}
       >
         {translatePlace(String(v ?? '—'))}
       </span>
