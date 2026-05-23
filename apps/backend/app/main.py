@@ -16,7 +16,7 @@ from slowapi import _rate_limit_exceeded_handler
 from .core.config import settings
 from .core.http_client import create_client, close_client
 from .core.rate_limit import limiter
-from .routers import earthquakes, tools, weather
+from .routers import earthquakes, tools, volcanes, weather
 
 
 def setup_logging() -> None:
@@ -159,3 +159,4 @@ async def healthz():
 app.include_router(weather.router, prefix="/api/weather", tags=["weather"])
 app.include_router(tools.router, prefix="/api/tools", tags=["tools"])
 app.include_router(earthquakes.router, prefix="/api/earthquakes", tags=["earthquakes"])
+app.include_router(volcanes.router,   prefix="/api/volcanes",   tags=["volcanes"])

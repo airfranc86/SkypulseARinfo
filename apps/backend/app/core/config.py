@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 5.0
     cache_ttl_seconds: int = 600           # 10 minutos — clima SMN
     cache_ttl_earthquakes_seconds: int = 21600  # 6 horas — USGS sismos
+    cache_ttl_volcanes_seconds: int = 7200      # 2 horas — OAVV volcanes
     log_level: str = "INFO"
     cors_origins: list[str] = [
         "http://localhost:5173",
