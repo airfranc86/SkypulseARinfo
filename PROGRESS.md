@@ -5,6 +5,99 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-22 — METAR fix verificado + TODO-FIX-DEBUG planificado
+
+**Done:**
+- METAR API HTTP 500 confirmado resuelto en producción (`skypulse-ar.vercel.app/metar`)
+- Fix fue commit `526fac3`: `api/metar.js` migrado de CommonJS → ESM (`export default`)
+- `vercel.json` simplificado (removido rewrite `/api/(.*)` innecesario)
+- `docs/plans/2026-05-22-TODO-FIX-DEBUG.md` creado con pendientes [1] METAR ✅ y [2] Terremotos UI
+
+**Files changed:**
+- `apps/frontend/api/metar.js` — CommonJS → ESM export default
+- `apps/frontend/vercel.json` — eliminado rewrite API innecesario
+- `docs/plans/2026-05-22-TODO-FIX-DEBUG.md` — plan debug/mejoras con estado actualizado
+
+**Tests:**
+- METAR widget funcional en prod (SAEZ, EGLL, etc.)
+
+**Next:**
+- [2a] Terremotos `DataTable` columna Fecha mobile-responsive
+- [2b] Componente `MagnitudeScale` con comparaciones domésticas debajo de la tabla
+
+---
+
+## 2026-05-22 — Fixes sesión 2: SMN date, description pipeline, GPS, badges, Info link
+
+**Done:**
+- SMN `date=None` → fallback a `datetime(2000,1,1)` (siempre stale, cae a OM/Windy)
+- `_parse_observed_at` acepta `%H:%M` y `%H:%M:%S` (SMN cambió formato)
+- "Sin datos" fix: `OpenMeteoCurrent` ahora expone `weather_code`, pasa por `WeatherCurrentResponse`, `describe_wmo` recibe código real → "Despejado" etc.
+- DayArc: BorderGlow removido, borde simple
+- Badge dinámico en PrevisionClima: `mixed` (SMN+GFS) o `gfs` (solo OM) según fuente real
+- WeatherHero: badge inline removido (redundante con PageHeader)
+- GPS jitter: `nearestCityLabel()` resuelve ciudad más cercana (<80km) en vez de "Mi ubicación"
+- GPS duplicados: si coords nuevas están a <100m del stored, retorna misma referencia → no refetch
+- `weather description` usa `current.description` primero, `describe_wmo` como fallback
+- Badge "↗ Info" → `skypulseinfo.vercel.app` en header (sm+) y nav (mobile)
+- Terremotos DataTable: Fecha `w-[72px]`, Lugar truncado con ellipsis
+- `docs/gh-auth-skills-setup.md` — procedimiento para instalar skill log-analysis en casa
+
+**Files changed:**
+- `apps/backend/app/services/smn.py` — multi-format date parse + stale fallback
+- `apps/backend/app/services/openmeteo.py` — weather_code en OpenMeteoCurrent
+- `apps/backend/app/schemas/weather.py` — weather_code en WeatherCurrentResponse
+- `apps/backend/app/services/weather_aggregator.py` — pasar weather_code a response
+- `apps/backend/app/routers/weather.py` — desc = current.description or wmo_desc; observed_at; dynamic badge
+- `apps/frontend/src/components/clima/DayArc.tsx` — sin BorderGlow
+- `apps/frontend/src/components/clima/WeatherHero.tsx` — sin badge inline, minutesAgo helper
+- `apps/frontend/src/pages/PrevisionClima.tsx` — badge dinámico pageModel()
+- `apps/frontend/src/hooks/useLocation.ts` — nearestCityLabel + GPS jitter guard
+- `apps/frontend/src/pages/Terremotos.tsx` — DataTable Fecha/Lugar mobile fix
+- `apps/frontend/src/App.tsx` — badge Info header+nav
+
+**Tests:**
+- `pytest tests/ -q` → 320 passed, 0 failed
+
+**Next:**
+- Instalar skill `log-analysis`: `npx skills add supercent-io/skills-template@log-analysis --global` (requiere `gh auth login` — ver `docs/gh-auth-skills-setup.md`)
+- Páginas huérfanas `HacerDeporte.tsx` + `SensacionTermica.tsx` → `_legacy/`
+- Migración `src/` HTML → React (`/nubes`, `/lluvias`, `/radar`, `/metar`, `/desastres`)
+
+---
+
+## 2026-05-22 — Fixes post-deploy: OM 429, badge, temperatura, Terremotos mobile
+
+**Done:**
+- Open-Meteo 429 non-fatal: `get_multi_model_daily` reducido de 3 modelos → 1 (gfs_seamless); dashboard usa fallback sintético desde Windy GFS cuando OM falla (sunrise/sunset por fórmula NOAA, WMO por heurística precip+nubosidad)
+- Badge GFS eliminado de secciones internas (HourlyStrip/Forecast7d) — redundante con badge de PageHeader; `badge?: ReactNode` queda como prop para uso futuro
+- `observed_at` agregado a `CurrentDetailedSchema` → WeatherHero muestra "Hace X min" bajo la ubicación para explicar datos SMN desactualizados
+- Terremotos DataTable: Lugar trunca a `min(150px, 38vw)` con ellipsis; Fecha con `w-[72px]` fijo y `style` inline para compatibilidad WebKit mobile
+- ENV=prod confirmado activo en Render
+- MagnitudeScaleBar ya estaba integrada (confirmado, no requería trabajo)
+
+**Files changed:**
+- `apps/backend/app/services/openmeteo.py` — 3 modelos → 1 en get_multi_model_daily
+- `apps/backend/app/routers/weather.py` — fallback sintético Windy + helpers _compute_sun_times/_wmo_from_windy_daily/_build_synthetic_daily_multi + observed_at en CurrentDetailedSchema construction
+- `apps/backend/app/schemas/weather.py` — observed_at: datetime | None en CurrentDetailedSchema
+- `apps/backend/tests/test_dashboard.py` — test 503 renombrado + nuevo test OM-fail/Windy-ok (320/320)
+- `apps/frontend/src/components/clima/HourlyStrip.tsx` — badge?: ReactNode prop
+- `apps/frontend/src/components/clima/Forecast7d.tsx` — badge?: ReactNode prop
+- `apps/frontend/src/pages/PrevisionClima.tsx` — badge props removidos de ambas secciones
+- `apps/frontend/src/components/clima/WeatherHero.tsx` — minutesAgo() + "Hace X min" display
+- `apps/frontend/src/lib/api.ts` — observed_at?: string en CurrentDetailed
+- `apps/frontend/src/pages/Terremotos.tsx` — Lugar truncado + Fecha w-72px
+
+**Tests:**
+- `pytest tests/ -q` → 320 passed, 0 failed
+- `npm run build` → ✓ built in 670ms, 0 errores
+
+**Next:**
+- Páginas huérfanas HacerDeporte.tsx + SensacionTermica.tsx → mover a _legacy/
+- Migración src/ HTML → React (/nubes, /lluvias, /radar, /metar, /desastres)
+
+---
+
 ## 2026-05-21 — Fase 6g: Pre-deploy audit paralelo + fixes bloqueantes
 
 **Done:**
