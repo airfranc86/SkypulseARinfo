@@ -35,7 +35,7 @@ _CATALOG: Final[list[dict]] = [
     {"id": 6,  "name": "Tupungatito",      "province": "Argentina-Chile",      "lat": -33.367, "lon": -69.800, "slug": "tupungatito",     "ranking": None},
     {"id": 7,  "name": "Maipo",            "province": "Argentina-Chile",      "lat": -34.167, "lon": -69.833, "slug": "maipo",           "ranking": None},
     {"id": 8,  "name": "Tromen",           "province": "Neuquén",              "lat": -37.133, "lon": -70.050, "slug": "tromen",          "ranking": None},
-    {"id": 15, "name": "Isla Decepción",   "province": "Antártida Argentina",  "lat": -62.967, "lon": -60.650, "slug": "isla-deception",  "ranking": None},
+    {"id": 15, "name": "Isla Decepción",   "province": "Antártida Argentina",  "lat": -62.967, "lon": -60.650, "slug": "isla-decepcion",  "ranking": None},
     {"id": 16, "name": "Domuyo",           "province": "Neuquén",              "lat": -36.633, "lon": -70.433, "slug": "domuyo",          "ranking": None},
 ]
 
@@ -55,28 +55,42 @@ _CACHE_KEY: Final = "oavv_volcanes"
 # ---------------------------------------------------------------------------
 
 def _detect_alert_level(image_bytes: bytes) -> AlertLevel:
-    """Samplea la franja horizontal central del PNG y clasifica el color dominante."""
+    """Samplea la franja superior (10-25 % de alto) del PNG y clasifica el color.
+
+    Las imágenes SEGEMAR (~754×287 px) tienen la banda de color de alerta en el
+    tercio superior; la mitad y la parte inferior son fondo gris neutro.
+
+    Umbrales calibrados con datos reales (2026-05):
+      verde   → R≈148  G≈205  B≈126  (G dominante)
+      amarillo → R≈255  G≈230  B≈103  (R y G altos, B bajo)
+      naranja  → R≈220+ G<150  B<90   (R alto, G/B moderados-bajos)
+      rojo     → R≈250+ G<80          (R muy alto, G/B muy bajos)
+    """
     try:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         w, h = img.size
         if w == 0 or h == 0:
             return "verde"
-        # Sampleo franja central (evita bordes, logos y texto)
+
+        # Sampleo de 4 filas en el tercio superior (10 – 25 % de altura)
+        row_ys = [int(h * pct) for pct in (0.10, 0.15, 0.20, 0.25)]
         samples = [
-            img.getpixel((x, h // 2))
-            for x in range(w // 4, 3 * w // 4, 10)
+            img.getpixel((x, row_y))
+            for row_y in row_ys
+            for x in range(w // 4, 3 * w // 4, 20)
         ]
         if not samples:
             return "verde"
+
         r = mean(s[0] for s in samples)
         g = mean(s[1] for s in samples)
         b = mean(s[2] for s in samples)
-        # Umbrales empíricos — paleta SEGEMAR (imágenes 1050×133 px)
-        if r > 180 and g < 80:
+
+        if r > 220 and g < 80:
             return "rojo"
-        if r > 180 and g < 140 and b < 80:
+        if r > 200 and g < 150 and b < 90:
             return "naranja"
-        if r > 160 and g > 140 and b < 80:
+        if r > 200 and g > 180 and b < 130:
             return "amarillo"
         return "verde"
     except Exception as exc:
