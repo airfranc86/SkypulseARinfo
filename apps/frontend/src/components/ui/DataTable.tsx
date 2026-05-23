@@ -1,10 +1,12 @@
-import { type ReactElement, type ReactNode } from 'react'
+import { type CSSProperties, type ReactElement, type ReactNode } from 'react'
 
 interface Column {
   key: string
   header: string
   render?: (value: unknown, row: Record<string, unknown>) => ReactNode
   className?: string
+  /** Inline style aplicado a <th> y <td> — necesario para anchos fijos en WebKit mobile */
+  style?: CSSProperties
 }
 
 interface DataTableProps {
@@ -31,7 +33,7 @@ export function DataTable({
                 <th
                   key={col.key}
                   className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wide ${col.className ?? ''}`}
-                  style={{ color: 'var(--color-muted-foreground)' }}
+                  style={{ color: 'var(--color-muted-foreground)', ...col.style }}
                 >
                   {col.header}
                 </th>
@@ -63,7 +65,7 @@ export function DataTable({
                     <td
                       key={col.key}
                       className={`px-4 py-3 ${col.className ?? ''}`}
-                      style={{ color: 'var(--color-foreground)' }}
+                      style={{ color: 'var(--color-foreground)', ...col.style }}
                     >
                       {col.render
                         ? col.render(row[col.key], row)

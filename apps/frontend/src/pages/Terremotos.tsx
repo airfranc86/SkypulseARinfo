@@ -51,7 +51,8 @@ const columns = [
   {
     key: 'occurred_at',
     header: 'Fecha',
-    className: 'w-[72px]',
+    // width fijo con style inline — Tailwind w-[] no se respeta en WebKit mobile en <td>
+    style: { width: '76px', minWidth: '76px', maxWidth: '76px' },
     render: (v: unknown) => {
       if (!v) return '—'
       const d = new Date(String(v))
@@ -59,7 +60,7 @@ const columns = [
       const fecha = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
       const hora  = d.toLocaleTimeString('es-AR',  { hour: '2-digit', minute: '2-digit' })
       return (
-        <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: '1px', lineHeight: 1.3 }}>
           <span className="text-xs font-medium">{fecha}</span>
           <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>{hora}</span>
         </span>

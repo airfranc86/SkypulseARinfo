@@ -82,7 +82,7 @@ export function LaundryDayCard({ day, index }: LaundryDayCardProps): ReactElemen
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {day.confidence_pct}% {day.confidence_label}
+                  {Math.round(day.confidence_pct)}% {day.confidence_label}
                 </span>
                 <span style={{ fontSize: '9px', color: 'var(--color-muted-foreground)', paddingRight: '2px' }}>
                   Pronóstico
