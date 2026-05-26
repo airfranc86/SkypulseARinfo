@@ -1,10 +1,11 @@
 # Audit — SkyPulse AR Info
 
 **Fecha:** 2026-05-26  
-**Commit de referencia:** `66f47b0`  
-**Tests:** 299 passed (excl. 2 pre-existentes en `test_tools_router.py`)  
-**Build frontend:** ✓ 2511 modules, 0 errores TS  
-**Deploy:** Backend → Render · Frontend → Vercel
+**Commit de referencia:** `6cc4c4a`  
+**Tests backend:** 328 passed · 2 rotos (ver P1) · cobertura global **81%**  
+**Build frontend:** ✓ 2511 modules · 0 errores TS · bundle 1.115 MB (WARN)  
+**Deploy:** Backend → Render · Frontend → Vercel  
+**Waves completadas:** Wave 1 ✅ · Wave 2 🔄 · Wave 3 ⬜ · Wave 4 ⬜
 
 ---
 
@@ -38,74 +39,140 @@
 | Windy API v2 | `WINDY_API_KEY` | 10 min / 1 h | Fuente primaria pronósticos + FWI incendios |
 | USGS FDSN | pública | 6 h | Sismos recientes |
 | SEGEMAR OAVV | pública (scraping PNG) | 2 h | Alertas volcánicas, análisis color Pillow |
-| METAR | pública (Vercel edge) | no cacheado | Widget aeródromo |
-
-> Windy `fireDanger` model = FWI real. Si no disponible en plan → fallback GFS estimado (`fire_danger.py`).  
-> Windy model = `gfs` (gratuito). ECMWF requiere plan pago.
+| METAR | pública (Vercel edge) | no cacheado | Widget aeródromo — **endpoint inexistente** (ver P2) |
 
 ---
 
-## Hallazgos de seguridad
+## Wave 1 — Seguridad + Pre-deploy + Cobertura
 
-### ✅ Resueltos
+### Confirmado OK ✅
 
-- `.env` en `.gitignore` — protegido
+- `.env` y `.env.*` en `.gitignore` raíz — protegido
 - `allow_methods=["GET"]` + `allow_credentials=False` en CORS
 - `/docs`, `/redoc`, `/openapi.json` deshabilitados en `ENV=prod`
-- Security headers en todas las respuestas: `X-Content-Type-Options`, `HSTS`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-site`
-- `lat/lon` redondeados a 2 decimales en logs (anti-PII)
-- Rate limiting 30 req/min por IP en todos los routers (slowapi)
+- Security headers: `X-Content-Type-Options: nosniff`, `HSTS`, `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-site`
+- `lat/lon` redondeados a 2 decimales en logs (anti-PII) — **excepto incendios** (ver P3)
+- Rate limiting 30 req/min por IP en todos los routers
 - `ReactQueryDevtools` solo en `import.meta.env.DEV`
-- Sin secrets hardcodeados (verificado con grep)
-
-### ⚠️ Pendientes
-
-| Severidad | Item | Archivo | Acción sugerida |
-|-----------|------|---------|-----------------|
-| **P2** | CORS origins hardcodeados (`localhost:5173`, dominios Vercel) | `apps/backend/app/core/config.py:15-19` | Mover a variable de entorno `CORS_ORIGINS` |
-| **P2** | `render.yaml` no lista `ENV=prod` ni `WINDY_API_KEY` — configuración manual en dashboard | `render.yaml` | Documentar vars requeridas o usar `envVarGroups` |
-| **P2** | `smn.py`, `usgs.py`, `openmeteo.py` crean `httpx.AsyncClient` locales en lugar de usar el cliente compartido | `services/smn.py`, `usgs.py`, `openmeteo.py` | Refactorizar para usar `get_http_client()` de `core/http_client.py` |
-| **P3** | Sin `Content-Security-Policy` ni `X-Frame-Options` en middleware | `app/main.py` | Agregar CSP básica dado el uso de WebGL/canvas |
-| **P3** | `VITE_API_BASE_URL` no configurada → solo `console.warn`, falla silenciosa en runtime | `apps/frontend/src/lib/api.ts:5` | Tirar `throw` en build si la var falta (`import.meta.env.MODE !== 'development'`) |
-| **P3** | Windy deshabilitado no tiene alerta en producción más allá de warning en logs | `services/windy.py` | Considerar health check o alerta explícita |
+- Sin secrets hardcodeados en código de producción (`npm audit` limpio)
+- Pydantic `ge`/`le` bbox Argentina en todos los routers
+- Error handler filtra valores de input (`_safe_errors`) — sin stack traces en respuestas
+- `windy_api_key` leída de env var, nunca en código
+- TODOs en código: **0** (grep confirmado)
 
 ---
 
-## Issues conocidos / deuda técnica
+### Hallazgos activos
 
-| Severidad | Item | Archivo | Contexto |
-|-----------|------|---------|----------|
-| **P1** | `test_tools_router.py::TestTenderRopa::test_best_window_present_when_high_score` roto (2 tests) | `tests/test_tools_router.py` | `best_window` fue removido del response en commit `413f6e3`; tests no actualizados |
-| **P2** | `station_altitude_m` hardcodeado a `500.0 m` en cota de nieve del dashboard | `routers/weather.py:447` | Mejorable con Elevation API (Open-Topo-Data o similar) |
-| **P2** | UV index solo de Open-Meteo; si OM falla → `None` | `routers/weather.py` | Windy GFS gratuito no provee UV |
-| **P2** | `precip_prob` de Windy horario es binario (0%/100%) derivado de `precip > 0.1 mm` | `routers/weather.py` | No es probabilidad real; documentado en comentario inline |
-| **P3** | Páginas `HacerDeporte.tsx` y `SensacionTermica.tsx` candidatas a `_legacy/` | `pages/` | Mencionadas desde 2026-05-22 como pendientes de mover |
+| ID | Sev | Área | Archivo:Línea | Descripción | Fix |
+|----|-----|------|--------------|-------------|-----|
+| S-01 | **P1** | Security | `render.yaml:1-8` | Sin bloque `envVars` — `ENV=prod` y `WINDY_API_KEY` se configuran manualmente en Render sin trazabilidad. Un redeploy en environment nuevo arranca en modo `dev` (docs expuestos) sin alerta. | Agregar `envVars` con `sync: false` para `WINDY_API_KEY` y `CORS_ORIGINS` |
+| S-02 | **P1** | Security | `app/main.py:88-95` | `Content-Security-Policy` y `X-Frame-Options` ausentes en middleware de headers. Para API JSON pura: `CSP: default-src 'none'` + `X-Frame-Options: DENY`. | 2 líneas en `security_headers` middleware |
+| S-03 | **P1** | Pre-deploy | `apps/backend/` `apps/frontend/` | `.env.example` inexistente en ambos proyectos. `render.yaml` no documenta vars requeridas. Sin documentación de qué variables son obligatorias. | Crear `.env.example` con keys vacías; actualizar `render.yaml` |
+| S-04 | **P1** | Tests | `tests/test_tools_router.py` | 2 tests rotos: `_make_hourly_forecast` usa `base_ts = 1705320000` (enero 2024 — pasado). `_filter_future` vacía todos los slots → `best_window = None`. Router está correcto; solo el fixture temporal está desactualizado. | Cambiar `base_ts = int(time.time()) + 3600` en `_make_hourly_forecast` |
+| S-05 | **P2** | Security | `frontend/src/lib/api.ts:1-6` | `VITE_API_BASE_URL` sin configurar → `console.warn` solamente, todas las llamadas API fallan silenciosamente en producción con 404. | Convertir en `throw new Error(...)` cuando `import.meta.env.PROD` |
+| S-06 | **P2** | Security | `pages/Metar.tsx:572,587` | Endpoint `/api/metar` no existe en backend (no registrado en `main.py`). ICAO code interpolado en URL sin `encodeURIComponent`. | Agregar `encodeURIComponent(clean)`; registrar router o remover feature |
+| S-07 | **P2** | Security | `components/animated/FallingText.tsx:41` | `innerHTML` con interpolación directa de prop `text` sin escape HTML. Actualmente estático pero el componente acepta input externo sin sanitizar. | `escapeHtml(word)` antes de interpolar, o usar `textContent` + `cloneNode` |
+| S-08 | **P2** | Security | `core/config.py:15-19` | CORS origins hardcodeados (`localhost:5173`, dominios Vercel). Mantenibilidad + riesgo medio si se agrega auth en el futuro. | Leer desde env var `CORS_ORIGINS` con `split(",")` |
+| S-09 | **P2** | Build | `render.yaml:6` | `buildCommand: pip install -r requirements.txt` con rangos amplios (`>=`). Cada deploy puede instalar versiones distintas incluyendo CVEs nuevos. `uv` no se usa. | `uv sync --no-dev` o `pip install -r requirements-lock.txt` con versiones pineadas |
+| S-10 | **P2** | Coverage | `services/fire_danger.py` | **22% cobertura** — 85% del servicio de incendios sin tests. Feature crítica de seguridad pública. | Crear `tests/test_fire_danger.py` |
+| S-11 | **P2** | Coverage | `services/openmeteo.py` | **42% cobertura** — parsers de respuesta no testeados directamente. Regresiones en parsing no se detectan. | Tests directos para `get_hourly_forecast`, `get_daily_forecast` |
+| S-12 | **P2** | Coverage | `services/oavv.py` | **33% cobertura** — parsing de alertas volcánicas completamente sin cubrir. | Tests para líneas 69-165 |
+| S-13 | **P2** | Coverage | `core/http_client.py` | **46% cobertura** — lógica de retry/timeout sin tests. Fallo silencioso afecta todos los servicios. | Tests para líneas 11-30 |
+| S-14 | **P2** | Coverage | `utils/moon_phase.py` | `compute_moon_position()` (agregado en `ddbec66`) sin ningún test. 5 tests propuestos (ver abajo). | Agregar a `tests/test_moon_phase.py` |
+| S-15 | **P2** | Pre-deploy | Build | Bundle JS: 1.115 MB (gzip 315 KB) — supera límite recomendado 500 KB. Impacto en mobile. | Code-splitting con `import()` dinámico para páginas menos usadas |
+| S-16 | **P3** | Security | `routers/incendios.py:107` | Log con `%.4f` (11 m precisión) en lugar de `%.2f` (1.1 km) como el resto de routers. Inconsistencia con política anti-PII del proyecto. | Cambiar `%.4f` → `%.2f` |
+| S-17 | **P3** | Security | `apps/frontend/.gitignore` | No excluye `.env.*`. Si se crea `.env.local` desde ese directorio, podría commitirse por accidente. | Agregar `.env` / `.env.*` / `!.env.example` |
+| S-18 | **P3** | Deuda | `pages/` | `HacerDeporte.tsx` y `SensacionTermica.tsx` sin ruta activa — candidatos a `pages/_legacy/`. | Mover o eliminar |
+| S-19 | **P3** | Deuda | `services/smn.py` `services/usgs.py` `services/openmeteo.py` | Crean `httpx.AsyncClient` locales en lugar de usar el cliente compartido de `core/http_client.py`. Inconsistencia de performance y configuración. | Refactorizar para usar `get_http_client()` |
 
 ---
 
-## Estado de tests
+### Tests propuestos — `compute_moon_position()`
 
-| Archivo | Tests definidos |
-|---------|----------------|
-| `test_calculators.py` | 63 |
-| `test_tools_router.py` | 31 (2 rotos — ver P1) |
-| `test_windy.py` | 21 |
-| `test_dashboard.py` | 21 |
-| `test_laundry_forecast_router.py` | 21 |
-| `test_moon_phase.py` | 15 |
-| `test_wmo_codes.py` | 16 |
-| `test_weather_router.py` | 16 |
-| `test_usgs.py` | 18 |
-| `test_smn.py` | 13 |
-| `test_weather_aggregator.py` | 12 |
-| `test_earthquakes_router.py` | 10 |
-| `test_incendios_router.py` | 9 |
-| `test_openmeteo.py` | 6 |
-| `test_healthz.py` | 1 |
-| **Total** | **273** |
+Agregar a `apps/backend/tests/test_moon_phase.py`:
 
-> Cobertura histórica: 82–92% según fase. No hay reporte actualizado post-`moon_phase` extension.  
-> Módulos sin tests: `moon_phase.py` tiene `test_moon_phase.py` pero `compute_moon_position()` fue agregado en `ddbec66` sin tests nuevos.
+```python
+from app.utils.moon_phase import MoonPositionInfo, compute_moon_position
+
+BUENOS_AIRES_LAT = -34.6037
+BUENOS_AIRES_LON = -58.3816
+
+def test_compute_moon_position_returns_correct_type():
+    now = datetime(2024, 1, 25, 17, 54, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    assert isinstance(result, MoonPositionInfo)
+
+def test_moon_moonrise_label_format():
+    now = datetime(2024, 1, 25, 20, 0, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    if result.moonrise_label is not None:
+        assert len(result.moonrise_label) == 5
+        assert result.moonrise_label[2] == ":"
+
+def test_position_pct_none_when_below_horizon():
+    now = datetime(2024, 1, 25, 6, 0, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    if not result.is_above_horizon:
+        assert result.position_pct is None
+
+def test_naive_datetime_handled():
+    naive = datetime(2024, 6, 22, 12, 0, 0)
+    result = compute_moon_position(naive, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    assert isinstance(result, MoonPositionInfo)
+
+def test_polar_coordinates_no_crash():
+    now = datetime(2024, 1, 25, 12, 0, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, lat=-89.9, lon=0.0)
+    assert isinstance(result, MoonPositionInfo)
+```
+
+---
+
+### Fix propuesto — tests rotos `test_tools_router.py`
+
+En `_make_hourly_forecast` (línea ~55), cambiar:
+```python
+base_ts = 1705320000  # 2024-01-15 — PASADO, _filter_future vacía todos los slots
+```
+por:
+```python
+import time
+base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los conserva
+```
+
+---
+
+## Wave 2 — Code Review Python + TypeScript
+
+> 🔄 En progreso
+
+---
+
+## Wave 3 — Performance + Dead Code
+
+> ⬜ Pendiente
+
+---
+
+## Wave 4 — UI/Design
+
+> ⬜ Pendiente
+
+---
+
+## Cobertura de tests — detalle
+
+| Módulo | Cobertura | Estado |
+|--------|-----------|--------|
+| `services/fire_danger.py` | **22%** | 🔴 Crítico |
+| `services/oavv.py` | **33%** | 🔴 Crítico |
+| `services/openmeteo.py` | **42%** | 🔴 Crítico |
+| `core/http_client.py` | **46%** | 🟡 Bajo |
+| `utils/parsing.py` | **75%** | 🟡 Bajo |
+| `routers/volcanes.py` | **85%** | 🟢 OK |
+| Resto de módulos | **>85%** | 🟢 OK |
+| **Global** | **81%** | 🟡 |
 
 ---
 
@@ -144,53 +211,38 @@
 ```
 apps/backend/app/
 ├── core/
-│   ├── config.py          ← Settings (CORS origins hardcoded — P2)
-│   ├── http_client.py     ← Cliente httpx compartido (no usado por smn/usgs/om — P2)
+│   ├── config.py          ← CORS origins hardcoded (S-08)
+│   ├── http_client.py     ← 46% cobertura (S-13); no usado por smn/usgs/om (S-19)
 │   └── rate_limit.py
 ├── routers/
-│   ├── weather.py         ← Dashboard + current; _parse_ar_dt; compute_moon_position
-│   ├── tools.py           ← tender-ropa, lavar-coche, cota-de-nieve, hacer-deporte
-│   ├── incendios.py       ← GET /api/incendios
+│   ├── weather.py         ← Dashboard + current; _parse_ar_dt; moon_position
+│   ├── tools.py           ← _filter_future causa tests rotos (S-04)
+│   ├── incendios.py       ← log %.4f en lugar de %.2f (S-16)
 │   ├── earthquakes.py
 │   └── volcanes.py
 ├── services/
-│   ├── weather_aggregator.py  ← SMN ↔ OM árbol de decisión
-│   ├── windy.py               ← Fuente primaria pronósticos + FWI
-│   ├── fire_danger.py         ← FWI + fallback GFS estimado
-│   ├── smn.py                 ← httpx local (inconsistente — P2)
-│   ├── openmeteo.py           ← httpx local (inconsistente — P2)
-│   └── usgs.py                ← httpx local (inconsistente — P2)
-├── schemas/
-│   ├── weather.py         ← MoonPhaseSchema (4 campos moon position)
-│   └── incendios.py       ← RISK_COLOR_MAP (actualizado WCAG)
+│   ├── fire_danger.py     ← 22% cobertura (S-10) 🔴
+│   ├── openmeteo.py       ← 42% cobertura (S-11) 🔴; httpx local (S-19)
+│   ├── oavv.py            ← 33% cobertura (S-12) 🔴; httpx local (S-19)
+│   ├── smn.py             ← httpx local (S-19)
+│   ├── usgs.py            ← httpx local (S-19)
+│   └── windy.py
 └── utils/
-    └── moon_phase.py      ← compute_moon_position() sin tests (P2)
+    └── moon_phase.py      ← compute_moon_position() sin tests (S-14)
 
 apps/frontend/src/
-├── lib/api.ts             ← Interfaces espejadas del backend; VITE_API_BASE_URL warn-only (P3)
-├── hooks/useWeather.ts    ← TanStack Query hooks para todos los endpoints
-├── components/
-│   ├── clima/DayArc.tsx   ← Moon dot SVG agregado en ddbec66
-│   └── ui/InfiniteNavRail.tsx  ← Nav con scroll-snap + drag
-└── pages/
-    ├── Incendios.tsx      ← PageHeader + gauge + RISK_COLORS WCAG fix
-    └── [HacerDeporte.tsx, SensacionTermica.tsx]  ← candidatos _legacy/ (P3)
+├── lib/api.ts             ← VITE_API_BASE_URL warn-only (S-05)
+├── pages/
+│   ├── Metar.tsx          ← endpoint inexistente + no encodeURIComponent (S-06) 🔴
+│   ├── HacerDeporte.tsx   ← legacy sin ruta (S-18)
+│   └── SensacionTermica.tsx ← legacy sin ruta (S-18)
+└── components/animated/
+    └── FallingText.tsx    ← innerHTML sin escape (S-07)
+
+render.yaml                ← sin envVars (S-01, S-03, S-09) 🔴
+apps/frontend/.gitignore   ← sin .env.* (S-17)
 ```
 
 ---
 
-## Próximos trabajos sugeridos (backlog)
-
-| Prioridad | Tarea |
-|-----------|-------|
-| P1 | Corregir o marcar `@pytest.mark.xfail` los 2 tests rotos en `test_tools_router.py` |
-| P2 | Tests para `compute_moon_position()` en `test_moon_phase.py` |
-| P2 | Refactorizar `smn.py`, `usgs.py`, `openmeteo.py` para usar cliente httpx compartido |
-| P2 | Mover CORS origins a variable de entorno `CORS_ORIGINS` |
-| P3 | Mover `HacerDeporte.tsx` + `SensacionTermica.tsx` a `pages/_legacy/` |
-| P3 | Agregar `Content-Security-Policy` en middleware de seguridad |
-| P3 | Tirar error en build si `VITE_API_BASE_URL` no configurada en producción |
-
----
-
-*Generado automáticamente — actualizar después de cada sesión significativa.*
+*Wave 1 completada 2026-05-26 · Actualizar al cerrar Wave 2.*
