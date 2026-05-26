@@ -1,6 +1,5 @@
 import { useId } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
-import { Dither } from '@/components/animated/Dither'
 import { useNiebla } from '@/hooks/useWeather'
 import type { NieblaResponse } from '@/lib/api'
 
@@ -639,22 +638,14 @@ export function Niebla({ location }: Props) {
           </div>
         </section>
 
-        {/* ── Visual divider with Dither ───────────────────────────────── */}
+        {/* ── Visual divider ───────────────────────────────────────────── */}
         <div
-          style={{
-            borderRadius: '16px',
-            overflow: 'hidden',
-            height: '120px',
-          }}
           aria-hidden="true"
-        >
-          <Dither
-            waveColor={[0.56, 0.67, 0.73]}
-            colorNum={4}
-            waveAmplitude={0.4}
-            waveFrequency={2}
-          />
-        </div>
+          style={{
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, var(--color-border), transparent)',
+          }}
+        />
 
         {/* ── Fog catalog ─────────────────────────────────────────────── */}
         <section>

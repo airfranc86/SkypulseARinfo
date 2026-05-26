@@ -215,13 +215,21 @@ function formatPeakTime(raw: string): string {
   return `${d.getDate()} ${d.toLocaleDateString('es-AR', { month: 'short' })} ${timePart}`
 }
 
+interface RiskGroup {
+  hourLabel: string
+  maxScore: number
+  color: string
+  label: string
+  isNow: boolean
+}
+
 /** Mini timeline de barras de riesgo — 8 grupos de 3h, sin scroll. */
 function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
   const first24 = slots.slice(0, 24)
 
   // Group into 8 buckets of 3 slots; each bucket shows the max-score slot's color/label
   const BUCKET = 3
-  const groups = Array.from({ length: 8 }, (_, gi) => {
+  const groups: RiskGroup[] = Array.from({ length: 8 }, (_, gi) => {
     const chunk = first24.slice(gi * BUCKET, gi * BUCKET + BUCKET)
     if (!chunk.length) return null
     const maxScore = Math.max(...chunk.map(s => s.fire_risk_score))
@@ -232,8 +240,8 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
       color: RISK_COLORS[peak.fire_risk_label] ?? '#f0a030',
       label: peak.fire_risk_label,
       isNow: gi === 0,
-    }
-  }).filter(Boolean) as NonNullable<typeof groups[number]>[]
+    } satisfies RiskGroup
+  }).filter((g): g is RiskGroup => g !== null)
 
   const globalMax = Math.max(...groups.map(g => g.maxScore), 1)
 
