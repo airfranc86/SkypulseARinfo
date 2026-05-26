@@ -288,6 +288,25 @@ export interface FireDangerResponse {
   is_estimated: boolean
 }
 
+// ── Niebla / Visibilidad schemas ──────────────────────────────────────────────
+
+export interface VisibilityHourlySlot {
+  hour_label: string
+  visibility_m: number | null
+  fog_level: number
+  fog_label: string
+  fog_color: string
+}
+
+export interface NieblaResponse {
+  visibility_m: number | null
+  fog_level: number
+  fog_label: string
+  fog_color: string
+  weather_code: number | null
+  hourly: VisibilityHourlySlot[]
+}
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -323,4 +342,7 @@ export const api = {
 
   fireDanger: (lat: number, lon: number) =>
     request<FireDangerResponse>('/api/incendios', { lat, lon }),
+
+  niebla: (lat: number, lon: number) =>
+    request<NieblaResponse>('/api/niebla', { lat, lon }),
 }

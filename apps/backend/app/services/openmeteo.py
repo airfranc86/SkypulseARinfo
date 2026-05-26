@@ -494,3 +494,93 @@ async def get_hourly_forecast_ext(
     except (KeyError, TypeError) as exc:
         logger.warning("Open-Meteo hourly_ext parse error: %s", exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Visibilidad actual + pronóstico 12h (niebla)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class VisibilityData:
+    current_m: float | None
+    weather_code: int | None
+    fog_level: int          # 0=despejada … 5=niebla densa
+    fog_label: str
+    fog_color: str          # hex
+    hourly_m: list[float | None]   # 12 slots, 1h cadence
+    hourly_labels: list[str]       # "14:00", …
+
+
+def _classify_visibility(v: float | None) -> tuple[int, str, str]:
+    """Returns (level, label, color) from visibility in meters."""
+    if v is None:
+        return 0, "Sin datos", "#90aabb"
+    if v >= 10_000:
+        return 0, "Despejada",     "#3ecf7a"
+    if v >= 5_000:
+        return 1, "Buena",         "#5aaad8"
+    if v >= 2_000:
+        return 2, "Reducida",      "#c8a84b"
+    if v >= 1_000:
+        return 3, "Bruma",         "#f0a030"
+    if v >= 500:
+        return 4, "Niebla",        "#e07030"
+    return     5, "Niebla densa",  "#e05545"
+
+
+async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | None:
+    """
+    Obtiene visibilidad actual y pronóstico 12h desde Open-Meteo.
+    Devuelve None ante cualquier error.
+    """
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "current": "visibility,weather_code",
+        "hourly": "visibility",
+        "timezone": "America/Argentina/Buenos_Aires",
+        "forecast_days": 1,
+    }
+
+    try:
+        client = get_client()
+        response = await client.get(
+            settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        logger.warning("Open-Meteo visibility fetch failed: %s", exc)
+        return None
+
+    try:
+        current = data["current"]
+        hourly = data["hourly"]
+
+        current_m = parse_float(current.get("visibility"))
+        wc_raw = current.get("weather_code")
+        weather_code = int(wc_raw) if wc_raw is not None else None
+
+        level, label, color = _classify_visibility(current_m)
+
+        # Take only the next 12 hourly slots
+        time_list: list[str] = hourly.get("time", [])[:12]
+        vis_list: list = hourly.get("visibility", [])[:12]
+
+        hourly_m: list[float | None] = [parse_float(v) for v in vis_list]
+        hourly_labels: list[str] = [t[11:16] for t in time_list]   # "14:00"
+
+        return VisibilityData(
+            current_m=current_m,
+            weather_code=weather_code,
+            fog_level=level,
+            fog_label=label,
+            fog_color=color,
+            hourly_m=hourly_m,
+            hourly_labels=hourly_labels,
+        )
+    except (KeyError, TypeError) as exc:
+        logger.warning("Open-Meteo visibility parse error: %s", exc)
+        return None

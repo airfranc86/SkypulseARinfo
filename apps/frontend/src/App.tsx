@@ -32,6 +32,7 @@ const Nubes       = lazy(() => import('@/pages/Nubes').then(m => ({ default: m.N
 const Metar       = lazy(() => import('@/pages/Metar').then(m => ({ default: m.Metar })))
 const Volcanes    = lazy(() => import('@/pages/Volcanes').then(m => ({ default: m.Volcanes })))
 const Incendios   = lazy(() => import('@/pages/Incendios').then(m => ({ default: m.Incendios })))
+const Niebla      = lazy(() => import('@/pages/Niebla').then(m => ({ default: m.Niebla })))
 
 import { useVolcanes } from '@/hooks/useWeather'
 
@@ -156,6 +157,7 @@ const NAV_CATALOG: NavRailItem[] = [
   { to: '/desastres', label: 'Desastres', emoji: '🌊', color: '#c47e5a' },
   { to: '/lluvias',   label: 'Lluvias',   emoji: '🌧️', color: '#7ab5c4' },
   { to: '/radar',     label: 'Radar',     emoji: '📡', color: '#9a9ac4' },
+  { to: '/niebla',    label: 'Niebla',    emoji: '🌫️', color: '#90aabb' },
 ]
 
 // ── RootLayout — wired to the ModelStatusProvider ─────────────────────────────
@@ -293,6 +295,7 @@ function RootLayout() {
             <Route path="/desastres" element={<Desastres />} />
             <Route path="/nubes" element={<Nubes />} />
             <Route path="/metar" element={<Metar />} />
+            <Route path="/niebla" element={<Niebla location={location} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

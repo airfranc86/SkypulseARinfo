@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
 const STALE = 10 * 60 * 1000
-const STALE_EARTHQUAKES = 6 * 60 * 60 * 1000  // 6 horas
+const STALE_EARTHQUAKES = 5 * 60 * 1000  // 5 minutos — matches backend TTL
 const STALE_VOLCANES    = 2 * 60 * 60 * 1000  // 2 horas
 
 export function useWeatherCurrent(lat: number | null, lon: number | null) {
@@ -102,5 +102,14 @@ export function useFireDanger(lat: number | null, lon: number | null) {
     queryFn: () => api.fireDanger(lat!, lon!),
     enabled: lat !== null && lon !== null,
     staleTime: 1000 * 60 * 60, // 1 hora
+  })
+}
+
+export function useNiebla(lat: number | null, lon: number | null) {
+  return useQuery({
+    queryKey: ['niebla', lat, lon],
+    queryFn: () => api.niebla(lat!, lon!),
+    enabled: lat !== null && lon !== null,
+    staleTime: 5 * 60 * 1000,  // 5 minutos
   })
 }

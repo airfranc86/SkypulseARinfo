@@ -199,13 +199,43 @@ function ConditionChip({
   )
 }
 
-/** Mini timeline de barras de riesgo (próximas 24h). */
+/** Formatea "2026-06-02 09:00" → "Hoy 09:00" / "Mañana 09:00" / "2 jun 09:00" */
+function formatPeakTime(raw: string): string {
+  const parts = raw.split(' ')
+  if (parts.length < 2) return raw
+  const [datePart, timePart] = parts
+  const today = new Date()
+  const todayStr = today.toISOString().slice(0, 10)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowStr = tomorrow.toISOString().slice(0, 10)
+  if (datePart === todayStr)     return `Hoy ${timePart}`
+  if (datePart === tomorrowStr)  return `Mañana ${timePart}`
+  const d = new Date(`${datePart}T12:00:00`)
+  return `${d.getDate()} ${d.toLocaleDateString('es-AR', { month: 'short' })} ${timePart}`
+}
+
+/** Mini timeline de barras de riesgo — 8 grupos de 3h, sin scroll. */
 function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
   const first24 = slots.slice(0, 24)
-  const maxScore = Math.max(...first24.map(s => s.fire_risk_score), 1)
 
-  // Find current hour index (first slot is "now")
-  const nowIndex = 0
+  // Group into 8 buckets of 3 slots; each bucket shows the max-score slot's color/label
+  const BUCKET = 3
+  const groups = Array.from({ length: 8 }, (_, gi) => {
+    const chunk = first24.slice(gi * BUCKET, gi * BUCKET + BUCKET)
+    if (!chunk.length) return null
+    const maxScore = Math.max(...chunk.map(s => s.fire_risk_score))
+    const peak = chunk.find(s => s.fire_risk_score === maxScore) ?? chunk[0]
+    return {
+      hourLabel: chunk[0].hour_label,
+      maxScore,
+      color: RISK_COLORS[peak.fire_risk_label] ?? '#f0a030',
+      label: peak.fire_risk_label,
+      isNow: gi === 0,
+    }
+  }).filter(Boolean) as NonNullable<typeof groups[number]>[]
+
+  const globalMax = Math.max(...groups.map(g => g.maxScore), 1)
 
   return (
     <div
@@ -215,52 +245,45 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
       <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
         Próximas 24 h
       </p>
-      {/* Scrollable on mobile so bars never compress below usable size */}
-      <div className="overflow-x-auto -mx-1 px-1">
-        <div className="flex items-end gap-1 h-16 min-w-[320px]">
-          {first24.map((slot, i) => {
-            const heightPct = (slot.fire_risk_score / maxScore) * 100
-            const color = RISK_COLORS[slot.fire_risk_label] ?? '#f0a030'
-            const isNow = i === nowIndex
-            return (
+      <div className="flex items-end gap-1.5 h-14">
+        {groups.map((g, i) => {
+          const heightPct = (g.maxScore / globalMax) * 100
+          return (
+            <div
+              key={i}
+              className="flex-1 flex flex-col items-center justify-end gap-1 cursor-help"
+              title={`${g.hourLabel} — ${g.label} (${g.maxScore})`}
+            >
               <div
-                key={i}
-                className="flex-1 flex flex-col items-center justify-end gap-0.5 group cursor-help"
-                title={`${slot.hour_label} — ${slot.fire_risk_label} (${slot.fire_risk_score})`}
-              >
-                <div
-                  className="w-full rounded-sm transition-all"
-                  style={{
-                    height: `${Math.max(heightPct, 4)}%`,
-                    background: color,
-                    opacity: isNow ? 1 : 0.75,
-                    minHeight: '3px',
-                    outline: isNow ? `2px solid ${color}` : undefined,
-                    outlineOffset: isNow ? '1px' : undefined,
-                  }}
-                />
-              </div>
-            )
-          })}
-        </div>
-        {/* Hour labels — solo cada 4 slots para no saturar */}
-        <div className="flex items-center mt-1.5 min-w-[320px]">
-          {first24.map((slot, i) => (
-            <div key={i} className="flex-1 text-center">
-              {i % 4 === 0 && (
-                <span
-                  className="text-[.5rem]"
-                  style={{
-                    color: i === nowIndex ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
-                    fontWeight: i === nowIndex ? 700 : undefined,
-                  }}
-                >
-                  {slot.hour_label}
-                </span>
-              )}
+                className="w-full rounded-sm transition-all"
+                style={{
+                  height: `${Math.max(heightPct, 5)}%`,
+                  background: g.color,
+                  opacity: g.isNow ? 1 : 0.72,
+                  minHeight: '3px',
+                  outline: g.isNow ? `2px solid ${g.color}` : undefined,
+                  outlineOffset: g.isNow ? '1px' : undefined,
+                }}
+              />
             </div>
-          ))}
-        </div>
+          )
+        })}
+      </div>
+      {/* Hour labels */}
+      <div className="flex items-center mt-1.5">
+        {groups.map((g, i) => (
+          <div key={i} className="flex-1 text-center">
+            <span
+              className="text-[.5rem]"
+              style={{
+                color: g.isNow ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
+                fontWeight: g.isNow ? 700 : undefined,
+              }}
+            >
+              {g.hourLabel}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -396,32 +419,29 @@ export function Incendios({ location }: Props) {
             {/* Timeline de riesgo */}
             {data.slots.length > 1 && <RiskTimeline slots={data.slots} />}
 
-            {/* Pico de riesgo — border color matches peak level */}
+            {/* Pico de riesgo — compact single-row */}
             <div
-              className="rounded-xl px-5 py-4 flex items-center justify-between gap-4"
+              className="rounded-xl px-5 py-3 flex items-center justify-between gap-3"
               style={{
                 background: 'var(--color-card)',
                 border: `1.5px solid ${peakColor}55`,
               }}
             >
-              <div>
-                <p
-                  className="text-[.6rem] font-semibold uppercase tracking-widest mb-0.5"
-                  style={{ color: 'var(--color-muted-foreground)' }}
-                >
-                  Pico de riesgo
-                </p>
-                <p
-                  className="text-sm font-medium"
+              <p
+                className="text-[.6rem] font-semibold uppercase tracking-widest"
+                style={{ color: 'var(--color-muted-foreground)' }}
+              >
+                Pico de riesgo
+              </p>
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-xs font-medium"
                   style={{ color: 'var(--color-foreground)' }}
                 >
-                  {data.peak_hour_label}
-                </p>
-              </div>
-              <div className="text-right flex flex-col items-end gap-1">
-                {/* Prominent badge for peak level */}
+                  {formatPeakTime(data.peak_hour_label)}
+                </span>
                 <span
-                  className="text-sm font-bold px-3 py-1 rounded-full"
+                  className="text-xs font-bold px-2.5 py-0.5 rounded-full"
                   style={{
                     color: peakColor,
                     background: `${peakColor}20`,
@@ -431,19 +451,12 @@ export function Incendios({ location }: Props) {
                 >
                   {data.peak_label}
                 </span>
-                <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-                  Score {data.peak_score}
-                </p>
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Footer — compact single line */}
             <p className="text-[.6rem] text-center" style={{ color: 'var(--color-muted-foreground)' }}>
-              {data.is_estimated
-                ? 'Índice estimado a partir de temperatura, humedad, viento y precipitación'
-                : 'Fire Weather Index (FWI) — Canadian Forest Fire Danger Rating System'
-              }
-              {' · '}Caché 1 h
+              ⓘ {data.is_estimated ? 'Estimado · GFS' : 'FWI canadiense · Windy'} · Caché 1 h
             </p>
           </div>
         </FadeContent>

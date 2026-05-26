@@ -99,7 +99,7 @@ const columns = [
 ]
 
 export function Terremotos({ location }: Props) {
-  const { data, isLoading, error } = useEarthquakes(location?.lat ?? null, location?.lon ?? null)
+  const { data, isLoading, error } = useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
 
   if (location === null) return <PageSkeleton />
 
@@ -147,7 +147,7 @@ export function Terremotos({ location }: Props) {
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
-              {location.label} · radio 500 km
+              {location.label} · radio 2000 km
             </p>
             <ModelBadge model="usgs" variant="header" />
           </div>
