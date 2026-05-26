@@ -145,13 +145,80 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 
 ## Wave 2 — Code Review Python + TypeScript
 
-> 🔄 En progreso
+**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 🔄 · Wave 4 ⬜
+
+### Python — Confirmado OK ✅
+- Frozen dataclasses consistentes en todos los DTOs de servicio
+- `asyncio.gather` con `return_exceptions=True` en `/dashboard` (fallos parciales no rompen el endpoint)
+- Fallback en cascada SMN → Windy → Open-Meteo → sintético documentado
+- `TTLCache` con `asyncio.Lock` — patrón correcto para concurrencia
+- `describe_wmo` centralizado, sin duplicación
+- Separación clara schemas/services/routers
+
+### Python — Hallazgos
+
+| ID | Sev | Archivo:Línea | Descripción | Fix |
+|----|-----|--------------|-------------|-----|
+| R-01 | **P1** | `routers/weather.py:345,403` | `except Exception: pass` en bloques de parse de sunrise/sunset. Si `_parse_ar_dt` falla, `is_day_now` queda `True` y `position_pct` queda en 0.5 sin traza en logs. | `except Exception as exc: logger.warning(...)` |
+| R-02 | **P1** | `routers/weather.py:389` | Clamp `min(1.5, elapsed_sec/total_sec)` — `DayArcSchema.current_position_pct` puede llegar al frontend con valor > 1.0 sin validación. | Cambiar a `min(1.0, ...)` o agregar `le=1.5` en schema + comment explícito si es intencional |
+| R-03 | **P1** | `routers/tools.py:189` | `_filter_future` usa `datetime.now().timestamp()` naive en lugar de `datetime.now(timezone.utc).timestamp()`. Frágil si el TZ del servidor cambia. Causa directa de los 2 tests rotos. | `datetime.now(timezone.utc).timestamp()` |
+| R-04 | **P1** | `services/fire_danger.py:185` | `except Exception` traga errores de red en `_fetch_raw_fire` sin distinción ni reintento. Timeout, 500, 404 de Windy degradan silenciosamente a GFS estimado. | Distinguir `httpx.TimeoutException` vs `HTTPStatusError`; `logger.error(exc_info=True)` en 5xx |
+| R-05 | **P1** | `services/openmeteo.py:62,135,202,282,439` | Crea `httpx.AsyncClient` nuevo por request — ignora el cliente global de `http_client.py`. En `/dashboard` (4 llamadas OM en paralelo) abre 4 conexiones TCP en lugar de reutilizar el pool. | Usar `get_client()` del módulo compartido; eliminar los `async with httpx.AsyncClient(...)` |
+| R-06 | **P2** | `services/fire_danger.py:25,28` | `_parse_hourly` y `_ms_to_kmh` importados pero no usados (ruff F401). La conversión wind u/v está duplicada inline. | Eliminar imports muertos; reutilizar `_ms_to_kmh` en líneas 226 y 271 |
+| R-07 | **P2** | `services/fire_danger.py:16` | `timezone` y `timedelta` importados pero no usados. | Reducir a `from datetime import datetime` |
+| R-08 | **P2** | `services/fire_danger.py:206,248` | `import math` dentro de funciones — viola PEP 8. | Mover al nivel de módulo |
+| R-09 | **P2** | `routers/weather.py:729` | `from app.services.openmeteo import _DAY_LABELS_ES` dentro de función. El símbolo ya está importado a nivel de módulo (línea 43). | Eliminar import local |
+| R-10 | **P2** | `routers/weather.py:120` | `from datetime import date as _date_cls` dentro de función. `_Date` ya existe a nivel de módulo. | Eliminar import local |
+| R-11 | **P2** | `routers/tools.py:76` | `_build_hourly_scores`: `forecast` y `score_fn` sin type hints (implicitly `Any`). | Agregar Protocol `_HourlyForecast` + `Callable` tipado |
+| R-12 | **P2** | `services/weather_aggregator.py:25` | `degrees_to_cardinal` duplicada con `_degrees_to_cardinal` en `windy.py`. | Mover ambas a `app/utils/geo.py` |
+| R-13 | **P2** | `services/windy.py:169` | Race condition TOCTOU en cache: check-then-act separado por llamada HTTP. Dos requests simultáneas al mismo `(lat,lon)` hacen 2 llamadas a Windy antes de que la primera escriba el cache. | `asyncio.Event` por cache_key o documentar la limitación |
+| R-14 | **P2** | `services/smn.py:9` | `Any` importado pero no usado (ruff F401). | Eliminar |
+| R-15 | **P2** | `utils/moon_phase.py:6` | `floor` importado pero no usado (ruff F401). | Eliminar |
+| R-16 | **P2** | `routers/weather.py:749` | Closure `_om_vals` sobre variable de loop `i`. Funciona pero es frágil. | Extraer como función con parámetros explícitos |
+| R-17 | **P3** | `routers/weather.py:183` y `routers/tools.py:56` | `LatParam`/`LonParam` duplicados en 2 routers. | Mover a `app/core/params.py` |
+| R-18 | **P3** | `routers/weather.py:199` y `routers/tools.py` | `SOURCE_WINDY`, `SOURCE_OPENMETEO`, `SOURCE_MIXED` duplicados. | Mover a módulo compartido |
+| R-19 | **P3** | `routers/tools.py:261` | `_score_fn` wrapper en `get_tender_ropa` es un no-op — la expresión es siempre equivalente a `p`. | Usar `calculators.score_tender_ropa` directamente |
+
+---
+
+### TypeScript — Confirmado OK ✅
+- `useLocation.ts`: `JSON.parse` a `unknown` + shape validation antes de usar — patrón correcto
+- GPS jitter suppression via rounding + stable reference bail-out en `setLocation`
+- `InfiniteNavRail`: drag suppresses click via `totalDragDelta` ref, bien comentado
+- `WeatherDashboardResponse`: todos los campos numéricos con `| null` explícito
+- `WeatherIcon`: `aria-hidden="true"` en todos los iconos decorativos
+- `ScrollToTopBubble`: `{ passive: true }` en scroll listener
+- Todas las páginas implementan `PageSkeleton` con `animate-pulse` consistente
+
+### TypeScript — Hallazgos
+
+| ID | Sev | Archivo:Línea | Descripción | Fix |
+|----|-----|--------------|-------------|-----|
+| T-01 | **P1** | `tsconfig.app.json` | `strict: true` **ausente** — `strictNullChecks` y `noImplicitAny` deshabilitados. Build limpio es falso positivo. Todas las aserciones `!` pasan sin verificación. | Agregar `"strict": true` y corregir los errores resultantes |
+| T-02 | **P1** | `components/ui/InfiniteNavRail.tsx:157-160` | `useCallback` self-referencial: `animate` referencia a sí mismo antes de ser inicializado. ESLint error. Funciona por closure pero es frágil. | `useRef` para el tick de RAF en lugar de `useCallback` |
+| T-03 | **P1** | `components/animated/FallingText.tsx:41` | `innerHTML` con `word` sin escape (ya en S-07 pero ahora confirmado con línea exacta y `highlightClass` también afectado). | `escapeHtml(word)` + `escapeHtml(highlightClass)` o DOM API |
+| T-04 | **P1** | `hooks/useWeather.ts:58,86` | `refetchInterval === staleTime` en `useEarthquakes` (6h) y `useVolcanes` (2h). Polling incondicional en background — el cache es irrelevante, la API se golpea en cada intervalo sin importar si los datos están frescos. | Eliminar `refetchInterval` si el objetivo es solo refrescar cuando los datos se vuelven stale |
+| T-05 | **P1** | `contexts/ModelStatusContext.tsx:40` | `JSON.parse(raw) as ModelStatusState` sin validación de shape. Si sessionStorage tiene una versión vieja del estado (ej: falta la key `earthquakes`), el reducer corrompe el status bar silenciosamente. | Validar shape o `catch` + `return INITIAL` |
+| T-06 | **P2** | `components/LocationPicker.tsx:27-31` | `setResults`/`setOpen` en `useEffect` para búsqueda síncrona en memoria. Causa doble render por keystroke. ESLint error. | `const results = useMemo(() => searchCities(query), [query])` |
+| T-07 | **P2** | `pages/Terremotos.tsx:187` | Double cast `as unknown as Record<string, unknown>[]` rompe el contrato de tipos de `DataTable`. | Hacer `DataTable` genérico: `DataTable<T extends Record<string, unknown>>` |
+| T-08 | **P2** | `components/clima/DayArc.tsx:41` | SVG gradient `id="arcGrad"` es ID global del DOM. Si el componente se renderiza dos veces, el segundo referencia el gradiente del primero. El commit `413f6e3` ya reparó esto en otros componentes. | `useId()` de React 18 por instancia |
+| T-09 | **P2** | `contexts/ModelStatusContext.tsx:107,115` | Hooks y componentes mezclados en el mismo archivo — ESLint `react-refresh/only-export-components`. Vite Fast Refresh requiere full page reload en cada cambio del contexto. | Separar hooks a `useModelStatus.ts` |
+| T-10 | **P2** | `hooks/useWeather.ts` (todos) | `queryFn: () => api.X(lat!, lon!)` — aserciones `!` sin guard en runtime. Si `refetch()` se llama manualmente, `null!` llega al fetch. | `if (lat === null \|\| lon === null) throw new Error(...)` al inicio de cada `queryFn` |
+| T-11 | **P2** | `App.tsx:165-166,170-191` | `volcanAlertColor` y `navTools` recalculados en cada render de `RootLayout` — incluye renders por location update. `InfiniteNavRail` recibe nueva referencia en cada render. | `useMemo` dependiendo de `volcanesData` |
+| T-12 | **P2** | `components/clima/DayArc.tsx:87-103` | IIFE en JSX para calcular posición del moon dot. Se recalcula en cada render. | Extraer a variable antes del `return` |
+| T-13 | **P3** | `components/clima/SportBlock.tsx:212` | `key={i}` en lista de indicadores que aparecen/desaparecen condicionalmente. | Key estable: `ind.emoji` o `ind.text.slice(0,10)` |
+| T-14 | **P3** | `pages/Incendios.tsx:143,168` | `key={i}` en `RiskTimeline`. | `slot.date + '-' + slot.hour_label` |
+| T-15 | **P3** | `lib/api.ts:18` | `res.json() as Promise<T>` — cast redundante. `Response.json()` ya satisface el tipo de retorno genérico sin cast. | Eliminar `as Promise<T>` |
+| T-16 | **P3** | `components/animated/FallingText.tsx:131` | Cleanup de useEffect captura `canvasContainerRef.current` en closure en lugar de copiar el valor al inicio del efecto. | `const container = canvasContainerRef.current` al inicio; usar `container` en cleanup |
+| T-17 | **P3** | `pages/Metar.tsx:417` | `setSearch('')` en `useEffect` — debería estar en el event handler que abre el modal. | Mover al handler |
+| T-18 | **P3** | `components/animated/Threads.tsx:163` | `let currentMouse` nunca se reasigna. ESLint `prefer-const`. | `const currentMouse` |
+| T-19 | **P3** | `components/animated/SplashCursor.tsx:93` | `supportLinearFiltering` asignado pero nunca leído. | Usar en condicional o eliminar |
 
 ---
 
 ## Wave 3 — Performance + Dead Code
 
-> ⬜ Pendiente
+> 🔄 En progreso
 
 ---
 
