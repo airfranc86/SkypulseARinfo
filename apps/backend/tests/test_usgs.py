@@ -250,6 +250,20 @@ class TestGetRecentEarthquakes:
         assert result.total == 0  # el evento está a ~1000 km, fuera de 500
 
     @pytest.mark.asyncio
+    async def test_chile_events_filtered_out(self):
+        """Eventos con place que NO contiene 'Argentina' deben excluirse."""
+        ar_event   = _feature("ar1", lon=-68.5, lat=-32.9, place="10 km NW of San Juan, Argentina")
+        chile_event = _feature("cl1", lon=-70.0, lat=-33.0, place="10 km S of Santiago, Chile")
+        with respx.mock:
+            respx.get(url__startswith="https://earthquake.usgs.gov").mock(
+                return_value=Response(200, json=_usgs_geojson([ar_event, chile_event]))
+            )
+            result = await get_recent_earthquakes(-34.6, -58.4, radius_km=2000)
+
+        assert result.total == 1
+        assert result.events[0].id == "ar1"
+
+    @pytest.mark.asyncio
     async def test_newer_event_first_regardless_of_magnitude(self):
         # El evento más reciente aparece primero aunque tenga menor magnitud
         newer_ms = 1705320000000 + 7200_000  # 2 horas más nuevo

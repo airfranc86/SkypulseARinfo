@@ -109,8 +109,17 @@ async def get_recent_earthquakes(
     events: list[EarthquakeEvent] = []
     for f in features:
         ev = _parse_event(f, user_lat, user_lon)
-        if ev is not None and ev.distance_km <= radius_km:
-            events.append(ev)
+        if ev is None:
+            continue
+        if ev.distance_km > radius_km:
+            continue
+        # USGS siempre incluye el país en el campo place ("10 km NW of San Juan, Argentina").
+        # Filtramos para mostrar solo eventos en Argentina y excluir la actividad chilena
+        # que dominaría la lista por la alta sismicidad del Pacífico.
+        place_lower = ev.place.lower()
+        if "argentina" not in place_lower:
+            continue
+        events.append(ev)
 
     # Ordenar por fecha descendente (más reciente primero) — un monitor de
     # sismos debe mostrar lo último, no el más cercano.
