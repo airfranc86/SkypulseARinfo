@@ -49,12 +49,25 @@ from app.services.windy import (
     get_daily_forecast as windy_get_daily_forecast,
     get_hourly_forecast as windy_get_hourly_forecast,
 )
-from app.utils.moon_phase import compute_moon_phase
+from app.utils.moon_phase import compute_moon_phase, compute_moon_position
 from app.utils.wmo_codes import describe_wmo
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# Timezone helpers — Open-Meteo devuelve strings ISO naive en hora local
+# Argentina (UTC-3). El servidor corre en UTC, así que hay que adjuntar la
+# tzinfo correcta ANTES de llamar a astimezone.
+# ---------------------------------------------------------------------------
+_AR_TZ = timezone(timedelta(hours=-3))
+
+
+def _parse_ar_dt(s: str) -> datetime:
+    """Convierte un string ISO naive (hora local Argentina, UTC-3) a datetime UTC-aware."""
+    naive = datetime.fromisoformat(s)
+    return naive.replace(tzinfo=_AR_TZ).astimezone(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -326,11 +339,8 @@ async def get_dashboard(
     is_day_now = True
 
     try:
-        sr_dt = datetime.fromisoformat(sunrise_today)
-        ss_dt = datetime.fromisoformat(sunset_today)
-        # Comparar en UTC
-        sr_utc = sr_dt.astimezone(timezone.utc)
-        ss_utc = ss_dt.astimezone(timezone.utc)
+        sr_utc = _parse_ar_dt(sunrise_today)
+        ss_utc = _parse_ar_dt(sunset_today)
         is_day_now = sr_utc <= now <= ss_utc
     except Exception:
         pass
@@ -371,8 +381,8 @@ async def get_dashboard(
 
     position_pct = 0.5
     try:
-        sr_dt2 = datetime.fromisoformat(sunrise_today).astimezone(timezone.utc)
-        ss_dt2 = datetime.fromisoformat(sunset_today).astimezone(timezone.utc)
+        sr_dt2 = _parse_ar_dt(sunrise_today)
+        ss_dt2 = _parse_ar_dt(sunset_today)
         total_sec = (ss_dt2 - sr_dt2).total_seconds()
         elapsed_sec = (now - sr_dt2).total_seconds()
         if total_sec > 0:
@@ -405,10 +415,15 @@ async def get_dashboard(
     # MoonPhaseSchema
     # =========================================================================
     moon = compute_moon_phase(now)
+    moon_pos = compute_moon_position(now, lat, lon)
     moon_schema = MoonPhaseSchema(
         name=moon.name,
         illumination=moon.illumination,
         icon=moon.icon,
+        position_pct=moon_pos.position_pct,
+        moonrise_label=moon_pos.moonrise_label,
+        moonset_label=moon_pos.moonset_label,
+        is_above_horizon=moon_pos.is_above_horizon,
     )
 
     # =========================================================================

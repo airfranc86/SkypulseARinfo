@@ -2,6 +2,7 @@ import type { FireDangerSlot } from '@/lib/api'
 import { useFireDanger } from '@/hooks/useWeather'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { FadeContent } from '@/components/animated/FadeContent'
+import { PageHeader } from '@/components/ui/PageHeader'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,8 +21,8 @@ const RISK_COLORS: Record<string, string> = {
   'Bajo':     '#7ec855',
   'Moderado': '#f0a030',
   'Alto':     '#e05545',
-  'Muy alto': '#c83030',
-  'Extremo':  '#8b0000',
+  'Muy alto': '#e03535',
+  'Extremo':  '#ff3333',
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ function ScoreGauge({ score, color }: { score: number; color: string }) {
         strokeWidth="10"
         strokeLinecap="round"
         strokeDasharray={`${progress} ${circumference}`}
-        style={{ transition: 'stroke-dasharray 0.6s ease' }}
+        className="motion-safe:[transition:stroke-dasharray_0.6s_ease]"
       />
       {/* Score text */}
       <text
@@ -145,7 +146,7 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
           return (
             <div
               key={i}
-              className="flex-1 flex flex-col items-center justify-end gap-0.5 group"
+              className="flex-1 flex flex-col items-center justify-end gap-0.5 group cursor-help"
               title={`${slot.hour_label} — ${slot.fire_risk_label} (${slot.fire_risk_score})`}
             >
               <div
@@ -221,30 +222,12 @@ export function Incendios({ location }: Props) {
 
   return (
     <div>
-      {/* Header */}
-      <header className="mb-8 flex items-start gap-4">
-        <div
-          className="shrink-0 size-16 rounded-2xl flex items-center justify-center text-3xl"
-          style={{
-            background: 'linear-gradient(135deg, rgba(224,85,69,0.22) 0%, rgba(224,85,69,0.06) 100%)',
-            border: '1px solid rgba(224,85,69,0.2)',
-          }}
-          aria-hidden="true"
-        >
-          🔥
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1
-            className="text-2xl font-semibold leading-tight mb-1"
-            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
-          >
-            Incendios
-          </h1>
-          <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
-            Riesgo de incendio forestal por ubicación
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        icon={<span className="text-3xl">🔥</span>}
+        title="Incendios"
+        subtitle="Riesgo de incendio forestal por ubicación"
+        accentColor="#e05545"
+      />
 
       {isLoading && <PageSkeleton />}
       {error && <ErrorMessage message={(error as Error).message} />}

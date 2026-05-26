@@ -174,6 +174,10 @@ export interface MoonPhaseInfo {
   name: string
   illumination: number
   icon: string
+  position_pct: number | null
+  moonrise_label: string | null
+  moonset_label: string | null
+  is_above_horizon: boolean
 }
 
 export interface DayArcInfo {

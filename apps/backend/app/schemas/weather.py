@@ -109,6 +109,10 @@ class MoonPhaseSchema(BaseModel):
     name: str
     illumination: float
     icon: str
+    position_pct: float | None = None
+    moonrise_label: str | None = None
+    moonset_label: str | None = None
+    is_above_horizon: bool = False
 
 
 class DayArcSchema(BaseModel):

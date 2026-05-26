@@ -12,8 +12,8 @@ RISK_COLOR_MAP: dict[str, str] = {
     "Bajo":     "#7ec855",
     "Moderado": "#f0a030",
     "Alto":     "#e05545",
-    "Muy alto": "#c83030",
-    "Extremo":  "#8b0000",
+    "Muy alto": "#e03535",
+    "Extremo":  "#ff3333",
 }
 
 

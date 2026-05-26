@@ -83,6 +83,25 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
           </>
         )}
 
+        {/* Moon dot — solo cuando está sobre el horizonte y hay posición calculada */}
+        {moonPhase.is_above_horizon && moonPhase.position_pct != null && (
+          <>
+            {(() => {
+              const moonPct = Math.max(0, Math.min(1, moonPhase.position_pct))
+              const moonAngleDeg = 180 - moonPct * 180
+              const moonAngleRad = (moonAngleDeg * Math.PI) / 180
+              const moonX = cx + r * Math.cos(moonAngleRad)
+              const moonY = cy - r * Math.sin(moonAngleRad)
+              return (
+                <>
+                  <circle cx={moonX} cy={moonY} r="7" fill="rgba(200,210,230,0.12)" />
+                  <circle cx={moonX} cy={moonY} r="4" fill="#c8d8e8" opacity="0.85" />
+                </>
+              )
+            })()}
+          </>
+        )}
+
         {/* Sunrise label */}
         <text
           x={cx - r + 2}

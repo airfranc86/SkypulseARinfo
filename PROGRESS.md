@@ -40,6 +40,35 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-26 — DayArc timezone fix + moon position + Incendios UI polish
+
+**Done:**
+- **DayArc timezone bug**: `_parse_ar_dt()` helper en `weather.py` — Open-Meteo devuelve strings ISO naive en UTC-3; el fix adjunta `_AR_TZ = timezone(timedelta(hours=-3))` antes de `.astimezone(utc)`. Corrige error de ~3h en `position_pct` y `is_day_now`.
+- **Moon position en arco**: `compute_moon_position(now, lat, lon)` en `moon_phase.py` usando algoritmo Meeus simplificado (RA/Dec → LST → hour angle → altitud → rise/set). Devuelve `position_pct`, `moonrise_label`, `moonset_label`, `is_above_horizon`.
+- **MoonPhaseSchema extendido**: 4 campos nuevos con defaults (retrocompatible).
+- **DayArc.tsx**: moon dot (círculo SVG semitransparente) cuando `is_above_horizon && position_pct != null`.
+- **MoonPhaseInfo interface** (`api.ts`): sincronizada con los 4 campos nuevos.
+- **Incendios UI polish**: `PageHeader`, RISK_COLORS `#8b0000`→`#ff3333` y `#c83030`→`#e03535` (WCAG fix), `motion-safe:` en gauge SVG, `cursor-help` en timeline bars.
+- **schemas/incendios.py**: `RISK_COLOR_MAP` actualizado a los mismos colores.
+
+**Files changed:**
+- `apps/backend/app/routers/weather.py` — _AR_TZ + _parse_ar_dt + compute_moon_position call
+- `apps/backend/app/utils/moon_phase.py` — MoonPositionInfo + _jd + _moon_ra_dec + _gmst + compute_moon_position
+- `apps/backend/app/schemas/weather.py` — MoonPhaseSchema: 4 campos nuevos con defaults
+- `apps/frontend/src/lib/api.ts` — MoonPhaseInfo: 4 campos nuevos
+- `apps/frontend/src/components/clima/DayArc.tsx` — moon dot SVG
+- `apps/frontend/src/pages/Incendios.tsx` — PageHeader + RISK_COLORS fix + motion-safe + cursor-help
+- `apps/backend/app/schemas/incendios.py` — RISK_COLOR_MAP colores corregidos
+
+**Tests:**
+- `pytest` (excl. test_tools_router pre-existing fail) → 299 passed ✓
+- `pnpm run build` → ✓ 2511 modules, 0 errores TS
+
+**Next:**
+- Awaiting user direction
+
+---
+
 ## 2026-05-26 — feat(incendios): página de riesgo de incendio forestal
 
 **Done:**
