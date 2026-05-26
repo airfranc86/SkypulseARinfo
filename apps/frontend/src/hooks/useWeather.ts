@@ -95,3 +95,12 @@ export function useLaundryForecast(lat: number | null, lon: number | null) {
     enabled: lat !== null && lon !== null,
   })
 }
+
+export function useFireDanger(lat: number | null, lon: number | null) {
+  return useQuery({
+    queryKey: ['fire-danger', lat, lon],
+    queryFn: () => api.fireDanger(lat!, lon!),
+    enabled: lat !== null && lon !== null,
+    staleTime: 1000 * 60 * 60, // 1 hora
+  })
+}

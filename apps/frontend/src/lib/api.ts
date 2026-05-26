@@ -257,6 +257,33 @@ export interface WeatherDashboardResponse {
   fetched_at: string
 }
 
+// ── Fire Danger schemas ───────────────────────────────────────────────────────
+
+export interface FireDangerSlot {
+  date: string
+  hour_label: string
+  fwi: number | null
+  fire_risk_score: number
+  fire_risk_label: string
+  temp_c: number | null
+  humidity: number | null
+  wind_kmh: number | null
+  precip_mm: number | null
+  is_estimated: boolean
+}
+
+export interface FireDangerResponse {
+  slots: FireDangerSlot[]
+  current_score: number
+  current_label: string
+  current_color: string
+  peak_score: number
+  peak_label: string
+  peak_hour_label: string
+  source: string
+  is_estimated: boolean
+}
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -289,4 +316,7 @@ export const api = {
 
   volcanes: () =>
     request<VolcanesResponse>('/api/volcanes'),
+
+  fireDanger: (lat: number, lon: number) =>
+    request<FireDangerResponse>('/api/incendios', { lat, lon }),
 }

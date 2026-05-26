@@ -5,6 +5,123 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-26 — Forecast7dCards scroll-snap + feature Incendios 🔥
+
+**Done:**
+- `Forecast7dCards`: `scrollSnapType: 'x mandatory'` en contenedor + `scrollSnapAlign: 'start'` en cada DayCard (porta el mismo patrón que HourlyStrip)
+- Feature Incendios completa: backend (service + schema + router) + frontend (page + hook + nav)
+  - Windy `fireDanger` model como fuente primaria (FWI real)
+  - Fallback automático: GFS (temp/humedad/viento/precip) → `_compute_fire_risk()` estimado
+  - Gauge SVG semicircular, chips condición, timeline 24h, card pico de riesgo
+  - Badge "Estimado" vs "Modelo Windy FWI" según fuente
+  - Ruta `/incendios` + nav item 🔥 en `InfiniteNavRail` (row tools)
+  - `cache_ttl_fire_seconds = 3600` (1h)
+
+**Files changed:**
+- `apps/frontend/src/components/clima/Forecast7dCards.tsx` — scroll-snap
+- `apps/backend/app/services/fire_danger.py` — NUEVO
+- `apps/backend/app/schemas/incendios.py` — NUEVO
+- `apps/backend/app/routers/incendios.py` — NUEVO
+- `apps/backend/app/main.py` — router registrado
+- `apps/backend/app/core/config.py` — cache_ttl_fire_seconds
+- `apps/backend/tests/test_incendios_router.py` — NUEVO, 9 tests
+- `apps/frontend/src/lib/api.ts` — FireDangerSlot + FireDangerResponse + api.fireDanger()
+- `apps/frontend/src/hooks/useWeather.ts` — useFireDanger
+- `apps/frontend/src/pages/Incendios.tsx` — NUEVO
+- `apps/frontend/src/App.tsx` — route /incendios + nav item
+
+**Tests:**
+- `pytest tests/test_incendios_router.py` → 9 passed
+- Suite backend → 328 passed, 0 new failures
+- `pnpm run build` → ✓ 2511 modules, 0 errores TS
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-05-26 — feat(incendios): página de riesgo de incendio forestal
+
+**Done:**
+- Backend `services/fire_danger.py`: intenta Windy `fireDanger` model (FWI), fallback a estimación GFS; `_compute_fire_risk()` con lógica NOAA; dataclass `FireDangerEntry(frozen=True)`
+- Backend `schemas/incendios.py`: `FireDangerSlot` + `FireDangerResponse` frozen; `RISK_COLOR_MAP`
+- Backend `routers/incendios.py`: `GET /api/incendios?lat&lon`; bbox Argentina; rate limit 30/min; manejo de `WindyNotConfiguredError` → 503
+- Backend `main.py`: router incendios registrado en `/api/incendios`
+- Backend `config.py`: `cache_ttl_fire_seconds: int = 3600`
+- Frontend `api.ts`: interfaces `FireDangerSlot` + `FireDangerResponse`; `api.fireDanger()`
+- Frontend `useWeather.ts`: `useFireDanger` hook con staleTime 1h
+- Frontend `pages/Incendios.tsx`: página completa — gauge SVG semicircular, label con color, badge estimado/FWI, 4 chips condición, timeline 24h barras coloreadas, card pico de riesgo, skeleton, ErrorMessage
+- Frontend `App.tsx`: import + KEY_MAP `fire-danger`→`forecast` + nav item 🔥 + route `/incendios`
+- Tests `tests/test_incendios_router.py`: 9 tests — 503 sin config, happy path estimado, happy path FWI, peak correcto, bbox 422, missing params 422, slot fields, excepción genérica 503
+- `tests/conftest.py`: limpiar `_fire_raw_cache` entre tests
+
+**Files changed:**
+- `apps/backend/app/services/fire_danger.py` — NUEVO
+- `apps/backend/app/schemas/incendios.py` — NUEVO
+- `apps/backend/app/routers/incendios.py` — NUEVO
+- `apps/backend/app/main.py` — import incendios + include_router
+- `apps/backend/app/core/config.py` — `cache_ttl_fire_seconds`
+- `apps/backend/tests/test_incendios_router.py` — NUEVO, 9 tests
+- `apps/backend/tests/conftest.py` — clear `_fire_raw_cache`
+- `apps/frontend/src/lib/api.ts` — interfaces + api.fireDanger()
+- `apps/frontend/src/hooks/useWeather.ts` — useFireDanger
+- `apps/frontend/src/pages/Incendios.tsx` — NUEVO
+- `apps/frontend/src/App.tsx` — import + KEY_MAP + nav + route
+
+**Tests:**
+- `uv run pytest tests/test_incendios_router.py -v` → 9/9 passed
+- `uv run pytest --tb=short -q` → 328 passed, 2 failed (pre-existentes en test_tools_router.py, sin relación)
+- `pnpm tsc --noEmit` → 0 errores TypeScript
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-05-23 — fix(sport+nav+icons): viento/sol, pill clicks, SVG ID collision
+
+**Done:**
+- SportBlock: eliminada sección `best_window`; agregados chips de Viento (velocidad + dirección) y Sol (4 estados: sin sol / moderado / directo / UV alto) debajo de sensación térmica
+- InfiniteNavRail: eliminado `setPointerCapture` — era la causa de que los pills no fueran clickeables (pointer capture redirigía el `pointerup` al container, impidiendo síntesis del `click` en NavLink)
+- vite.config.ts: instalado `@svgr/plugin-svgo` + configurado `prefixIds` en SVGO → IDs únicos por archivo SVG; corrige colisión de gradientes Meteocons cuando múltiples íconos se renderizan en la misma página
+
+**Files changed:**
+- `apps/frontend/src/components/clima/SportBlock.tsx` — best_window removido, chips viento+sol añadidos
+- `apps/frontend/src/components/ui/InfiniteNavRail.tsx` — removido `setPointerCapture`
+- `apps/frontend/vite.config.ts` — svgr con @svgr/plugin-svgo + prefixIds
+- `apps/frontend/package.json` + `pnpm-lock.yaml` — @svgr/plugin-svgo@8.1.0 como devDep
+
+**Tests:**
+- `pnpm run build` — BUILD OK (0 errores TS), bundle hash cambió (`DrxbvMMl` → `BjTbA8Gd`), +4 KB esperados por prefijos de IDs
+- Commit `413f6e3` pusheado a main
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-05-23 20:30 — Nav: InfiniteNavRail drag interactivo + blur lateral
+
+**Done:**
+- Drag interactivo (mouse/touch/stylus) en ambas filas del InfiniteNavRail
+- Auto-scroll migrado de CSS `@keyframes` a `requestAnimationFrame` en JS
+- Cursor `grab` → `grabbing` al arrastrar; drag >5px suprime click accidental
+- Loop infinito garantizado: RAF aguarda `halfWidthRef` antes del primer tick
+- `wrapPosition()` en `onPointerMove` — sin salto al soltar cerca del límite
+- Blur lateral: dos overlays absolutos `pointer-events:none` con gradiente + `backdropFilter: blur(2px)` (reemplaza `maskImage` en container, más compatible Safari)
+
+**Files changed:**
+- `apps/frontend/src/components/ui/InfiniteNavRail.tsx` — rewrite completo con RAF + drag + blur overlays
+- `apps/frontend/src/index.css` — removidas reglas `nav-marquee` (CSS ya no necesario)
+
+**Tests:**
+- `pnpm run build` — BUILD OK (0 errores TS), commits `e445053` y `7d26fd6` en main
+
+**Next:**
+- Awaiting user direction
+
+---
+
 ## 2026-05-23 18:00 — Terremotos: MagnitudeScaleBar indicator + Fecha column
 
 **Done:**

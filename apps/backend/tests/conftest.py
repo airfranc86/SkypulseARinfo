@@ -109,15 +109,18 @@ def disable_windy_by_default(monkeypatch):
     que intentan Windy primero caigan determinísticamente al fallback Open-Meteo
     (que es donde apuntan los mocks existentes).
 
-    También limpia el cache crudo de Windy entre tests.
+    También limpia el cache crudo de Windy y fire_danger entre tests.
     """
     import app.core.config as cfg
     import app.services.windy as windy_module
+    import app.services.fire_danger as fire_module
 
     monkeypatch.setattr(cfg.settings, "windy_api_key", "", raising=False)
     windy_module._raw_cache.clear()
+    fire_module._fire_raw_cache.clear()
     yield
     windy_module._raw_cache.clear()
+    fire_module._fire_raw_cache.clear()
 
 
 # ---------------------------------------------------------------------------

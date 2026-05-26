@@ -13,7 +13,7 @@ const CONFIDENCE_COLOR: Record<string, string> = {
 
 export function Forecast7dCards({ days }: Props) {
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
+    <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin', scrollSnapType: 'x mandatory' }}>
       {days.map((day, idx) => {
         const isHighlight = idx === 0 || day.confidence_label === 'ALTA'
         return <DayCard key={day.date} day={day} highlighted={isHighlight} />
@@ -31,6 +31,7 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
       className="shrink-0 flex flex-col items-center gap-2 rounded-2xl px-4 py-4"
       style={{
         minWidth: '100px',
+        scrollSnapAlign: 'start',
         background: 'var(--color-card)',
         border: highlighted
           ? `1px solid ${confColor}55`

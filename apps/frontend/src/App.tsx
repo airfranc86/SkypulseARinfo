@@ -28,6 +28,7 @@ import { Nubes } from '@/pages/Nubes'
 import { Metar } from '@/pages/Metar'
 import { PrevisionClima } from '@/pages/PrevisionClima'
 import { Volcanes } from '@/pages/Volcanes'
+import { Incendios } from '@/pages/Incendios'
 import { useVolcanes } from '@/hooks/useWeather'
 
 // ── queryKey → ModelCategory map ─────────────────────────────────────────────
@@ -42,6 +43,7 @@ const KEY_MAP: Record<string, ModelCategory> = {
   'lavar-coche':        'forecast',
   'laundry-forecast':   'forecast',
   'earthquakes':        'earthquakes',
+  'fire-danger':        'forecast',
 }
 
 function extractSource(data: unknown, queryKey0: string): string | null {
@@ -140,6 +142,7 @@ const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
   { to: '/terremotos',    label: 'Terremotos',    emoji: '🌍', color: '#e05545' },
   { to: '/cota-de-nieve', label: 'Cota de nieve', emoji: '⛷️', color: '#90aabb' },
   { to: '/volcanes',      label: 'Volcanes',      emoji: '🌋', color: '#e05545' },
+  { to: '/incendios',     label: 'Incendios',     emoji: '🔥', color: '#e05545' },
 ]
 
 /** Static catalog pages — no backend dependency (Row 2, scrolls →) */
@@ -271,6 +274,7 @@ function RootLayout() {
           <Route path="/hacer-deporte" element={<Navigate to="/prevision" replace />} />
           <Route path="/terremotos" element={<Terremotos location={location} />} />
           <Route path="/volcanes"   element={<Volcanes />} />
+          <Route path="/incendios"  element={<Incendios location={location} />} />
           <Route path="/lavar-auto" element={<LavarCoche location={location} />} />
           <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
           <Route path="/lluvias" element={<Lluvias />} />
