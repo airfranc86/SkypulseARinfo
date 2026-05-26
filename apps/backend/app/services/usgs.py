@@ -32,11 +32,14 @@ async def _fetch_usgs() -> list[dict]:
     """HTTP GET a USGS FDSN. Retorna lista de features GeoJSON."""
     # starttime explícito: últimas 24h — garantiza que eventos recientes
     # siempre estén incluidos sin depender del default de USGS.
-    starttime = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S")
+    # Ventana de 30 días: Argentina tiene actividad sísmica moderada;
+    # con 24h y M≥2.5 el resultado suele ser vacío. M≥2.0 cubre bien
+    # los eventos perceptibles en el país.
+    starttime = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S")
     params = {
         **_AR_BBOX,
         "format": "geojson",
-        "minmagnitude": 2.5,
+        "minmagnitude": 2.0,
         "orderby": "time",
         "limit": 100,
         "starttime": starttime,
