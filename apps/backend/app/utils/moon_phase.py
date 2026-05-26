@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from math import acos, asin, cos, degrees, floor, pi, radians, sin
+from math import acos, asin, cos, degrees, pi, radians, sin
 
 
 @dataclass(frozen=True)

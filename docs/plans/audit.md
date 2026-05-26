@@ -5,7 +5,7 @@
 **Tests backend:** 328 passed · 2 rotos (ver P1) · cobertura global **81%**  
 **Build frontend:** ✓ 2511 modules · 0 errores TS · bundle 1.115 MB (WARN)  
 **Deploy:** Backend → Render · Frontend → Vercel  
-**Waves completadas:** Wave 1 ✅ · Wave 2 🔄 · Wave 3 ⬜ · Wave 4 ⬜
+**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 ✅ · Wave 4 ✅
 
 ---
 
@@ -145,7 +145,7 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 
 ## Wave 2 — Code Review Python + TypeScript
 
-**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 🔄 · Wave 4 ⬜
+**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 ✅ · Wave 4 ✅
 
 ### Python — Confirmado OK ✅
 - Frozen dataclasses consistentes en todos los DTOs de servicio
@@ -218,13 +218,50 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 
 ## Wave 3 — Performance + Dead Code
 
-> 🔄 En progreso
+> ✅ Completada 2026-05-26
+
+### Aplicado
+
+| ID | Fix | Archivo |
+|----|-----|---------|
+| R-05 | httpx shared client reemplaza clientes locales | `services/openmeteo.py` |
+| R-06/07 | Imports muertos eliminados (`_parse_hourly`, `_ms_to_kmh`, `timezone`, `timedelta`) | `services/fire_danger.py` |
+| R-08 | `import math` movido al nivel de módulo | `services/fire_danger.py` |
+| R-09 | Import local `_DAY_LABELS_ES` dentro de función eliminado | `routers/weather.py` |
+| R-10 | Import local `date as _date_cls` dentro de función eliminado | `routers/weather.py` |
+| R-14 | `Any` import muerto eliminado | `services/smn.py` |
+| R-15 | `floor` import muerto eliminado | `utils/moon_phase.py` |
+| S-15 | Code splitting: 11 páginas secundarias → `React.lazy()` + `Suspense` | `App.tsx` |
+| S-18 | Verificado: páginas legacy ya no existían (redirect ya en App.tsx) | — |
+| T-15 | Cast `as Promise<T>` redundante eliminado | `lib/api.ts` |
+
+### No aplicados (falsos positivos del audit)
+- T-18: `currentMouse` muta por índice — `const` es correcto pero cosmético.
+- T-19: `supportLinearFiltering` sí se lee (línea 147 en el objeto `ext`).
+
+**Tests:** 328 passed · 2 fallos pre-existentes (sin cambios)
+**Build:** ✓ 16 chunks separados · 0 errores TS
 
 ---
 
 ## Wave 4 — UI/Design
 
-> ⬜ Pendiente
+> ✅ Completada 2026-05-26
+
+### Aplicado
+
+| ID | Fix | Archivo |
+|----|-----|---------|
+| T-06 | `useEffect + setState` → `useMemo` para búsqueda síncrona (elimina double render) | `LocationPicker.tsx` |
+| T-08 | `id="arcGrad"` hardcodeado → `useId()` por instancia | `DayArc.tsx` |
+| T-11 | `volcanAlertColor` y `navTools` → `useMemo` (evita nueva referencia en re-renders) | `App.tsx` |
+| T-12 | IIFE moon dot en JSX → variable `moonDotProps` antes del `return` | `DayArc.tsx` |
+| UI | Incendios gauge: needle visible + score background + gauge responsive | `pages/Incendios.tsx` |
+| UI | Incendios chips: emoji por tipo + borde critico en condiciones extremas | `pages/Incendios.tsx` |
+| UI | Incendios timeline: scroll horizontal en mobile + hora actual resaltada | `pages/Incendios.tsx` |
+| UI | Incendios peak card: borde con color del nivel + badge prominente | `pages/Incendios.tsx` |
+
+**Build:** ✓ 17 chunks · 0 errores TS
 
 ---
 

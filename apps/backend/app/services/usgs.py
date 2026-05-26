@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Final
 
-import httpx
 from cachetools import TTLCache
+from httpx import HTTPStatusError, TimeoutException as HttpxTimeout
 
 from app.core.config import settings
+from app.core.http_client import get_client
 from app.schemas.earthquakes import EarthquakeEvent, EarthquakesResponse
 from app.services.smn import haversine
 
@@ -22,24 +23,32 @@ _cache_lock = asyncio.Lock()
 _AR_BBOX = {
     "minlatitude": -55,
     "maxlatitude": -21,
-    "minlongitude": -74,
+    "minlongitude": -76,   # era -74; ampliado para incluir franja costera chilena percibida en AR
     "maxlongitude": -53,
 }
 
 
 async def _fetch_usgs() -> list[dict]:
     """HTTP GET a USGS FDSN. Retorna lista de features GeoJSON."""
+    # starttime explícito: últimas 24h — garantiza que eventos recientes
+    # siempre estén incluidos sin depender del default de USGS.
+    starttime = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S")
     params = {
         **_AR_BBOX,
         "format": "geojson",
         "minmagnitude": 2.5,
         "orderby": "time",
         "limit": 100,
+        "starttime": starttime,
     }
-    async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-        resp = await client.get(settings.usgs_base_url, params=params)
-        resp.raise_for_status()
-        return resp.json().get("features", [])
+    client = get_client()
+    resp = await client.get(
+        settings.usgs_base_url,
+        params=params,
+        timeout=settings.http_timeout_seconds,
+    )
+    resp.raise_for_status()
+    return resp.json().get("features", [])
 
 
 def _parse_event(feature: dict, user_lat: float, user_lon: float) -> EarthquakeEvent | None:
@@ -88,9 +97,9 @@ async def get_recent_earthquakes(
             else:
                 features = await _fetch_usgs()
                 _event_cache[_CACHE_KEY] = features
-    except httpx.TimeoutException:
+    except HttpxTimeout:
         logger.warning("USGS request timeout")
-    except httpx.HTTPStatusError as exc:
+    except HTTPStatusError as exc:
         logger.warning("USGS HTTP error: %s", exc.response.status_code)
     except asyncio.CancelledError:
         raise
@@ -103,6 +112,8 @@ async def get_recent_earthquakes(
         if ev is not None and ev.distance_km <= radius_km:
             events.append(ev)
 
-    events.sort(key=lambda e: (e.distance_km, -e.magnitude))
+    # Ordenar por fecha descendente (más reciente primero) — un monitor de
+    # sismos debe mostrar lo último, no el más cercano.
+    events.sort(key=lambda e: e.occurred_at, reverse=True)
 
     return EarthquakesResponse(total=len(events), radius_km=radius_km, events=events)

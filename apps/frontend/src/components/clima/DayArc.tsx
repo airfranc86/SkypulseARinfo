@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import type { DayArcInfo, MoonPhaseInfo } from '@/lib/api'
 
@@ -14,6 +15,10 @@ function timeLabel(iso: string): string {
 }
 
 export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
+  // Unique gradient ID to avoid SVG ID collisions when multiple instances render
+  const uid = useId()
+  const gradId = `arcGrad-${uid.replace(/:/g, '')}`
+
   // Arc geometry (SVG viewBox 0 0 200 110)
   const cx = 100, cy = 100, r = 85
 
@@ -30,6 +35,18 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
 
   const isAfterSunset = dayArc.current_position_pct > 1
 
+  // T-12: pre-compute moon dot position instead of IIFE inside JSX
+  const moonDotProps = (() => {
+    if (!moonPhase.is_above_horizon || moonPhase.position_pct == null) return null
+    const moonPct = Math.max(0, Math.min(1, moonPhase.position_pct))
+    const moonAngleDeg = 180 - moonPct * 180
+    const moonAngleRad = (moonAngleDeg * Math.PI) / 180
+    return {
+      cx: cx + r * Math.cos(moonAngleRad),
+      cy: cy - r * Math.sin(moonAngleRad),
+    }
+  })()
+
   return (
     <div
       className="rounded-2xl p-5"
@@ -38,7 +55,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
       {/* SVG arc */}
       <svg viewBox="0 0 200 126" className="w-full" style={{ maxHeight: '140px' }}>
         <defs>
-          <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#f0a030" stopOpacity="0.3" />
             <stop offset="50%" stopColor="#c8a84b" stopOpacity="0.7" />
             <stop offset="100%" stopColor="#f0a030" stopOpacity="0.3" />
@@ -59,7 +76,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
           <path
             d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${sunX} ${sunY}`}
             fill="none"
-            stroke="url(#arcGrad)"
+            stroke={`url(#${gradId})`}
             strokeWidth="3"
             strokeLinecap="round"
           />
@@ -68,7 +85,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
           <path
             d={arcPath}
             fill="none"
-            stroke="url(#arcGrad)"
+            stroke={`url(#${gradId})`}
             strokeWidth="3"
             strokeLinecap="round"
             strokeOpacity="0.4"
@@ -84,21 +101,10 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         )}
 
         {/* Moon dot — solo cuando está sobre el horizonte y hay posición calculada */}
-        {moonPhase.is_above_horizon && moonPhase.position_pct != null && (
+        {moonDotProps && (
           <>
-            {(() => {
-              const moonPct = Math.max(0, Math.min(1, moonPhase.position_pct))
-              const moonAngleDeg = 180 - moonPct * 180
-              const moonAngleRad = (moonAngleDeg * Math.PI) / 180
-              const moonX = cx + r * Math.cos(moonAngleRad)
-              const moonY = cy - r * Math.sin(moonAngleRad)
-              return (
-                <>
-                  <circle cx={moonX} cy={moonY} r="7" fill="rgba(200,210,230,0.12)" />
-                  <circle cx={moonX} cy={moonY} r="4" fill="#c8d8e8" opacity="0.85" />
-                </>
-              )
-            })()}
+            <circle cx={moonDotProps.cx} cy={moonDotProps.cy} r="7" fill="rgba(200,210,230,0.12)" />
+            <circle cx={moonDotProps.cx} cy={moonDotProps.cy} r="4" fill="#c8d8e8" opacity="0.85" />
           </>
         )}
 

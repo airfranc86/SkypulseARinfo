@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
 from cachetools import TTLCache
 
@@ -22,10 +23,8 @@ from app.core.http_client import get_client
 from app.services.windy import (
     WindyNotConfiguredError,
     _fetch_raw,
-    _parse_hourly,
     _safe_get,
     _k_to_c,
-    _ms_to_kmh,
     _AR_TZ,
 )
 
@@ -203,8 +202,6 @@ def _parse_fire_entries_from_fwi(data: dict) -> list[FireDangerEntry]:
     wind_v: list[float | None] = data.get("wind_v-surface", [])
     precip: list[float | None] = data.get("past3hprecip-surface", [])
 
-    import math
-
     entries: list[FireDangerEntry] = []
     for i, ts_ms in enumerate(ts_ms_list):
         dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=_AR_TZ)
@@ -245,8 +242,6 @@ def _parse_fire_entries_from_fwi(data: dict) -> list[FireDangerEntry]:
 
 def _parse_fire_entries_from_gfs(lat: float, lon: float, data: dict) -> list[FireDangerEntry]:
     """Genera FireDangerEntry estimados a partir del payload GFS estándar."""
-    import math
-
     ts_ms_list: list[int] = data.get("ts", [])
     temp_k: list[float | None] = data.get("temp-surface", [])
     rh: list[float | None] = data.get("rh-surface", [])

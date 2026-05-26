@@ -21,7 +21,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 
 export interface NavRailItem {
   to: string
@@ -114,6 +114,8 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
   // Cursor state — only this needs a re-render
   const [cursor, setCursor] = useState<'grab' | 'grabbing'>('grab')
 
+  const navigate = useNavigate()
+
   // Speed: negative = leftward (default), positive = rightward (reverse rows)
   const speed = reverse ? AUTO_SCROLL_SPEED : -AUTO_SCROLL_SPEED
 
@@ -181,10 +183,14 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
     totalDragDelta.current = 0
     dragStartX.current = e.clientX
     dragStartPos.current = posRef.current
-    // NOTE: intentionally NOT calling setPointerCapture — pointer capture redirects
-    // pointerup to the container, which prevents the browser from synthesising a
-    // click event on the child NavLink elements (pills stop being clickable).
-    // Dragging outside the container is handled by onPointerLeave → onPointerUp.
+    // Explicit capture on the container overrides the browser's implicit pointer
+    // capture on child NavLink elements. Without this, on mobile the browser
+    // captures the pointer on the NavLink that received the initial touch, so
+    // pointermove/pointerup go to the NavLink and the container never sees them
+    // — the drag never works and isDragging gets stuck in true.
+    // Navigation is now handled by onContainerClick below (since setPointerCapture
+    // causes the click event to fire on the container, not on the NavLink).
+    e.currentTarget.setPointerCapture(e.pointerId)
     setCursor('grabbing')
   }, [])
 
@@ -206,18 +212,39 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
     setCursor('grab')
   }, [])
 
+  /**
+   * With setPointerCapture, the browser fires click on the container (not on the
+   * NavLink). For short taps (totalDragDelta ≤ 5 px) we synthesise navigation by
+   * hit-testing the physical tap coordinates to find the underlying NavLink.
+   * Keyboard navigation (Tab + Enter on a NavLink) still works natively because
+   * keyboard-originated clicks are NOT pointer-captured.
+   */
+  const onContainerClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (totalDragDelta.current > 5) return // real drag — skip navigation
+      const el = document.elementFromPoint(e.clientX, e.clientY)
+      const link = el?.closest('a') as HTMLAnchorElement | null
+      if (link) {
+        const href = link.getAttribute('href')
+        if (href) navigate(href)
+      }
+    },
+    [navigate],
+  )
+
   return (
     <div
       ref={containerRef}
       role="list"
       aria-label={ariaLabel}
       className="relative overflow-hidden"
-      style={{ cursor }}
+      style={{ cursor, touchAction: 'pan-y' }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
       onPointerCancel={onPointerUp}
+      onClick={onContainerClick}
     >
       {/* Frosted-glass left edge — pointer-events:none so drag still works */}
       <div style={edgeOverlayStyle('left')} aria-hidden="true" />
@@ -235,12 +262,6 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
             aria-label={item.label}
             draggable={false}
             style={({ isActive }) => pillStyle(item.color, isActive)}
-            onClick={(e) => {
-              // Suppress navigation when the user was actually dragging
-              if (totalDragDelta.current > 5) {
-                e.preventDefault()
-              }
-            }}
           >
             <span aria-hidden="true">{item.emoji}</span>
             <span style={{ position: 'relative' }}>

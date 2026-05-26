@@ -386,3 +386,34 @@ Activar antes de cualquier push a producción.
 4. Implementar solo los cambios acordados
 5. Re-correr el skill para verificar que los P0/P1 están resueltos
 - coherencia entre prompt de imagen y contenido
+
+### Gotcha — cliente httpx compartido
+
+`apps/backend/app/core/http_client.py` provee un singleton `AsyncClient` compartido.
+Al migrar un servicio de `async with httpx.AsyncClient(...) as client:` a `get_client()`:
+
+1. **Eliminar `import httpx`** del servicio, pero **re-importar explícitamente** las excepciones que se usan en `except`:
+   ```python
+   from httpx import HTTPStatusError, TimeoutException as HttpxTimeout
+   ```
+   Si quedó `except httpx.TimeoutException:` con `httpx` no importado → `NameError` en runtime.
+
+2. **Tests**: El fixture `init_shared_http_client` (autouse en conftest.py) inicializa el singleton antes de cada test. `respx.mock` intercepta al cliente compartido correctamente.
+
+3. **Timeout por call**: el singleton no tiene timeout global; pasar `timeout=settings.http_timeout_seconds` en cada `.get()`/`.post()`.
+
+---
+
+## Cuaderno NotebookLM — Fuente de verdad del proyecto
+
+El proyecto tiene un cuaderno NotebookLM permanente con información técnica verificada:
+
+- **ID:** `ccca882a-155e-4425-84f4-5107a3e6f553`
+- **URL:** `https://notebooklm.google.com/notebook/ccca882a-155e-4425-84f4-5107a3e6f553`
+
+**Protocolo obligatorio:**
+- Antes de tomar decisiones técnicas sobre fuentes de datos, APIs externas o arquitectura, consultá este cuaderno.
+- Cuando se complete una wave de auditoría o se agregue una feature significativa, actualizá el cuaderno con los nuevos hallazgos.
+- El cuaderno es la fuente de referencia más confiable sobre el estado actual del proyecto.
+
+Para actualizar: usá la herramienta `mcp__notebooklm-mcp__notebook_query` con el ID del cuaderno.

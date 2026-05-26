@@ -143,10 +143,12 @@ class TestGetRecentEarthquakes:
         assert len(result.events) == 3
 
     @pytest.mark.asyncio
-    async def test_sorted_by_distance(self):
+    async def test_sorted_by_time_desc(self):
+        # Eventos con timestamps distintos — el más reciente primero
+        newer_ms = 1705320000000 + 3600_000  # 1 hora más nuevo
         features = [
-            _feature("far", lon=-68.5, lat=-32.9, mag=4.5),   # lejos
-            _feature("close", lon=-58.5, lat=-35.0, mag=3.0),  # cerca
+            _feature("older", lon=-68.5, lat=-32.9, mag=4.5, time_ms=1705320000000),
+            _feature("newer", lon=-58.5, lat=-35.0, mag=3.0, time_ms=newer_ms),
         ]
         with respx.mock:
             respx.get(url__startswith="https://earthquake.usgs.gov").mock(
@@ -154,8 +156,8 @@ class TestGetRecentEarthquakes:
             )
             result = await get_recent_earthquakes(-34.6, -58.4, radius_km=2000)
 
-        assert result.events[0].id == "close"
-        assert result.events[1].id == "far"
+        assert result.events[0].id == "newer"
+        assert result.events[1].id == "older"
 
     @pytest.mark.asyncio
     async def test_filter_by_radius(self):
@@ -248,12 +250,12 @@ class TestGetRecentEarthquakes:
         assert result.total == 0  # el evento está a ~1000 km, fuera de 500
 
     @pytest.mark.asyncio
-    async def test_tie_sort_by_magnitude_desc(self):
-        # Dos eventos a distancia similar — el de mayor magnitud primero
-        # Ambos en longitud idéntica, diff lat mínima para distancias casi iguales
+    async def test_newer_event_first_regardless_of_magnitude(self):
+        # El evento más reciente aparece primero aunque tenga menor magnitud
+        newer_ms = 1705320000000 + 7200_000  # 2 horas más nuevo
         features = [
-            _feature("low_mag", lon=-58.5, lat=-35.0, mag=3.0),
-            _feature("high_mag", lon=-58.5, lat=-35.0, mag=5.0),
+            _feature("big_old", lon=-58.5, lat=-35.0, mag=5.0, time_ms=1705320000000),
+            _feature("small_new", lon=-58.5, lat=-35.0, mag=3.0, time_ms=newer_ms),
         ]
         with respx.mock:
             respx.get(url__startswith="https://earthquake.usgs.gov").mock(
@@ -261,5 +263,6 @@ class TestGetRecentEarthquakes:
             )
             result = await get_recent_earthquakes(-34.6, -58.4, radius_km=2000)
 
-        # Con igual distancia, mayor magnitud primero
-        assert result.events[0].magnitude == 5.0
+        # El más reciente (menor magnitud) aparece primero
+        assert result.events[0].id == "small_new"
+        assert result.events[1].id == "big_old"

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { MapPin, Navigation, Search, X } from 'lucide-react'
 import { searchCities, type City } from '@/lib/cities-ar'
 import { cn } from '@/lib/utils'
@@ -19,34 +19,40 @@ export function LocationPicker({
   geoError,
 }: LocationPickerProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<City[]>([])
-  const [open, setOpen] = useState(false)
+  // dismissed: user explicitly closed the dropdown for the current query value
+  const [dismissed, setDismissed] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
-  useEffect(() => {
-    const cities = searchCities(query)
-    setResults(cities)
-    setOpen(cities.length > 0)
-  }, [query])
+  // T-06: synchronous search via useMemo avoids double render from useEffect+setState
+  const results = useMemo(
+    () => (query.length >= 2 ? searchCities(query) : []),
+    [query],
+  )
+
+  // Dropdown is open when there are results AND user hasn't dismissed it
+  const open = results.length > 0 && !dismissed
+
+  function handleQueryChange(value: string) {
+    setQuery(value)
+    setDismissed(false)  // new keystroke reopens the list
+  }
 
   function handleSelect(city: City) {
     setQuery(city.name)
-    setResults([])
-    setOpen(false)
+    setDismissed(true)
     onSelectCity(city)
   }
 
   function handleClear() {
     setQuery('')
-    setResults([])
-    setOpen(false)
+    setDismissed(false)
     inputRef.current?.focus()
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
-      setOpen(false)
+      setDismissed(true)
       return
     }
     if (e.key === 'ArrowDown' && open) {
@@ -64,7 +70,7 @@ export function LocationPicker({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => handleQueryChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={label}
           aria-label="Buscar ciudad"
@@ -108,7 +114,7 @@ export function LocationPicker({
                   onClick={() => handleSelect(city)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSelect(city)
-                    if (e.key === 'Escape') setOpen(false)
+                    if (e.key === 'Escape') setDismissed(true)
                   }}
                 >
                   <MapPin className="size-3.5 shrink-0 text-[var(--color-primary)]" />

@@ -5,6 +5,50 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-26 — Audit Wave 3 (Performance + Dead Code) + Wave 4 (UI/Design) ✅
+
+**Done:**
+
+**Wave 3 — Performance + Dead Code:**
+- Dead imports eliminados: `_parse_hourly`, `_ms_to_kmh`, `timezone`, `timedelta` (fire_danger.py); `Any` (smn.py); `floor` (moon_phase.py)
+- `import math` movido al nivel de módulo en fire_danger.py
+- Imports locales dentro de funciones eliminados en routers/weather.py (R-09, R-10)
+- `services/openmeteo.py`: reemplazados 4 bloques `async with httpx.AsyncClient(...)` locales por `get_client()` compartido con timeout por-call
+- `App.tsx`: code splitting — 11 páginas secundarias → `React.lazy()` + `<Suspense>` (bundle split en 16 chunks)
+- `lib/api.ts`: cast `as Promise<T>` redundante eliminado
+- `CLAUDE.md`: agregada sección cuaderno NotebookLM ID `ccca882a-155e-4425-84f4-5107a3e6f553`
+
+**Wave 4 — UI/Design:**
+- `DayArc.tsx`: `useId()` para gradient ID único por instancia (T-08) + moonDot IIFE → variable (T-12)
+- `LocationPicker.tsx`: `useEffect+setState` → `useMemo` eliminando double render (T-06)
+- `App.tsx`: `volcanAlertColor` y `navTools` → `useMemo([volcanesData])` (T-11)
+- `Incendios.tsx`: needle SVG visible + score background + responsive gauge (`max-w-xs`) + chips con emojis + bordes críticos + timeline mobile scroll + peak card con color de nivel
+
+**Files changed:**
+- `apps/backend/app/services/fire_danger.py` — dead imports + math module-level
+- `apps/backend/app/services/smn.py` — Any import removed
+- `apps/backend/app/utils/moon_phase.py` — floor import removed
+- `apps/backend/app/routers/weather.py` — local imports removed
+- `apps/backend/app/services/openmeteo.py` — shared httpx client
+- `apps/frontend/src/lib/api.ts` — redundant cast removed
+- `apps/frontend/src/App.tsx` — React.lazy + Suspense + useMemo navTools/volcanAlertColor
+- `apps/frontend/src/components/clima/DayArc.tsx` — useId() + moonDot refactor
+- `apps/frontend/src/components/LocationPicker.tsx` — useMemo results
+- `apps/frontend/src/pages/Incendios.tsx` — UI improvements
+- `CLAUDE.md` — NLM notebook ID documented
+- `audit.md` — Wave 3 + Wave 4 marcadas como completadas
+
+**Tests:**
+- `pytest --tb=short -q` → 328 passed · 2 fallos pre-existentes (sin cambios)
+- `pnpm run build` → ✓ 17 chunks · 0 errores TS
+
+**Next:**
+- Audit completado (todas las waves ✅)
+- Próximas mejoras posibles: cobertura fire_danger.py (22%) + oavv.py (33%) + openmeteo.py (42%)
+- Revisión.md: auditar terremoto EMSC ID 2000865 + interactividad header
+
+---
+
 ## 2026-05-26 — Forecast7dCards scroll-snap + feature Incendios 🔥
 
 **Done:**

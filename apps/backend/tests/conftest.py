@@ -5,9 +5,11 @@ from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+import respx
 from httpx import AsyncClient, ASGITransport
 
 from app.main import app
+import app.core.http_client as _http_client_module
 
 
 # ---------------------------------------------------------------------------
@@ -132,3 +134,24 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+# ---------------------------------------------------------------------------
+# Singleton httpx client — inicializado para tests que usan get_client()
+# directamente (ej. test_openmeteo.py). respx.mock() intercepta el transport
+# del cliente, por lo que necesitamos que el singleton use MockTransport.
+# ---------------------------------------------------------------------------
+
+@pytest_asyncio.fixture(autouse=True)
+async def init_shared_http_client():
+    """Inicializa el singleton httpx para tests que llaman get_client() directamente.
+
+    respx.mock() intercepta a nivel de MockRouter global — el singleton necesita
+    ser un AsyncClient normal; respx lo intercepta automáticamente cuando está
+    activo como context manager durante el test.
+    """
+    client = AsyncClient()
+    _http_client_module._client = client
+    yield
+    await client.aclose()
+    _http_client_module._client = None

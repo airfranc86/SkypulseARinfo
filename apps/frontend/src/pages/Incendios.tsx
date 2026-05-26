@@ -25,6 +25,24 @@ const RISK_COLORS: Record<string, string> = {
   'Extremo':  '#ff3333',
 }
 
+// Condition thresholds that trigger critical styling
+function isCriticalCondition(label: string, value: string | number | null): boolean {
+  if (value === null || value === undefined) return false
+  const n = typeof value === 'string' ? parseFloat(value) : value
+  if (label === 'Humedad' && n < 20) return true
+  if (label === 'Viento' && n > 60) return true
+  if (label === 'Temperatura' && n > 38) return true
+  return false
+}
+
+// Emoji icons for each condition chip
+const CONDITION_ICONS: Record<string, string> = {
+  'Temperatura':   '🌡️',
+  'Humedad':       '💧',
+  'Viento':        '💨',
+  'Precipitación': '🌧️',
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -44,11 +62,18 @@ function ScoreGauge({ score, color }: { score: number; color: string }) {
   const endX   = cx + radius
   const endY   = cy
 
+  // Needle angle: map 0–100 score to 180°–0° (left to right)
+  const needleAngleDeg = 180 - (score / 100) * 180
+  const needleAngleRad = (needleAngleDeg * Math.PI) / 180
+  const needleLen = 40
+  const needleX = cx + needleLen * Math.cos(needleAngleRad)
+  const needleY = cy - needleLen * Math.sin(needleAngleRad)
+
   return (
     <svg
-      viewBox="0 0 140 80"
+      viewBox="0 0 140 90"
       aria-label={`Score de riesgo: ${score} de 100`}
-      className="w-full max-w-[220px]"
+      className="w-full max-w-xs mx-auto"
     >
       {/* Track */}
       <path
@@ -68,12 +93,46 @@ function ScoreGauge({ score, color }: { score: number; color: string }) {
         strokeDasharray={`${progress} ${circumference}`}
         className="motion-safe:[transition:stroke-dasharray_0.6s_ease]"
       />
-      {/* Score text */}
+      {/* Needle with white stroke for visibility */}
+      <line
+        x1={cx}
+        y1={cy}
+        x2={needleX}
+        y2={needleY}
+        stroke="white"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        opacity="0.5"
+      />
+      <line
+        x1={cx}
+        y1={cy}
+        x2={needleX}
+        y2={needleY}
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        className="motion-safe:[transition:all_0.6s_ease]"
+      />
+      {/* Needle pivot */}
+      <circle cx={cx} cy={cy} r="4" fill={color} />
+      <circle cx={cx} cy={cy} r="2.5" fill="white" opacity="0.8" />
+
+      {/* Score text — background rect for legibility */}
+      <rect
+        x={cx - 22}
+        y={cy - 26}
+        width="44"
+        height="22"
+        rx="5"
+        fill="var(--color-card)"
+        opacity="0.75"
+      />
       <text
         x={cx}
-        y={cy - 6}
+        y={cy - 10}
         textAnchor="middle"
-        fontSize="22"
+        fontSize="18"
         fontWeight="700"
         fill="var(--color-foreground)"
         fontFamily="var(--font-serif)"
@@ -82,9 +141,9 @@ function ScoreGauge({ score, color }: { score: number; color: string }) {
       </text>
       <text
         x={cx}
-        y={cy + 10}
+        y={cy + 6}
         textAnchor="middle"
-        fontSize="9"
+        fontSize="8"
         fill="var(--color-muted-foreground)"
         fontFamily="var(--font-sans)"
       >
@@ -97,7 +156,7 @@ function ScoreGauge({ score, color }: { score: number; color: string }) {
   )
 }
 
-/** Chip de condición meteorológica. */
+/** Chip de condición meteorológica con ícono y alerta crítica. */
 function ConditionChip({
   label,
   value,
@@ -110,16 +169,30 @@ function ConditionChip({
   const display = value !== null && value !== undefined
     ? `${value}${unit ? ` ${unit}` : ''}`
     : '—'
+  const critical = isCriticalCondition(label, value)
+  const icon = CONDITION_ICONS[label] ?? '📊'
 
   return (
     <div
-      className="rounded-xl px-4 py-3 flex flex-col gap-0.5"
-      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+      className="rounded-xl px-4 py-3 flex flex-col gap-1"
+      style={{
+        background: 'var(--color-card)',
+        border: critical
+          ? '1.5px solid rgba(224,85,69,0.6)'
+          : '1px solid var(--color-border)',
+        boxShadow: critical ? '0 0 0 3px rgba(224,85,69,0.08)' : undefined,
+      }}
     >
-      <span className="text-[.6rem] uppercase tracking-widest" style={{ color: 'var(--color-muted-foreground)' }}>
-        {label}
-      </span>
-      <span className="text-base font-semibold" style={{ color: 'var(--color-foreground)' }}>
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm leading-none" aria-hidden="true">{icon}</span>
+        <span className="text-[.6rem] uppercase tracking-widest" style={{ color: 'var(--color-muted-foreground)' }}>
+          {label}
+        </span>
+      </div>
+      <span
+        className="text-base font-semibold"
+        style={{ color: critical ? '#e05545' : 'var(--color-foreground)' }}
+      >
         {display}
       </span>
     </div>
@@ -131,6 +204,9 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
   const first24 = slots.slice(0, 24)
   const maxScore = Math.max(...first24.map(s => s.fire_risk_score), 1)
 
+  // Find current hour index (first slot is "now")
+  const nowIndex = 0
+
   return (
     <div
       className="rounded-xl p-4"
@@ -139,40 +215,52 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
       <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
         Próximas 24 h
       </p>
-      <div className="flex items-end gap-1 h-16">
-        {first24.map((slot, i) => {
-          const heightPct = (slot.fire_risk_score / maxScore) * 100
-          const color = RISK_COLORS[slot.fire_risk_label] ?? '#f0a030'
-          return (
-            <div
-              key={i}
-              className="flex-1 flex flex-col items-center justify-end gap-0.5 group cursor-help"
-              title={`${slot.hour_label} — ${slot.fire_risk_label} (${slot.fire_risk_score})`}
-            >
+      {/* Scrollable on mobile so bars never compress below usable size */}
+      <div className="overflow-x-auto -mx-1 px-1">
+        <div className="flex items-end gap-1 h-16 min-w-[320px]">
+          {first24.map((slot, i) => {
+            const heightPct = (slot.fire_risk_score / maxScore) * 100
+            const color = RISK_COLORS[slot.fire_risk_label] ?? '#f0a030'
+            const isNow = i === nowIndex
+            return (
               <div
-                className="w-full rounded-sm transition-all"
-                style={{
-                  height: `${Math.max(heightPct, 4)}%`,
-                  background: color,
-                  opacity: 0.85,
-                  minHeight: '3px',
-                }}
-              />
+                key={i}
+                className="flex-1 flex flex-col items-center justify-end gap-0.5 group cursor-help"
+                title={`${slot.hour_label} — ${slot.fire_risk_label} (${slot.fire_risk_score})`}
+              >
+                <div
+                  className="w-full rounded-sm transition-all"
+                  style={{
+                    height: `${Math.max(heightPct, 4)}%`,
+                    background: color,
+                    opacity: isNow ? 1 : 0.75,
+                    minHeight: '3px',
+                    outline: isNow ? `2px solid ${color}` : undefined,
+                    outlineOffset: isNow ? '1px' : undefined,
+                  }}
+                />
+              </div>
+            )
+          })}
+        </div>
+        {/* Hour labels — solo cada 4 slots para no saturar */}
+        <div className="flex items-center mt-1.5 min-w-[320px]">
+          {first24.map((slot, i) => (
+            <div key={i} className="flex-1 text-center">
+              {i % 4 === 0 && (
+                <span
+                  className="text-[.5rem]"
+                  style={{
+                    color: i === nowIndex ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
+                    fontWeight: i === nowIndex ? 700 : undefined,
+                  }}
+                >
+                  {slot.hour_label}
+                </span>
+              )}
             </div>
-          )
-        })}
-      </div>
-      {/* Hour labels — solo cada 4 slots para no saturar */}
-      <div className="flex items-center mt-1.5">
-        {first24.map((slot, i) => (
-          <div key={i} className="flex-1 text-center">
-            {i % 4 === 0 && (
-              <span className="text-[.5rem]" style={{ color: 'var(--color-muted-foreground)' }}>
-                {slot.hour_label}
-              </span>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -219,6 +307,7 @@ export function Incendios({ location }: Props) {
   if (location === null) return <PageSkeleton />
 
   const current = data?.slots[0] ?? null
+  const peakColor = RISK_COLORS[data?.peak_label ?? ''] ?? '#f0a030'
 
   return (
     <div>
@@ -240,13 +329,20 @@ export function Incendios({ location }: Props) {
               className="rounded-2xl p-6 flex flex-col items-center gap-3"
               style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
             >
-              <ScoreGauge score={data.current_score} color={data.current_color} />
+              {/* Responsive gauge: fills on mobile, capped on desktop */}
+              <div className="w-full max-w-xs mx-auto">
+                <ScoreGauge score={data.current_score} color={data.current_color} />
+              </div>
 
-              {/* Risk label */}
+              {/* Risk label with background for legibility */}
               <div className="flex flex-col items-center gap-2">
                 <span
-                  className="text-xl font-bold tracking-tight"
-                  style={{ color: data.current_color, fontFamily: 'var(--font-serif)' }}
+                  className="text-xl font-bold tracking-tight px-3 py-0.5 rounded-lg"
+                  style={{
+                    color: data.current_color,
+                    fontFamily: 'var(--font-serif)',
+                    background: `${data.current_color}18`,
+                  }}
                 >
                   {data.current_label}
                 </span>
@@ -300,10 +396,13 @@ export function Incendios({ location }: Props) {
             {/* Timeline de riesgo */}
             {data.slots.length > 1 && <RiskTimeline slots={data.slots} />}
 
-            {/* Pico de riesgo */}
+            {/* Pico de riesgo — border color matches peak level */}
             <div
               className="rounded-xl px-5 py-4 flex items-center justify-between gap-4"
-              style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+              style={{
+                background: 'var(--color-card)',
+                border: `1.5px solid ${peakColor}55`,
+              }}
             >
               <div>
                 <p
@@ -319,11 +418,14 @@ export function Incendios({ location }: Props) {
                   {data.peak_hour_label}
                 </p>
               </div>
-              <div className="text-right">
+              <div className="text-right flex flex-col items-end gap-1">
+                {/* Prominent badge for peak level */}
                 <span
-                  className="text-lg font-bold"
+                  className="text-sm font-bold px-3 py-1 rounded-full"
                   style={{
-                    color: RISK_COLORS[data.peak_label] ?? '#f0a030',
+                    color: peakColor,
+                    background: `${peakColor}20`,
+                    border: `1.5px solid ${peakColor}55`,
                     fontFamily: 'var(--font-serif)',
                   }}
                 >

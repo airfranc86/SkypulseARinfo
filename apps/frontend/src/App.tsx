@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation as useRouterLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -16,19 +16,23 @@ import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
 import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 
-import { TenderRopa } from '@/pages/TenderRopa'
-import { CotaDeNieve } from '@/pages/CotaDeNieve'
-import { Terremotos } from '@/pages/Terremotos'
-import { LavarCoche } from '@/pages/LavarCoche'
+// Static imports — critical path (landing + primary forecast)
 import { Landing } from '@/pages/Landing'
-import { Lluvias } from '@/pages/Lluvias'
-import { Radar } from '@/pages/Radar'
-import { Desastres } from '@/pages/Desastres'
-import { Nubes } from '@/pages/Nubes'
-import { Metar } from '@/pages/Metar'
 import { PrevisionClima } from '@/pages/PrevisionClima'
-import { Volcanes } from '@/pages/Volcanes'
-import { Incendios } from '@/pages/Incendios'
+
+// Lazy imports — secondary pages (code-split for faster initial load)
+const TenderRopa  = lazy(() => import('@/pages/TenderRopa').then(m => ({ default: m.TenderRopa })))
+const CotaDeNieve = lazy(() => import('@/pages/CotaDeNieve').then(m => ({ default: m.CotaDeNieve })))
+const Terremotos  = lazy(() => import('@/pages/Terremotos').then(m => ({ default: m.Terremotos })))
+const LavarCoche  = lazy(() => import('@/pages/LavarCoche').then(m => ({ default: m.LavarCoche })))
+const Lluvias     = lazy(() => import('@/pages/Lluvias').then(m => ({ default: m.Lluvias })))
+const Radar       = lazy(() => import('@/pages/Radar').then(m => ({ default: m.Radar })))
+const Desastres   = lazy(() => import('@/pages/Desastres').then(m => ({ default: m.Desastres })))
+const Nubes       = lazy(() => import('@/pages/Nubes').then(m => ({ default: m.Nubes })))
+const Metar       = lazy(() => import('@/pages/Metar').then(m => ({ default: m.Metar })))
+const Volcanes    = lazy(() => import('@/pages/Volcanes').then(m => ({ default: m.Volcanes })))
+const Incendios   = lazy(() => import('@/pages/Incendios').then(m => ({ default: m.Incendios })))
+
 import { useVolcanes } from '@/hooks/useWeather'
 
 // ── queryKey → ModelCategory map ─────────────────────────────────────────────
@@ -162,32 +166,38 @@ function RootLayout() {
 
   const { enableHeavyEffects, enableAnimations } = useMotionPreferences()
   const { data: volcanesData } = useVolcanes()
-  const volcanAlertColor = volcanesData?.volcanes.some(v => v.alert_level === 'rojo')
-    ? '#ff3333'
-    : '#e05545'
+
+  // T-11: memoize to avoid new array/element references on every location update
+  const volcanAlertColor = useMemo(
+    () => volcanesData?.volcanes.some(v => v.alert_level === 'rojo') ? '#ff3333' : '#e05545',
+    [volcanesData],
+  )
 
   // Inject reactive Volcanes badge into the tools row
-  const navTools = NAV_TOOLS_BASE.map(item =>
-    item.to === '/volcanes' && volcanesData?.has_active_alert
-      ? {
-          ...item,
-          badge: (
-            <span
-              aria-label="Alerta volcánica activa"
-              style={{
-                position: 'absolute' as const,
-                top: '-5px',
-                right: '-7px',
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                background: volcanAlertColor,
-                animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
-              }}
-            />
-          ),
-        }
-      : item
+  const navTools = useMemo(
+    () => NAV_TOOLS_BASE.map(item =>
+      item.to === '/volcanes' && volcanesData?.has_active_alert
+        ? {
+            ...item,
+            badge: (
+              <span
+                aria-label="Alerta volcánica activa"
+                style={{
+                  position: 'absolute' as const,
+                  top: '-5px',
+                  right: '-7px',
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: volcanAlertColor,
+                  animation: 'pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite',
+                }}
+              />
+            ),
+          }
+        : item
+    ),
+    [volcanesData, volcanAlertColor],
   )
 
   usePageTracking()
@@ -265,25 +275,27 @@ function RootLayout() {
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/prevision" element={<PrevisionClima location={location} />} />
-          <Route path="/tender-ropa" element={<TenderRopa location={location} />} />
-          <Route path="/sensacion-termica" element={<Navigate to="/prevision" replace />} />
-          <Route path="/cota-de-nieve" element={<CotaDeNieve location={location} />} />
-          <Route path="/hacer-deporte" element={<Navigate to="/prevision" replace />} />
-          <Route path="/terremotos" element={<Terremotos location={location} />} />
-          <Route path="/volcanes"   element={<Volcanes />} />
-          <Route path="/incendios"  element={<Incendios location={location} />} />
-          <Route path="/lavar-auto" element={<LavarCoche location={location} />} />
-          <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
-          <Route path="/lluvias" element={<Lluvias />} />
-          <Route path="/radar" element={<Radar />} />
-          <Route path="/desastres" element={<Desastres />} />
-          <Route path="/nubes" element={<Nubes />} />
-          <Route path="/metar" element={<Metar />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">Cargando…</div>}>
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/prevision" element={<PrevisionClima location={location} />} />
+            <Route path="/tender-ropa" element={<TenderRopa location={location} />} />
+            <Route path="/sensacion-termica" element={<Navigate to="/prevision" replace />} />
+            <Route path="/cota-de-nieve" element={<CotaDeNieve location={location} />} />
+            <Route path="/hacer-deporte" element={<Navigate to="/prevision" replace />} />
+            <Route path="/terremotos" element={<Terremotos location={location} />} />
+            <Route path="/volcanes"   element={<Volcanes />} />
+            <Route path="/incendios"  element={<Incendios location={location} />} />
+            <Route path="/lavar-auto" element={<LavarCoche location={location} />} />
+            <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
+            <Route path="/lluvias" element={<Lluvias />} />
+            <Route path="/radar" element={<Radar />} />
+            <Route path="/desastres" element={<Desastres />} />
+            <Route path="/nubes" element={<Nubes />} />
+            <Route path="/metar" element={<Metar />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
 
       <footer className="border-t border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-muted-foreground)]">

@@ -127,16 +127,15 @@ def _build_synthetic_daily_multi(
     no está disponible (ej. rate-limited 429). Usa fórmula astronómica para
     sunrise/sunset y heurística para weather_codes.
     """
-    from datetime import date as _date_cls
     dates = [w.date for w in windy_daily]
-    today_dt = _date_cls.today()
+    today_dt = _Date.today()
     day_labels: list[str] = []
     sunrise_list: list[str] = []
     sunset_list: list[str] = []
     daylight_secs: list[float | None] = []
 
     for d_str in dates:
-        d = _date_cls.fromisoformat(d_str)
+        d = _Date.fromisoformat(d_str)
         days_ahead = (d - today_dt).days
         if days_ahead == 0:
             day_labels.append("Hoy")
@@ -399,7 +398,27 @@ async def get_dashboard(
             m = int((remaining % 3600) // 60)
             daylight_label = f"{h}h {m:02d}m de luz"
         else:
-            daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
+            # Es de noche (post-sunset). Mostrar cuánto falta para el amanecer.
+            # El índice [1] del pronóstico diario es el sunrise de mañana.
+            tomorrow_sr_str = (
+                ref_daily.sunrise[1] if ref_daily.sunrise and len(ref_daily.sunrise) > 1 else None
+            )
+            if tomorrow_sr_str:
+                try:
+                    sr_tomorrow = _parse_ar_dt(tomorrow_sr_str)
+                    secs_to_dawn = (sr_tomorrow - now).total_seconds()
+                    if secs_to_dawn > 0:
+                        _hd = int(secs_to_dawn // 3600)
+                        _md = int((secs_to_dawn % 3600) // 60)
+                        daylight_label = (
+                            f"Amanece en {_hd}h {_md:02d}m" if _hd > 0 else f"Amanece en {_md}m"
+                        )
+                    else:
+                        daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
+                except Exception:
+                    daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
+            else:
+                daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
     except Exception:
         pass
 
@@ -725,11 +744,8 @@ def _build_7d_forecast(
         - Windy GFS daily para temp/precip/wind/humidity (cuando disponible).
         - Open-Meteo multi-model para weather_codes, confidence_pct y armazón.
     """
-    from datetime import date as date_cls
-    from app.services.openmeteo import _DAY_LABELS_ES
-
     ref = next(iter(daily_multi.models.values()))
-    today = date_cls.today()
+    today = _Date.today()
 
     # Indexar Windy por fecha
     windy_by_date: dict[str, WindyDailyEntry] = {}
@@ -778,7 +794,7 @@ def _build_7d_forecast(
             if i < len(m.weather_codes) and m.weather_codes[i] is not None:
                 codes.append(m.weather_codes[i])  # type: ignore[arg-type]
 
-        date_obj = date_cls.fromisoformat(date_str)
+        date_obj = _Date.fromisoformat(date_str)
         days_ahead = (date_obj - today).days
 
         if days_ahead == 0:

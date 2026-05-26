@@ -6,7 +6,7 @@ import logging
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from typing import Any, Final
+from typing import Final
 
 import httpx
 from cachetools import TTLCache

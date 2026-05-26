@@ -15,7 +15,7 @@ async function request<T>(path: string, params?: Record<string, string | number>
     const body = await res.json().catch(() => ({}))
     throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
   }
-  return res.json() as Promise<T>
+  return res.json()
 }
 
 // ── Schemas — espejados del backend ──────────────────────────────────────────

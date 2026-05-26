@@ -6,9 +6,8 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-import httpx
-
 from app.core.config import settings
+from app.core.http_client import get_client
 from app.utils.parsing import parse_float
 
 _DAY_LABELS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
@@ -59,16 +58,14 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-            response = await client.get(settings.openmeteo_base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
-    except httpx.TimeoutException:
-        logger.warning("Open-Meteo request timeout for (%s, %s)", lat, lon)
-        return None
-    except httpx.HTTPStatusError as exc:
-        logger.warning("Open-Meteo HTTP error: %s", exc.response.status_code)
-        return None
+        client = get_client()
+        response = await client.get(
+            settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
     except Exception as exc:
         logger.warning("Open-Meteo fetch failed: %s", exc)
         return None
@@ -132,10 +129,14 @@ async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | No
     }
 
     try:
-        async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-            response = await client.get(settings.openmeteo_base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
+        client = get_client()
+        response = await client.get(
+            settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
     except Exception as exc:
         logger.warning("Open-Meteo hourly forecast failed: %s", exc)
         return None
@@ -199,10 +200,14 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
     }
 
     try:
-        async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-            response = await client.get(settings.openmeteo_base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
+        client = get_client()
+        response = await client.get(
+            settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
     except Exception as exc:
         logger.warning("Open-Meteo daily forecast failed: %s", exc)
         return None
@@ -279,10 +284,14 @@ async def get_daily_forecast_ext(
         params["models"] = model
 
     try:
-        async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-            response = await client.get(settings.openmeteo_base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
+        client = get_client()
+        response = await client.get(
+            settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
     except Exception as exc:
         logger.warning("Open-Meteo daily_ext forecast failed (model=%s): %s", model, exc)
         return None
@@ -436,10 +445,14 @@ async def get_hourly_forecast_ext(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-            response = await client.get(settings.openmeteo_base_url, params=params)
-            response.raise_for_status()
-            data = response.json()
+        client = get_client()
+        response = await client.get(
+            settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
     except Exception as exc:
         logger.warning("Open-Meteo hourly_ext forecast failed: %s", exc)
         return None
