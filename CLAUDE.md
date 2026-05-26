@@ -323,4 +323,66 @@ Antes de responder, verificar:
 - dato histórico con año y cifra
 - URLs de fuentes oficiales reconocidas
 - acción no ambigua
+
+---
+
+## Suite de Auditoría — Stack SkyPulse
+
+Este proyecto usa **FastAPI (Python)** + **React + TypeScript + Vite + Tailwind v4**.
+Antes de proponer cualquier cambio de código, activá el skill correspondiente según la tarea y presentá un reporte de hallazgos (P0–P3). **No hacer cambios a ciegas** — toda refactorización debe estar fundamentada en los resultados del skill.
+
+### Severidad de hallazgos
+
+| Nivel | Criterio | Acción |
+|-------|----------|--------|
+| **P0** | Seguridad crítica / dato incorrecto / build roto | Detener y corregir antes de continuar |
+| **P1** | Bug con impacto en usuario / test roto / fuga de API key | Corregir en la misma sesión |
+| **P2** | Degradación de performance / deuda técnica significativa | Reportar y planificar |
+| **P3** | Mejora de calidad / naming / accesibilidad menor | Registrar para futura iteración |
+
+### 1. Auditoría de Frontend
+
+Activar cuando: se toca cualquier archivo en `apps/frontend/src/`.
+
+```
+/audit          → UI/UX, accesibilidad (WCAG), contraste, touch targets
+/vercel-react-best-practices → Performance React/Vite, bundle size, lazy loading, memoización
+/ui-ux-pro-max  → Design system compliance, responsive, motion, patrones de interacción
+```
+
+### 2. Auditoría de Backend
+
+Activar cuando: se toca cualquier archivo en `apps/backend/app/`.
+
+```
+/fastapi-python            → Arquitectura de la API, dependency injection, schemas Pydantic
+/python-performance-optimization → Cuellos de botella, async patterns, caching TTL, N+1 queries
+/python-review             → PEP8, type hints, error handling, inmutabilidad
+```
+
+### 3. Auditoría de Seguridad
+
+Activar antes de cualquier commit que toque: routers, config, servicios externos, variables de entorno.
+
+```
+/security-review      → Escaneo full-stack: secrets, CORS, rate limiting, input validation
+/api-security-audit   → Endpoints FastAPI: autenticación, autorización, exposición de datos
+```
+
+### 4. Pre-deploy
+
+Activar antes de cualquier push a producción.
+
+```
+/predeploy → 7 checks: .gitignore, env vars, secrets hardcodeados, URLs hardcodeadas,
+             tests (suite completa), tipos vs schema, TODOs críticos
+```
+
+### Flujo obligatorio antes de refactorizar
+
+1. Correr el skill correspondiente a la zona de cambio
+2. Presentar reporte P0–P3 al usuario
+3. Confirmar qué hallazgos se van a atacar en esta sesión
+4. Implementar solo los cambios acordados
+5. Re-correr el skill para verificar que los P0/P1 están resueltos
 - coherencia entre prompt de imagen y contenido
