@@ -500,6 +500,24 @@ async def get_hourly_forecast_ext(
 # Visibilidad actual + pronóstico 12h (niebla)
 # ---------------------------------------------------------------------------
 
+def _next_ar_hour_idx(time_list: list[str]) -> int:
+    """
+    Retorna el índice en `time_list` correspondiente a la próxima hora AR redonda.
+
+    Open-Meteo devuelve cadenas ISO locales ("2026-05-27T01:00") sin timezone.
+    Comparamos como strings: el formato YYYY-MM-DDTHH:MM permite comparación lexicográfica.
+    """
+    from datetime import datetime, timezone, timedelta
+    ar_now   = datetime.now(timezone(timedelta(hours=-3)))
+    next_ar  = ar_now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    next_str = next_ar.strftime("%Y-%m-%dT%H:%M")  # "2026-05-27T02:00"
+
+    for i, t in enumerate(time_list):
+        if t >= next_str:
+            return i
+    return 0  # fallback al inicio si el TAF cubre el futuro y OM no lo alcanza
+
+
 @dataclass(frozen=True)
 class VisibilityData:
     current_m: float | None
@@ -576,9 +594,13 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
 
         level, label, color = _classify_visibility(current_m)
 
-        # Take only the next 12 hourly slots
-        time_list: list[str] = hourly.get("time", [])[:12]
-        vis_list: list = hourly.get("visibility", [])[:12]
+        # Empezar desde la próxima hora AR redonda para consistencia con TAF/fog inference
+        all_times: list[str] = hourly.get("time", [])
+        all_vis: list = hourly.get("visibility", [])
+        start_idx = _next_ar_hour_idx(all_times)
+
+        time_list: list[str] = all_times[start_idx:start_idx + 12]
+        vis_list: list = all_vis[start_idx:start_idx + 12]
 
         hourly_m: list[float | None] = [_cap_vis(parse_float(v)) for v in vis_list]
         hourly_labels: list[str] = [t[11:16] for t in time_list]   # "14:00"
@@ -652,12 +674,15 @@ async def get_fog_inference_forecast(
 
     try:
         hourly = data["hourly"]
-        time_list: list[str]   = hourly.get("time", [])[:hours]
-        rh_list                = hourly.get("relative_humidity_2m", [])[:hours]
-        td_list                = hourly.get("dew_point_2m", [])[:hours]
-        temp_list              = hourly.get("temperature_2m", [])[:hours]
-        wind_list              = hourly.get("wind_speed_10m", [])[:hours]
-        wcode_list             = hourly.get("weather_code", [])[:hours]
+        all_times = hourly.get("time", [])
+        si = _next_ar_hour_idx(all_times)   # start index: próxima hora AR redonda
+
+        time_list: list[str]   = all_times[si:si + hours]
+        rh_list                = hourly.get("relative_humidity_2m", [])[si:si + hours]
+        td_list                = hourly.get("dew_point_2m", [])[si:si + hours]
+        temp_list              = hourly.get("temperature_2m", [])[si:si + hours]
+        wind_list              = hourly.get("wind_speed_10m", [])[si:si + hours]
+        wcode_list             = hourly.get("weather_code", [])[si:si + hours]
 
         slots: list[FogInferenceSlot] = []
         for i, t in enumerate(time_list):

@@ -293,12 +293,17 @@ async def get_nearest_taf_hourly(
     if not fcsts:
         return None
 
-    now_ts = datetime.now(timezone.utc).timestamp()
+    # Empezar desde la próxima hora AR redonda (ej. 02:00, 03:00…).
+    # Esto separa visualmente "ahora" (METAR / línea 'Ahora') del
+    # pronóstico futuro (barras TAF) y evita etiquetas con minutos exactos.
+    now_ar   = datetime.now(_AR_TZ)
+    start_ar = now_ar.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+
     slots: list[TafHourlySlot] = []
 
     for h in range(hours):
-        target_ts = now_ts + h * 3600
-        target_dt = datetime.fromtimestamp(target_ts, tz=_AR_TZ)
+        target_dt = start_ar + timedelta(hours=h)
+        target_ts = target_dt.timestamp()
         hour_label = target_dt.strftime("%H:%M")
 
         # Buscar período(s) TAF que cubran este timestamp.
