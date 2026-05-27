@@ -3,11 +3,15 @@ import { useModelStatus, type ModelCategory } from '@/contexts/ModelStatusContex
 // ── Label map ─────────────────────────────────────────────────────────────────
 
 const SOURCE_LABELS: Record<string, string> = {
-  smn:                'SMN',
-  windy_ecmwf:        'Windy ECMWF',
-  windy_gfs:          'Windy GFS',
-  openmeteo_fallback: 'Open-Meteo',
-  usgs:               'USGS',
+  smn:                  'SMN',
+  windy_ecmwf:          'Windy ECMWF',
+  windy_gfs:            'Windy GFS',
+  windy_firedanger:     'Windy FWI',
+  windy_gfs_estimated:  'Windy',
+  openmeteo_fallback:   'Open-Meteo',
+  openmeteo:            'Open-Meteo',
+  usgs:                 'USGS',
+  emsc:                 'EMSC',
 }
 
 // Collect unique sources that have appeared this session (source !== null && !== 'error')

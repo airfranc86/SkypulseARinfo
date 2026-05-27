@@ -475,28 +475,49 @@ function VisibilityTimeline({
           )
         })}
 
-        {/* Reference line — absolute, painted after bars so it's always on top */}
+        {/* Reference line + "Ahora" label — painted after bars, always on top */}
         {refBottom != null && (
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: `${refBottom}px`,
-              height: '2px',
-              pointerEvents: 'none',
-              backgroundImage: [
-                'repeating-linear-gradient(',
-                '90deg,',
-                'rgba(200,168,75,0.9) 0px,',
-                'rgba(200,168,75,0.9) 7px,',
-                'transparent 7px,',
-                'transparent 11px',
-                ')',
-              ].join(''),
-            }}
-          />
+          <>
+            {/* Dashed line — leaves 44px on right for the label */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: '44px',
+                bottom: `${refBottom}px`,
+                height: '2px',
+                pointerEvents: 'none',
+                backgroundImage: [
+                  'repeating-linear-gradient(',
+                  '90deg,',
+                  'rgba(200,168,75,0.9) 0px,',
+                  'rgba(200,168,75,0.9) 7px,',
+                  'transparent 7px,',
+                  'transparent 11px',
+                  ')',
+                ].join(''),
+              }}
+            />
+            {/* Label "Ahora" — right edge, vertically centred on the 2px line */}
+            <span
+              aria-label="Nivel de visibilidad actual"
+              style={{
+                position: 'absolute',
+                right: 0,
+                bottom: `${refBottom - 4}px`,
+                fontSize: '8px',
+                fontWeight: 700,
+                color: 'rgba(200,168,75,0.95)',
+                lineHeight: 1,
+                whiteSpace: 'nowrap',
+                letterSpacing: '.02em',
+                pointerEvents: 'none',
+              }}
+            >
+              Ahora
+            </span>
+          </>
         )}
       </div>
 

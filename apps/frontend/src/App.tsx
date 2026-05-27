@@ -47,6 +47,7 @@ const KEY_MAP: Record<string, ModelCategory> = {
   'cota-de-nieve':      'forecast',
   'lavar-coche':        'forecast',
   'laundry-forecast':   'forecast',
+  'niebla':             'forecast',
   'earthquakes':        'earthquakes',
   'fire-danger':        'forecast',
 }
@@ -58,7 +59,13 @@ function extractSource(data: unknown, queryKey0: string): string | null {
   if (typeof fromMeta === 'string') return fromMeta
   if (typeof d['source'] === 'string') return d['source']
   // No source field — deduce from key
-  if (queryKey0 === 'earthquakes') return 'usgs'
+  if (queryKey0 === 'earthquakes') {
+    // Check actual event source (emsc or usgs) now that EMSC is primary
+    const events = (d as { events?: Array<{ source?: string }> })?.events
+    if (Array.isArray(events) && events.length > 0) return events[0]?.source ?? 'usgs'
+    return 'usgs'
+  }
+  if (queryKey0 === 'niebla') return 'openmeteo'
   return null
 }
 
