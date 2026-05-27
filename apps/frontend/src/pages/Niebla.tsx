@@ -1,7 +1,10 @@
-import { useId } from 'react'
+import type { ComponentType } from 'react'
+import { Eye, Wind, Waves, Mountain, Snowflake, Droplets, Sun } from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { useNiebla } from '@/hooks/useWeather'
 import type { NieblaResponse } from '@/lib/api'
+import FogDayIcon from '@/assets/meteocons/fog-day.svg?react'
+import { PageHeader } from '@/components/ui/PageHeader'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,7 +26,7 @@ interface FogType {
   dangerLabel: string
   description: string
   tip: string
-  icon: string
+  Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
 }
 
 // ---------------------------------------------------------------------------
@@ -41,7 +44,7 @@ const FOG_TYPES: FogType[] = [
     dangerLabel: 'Visibilidad reducida al amanecer',
     description: 'El suelo enfría el aire cercano durante la noche y condensa el vapor de agua. Se forma entre medianoche y el amanecer y desaparece con el sol. La más frecuente en las llanuras argentinas.',
     tip: 'Espera 2–3 horas después del amanecer — el sol la disipa rápidamente.',
-    icon: '🌫️',
+    Icon: Sun,
   },
   {
     id: 'advection',
@@ -53,7 +56,7 @@ const FOG_TYPES: FogType[] = [
     dangerLabel: 'Puede durar días enteros',
     description: 'Masa de aire cálido y húmedo que se desplaza sobre una superficie más fría (agua o tierra). A diferencia de la radiación, no desaparece con el sol y puede cubrir grandes áreas por días.',
     tip: 'Si hay viento del noreste con temperatura superior a la media: esperá niebla persistente.',
-    icon: '🌊',
+    Icon: Wind,
   },
   {
     id: 'sea',
@@ -65,7 +68,7 @@ const FOG_TYPES: FogType[] = [
     dangerLabel: 'Visibilidad 500–2000 m',
     description: 'La evaporación del agua del Río de la Plata o el océano crea una capa baja de niebla que avanza tierra adentro con el viento. Frecuente en la madrugada y mañana en la costa porteña.',
     tip: 'Visible como banco blanco sobre el río al amanecer desde la costanera.',
-    icon: '⚓',
+    Icon: Waves,
   },
   {
     id: 'valley',
@@ -77,7 +80,7 @@ const FOG_TYPES: FogType[] = [
     dangerLabel: 'Persistente en zonas encajonadas',
     description: 'El aire frío y pesado escurre ladera abajo y se acumula en los valles. Los pasos de montaña y rutas de altura pueden tener niebla intensa mientras en la cumbre el cielo está despejado.',
     tip: 'En rutas de montaña: si la temperatura baja 5°C en menos de una hora, reducí velocidad.',
-    icon: '⛰️',
+    Icon: Mountain,
   },
   {
     id: 'freezing',
@@ -89,7 +92,7 @@ const FOG_TYPES: FogType[] = [
     dangerLabel: 'WMO código 48 — peligro grave',
     description: 'Niebla en la que las gotitas se congelan al contacto con superficies. Crea una capa de hielo invisible en el asfalto, alas de avión y tendidos eléctricos. La más peligrosa de todas.',
     tip: 'Si hay niebla + temperatura bajo 0°C: no salgas en auto. Las rutas están como espejo.',
-    icon: '🧊',
+    Icon: Snowflake,
   },
   {
     id: 'steam',
@@ -101,7 +104,7 @@ const FOG_TYPES: FogType[] = [
     dangerLabel: 'Efecto visual, baja peligrosidad',
     description: 'Columnas de vapor que suben de la superficie del agua cuando el aire está mucho más frío. El agua "humea" como si estuviera hirviendo. Espectacular en los lagos patagónicos en invierno.',
     tip: 'Fenómeno efímero y localizado — la visibilidad mejora a solo metros de la orilla.',
-    icon: '💨',
+    Icon: Droplets,
   },
 ]
 
@@ -131,6 +134,49 @@ function visibilityFraction(m: number | null): number {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+type PillStatus = 'loading' | 'ok' | 'error'
+
+/** Minimal source indicator — no technical jargon, just name + status color. */
+function SourcePill({ status }: { status: PillStatus }) {
+  const color =
+    status === 'ok'    ? '#3ecf7a' :
+    status === 'error' ? '#e05545' :
+    'var(--color-muted-foreground)'
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px',
+        fontSize: '11px',
+        fontWeight: 500,
+        color,
+        background: status === 'loading'
+          ? 'rgba(255,255,255,.06)'
+          : `${color}14`,
+        border: `1px solid ${status === 'loading' ? 'var(--color-border)' : `${color}35`}`,
+        borderRadius: '99px',
+        padding: '2px 9px 2px 6px',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: '6px',
+          height: '6px',
+          borderRadius: '50%',
+          background: color,
+          display: 'inline-block',
+          flexShrink: 0,
+        }}
+      />
+      Open-Meteo
+    </span>
+  )
+}
+
 function FogCard({ fog }: { fog: FogType }) {
   const d = DANGER_COLORS[fog.danger]
   return (
@@ -147,18 +193,21 @@ function FogCard({ fog }: { fog: FogType }) {
     >
       {/* Icon + title row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-        <span
+        <div
           style={{
-            fontSize: '28px',
-            lineHeight: 1,
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            background: `${d.color}12`,
+            border: `1px solid ${d.color}30`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             flexShrink: 0,
-            marginTop: '2px',
           }}
-          role="img"
-          aria-hidden="true"
         >
-          {fog.icon}
-        </span>
+          <fog.Icon size={20} color={d.color} strokeWidth={1.5} />
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3
             style={{
@@ -347,17 +396,26 @@ function VisibilityMeter({
   )
 }
 
-/** 12-hour visibility timeline bars */
+/** 12-hour visibility timeline bars with a reference line at current visibility */
 function VisibilityTimeline({
   slots,
+  currentVisibilityM,
 }: {
   slots: NieblaResponse['hourly']
+  currentVisibilityM?: number | null
 }) {
-  const gradId = useId()
-
   if (!slots.length) return null
 
-  const maxM = 10_000
+  const maxM       = 10_000
+  const CHART_H    = 64 // px — chart area height (labels rendered outside)
+
+  // Reference line: position from bottom, in px within the chart area
+  const refFraction = (currentVisibilityM != null)
+    ? Math.min(currentVisibilityM / maxM, 1)
+    : null
+  const refBottom = refFraction != null
+    ? Math.round(refFraction * CHART_H)
+    : null
 
   return (
     <div>
@@ -373,54 +431,86 @@ function VisibilityTimeline({
       >
         Próximas 12 h
       </h3>
+
+      {/* ── Chart area: bars only, no labels ── */}
       <div
         style={{
+          position: 'relative',
+          height: `${CHART_H}px`,
           display: 'flex',
           alignItems: 'flex-end',
           gap: '4px',
-          height: '60px',
+          overflow: 'hidden',
         }}
         role="img"
         aria-label="Pronóstico de visibilidad para las próximas 12 horas"
       >
-        <svg width={0} height={0} style={{ position: 'absolute' }}>
-          <defs>
-            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#5aaad8" stopOpacity="1" />
-              <stop offset="100%" stopColor="#5aaad8" stopOpacity="0.4" />
-            </linearGradient>
-          </defs>
-        </svg>
+        {/* Reference line — rendered ABOVE bars via z-index */}
+        {refBottom != null && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: `${refBottom}px`,
+              height: '1px',
+              zIndex: 2,
+              pointerEvents: 'none',
+              backgroundImage: [
+                'repeating-linear-gradient(',
+                '90deg,',
+                'rgba(200,168,75,0.85) 0px,',
+                'rgba(200,168,75,0.85) 6px,',
+                'transparent 6px,',
+                'transparent 10px',
+                ')',
+              ].join(''),
+            }}
+          />
+        )}
+
+        {/* Bars — z-index below the reference line */}
         {slots.map((s) => {
-          const h = Math.max((((s.visibility_m ?? 0) / maxM) * 52) + 8, 6)
+          const barH = Math.max(
+            (((s.visibility_m ?? 0) / maxM) * (CHART_H - 8)) + 8,
+            6,
+          )
           return (
             <div
               key={s.hour_label}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}
-            >
-              <div
-                title={`${s.hour_label}: ${visibilityKm(s.visibility_m)} — ${s.fog_label}`}
-                style={{
-                  width: '100%',
-                  height: `${h}px`,
-                  background: `${s.fog_color}cc`,
-                  borderRadius: '4px 4px 2px 2px',
-                  transition: 'height 0.5s ease',
-                  cursor: 'default',
-                }}
-              />
-              <span
-                style={{
-                  fontSize: '9px',
-                  color: 'var(--color-muted-foreground)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {s.hour_label}
-              </span>
-            </div>
+              title={`${s.hour_label}: ${visibilityKm(s.visibility_m)} — ${s.fog_label}`}
+              style={{
+                flex: 1,
+                height: `${barH}px`,
+                background: `${s.fog_color}cc`,
+                borderRadius: '4px 4px 2px 2px',
+                transition: 'height 0.5s ease',
+                cursor: 'default',
+                position: 'relative',
+                zIndex: 1,
+              }}
+            />
           )
         })}
+      </div>
+
+      {/* ── Hour labels — outside chart area, never clipped ── */}
+      <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+        {slots.map((s) => (
+          <span
+            key={s.hour_label}
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: '9px',
+              color: 'var(--color-muted-foreground)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {s.hour_label}
+          </span>
+        ))}
       </div>
     </div>
   )
@@ -443,8 +533,8 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '20px' }} role="img" aria-hidden="true">👁️</span>
-        <div>
+        <Eye size={20} color="var(--color-muted-foreground)" strokeWidth={1.5} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <h2
             style={{
               margin: 0,
@@ -455,15 +545,9 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
           >
             Visibilidad actual
           </h2>
-          <p
-            style={{
-              margin: '1px 0 0',
-              fontSize: '11px',
-              color: 'var(--color-muted-foreground)',
-            }}
-          >
-            Datos Open-Meteo · actualiza cada 5 min
-          </p>
+          <SourcePill
+            status={error ? 'error' : isLoading ? 'loading' : 'ok'}
+          />
         </div>
       </div>
 
@@ -491,7 +575,10 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
             fogLabel={data.fog_label}
             fogColor={data.fog_color}
           />
-          <VisibilityTimeline slots={data.hourly} />
+          <VisibilityTimeline
+            slots={data.hourly}
+            currentVisibilityM={data.visibility_m}
+          />
         </>
       )}
     </section>
@@ -532,45 +619,12 @@ export function Niebla({ location }: Props) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
         {/* ── Header ────────────────────────────────────────────────────── */}
-        <header style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, rgba(144,170,187,.2) 0%, rgba(144,170,187,.05) 100%)',
-              border: '1px solid rgba(144,170,187,.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '22px',
-              marginBottom: '4px',
-            }}
-          >
-            🌫️
-          </div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '26px',
-              fontWeight: 700,
-              fontFamily: 'var(--font-serif)',
-              color: 'var(--color-foreground)',
-            }}
-          >
-            Niebla, Bruma y Neblina
-          </h1>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '14px',
-              color: 'var(--color-muted-foreground)',
-              maxWidth: '520px',
-            }}
-          >
-            Seis tipos de niebla que se forman en Argentina — y cómo cada una afecta la visibilidad de forma diferente.
-          </p>
-        </header>
+        <PageHeader
+          icon={<FogDayIcon style={{ width: '40px', height: '40px' }} />}
+          title="Niebla, Bruma y Neblina"
+          subtitle="6 tipos de niebla en Argentina — visibilidad y qué esperar."
+          accentColor="#90aabb"
+        />
 
         {/* ── Live visibility (only if location) ──────────────────────── */}
         <VisibilityBlock location={location} />
@@ -684,7 +738,7 @@ export function Niebla({ location }: Props) {
             paddingBottom: '8px',
           }}
         >
-          Visibilidad en metros según modelo Open-Meteo best_match · Clasificación basada en estándares WMO
+          Visibilidad · Estándares WMO
         </p>
 
       </div>

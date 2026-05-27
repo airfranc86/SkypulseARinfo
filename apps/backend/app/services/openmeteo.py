@@ -511,6 +511,17 @@ class VisibilityData:
     hourly_labels: list[str]       # "14:00", …
 
 
+# Open-Meteo returns raw model visibility in meters without a physical cap.
+# Values above ~24 km are model artifacts — the real atmospheric limit for
+# standard conditions. Cap before classifying so the UI never shows e.g. "55 km".
+_MAX_VIS_M: float = 24_000.0
+
+
+def _cap_vis(raw: float | None) -> float | None:
+    """Clamp raw visibility to a physically plausible maximum."""
+    return min(raw, _MAX_VIS_M) if raw is not None else None
+
+
 def _classify_visibility(v: float | None) -> tuple[int, str, str]:
     """Returns (level, label, color) from visibility in meters."""
     if v is None:
@@ -559,7 +570,7 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
         current = data["current"]
         hourly = data["hourly"]
 
-        current_m = parse_float(current.get("visibility"))
+        current_m = _cap_vis(parse_float(current.get("visibility")))
         wc_raw = current.get("weather_code")
         weather_code = int(wc_raw) if wc_raw is not None else None
 
@@ -569,7 +580,7 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
         time_list: list[str] = hourly.get("time", [])[:12]
         vis_list: list = hourly.get("visibility", [])[:12]
 
-        hourly_m: list[float | None] = [parse_float(v) for v in vis_list]
+        hourly_m: list[float | None] = [_cap_vis(parse_float(v)) for v in vis_list]
         hourly_labels: list[str] = [t[11:16] for t in time_list]   # "14:00"
 
         return VisibilityData(

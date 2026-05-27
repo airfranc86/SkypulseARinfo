@@ -96,6 +96,14 @@ const TOOLS: Array<{
     color: '#90aabb',
     model: 'gfs',
   },
+  {
+    to: '/niebla',
+    emoji: '🌫️',
+    title: 'Niebla y visibilidad',
+    desc: 'Visibilidad actual y pronóstico de niebla hora a hora.',
+    color: '#90aabb',
+    model: 'openmeteo',
+  },
 ]
 
 export function Landing() {

@@ -5,6 +5,38 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-27 — feat(earthquakes): EMSC primario + USGS fallback ✅
+
+**Done:**
+- `services/emsc.py` — cliente FDSN EMSC (seismicportal.eu), formato text (pipe-delimited), red NSNA/INPRES, TTLCache 5 min, M≥2.0, filtro "ARGENTINA" en place
+- `services/earthquakes.py` — aggregator: EMSC primario → si total=0 consulta USGS
+- `routers/earthquakes.py` — actualizado para importar del aggregator; descripción endpoint actualizada
+- `schemas/earthquakes.py` — campo `source: str = "usgs"` (default backward-compat)
+- `tests/test_emsc.py` — 22 tests (parse + service)
+- `conftest.py` — limpia `_event_cache` de EMSC entre tests
+- `api.ts` — `source?: string` en `EarthquakeEvent`
+- `CLAUDE.md` — sección ⚠️ Límites de Alcance: `skypulseinfo.vercel.app` = legado, NO tocar `src/`
+
+**Files changed:**
+- `apps/backend/app/services/emsc.py` — NUEVO
+- `apps/backend/app/services/earthquakes.py` — NUEVO (aggregator)
+- `apps/backend/app/routers/earthquakes.py` — import aggregator, descripción actualizada
+- `apps/backend/app/schemas/earthquakes.py` — campo source
+- `apps/backend/tests/test_emsc.py` — NUEVO, 22 tests
+- `apps/backend/tests/conftest.py` — clear emsc cache
+- `apps/frontend/src/lib/api.ts` — source?: string en EarthquakeEvent
+- `CLAUDE.md` — regla activo/legado
+
+**Tests:**
+- `uv run pytest tests/test_emsc.py tests/test_usgs.py tests/test_earthquakes_router.py` → 50/50 ✓
+- `uv run pytest --tb=short -q` → 350 passed, 2 failed (pre-existentes test_tools_router best_window)
+- `pnpm run build` → ✓ 0 errores TS
+
+**Next:**
+- Awaiting user direction
+
+---
+
 ## 2026-05-26 — Audit Wave 3 (Performance + Dead Code) + Wave 4 (UI/Design) ✅
 
 **Done:**
