@@ -19,3 +19,8 @@ class NieblaResponse(BaseModel):
     fog_color: str
     weather_code: int | None
     hourly: list[VisibilityHourlySlot]
+    # Metadata de fuente para el valor "ahora"
+    source: str = "openmeteo"           # "metar" | "openmeteo"
+    metar_station: str | None = None    # ICAO code, e.g. "SAEZ"
+    metar_station_name: str | None = None  # human name, e.g. "Ezeiza"
+    metar_distance_km: float | None = None  # km al aeropuerto más cercano

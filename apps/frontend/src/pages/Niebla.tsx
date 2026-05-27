@@ -137,15 +137,28 @@ function visibilityFraction(m: number | null): number {
 
 type PillStatus = 'loading' | 'ok' | 'error'
 
-/** Minimal source indicator — no technical jargon, just name + status color. */
-function SourcePill({ status }: { status: PillStatus }) {
+interface SourcePillProps {
+  status: PillStatus
+  source?: string | null
+  stationName?: string | null
+  distanceKm?: number | null
+}
+
+/** Source indicator showing METAR station or Open-Meteo depending on data source. */
+function SourcePill({ status, source, stationName, distanceKm }: SourcePillProps) {
   const color =
     status === 'ok'    ? '#3ecf7a' :
     status === 'error' ? '#e05545' :
     'var(--color-muted-foreground)'
 
+  const isMetar = source === 'metar'
+  const label = isMetar
+    ? `METAR · ${stationName ?? ''}${distanceKm != null ? ` · ${Math.round(distanceKm)} km` : ''}`
+    : 'Open-Meteo'
+
   return (
     <span
+      title={isMetar ? 'Visibilidad medida en aeropuerto más cercano (dato real)' : 'Estimación numérica Open-Meteo'}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -173,7 +186,7 @@ function SourcePill({ status }: { status: PillStatus }) {
           flexShrink: 0,
         }}
       />
-      Open-Meteo
+      {label}
     </span>
   )
 }
@@ -573,6 +586,9 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
           </h2>
           <SourcePill
             status={error ? 'error' : isLoading ? 'loading' : 'ok'}
+            source={data?.source}
+            stationName={data?.metar_station_name}
+            distanceKm={data?.metar_distance_km}
           />
         </div>
       </div>

@@ -65,7 +65,7 @@ function extractSource(data: unknown, queryKey0: string): string | null {
     if (Array.isArray(events) && events.length > 0) return events[0]?.source ?? 'usgs'
     return 'usgs'
   }
-  if (queryKey0 === 'niebla') return 'openmeteo'
+  if (queryKey0 === 'niebla') return typeof d['source'] === 'string' ? d['source'] : 'openmeteo'
   return null
 }
 

@@ -306,6 +306,10 @@ export interface NieblaResponse {
   fog_color: string
   weather_code: number | null
   hourly: VisibilityHourlySlot[]
+  source?: string               // "metar" | "openmeteo"
+  metar_station?: string | null
+  metar_station_name?: string | null
+  metar_distance_km?: number | null
 }
 
 // ── API client ────────────────────────────────────────────────────────────────

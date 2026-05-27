@@ -12,6 +12,7 @@ const SOURCE_LABELS: Record<string, string> = {
   openmeteo:            'Open-Meteo',
   usgs:                 'USGS',
   emsc:                 'EMSC',
+  metar:                'METAR',
 }
 
 // Collect unique sources that have appeared this session (source !== null && !== 'error')
