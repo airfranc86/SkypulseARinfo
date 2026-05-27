@@ -120,9 +120,14 @@ def disable_windy_by_default(monkeypatch):
     monkeypatch.setattr(cfg.settings, "windy_api_key", "", raising=False)
     windy_module._raw_cache.clear()
     fire_module._fire_raw_cache.clear()
+
+    import app.services.emsc as emsc_module
+    emsc_module._event_cache.clear()
+
     yield
     windy_module._raw_cache.clear()
     fire_module._fire_raw_cache.clear()
+    emsc_module._event_cache.clear()
 
 
 # ---------------------------------------------------------------------------

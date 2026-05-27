@@ -16,6 +16,7 @@ class EarthquakeEvent(BaseModel):
     lon: float
     distance_km: float
     usgs_url: str
+    source: str = "usgs"  # "emsc" | "usgs" — indica la red que reportó el evento
 
 
 class EarthquakesResponse(BaseModel):

@@ -138,6 +138,7 @@ export interface EarthquakeEvent {
   lon: number
   distance_km: number
   usgs_url: string
+  source?: string       // "emsc" | "usgs" — red que reportó el evento
 }
 
 export interface EarthquakesResponse {

@@ -326,6 +326,27 @@ Antes de responder, verificar:
 
 ---
 
+## ⚠️ Límites de Alcance — Activo vs Legado
+
+### Mapa de proyectos
+
+| Directorio | URL de deploy | Estado |
+|-----------|--------------|--------|
+| `apps/frontend/` | `https://skypulse-ar.vercel.app` | ✅ **Activo** — todo el trabajo va aquí |
+| `apps/backend/` | Backend en Render | ✅ **Activo** — todo el trabajo va aquí |
+| `src/` | `https://skypulseinfo.vercel.app` | ❌ **LEGADO — NO TOCAR** |
+
+### Regla CRÍTICA e irrevocable
+
+> **`src/` y `skypulseinfo.vercel.app` son proyectos LEGADOS.**
+> No se deben hacer cambios en ningún archivo dentro de `src/`.
+> No se deben hacer auditorías, refactorizaciones, ni correcciones sobre `skypulseinfo.vercel.app`.
+> TODO el desarrollo ocurre EXCLUSIVAMENTE en `apps/`.
+
+Si algo en `src/` parece roto o mejorable → ignorarlo. No es nuestro proyecto activo.
+
+---
+
 ## Suite de Auditoría — Stack SkyPulse
 
 Este proyecto usa **FastAPI (Python)** + **React + TypeScript + Vite + Tailwind v4**.
