@@ -149,7 +149,10 @@ export function Terremotos({ location }: Props) {
             <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
               {location.label} · radio 2000 km
             </p>
-            <ModelBadge model="usgs" variant="header" />
+            <ModelBadge
+              model={data?.events?.[0]?.source === 'emsc' ? 'emsc' : 'usgs'}
+              variant="header"
+            />
           </div>
         </div>
       </header>

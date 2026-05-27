@@ -512,9 +512,9 @@ class VisibilityData:
 
 
 # Open-Meteo returns raw model visibility in meters without a physical cap.
-# Values above ~24 km are model artifacts — the real atmospheric limit for
-# standard conditions. Cap before classifying so the UI never shows e.g. "55 km".
-_MAX_VIS_M: float = 24_000.0
+# Atmospheric visibility maxes out at 10 km for practical purposes — values
+# beyond that don't differentiate "clear" conditions meaningfully.
+_MAX_VIS_M: float = 10_000.0
 
 
 def _cap_vis(raw: float | None) -> float | None:

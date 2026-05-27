@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Info } from 'lucide-react'
 
-export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'windy_ecmwf' | 'openmeteo' | 'mixed' | 'segemar'
+export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'mixed' | 'segemar'
 type Variant = 'pill' | 'inline' | 'header'
 
 interface ModelMeta {
@@ -44,6 +44,14 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     color: '#e05545',
     description: 'Red sísmica global del U.S. Geological Survey.',
     reliability: 'Tiempo real',
+    updateFreq: 'Continua',
+  },
+  emsc: {
+    label: 'EMSC',
+    org: 'Europa',
+    color: '#e05545',
+    description: 'Centro Sismológico Europeo · incluye red NSNA/INPRES de Argentina con menor latencia.',
+    reliability: 'Tiempo real · datos INPRES',
     updateFreq: 'Continua',
   },
   openmeteo: {

@@ -464,7 +464,7 @@ export function Incendios({ location }: Props) {
 
             {/* Footer — compact single line */}
             <p className="text-[.6rem] text-center" style={{ color: 'var(--color-muted-foreground)' }}>
-              ⓘ {data.is_estimated ? 'Estimado · GFS' : 'FWI canadiense · Windy'} · Caché 1 h
+              ⓘ {data.is_estimated ? 'Estimado' : 'Windy'} · Caché 1 h
             </p>
           </div>
         </FadeContent>

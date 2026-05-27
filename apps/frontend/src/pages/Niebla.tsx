@@ -120,6 +120,7 @@ const DANGER_COLORS = {
 
 function visibilityKm(m: number | null): string {
   if (m == null) return '—'
+  if (m >= 10_000) return '>10 km'
   if (m >= 1000) return `${(m / 1000).toFixed(1)} km`
   return `${Math.round(m)} m`
 }
@@ -406,15 +407,23 @@ function VisibilityTimeline({
 }) {
   if (!slots.length) return null
 
-  const maxM       = 10_000
-  const CHART_H    = 64 // px — chart area height (labels rendered outside)
+  const maxM    = 10_000
+  const CHART_H = 80 // px — chart area height (labels rendered outside)
+  const BAR_MIN = 6  // minimum bar height in px (same as max(..., 6) below)
+  const BAR_PAD = 8  // base offset so 0-visibility bar is still visible
 
-  // Reference line: position from bottom, in px within the chart area
-  const refFraction = (currentVisibilityM != null)
-    ? Math.min(currentVisibilityM / maxM, 1)
-    : null
-  const refBottom = refFraction != null
-    ? Math.round(refFraction * CHART_H)
+  /**
+   * Bar height formula: fraction × (CHART_H - BAR_PAD) + BAR_PAD
+   * Reference line must use the SAME formula so it aligns with bar tops.
+   * Cap at CHART_H - 1 to prevent clipping by overflow:hidden.
+   */
+  const refBottom = (currentVisibilityM != null)
+    ? Math.min(
+        Math.round(
+          (Math.min(currentVisibilityM, maxM) / maxM) * (CHART_H - BAR_PAD) + BAR_PAD,
+        ),
+        CHART_H - 2,
+      )
     : null
 
   return (
@@ -432,49 +441,23 @@ function VisibilityTimeline({
         Próximas 12 h
       </h3>
 
-      {/* ── Chart area: bars only, no labels ── */}
+      {/* ── Chart area: bars + reference line ── */}
       <div
         style={{
           position: 'relative',
           height: `${CHART_H}px`,
           display: 'flex',
           alignItems: 'flex-end',
-          gap: '4px',
-          overflow: 'hidden',
+          gap: '3px',
         }}
         role="img"
         aria-label="Pronóstico de visibilidad para las próximas 12 horas"
       >
-        {/* Reference line — rendered ABOVE bars via z-index */}
-        {refBottom != null && (
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: `${refBottom}px`,
-              height: '1px',
-              zIndex: 2,
-              pointerEvents: 'none',
-              backgroundImage: [
-                'repeating-linear-gradient(',
-                '90deg,',
-                'rgba(200,168,75,0.85) 0px,',
-                'rgba(200,168,75,0.85) 6px,',
-                'transparent 6px,',
-                'transparent 10px',
-                ')',
-              ].join(''),
-            }}
-          />
-        )}
-
-        {/* Bars — z-index below the reference line */}
+        {/* Bars — rendered first so reference line paints on top */}
         {slots.map((s) => {
           const barH = Math.max(
-            (((s.visibility_m ?? 0) / maxM) * (CHART_H - 8)) + 8,
-            6,
+            ((s.visibility_m ?? 0) / maxM) * (CHART_H - BAR_PAD) + BAR_PAD,
+            BAR_MIN,
           )
           return (
             <div
@@ -483,16 +466,38 @@ function VisibilityTimeline({
               style={{
                 flex: 1,
                 height: `${barH}px`,
-                background: `${s.fog_color}cc`,
+                background: `${s.fog_color}bb`,
                 borderRadius: '4px 4px 2px 2px',
                 transition: 'height 0.5s ease',
                 cursor: 'default',
-                position: 'relative',
-                zIndex: 1,
               }}
             />
           )
         })}
+
+        {/* Reference line — absolute, painted after bars so it's always on top */}
+        {refBottom != null && (
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: `${refBottom}px`,
+              height: '2px',
+              pointerEvents: 'none',
+              backgroundImage: [
+                'repeating-linear-gradient(',
+                '90deg,',
+                'rgba(200,168,75,0.9) 0px,',
+                'rgba(200,168,75,0.9) 7px,',
+                'transparent 7px,',
+                'transparent 11px',
+                ')',
+              ].join(''),
+            }}
+          />
+        )}
       </div>
 
       {/* ── Hour labels — outside chart area, never clipped ── */}
