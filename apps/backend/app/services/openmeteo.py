@@ -595,3 +595,106 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
     except (KeyError, TypeError) as exc:
         logger.warning("Open-Meteo visibility parse error: %s", exc)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Inferencia de niebla a partir de NWP (fallback para pronóstico horario)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class FogInferenceSlot:
+    """Slot horario con visibilidad inferida de humedad/rocío/viento."""
+    hour_label: str
+    visibility_m: float | None
+
+
+async def get_fog_inference_forecast(
+    lat: float,
+    lon: float,
+    hours: int = 12,
+) -> list[FogInferenceSlot] | None:
+    """
+    Infiere visibilidad horaria a partir de variables meteorológicas de Open-Meteo.
+
+    Más confiable para niebla de radiación que el campo `visibility` directo
+    (que refleja valores del modelo numérico y suele ser optimista).
+
+    Algoritmo (prioridad):
+      1. WMO code 45/48 (niebla confirmada) → 300 m
+      2. T - Td < 2°C + HR ≥ 95 % + viento < 5 km/h  → niebla densa  (300 m)
+      3. T - Td < 3°C + HR ≥ 90 % + viento < 8 km/h  → niebla        (1000 m)
+      4. T - Td < 5°C + HR ≥ 80 %                     → reducida      (3000 m)
+      5. Resto                                          → despejada     (10 000 m)
+    """
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": (
+            "relative_humidity_2m,dew_point_2m,temperature_2m,"
+            "wind_speed_10m,weather_code"
+        ),
+        "timezone": "America/Argentina/Buenos_Aires",
+        "forecast_days": 1,
+    }
+
+    try:
+        client = get_client()
+        response = await client.get(
+            settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        logger.warning("Open-Meteo fog inference fetch failed: %s", exc)
+        return None
+
+    try:
+        hourly = data["hourly"]
+        time_list: list[str]   = hourly.get("time", [])[:hours]
+        rh_list                = hourly.get("relative_humidity_2m", [])[:hours]
+        td_list                = hourly.get("dew_point_2m", [])[:hours]
+        temp_list              = hourly.get("temperature_2m", [])[:hours]
+        wind_list              = hourly.get("wind_speed_10m", [])[:hours]
+        wcode_list             = hourly.get("weather_code", [])[:hours]
+
+        slots: list[FogInferenceSlot] = []
+        for i, t in enumerate(time_list):
+            hour_label = t[11:16]   # "14:00"
+
+            rh    = parse_float(rh_list[i])    if i < len(rh_list)    else None
+            td    = parse_float(td_list[i])    if i < len(td_list)    else None
+            temp  = parse_float(temp_list[i])  if i < len(temp_list)  else None
+            wind  = parse_float(wind_list[i])  if i < len(wind_list)  else None
+            wc_r  = wcode_list[i]              if i < len(wcode_list) else None
+            wcode = int(wc_r) if wc_r is not None else None
+
+            vis_m: float | None = None
+
+            if wcode in (45, 48):
+                # WMO fog / depositing rime fog — confirmado por código
+                vis_m = 300.0
+            elif (
+                rh is not None
+                and td is not None
+                and temp is not None
+                and wind is not None
+            ):
+                dep = temp - td   # depresión del punto de rocío
+                if dep < 2.0 and rh >= 95.0 and wind < 5.0:
+                    vis_m = 300.0      # niebla densa
+                elif dep < 3.0 and rh >= 90.0 and wind < 8.0:
+                    vis_m = 1_000.0    # niebla / bruma
+                elif dep < 5.0 and rh >= 80.0:
+                    vis_m = 3_000.0    # reducida
+                else:
+                    vis_m = 10_000.0   # despejada
+
+            slots.append(FogInferenceSlot(hour_label=hour_label, visibility_m=vis_m))
+
+        return slots if slots else None
+
+    except (KeyError, TypeError, IndexError) as exc:
+        logger.warning("Open-Meteo fog inference parse error: %s", exc)
+        return None

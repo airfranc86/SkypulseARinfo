@@ -310,6 +310,7 @@ export interface NieblaResponse {
   metar_station?: string | null
   metar_station_name?: string | null
   metar_distance_km?: number | null
+  hourly_source?: string        // "taf" | "openmeteo_inference" | "openmeteo"
 }
 
 // ── API client ────────────────────────────────────────────────────────────────

@@ -410,13 +410,22 @@ function VisibilityMeter({
   )
 }
 
+// Human-readable labels for hourly data sources
+const HOURLY_SOURCE_LABEL: Record<string, string> = {
+  taf:                  'TAF · Aviación',
+  openmeteo_inference:  'Inferencia OM',
+  openmeteo:            'Open-Meteo',
+}
+
 /** 12-hour visibility timeline bars with a reference line at current visibility */
 function VisibilityTimeline({
   slots,
   currentVisibilityM,
+  hourlySource,
 }: {
   slots: NieblaResponse['hourly']
   currentVisibilityM?: number | null
+  hourlySource?: string | null
 }) {
   if (!slots.length) return null
 
@@ -441,18 +450,44 @@ function VisibilityTimeline({
 
   return (
     <div>
-      <h3
-        style={{
-          margin: '0 0 12px',
-          fontSize: '13px',
-          fontWeight: 600,
-          color: 'var(--color-muted-foreground)',
-          textTransform: 'uppercase',
-          letterSpacing: '.05em',
-        }}
-      >
-        Próximas 12 h
-      </h3>
+      {/* Header: title + hourly source badge */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: '13px',
+            fontWeight: 600,
+            color: 'var(--color-muted-foreground)',
+            textTransform: 'uppercase',
+            letterSpacing: '.05em',
+          }}
+        >
+          Próximas 12 h
+        </h3>
+        {hourlySource && (
+          <span
+            title={
+              hourlySource === 'taf'
+                ? 'Pronóstico emitido por meteorólogos de aviación (TAF)'
+                : hourlySource === 'openmeteo_inference'
+                ? 'Estimado a partir de humedad, rocío y viento (Open-Meteo)'
+                : 'Pronóstico numérico Open-Meteo'
+            }
+            style={{
+              fontSize: '10px',
+              fontWeight: 500,
+              color: hourlySource === 'taf' ? '#3ecf7a' : 'var(--color-muted-foreground)',
+              background: hourlySource === 'taf' ? 'rgba(62,207,122,.08)' : 'rgba(255,255,255,.04)',
+              border: `1px solid ${hourlySource === 'taf' ? 'rgba(62,207,122,.3)' : 'var(--color-border)'}`,
+              borderRadius: '20px',
+              padding: '2px 8px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {HOURLY_SOURCE_LABEL[hourlySource] ?? hourlySource}
+          </span>
+        )}
+      </div>
 
       {/* ── Chart area: bars + reference line ── */}
       <div
@@ -620,6 +655,7 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
           <VisibilityTimeline
             slots={data.hourly}
             currentVisibilityM={data.visibility_m}
+            hourlySource={data.hourly_source}
           />
         </>
       )}
