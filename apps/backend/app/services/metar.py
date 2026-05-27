@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 _SM_TO_M    = 1609.344    # statute miles → metros
 _MAX_VIS_M  = 10_000.0    # cap de visibilidad en metros (consistente con OM)
-_HTTP_TIMEOUT = 12.0      # segundos — margen para redes lentas en Render
+_HTTP_TIMEOUT = 5.0       # segundos — fallo rápido si AWC no es alcanzable
 
 # Argentina time zone offset (no DST)
 _AR_TZ = timezone(timedelta(hours=-3))
