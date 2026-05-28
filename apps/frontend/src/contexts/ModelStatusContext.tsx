@@ -1,6 +1,5 @@
 import {
   createContext,
-  useContext,
   useReducer,
   useEffect,
   type ReactNode,
@@ -33,11 +32,27 @@ const INITIAL: ModelStatusState = {
 
 const SESSION_KEY = 'skypulse:model-status'
 
+function isModelStatusState(v: unknown): v is ModelStatusState {
+  if (typeof v !== 'object' || v === null) return false
+  const categories: ModelCategory[] = ['weather', 'forecast', 'earthquakes']
+  return categories.every(cat => {
+    const entry = (v as Record<string, unknown>)[cat]
+    return (
+      typeof entry === 'object' &&
+      entry !== null &&
+      'source' in entry &&
+      'active' in entry &&
+      'updatedAt' in entry
+    )
+  })
+}
+
 function loadFromSession(): ModelStatusState {
   try {
     const raw = sessionStorage.getItem(SESSION_KEY)
     if (!raw) return INITIAL
-    return JSON.parse(raw) as ModelStatusState
+    const parsed: unknown = JSON.parse(raw)
+    return isModelStatusState(parsed) ? parsed : INITIAL
   } catch {
     return INITIAL
   }
@@ -76,8 +91,8 @@ function reducer(state: ModelStatusState, action: ModelStatusAction): ModelStatu
 
 // ── Contexts ──────────────────────────────────────────────────────────────────
 
-const ModelStatusContext = createContext<ModelStatusState | null>(null)
-const ModelStatusDispatchContext = createContext<Dispatch<ModelStatusAction> | null>(null)
+export const ModelStatusContext = createContext<ModelStatusState | null>(null)
+export const ModelStatusDispatchContext = createContext<Dispatch<ModelStatusAction> | null>(null)
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
@@ -102,20 +117,3 @@ export function ModelStatusProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// ── Hooks ─────────────────────────────────────────────────────────────────────
-
-export function useModelStatus(): { status: ModelStatusState } {
-  const ctx = useContext(ModelStatusContext)
-  if (ctx === null) {
-    throw new Error('useModelStatus must be used inside ModelStatusProvider')
-  }
-  return { status: ctx }
-}
-
-export function useModelStatusDispatch(): Dispatch<ModelStatusAction> {
-  const ctx = useContext(ModelStatusDispatchContext)
-  if (ctx === null) {
-    throw new Error('useModelStatusDispatch must be used inside ModelStatusProvider')
-  }
-  return ctx
-}

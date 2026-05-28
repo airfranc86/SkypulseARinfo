@@ -1,11 +1,11 @@
 # Audit — SkyPulse AR Info
 
-**Fecha:** 2026-05-26  
-**Commit de referencia:** `6cc4c4a`  
-**Tests backend:** 328 passed · 2 rotos (ver P1) · cobertura global **81%**  
-**Build frontend:** ✓ 2511 modules · 0 errores TS · bundle 1.115 MB (WARN)  
+**Fecha:** 2026-05-28 (actualizado)  
+**Commit de referencia inicial:** `6cc4c4a`  
+**Tests backend:** 352 passed · 0 rotos · cobertura global **81%**  
+**Build frontend:** ✓ 2513 modules · 0 errores TS · bundle 1.12 MB  
 **Deploy:** Backend → Render · Frontend → Vercel  
-**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 ✅ · Wave 4 ✅
+**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 ✅ · Wave 4 ✅ · Wave 5 ✅
 
 ---
 
@@ -67,13 +67,13 @@
 | ID | Sev | Área | Archivo:Línea | Descripción | Fix |
 |----|-----|------|--------------|-------------|-----|
 | S-01 | **P1** | Security | `render.yaml:1-8` | Sin bloque `envVars` — `ENV=prod` y `WINDY_API_KEY` se configuran manualmente en Render sin trazabilidad. Un redeploy en environment nuevo arranca en modo `dev` (docs expuestos) sin alerta. | Agregar `envVars` con `sync: false` para `WINDY_API_KEY` y `CORS_ORIGINS` |
-| S-02 | **P1** | Security | `app/main.py:88-95` | `Content-Security-Policy` y `X-Frame-Options` ausentes en middleware de headers. Para API JSON pura: `CSP: default-src 'none'` + `X-Frame-Options: DENY`. | 2 líneas en `security_headers` middleware |
+| S-02 | ~~**P1**~~ ✅ | Security | `app/main.py:88-95` | `Content-Security-Policy` y `X-Frame-Options` ausentes en middleware de headers. Para API JSON pura: `CSP: default-src 'none'` + `X-Frame-Options: DENY`. | **Resuelto Wave 5** |
 | S-03 | **P1** | Pre-deploy | `apps/backend/` `apps/frontend/` | `.env.example` inexistente en ambos proyectos. `render.yaml` no documenta vars requeridas. Sin documentación de qué variables son obligatorias. | Crear `.env.example` con keys vacías; actualizar `render.yaml` |
-| S-04 | **P1** | Tests | `tests/test_tools_router.py` | 2 tests rotos: `_make_hourly_forecast` usa `base_ts = 1705320000` (enero 2024 — pasado). `_filter_future` vacía todos los slots → `best_window = None`. Router está correcto; solo el fixture temporal está desactualizado. | Cambiar `base_ts = int(time.time()) + 3600` en `_make_hourly_forecast` |
-| S-05 | **P2** | Security | `frontend/src/lib/api.ts:1-6` | `VITE_API_BASE_URL` sin configurar → `console.warn` solamente, todas las llamadas API fallan silenciosamente en producción con 404. | Convertir en `throw new Error(...)` cuando `import.meta.env.PROD` |
+| S-04 | ~~**P1**~~ ✅ | Tests | `tests/test_tools_router.py` | 2 tests rotos: `_make_hourly_forecast` usa `base_ts = 1705320000` (enero 2024 — pasado). `_filter_future` vacía todos los slots → `best_window = None`. Router está correcto; solo el fixture temporal está desactualizado. | **Resuelto Wave 5** |
+| S-05 | ~~**P2**~~ ✅ | Security | `frontend/src/lib/api.ts:1-6` | `VITE_API_BASE_URL` sin configurar → `console.warn` solamente, todas las llamadas API fallan silenciosamente en producción con 404. | **Resuelto Wave 5** |
 | S-06 | **P2** | Security | `pages/Metar.tsx:572,587` | Endpoint `/api/metar` no existe en backend (no registrado en `main.py`). ICAO code interpolado en URL sin `encodeURIComponent`. | Agregar `encodeURIComponent(clean)`; registrar router o remover feature |
-| S-07 | **P2** | Security | `components/animated/FallingText.tsx:41` | `innerHTML` con interpolación directa de prop `text` sin escape HTML. Actualmente estático pero el componente acepta input externo sin sanitizar. | `escapeHtml(word)` antes de interpolar, o usar `textContent` + `cloneNode` |
-| S-08 | **P2** | Security | `core/config.py:15-19` | CORS origins hardcodeados (`localhost:5173`, dominios Vercel). Mantenibilidad + riesgo medio si se agrega auth en el futuro. | Leer desde env var `CORS_ORIGINS` con `split(",")` |
+| S-07 | ~~**P2**~~ ✅ | Security | `components/animated/FallingText.tsx:41` | `innerHTML` con interpolación directa de prop `text` sin escape HTML. Actualmente estático pero el componente acepta input externo sin sanitizar. | **Resuelto Wave 5** |
+| S-08 | ~~**P2**~~ ✅ | Security | `core/config.py:15-19` | CORS origins hardcodeados (`localhost:5173`, dominios Vercel). Mantenibilidad + riesgo medio si se agrega auth en el futuro. | **Resuelto Wave 5** |
 | S-09 | **P2** | Build | `render.yaml:6` | `buildCommand: pip install -r requirements.txt` con rangos amplios (`>=`). Cada deploy puede instalar versiones distintas incluyendo CVEs nuevos. `uv` no se usa. | `uv sync --no-dev` o `pip install -r requirements-lock.txt` con versiones pineadas |
 | S-10 | **P2** | Coverage | `services/fire_danger.py` | **22% cobertura** — 85% del servicio de incendios sin tests. Feature crítica de seguridad pública. | Crear `tests/test_fire_danger.py` |
 | S-11 | **P2** | Coverage | `services/openmeteo.py` | **42% cobertura** — parsers de respuesta no testeados directamente. Regresiones en parsing no se detectan. | Tests directos para `get_hourly_forecast`, `get_daily_forecast` |
@@ -81,10 +81,10 @@
 | S-13 | **P2** | Coverage | `core/http_client.py` | **46% cobertura** — lógica de retry/timeout sin tests. Fallo silencioso afecta todos los servicios. | Tests para líneas 11-30 |
 | S-14 | **P2** | Coverage | `utils/moon_phase.py` | `compute_moon_position()` (agregado en `ddbec66`) sin ningún test. 5 tests propuestos (ver abajo). | Agregar a `tests/test_moon_phase.py` |
 | S-15 | **P2** | Pre-deploy | Build | Bundle JS: 1.115 MB (gzip 315 KB) — supera límite recomendado 500 KB. Impacto en mobile. | Code-splitting con `import()` dinámico para páginas menos usadas |
-| S-16 | **P3** | Security | `routers/incendios.py:107` | Log con `%.4f` (11 m precisión) en lugar de `%.2f` (1.1 km) como el resto de routers. Inconsistencia con política anti-PII del proyecto. | Cambiar `%.4f` → `%.2f` |
-| S-17 | **P3** | Security | `apps/frontend/.gitignore` | No excluye `.env.*`. Si se crea `.env.local` desde ese directorio, podría commitirse por accidente. | Agregar `.env` / `.env.*` / `!.env.example` |
+| S-16 | ~~**P3**~~ ✅ | Security | `routers/incendios.py:107` | Log con `%.4f` (11 m precisión) en lugar de `%.2f` (1.1 km) como el resto de routers. Inconsistencia con política anti-PII del proyecto. | **Resuelto Wave 5** |
+| S-17 | ~~**P3**~~ ✅ | Security | `apps/frontend/.gitignore` | No excluye `.env.*`. Si se crea `.env.local` desde ese directorio, podría commitirse por accidente. | **Resuelto Wave 5** |
 | S-18 | **P3** | Deuda | `pages/` | `HacerDeporte.tsx` y `SensacionTermica.tsx` sin ruta activa — candidatos a `pages/_legacy/`. | Mover o eliminar |
-| S-19 | **P3** | Deuda | `services/smn.py` `services/usgs.py` `services/openmeteo.py` | Crean `httpx.AsyncClient` locales en lugar de usar el cliente compartido de `core/http_client.py`. Inconsistencia de performance y configuración. | Refactorizar para usar `get_http_client()` |
+| S-19 | ~~**P3**~~ ✅ | Deuda | `services/smn.py` `services/oavv.py` `services/openmeteo.py` | Crean `httpx.AsyncClient` locales en lugar de usar el cliente compartido de `core/http_client.py`. Inconsistencia de performance y configuración. | **Resuelto: smn (Wave 5), oavv (Wave 5), openmeteo (Wave 3)** |
 
 ---
 
@@ -159,10 +159,10 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 
 | ID | Sev | Archivo:Línea | Descripción | Fix |
 |----|-----|--------------|-------------|-----|
-| R-01 | **P1** | `routers/weather.py:345,403` | `except Exception: pass` en bloques de parse de sunrise/sunset. Si `_parse_ar_dt` falla, `is_day_now` queda `True` y `position_pct` queda en 0.5 sin traza en logs. | `except Exception as exc: logger.warning(...)` |
-| R-02 | **P1** | `routers/weather.py:389` | Clamp `min(1.5, elapsed_sec/total_sec)` — `DayArcSchema.current_position_pct` puede llegar al frontend con valor > 1.0 sin validación. | Cambiar a `min(1.0, ...)` o agregar `le=1.5` en schema + comment explícito si es intencional |
-| R-03 | **P1** | `routers/tools.py:189` | `_filter_future` usa `datetime.now().timestamp()` naive en lugar de `datetime.now(timezone.utc).timestamp()`. Frágil si el TZ del servidor cambia. Causa directa de los 2 tests rotos. | `datetime.now(timezone.utc).timestamp()` |
-| R-04 | **P1** | `services/fire_danger.py:185` | `except Exception` traga errores de red en `_fetch_raw_fire` sin distinción ni reintento. Timeout, 500, 404 de Windy degradan silenciosamente a GFS estimado. | Distinguir `httpx.TimeoutException` vs `HTTPStatusError`; `logger.error(exc_info=True)` en 5xx |
+| R-01 | ~~**P1**~~ ✅ | `routers/weather.py:345,403` | `except Exception: pass` en bloques de parse de sunrise/sunset. Si `_parse_ar_dt` falla, `is_day_now` queda `True` y `position_pct` queda en 0.5 sin traza en logs. | **Resuelto Wave 5** |
+| R-02 | ~~**P1**~~ ✅ | `routers/weather.py:389` | Clamp `min(1.5, elapsed_sec/total_sec)` — `DayArcSchema.current_position_pct` puede llegar al frontend con valor > 1.0 sin validación. | **Resuelto Wave 5** |
+| R-03 | ~~**P1**~~ ✅ | `routers/tools.py:189` | `_filter_future` usa `datetime.now().timestamp()` naive en lugar de `datetime.now(timezone.utc).timestamp()`. Frágil si el TZ del servidor cambia. Causa directa de los 2 tests rotos. | **Resuelto Wave 5** |
+| R-04 | ~~**P1**~~ ✅ | `services/fire_danger.py:185` | `except Exception` traga errores de red en `_fetch_raw_fire` sin distinción ni reintento. Timeout, 500, 404 de Windy degradan silenciosamente a GFS estimado. | **Resuelto Wave 5** |
 | R-05 | **P1** | `services/openmeteo.py:62,135,202,282,439` | Crea `httpx.AsyncClient` nuevo por request — ignora el cliente global de `http_client.py`. En `/dashboard` (4 llamadas OM en paralelo) abre 4 conexiones TCP en lugar de reutilizar el pool. | Usar `get_client()` del módulo compartido; eliminar los `async with httpx.AsyncClient(...)` |
 | R-06 | **P2** | `services/fire_danger.py:25,28` | `_parse_hourly` y `_ms_to_kmh` importados pero no usados (ruff F401). La conversión wind u/v está duplicada inline. | Eliminar imports muertos; reutilizar `_ms_to_kmh` en líneas 226 y 271 |
 | R-07 | **P2** | `services/fire_danger.py:16` | `timezone` y `timedelta` importados pero no usados. | Reducir a `from datetime import datetime` |
@@ -177,7 +177,7 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 | R-16 | **P2** | `routers/weather.py:749` | Closure `_om_vals` sobre variable de loop `i`. Funciona pero es frágil. | Extraer como función con parámetros explícitos |
 | R-17 | **P3** | `routers/weather.py:183` y `routers/tools.py:56` | `LatParam`/`LonParam` duplicados en 2 routers. | Mover a `app/core/params.py` |
 | R-18 | **P3** | `routers/weather.py:199` y `routers/tools.py` | `SOURCE_WINDY`, `SOURCE_OPENMETEO`, `SOURCE_MIXED` duplicados. | Mover a módulo compartido |
-| R-19 | **P3** | `routers/tools.py:261` | `_score_fn` wrapper en `get_tender_ropa` es un no-op — la expresión es siempre equivalente a `p`. | Usar `calculators.score_tender_ropa` directamente |
+| R-19 | ~~**P3**~~ ✅ | `routers/tools.py:261` | `_score_fn` wrapper en `get_tender_ropa` es un no-op — la expresión es siempre equivalente a `p`. | **Resuelto Wave 5** |
 
 ---
 
@@ -196,20 +196,20 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 |----|-----|--------------|-------------|-----|
 | T-01 | **P1** | `tsconfig.app.json` | `strict: true` **ausente** — `strictNullChecks` y `noImplicitAny` deshabilitados. Build limpio es falso positivo. Todas las aserciones `!` pasan sin verificación. | Agregar `"strict": true` y corregir los errores resultantes |
 | T-02 | **P1** | `components/ui/InfiniteNavRail.tsx:157-160` | `useCallback` self-referencial: `animate` referencia a sí mismo antes de ser inicializado. ESLint error. Funciona por closure pero es frágil. | `useRef` para el tick de RAF en lugar de `useCallback` |
-| T-03 | **P1** | `components/animated/FallingText.tsx:41` | `innerHTML` con `word` sin escape (ya en S-07 pero ahora confirmado con línea exacta y `highlightClass` también afectado). | `escapeHtml(word)` + `escapeHtml(highlightClass)` o DOM API |
-| T-04 | **P1** | `hooks/useWeather.ts:58,86` | `refetchInterval === staleTime` en `useEarthquakes` (6h) y `useVolcanes` (2h). Polling incondicional en background — el cache es irrelevante, la API se golpea en cada intervalo sin importar si los datos están frescos. | Eliminar `refetchInterval` si el objetivo es solo refrescar cuando los datos se vuelven stale |
-| T-05 | **P1** | `contexts/ModelStatusContext.tsx:40` | `JSON.parse(raw) as ModelStatusState` sin validación de shape. Si sessionStorage tiene una versión vieja del estado (ej: falta la key `earthquakes`), el reducer corrompe el status bar silenciosamente. | Validar shape o `catch` + `return INITIAL` |
+| T-03 | ~~**P1**~~ ✅ | `components/animated/FallingText.tsx:41` | `innerHTML` con `word` sin escape (ya en S-07 pero ahora confirmado con línea exacta y `highlightClass` también afectado). | **Resuelto Wave 5** |
+| T-04 | ~~**P1**~~ ✅ | `hooks/useWeather.ts:58,86` | `refetchInterval === staleTime` en `useEarthquakes` (6h) y `useVolcanes` (2h). Polling incondicional en background — el cache es irrelevante, la API se golpea en cada intervalo sin importar si los datos están frescos. | **Resuelto Wave 5** |
+| T-05 | ~~**P1**~~ ✅ | `contexts/ModelStatusContext.tsx:40` | `JSON.parse(raw) as ModelStatusState` sin validación de shape. Si sessionStorage tiene una versión vieja del estado (ej: falta la key `earthquakes`), el reducer corrompe el status bar silenciosamente. | **Resuelto Wave 5** |
 | T-06 | **P2** | `components/LocationPicker.tsx:27-31` | `setResults`/`setOpen` en `useEffect` para búsqueda síncrona en memoria. Causa doble render por keystroke. ESLint error. | `const results = useMemo(() => searchCities(query), [query])` |
-| T-07 | **P2** | `pages/Terremotos.tsx:187` | Double cast `as unknown as Record<string, unknown>[]` rompe el contrato de tipos de `DataTable`. | Hacer `DataTable` genérico: `DataTable<T extends Record<string, unknown>>` |
+| T-07 | ~~**P2**~~ ✅ | `pages/Terremotos.tsx:187` | Double cast `as unknown as Record<string, unknown>[]` rompe el contrato de tipos de `DataTable`. | **Resuelto Wave 5** — `DataTable<T extends object>` genérico |
 | T-08 | **P2** | `components/clima/DayArc.tsx:41` | SVG gradient `id="arcGrad"` es ID global del DOM. Si el componente se renderiza dos veces, el segundo referencia el gradiente del primero. El commit `413f6e3` ya reparó esto en otros componentes. | `useId()` de React 18 por instancia |
-| T-09 | **P2** | `contexts/ModelStatusContext.tsx:107,115` | Hooks y componentes mezclados en el mismo archivo — ESLint `react-refresh/only-export-components`. Vite Fast Refresh requiere full page reload en cada cambio del contexto. | Separar hooks a `useModelStatus.ts` |
-| T-10 | **P2** | `hooks/useWeather.ts` (todos) | `queryFn: () => api.X(lat!, lon!)` — aserciones `!` sin guard en runtime. Si `refetch()` se llama manualmente, `null!` llega al fetch. | `if (lat === null \|\| lon === null) throw new Error(...)` al inicio de cada `queryFn` |
+| T-09 | ~~**P2**~~ ✅ | `contexts/ModelStatusContext.tsx:107,115` | Hooks y componentes mezclados en el mismo archivo — ESLint `react-refresh/only-export-components`. Vite Fast Refresh requiere full page reload en cada cambio del contexto. | **Resuelto Wave 5** — movidos a `hooks/useModelStatus.ts` |
+| T-10 | ~~**P2**~~ ✅ | `hooks/useWeather.ts` (todos) | `queryFn: () => api.X(lat!, lon!)` — aserciones `!` sin guard en runtime. Si `refetch()` se llama manualmente, `null!` llega al fetch. | **Resuelto Wave 5** |
 | T-11 | **P2** | `App.tsx:165-166,170-191` | `volcanAlertColor` y `navTools` recalculados en cada render de `RootLayout` — incluye renders por location update. `InfiniteNavRail` recibe nueva referencia en cada render. | `useMemo` dependiendo de `volcanesData` |
 | T-12 | **P2** | `components/clima/DayArc.tsx:87-103` | IIFE en JSX para calcular posición del moon dot. Se recalcula en cada render. | Extraer a variable antes del `return` |
 | T-13 | **P3** | `components/clima/SportBlock.tsx:212` | `key={i}` en lista de indicadores que aparecen/desaparecen condicionalmente. | Key estable: `ind.emoji` o `ind.text.slice(0,10)` |
 | T-14 | **P3** | `pages/Incendios.tsx:143,168` | `key={i}` en `RiskTimeline`. | `slot.date + '-' + slot.hour_label` |
 | T-15 | **P3** | `lib/api.ts:18` | `res.json() as Promise<T>` — cast redundante. `Response.json()` ya satisface el tipo de retorno genérico sin cast. | Eliminar `as Promise<T>` |
-| T-16 | **P3** | `components/animated/FallingText.tsx:131` | Cleanup de useEffect captura `canvasContainerRef.current` en closure en lugar de copiar el valor al inicio del efecto. | `const container = canvasContainerRef.current` al inicio; usar `container` en cleanup |
+| T-16 | ~~**P3**~~ ✅ | `components/animated/FallingText.tsx:131` | Cleanup de useEffect captura `canvasContainerRef.current` en closure en lugar de copiar el valor al inicio del efecto. | **Resuelto Wave 5** |
 | T-17 | **P3** | `pages/Metar.tsx:417` | `setSearch('')` en `useEffect` — debería estar en el event handler que abre el modal. | Mover al handler |
 | T-18 | **P3** | `components/animated/Threads.tsx:163` | `let currentMouse` nunca se reasigna. ESLint `prefer-const`. | `const currentMouse` |
 | T-19 | **P3** | `components/animated/SplashCursor.tsx:93` | `supportLinearFiltering` asignado pero nunca leído. | Usar en condicional o eliminar |
@@ -265,6 +265,57 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 
 ---
 
+## Wave 5 — Cierre de hallazgos pendientes
+
+> ✅ Completada 2026-05-28
+
+### Aplicado
+
+| ID | Fix | Archivo |
+|----|-----|---------|
+| S-02 | `Content-Security-Policy: default-src 'none'` + `X-Frame-Options: DENY` agregados al middleware | `app/main.py` |
+| S-04 | Tests rotos: `base_ts` fijo → `time.time() + 3600`; `_filter_future` naive datetime → `timezone.utc` | `test_tools_router.py`, `routers/tools.py` |
+| S-05 | `console.warn` → `throw new Error(...)` cuando `PROD && !BASE_URL` | `frontend/src/lib/api.ts` |
+| S-07/T-03 | `escapeHtml(word)` + `escapeHtml(highlightClass)` antes de `innerHTML`; `canvasContainerRef.current` capturado en variable antes del cleanup (T-16) | `components/animated/FallingText.tsx` |
+| S-08 | CORS origins leídas desde env var `CORS_ORIGINS` (comma-split) con `field_validator` | `core/config.py` |
+| S-16 | Log `%.4f` → `%.2f` en incendios | `routers/incendios.py` |
+| S-17 | `.env` / `.env.*` / `!.env.example` agregados al `.gitignore` del frontend | `apps/frontend/.gitignore` |
+| S-19 | `_fetch_stations` (smn) y `_fetch_all_volcanes` (oavv) migrados a `get_client()` | `services/smn.py`, `services/oavv.py` |
+| R-01 | Tres `except Exception: pass` → `except Exception as exc: logger.warning(...)` | `routers/weather.py` |
+| R-02 | Clamp `min(1.5, ...)` → `min(1.0, ...)` — `position_pct` no puede exceder 1.0 | `routers/weather.py` |
+| R-03 | `datetime.now()` naive → `datetime.now(timezone.utc)` en `_filter_future` | `routers/tools.py` |
+| R-04 | `except Exception` → `except httpx.TimeoutException` + `except httpx.HTTPStatusError` + `except Exception` con mensajes diferenciados | `services/fire_danger.py` |
+| R-19 | Wrapper no-op `_score_fn` eliminado; se pasa `calculators.score_tender_ropa` directamente | `routers/tools.py` |
+| T-04 | `refetchInterval` eliminado de `useEarthquakes` y `useVolcanes` (polling innecesario cuando `staleTime` ya controla refresco) | `hooks/useWeather.ts` |
+| T-05 | Shape validator `isModelStatusState()` antes de usar el resultado de `JSON.parse` | `contexts/ModelStatusContext.tsx` |
+| T-07 | `DataTable` genérico `<T extends object>` con `Column<T>` exportado; Terremotos usa `DataTable<EarthquakeEvent>` sin cast | `components/ui/DataTable.tsx`, `pages/Terremotos.tsx` |
+| T-09 | Hooks `useModelStatus` / `useModelStatusDispatch` movidos a `hooks/useModelStatus.ts`; contextos internos exportados | `contexts/ModelStatusContext.tsx`, `hooks/useModelStatus.ts`, `App.tsx`, `ModelStatusBar.tsx` |
+| T-10 | `lat !== null && lon !== null` guard explícito al inicio de cada `queryFn`; eliminados todos los `!` | `hooks/useWeather.ts` |
+| T-16 | `canvasContainerRef.current` copiado a `const canvasContainer` antes del cleanup | `components/animated/FallingText.tsx` |
+
+### No aplicados en Wave 5 (justificación explícita)
+
+| ID | Motivo del skip |
+|----|----------------|
+| S-01 | `render.yaml` — configuración de infraestructura, no código. Cambio manual en panel Render. |
+| S-03 | `.env.example` inexistente — requiere decisión de equipo sobre qué vars exponer. |
+| S-06 | Endpoint `/api/metar` no existe en backend — requiere diseño completo del feature. |
+| S-09 | `render.yaml` buildCommand — ops config, no cambia funcionalidad ni seguridad del código. |
+| S-10–S-14 | Tests de cobertura para `fire_danger`, `openmeteo`, `oavv`, `http_client`, `moon_phase` — cada uno es una sesión de tests separada. |
+| R-11 | Protocol `_HourlyForecast` + `Callable` tipado — refactoring cosméti­co, no afecta funcionalidad. |
+| R-12 | `degrees_to_cardinal` duplicada en `weather_aggregator` y `windy` — refactoring mayor con riesgo de regresión. |
+| R-13 | Race condition TOCTOU en Windy cache — requiere diseño con `asyncio.Event`; complejidad alta. |
+| T-01 | `strict: true` en tsconfig — activarlo introduce decenas de errores de tipo; requiere sesión dedicada. |
+| T-02 | `useCallback` self-ref en `InfiniteNavRail` — animación compleja, alto riesgo de romper behavior. |
+| T-13 | `key={i}` en SportBlock — cosmético, sin impacto funcional. |
+| T-14 | `key={i}` en RiskTimeline — cosmético, sin impacto funcional. |
+| T-17 | `setSearch('')` en Metar — cosmético, pertenece al refactor de Metar modal. |
+
+**Tests:** 352 passed · 0 fallos · cobertura **81%**
+**Build:** ✓ 2513 modules · 0 errores TS
+
+---
+
 ## Cobertura de tests — detalle
 
 | Módulo | Cobertura | Estado |
@@ -315,40 +366,21 @@ base_ts = int(time.time()) + 3600  # 1 hora en el futuro → _filter_future los 
 ```
 apps/backend/app/
 ├── core/
-│   ├── config.py          ← CORS origins hardcoded (S-08)
-│   ├── http_client.py     ← 46% cobertura (S-13); no usado por smn/usgs/om (S-19)
-│   └── rate_limit.py
-├── routers/
-│   ├── weather.py         ← Dashboard + current; _parse_ar_dt; moon_position
-│   ├── tools.py           ← _filter_future causa tests rotos (S-04)
-│   ├── incendios.py       ← log %.4f en lugar de %.2f (S-16)
-│   ├── earthquakes.py
-│   └── volcanes.py
+│   └── http_client.py     ← 46% cobertura (S-13) — pendiente Wave 6
 ├── services/
-│   ├── fire_danger.py     ← 22% cobertura (S-10) 🔴
-│   ├── openmeteo.py       ← 42% cobertura (S-11) 🔴; httpx local (S-19)
-│   ├── oavv.py            ← 33% cobertura (S-12) 🔴; httpx local (S-19)
-│   ├── smn.py             ← httpx local (S-19)
-│   ├── usgs.py            ← httpx local (S-19)
-│   └── windy.py
+│   ├── fire_danger.py     ← 22% cobertura (S-10) 🔴 — pendiente Wave 6
+│   ├── openmeteo.py       ← 42% cobertura (S-11) 🔴 — pendiente Wave 6
+│   └── oavv.py            ← 33% cobertura (S-12) 🔴 — pendiente Wave 6
 └── utils/
-    └── moon_phase.py      ← compute_moon_position() sin tests (S-14)
+    └── moon_phase.py      ← compute_moon_position() sin tests (S-14) — pendiente Wave 6
 
 apps/frontend/src/
-├── lib/api.ts             ← VITE_API_BASE_URL warn-only (S-05)
-├── pages/
-│   ├── Metar.tsx          ← endpoint inexistente + no encodeURIComponent (S-06) 🔴
-│   ├── HacerDeporte.tsx   ← legacy sin ruta (S-18)
-│   └── SensacionTermica.tsx ← legacy sin ruta (S-18)
-└── components/animated/
-    └── FallingText.tsx    ← innerHTML sin escape (S-07)
+└── pages/
+    └── Metar.tsx          ← endpoint inexistente + no encodeURIComponent (S-06) 🔴 — requiere diseño
 
-render.yaml                ← sin envVars (S-01, S-03, S-09) 🔴
-apps/frontend/.gitignore   ← sin .env.* (S-17)
+render.yaml                ← sin envVars (S-01, S-03, S-09) — ops config, acción manual
 ```
 
 ---
 
-*Wave 1 completada 2026-05-26 · Actualizar al cerrar Wave 2.*
-
-agregá de revisar y modificar : En la seccion de Niebla vamos a refinar un poco. Reemplaza Niebla por Neblina y Niebla densa por Niebla. y quita la linea punteada naranja de "Ahora"
+*Waves 1–5 completadas 2026-05-28. Próxima: Wave 6 — cobertura de tests (`fire_danger` 22%, `oavv` 33%, `openmeteo` 42%, `moon_phase` sin tests) + S-06 endpoint `/api/metar`.*

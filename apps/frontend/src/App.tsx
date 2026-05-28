@@ -8,10 +8,10 @@ import { SplashCursor } from '@/components/animated/SplashCursor'
 import { Threads } from '@/components/animated/Threads'
 import {
   ModelStatusProvider,
-  useModelStatusDispatch,
   type ModelCategory,
   type ModelStatusAction,
 } from '@/contexts/ModelStatusContext'
+import { useModelStatusDispatch } from '@/hooks/useModelStatus'
 import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
 import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'

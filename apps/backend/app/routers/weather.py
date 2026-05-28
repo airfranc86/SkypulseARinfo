@@ -341,8 +341,8 @@ async def get_dashboard(
         sr_utc = _parse_ar_dt(sunrise_today)
         ss_utc = _parse_ar_dt(sunset_today)
         is_day_now = sr_utc <= now <= ss_utc
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("_parse_ar_dt sunrise/sunset failed: %s", exc)
 
     # =========================================================================
     # CurrentDetailedSchema
@@ -385,7 +385,7 @@ async def get_dashboard(
         total_sec = (ss_dt2 - sr_dt2).total_seconds()
         elapsed_sec = (now - sr_dt2).total_seconds()
         if total_sec > 0:
-            position_pct = max(0.0, min(1.5, elapsed_sec / total_sec))
+            position_pct = max(0.0, min(1.0, elapsed_sec / total_sec))
 
         if now < sr_dt2:
             secs_to_sr = (sr_dt2 - now).total_seconds()
@@ -415,12 +415,13 @@ async def get_dashboard(
                         )
                     else:
                         daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
-                except Exception:
+                except Exception as exc:
+                    logger.warning("_parse_ar_dt tomorrow sunrise failed: %s", exc)
                     daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
             else:
                 daylight_label = f"Hoy: {_h_total}h {_m_total:02d}m de luz"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DayArc calculation failed: %s", exc)
 
     day_arc = DayArcSchema(
         sunrise=sunrise_today,

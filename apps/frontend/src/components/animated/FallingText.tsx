@@ -34,11 +34,14 @@ export function FallingText({
   // Render word spans
   useEffect(() => {
     if (!textRef.current) return
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const safeClass = escapeHtml(highlightClass)
     const words = text.split(' ')
     textRef.current.innerHTML = words
       .map(word => {
         const isHighlighted = highlightWords.some(hw => word.startsWith(hw))
-        return `<span class="falling-word ${isHighlighted ? highlightClass : ''}" style="display:inline-block;margin:0 3px;cursor:default">${word}</span>`
+        return `<span class="falling-word ${isHighlighted ? safeClass : ''}" style="display:inline-block;margin:0 3px;cursor:default">${escapeHtml(word)}</span>`
       })
       .join(' ')
   }, [text, highlightWords, highlightClass])
@@ -123,12 +126,13 @@ export function FallingText({
     }
     animId.id = requestAnimationFrame(updateLoop)
 
+    const canvasContainer = canvasContainerRef.current
     return () => {
       cancelAnimationFrame(animId.id)
       Render.stop(render)
       Runner.stop(runner)
-      if (render.canvas && canvasContainerRef.current?.contains(render.canvas)) {
-        canvasContainerRef.current.removeChild(render.canvas)
+      if (render.canvas && canvasContainer?.contains(render.canvas)) {
+        canvasContainer.removeChild(render.canvas)
       }
       World.clear(engine.world, false)
       Engine.clear(engine)

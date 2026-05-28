@@ -1,8 +1,7 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
-// In production builds, warn if the API base URL is not configured
 if (import.meta.env.PROD && !BASE_URL) {
-  console.warn('[SkyPulse] VITE_API_BASE_URL is not set — API calls will fail in production. Set it in Vercel environment variables.')
+  throw new Error('[SkyPulse] VITE_API_BASE_URL is not set. Configure it in Vercel environment variables.')
 }
 
 async function request<T>(path: string, params?: Record<string, string | number>): Promise<T> {

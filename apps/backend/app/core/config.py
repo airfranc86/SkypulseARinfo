@@ -1,4 +1,7 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+_DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app,https://skypulseinfo.vercel.app"
 
 
 class Settings(BaseSettings):
@@ -12,11 +15,16 @@ class Settings(BaseSettings):
     cache_ttl_earthquakes_seconds: int = 300    # 5 minutos — USGS sismos (era 6h, causaba datos obsoletos)
     cache_ttl_volcanes_seconds: int = 7200      # 2 horas — OAVV volcanes
     log_level: str = "INFO"
-    cors_origins: list[str] = [
-        "http://localhost:5173",
-        "https://skypulse-ar.vercel.app",
-        "https://skypulseinfo.vercel.app",
-    ]
+    cors_origins: list[str] | str = _DEFAULT_CORS
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_cors(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        if isinstance(v, list):
+            return v
+        return []
 
     windy_api_key: str = ""
     windy_base_url: str = "https://api.windy.com/api/point-forecast/v2"

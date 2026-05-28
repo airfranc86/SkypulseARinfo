@@ -258,11 +258,7 @@ async def get_tender_ropa(
     )
 
     # Construir hourly 24h
-    def _score_fn(t, h, w, p):
-        p6 = p if p == 0.0 else (None if p is None else p)
-        return calculators.score_tender_ropa(t, h, w, p6)
-
-    hourly = _build_hourly_scores(forecast, _score_fn, hours=24)
+    hourly = _build_hourly_scores(forecast, calculators.score_tender_ropa, hours=24)
     hourly = _mark_best(hourly)
     future_hourly_tr = _filter_future(hourly)
     best_window = _best_window_consecutive(future_hourly_tr, min_score=70)

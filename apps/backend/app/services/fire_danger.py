@@ -181,6 +181,12 @@ async def _fetch_raw_fire(lat: float, lon: float) -> dict | None:
 
         return data
 
+    except httpx.TimeoutException as exc:
+        logger.warning("fireDanger model timeout — will use GFS fallback: %s", exc)
+        return None
+    except httpx.HTTPStatusError as exc:
+        logger.warning("fireDanger model HTTP %s — will use GFS fallback", exc.response.status_code)
+        return None
     except Exception as exc:
         logger.warning("fireDanger model unavailable (%s) — will use GFS fallback", exc)
         return None

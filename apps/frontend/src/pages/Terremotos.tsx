@@ -2,8 +2,9 @@ import type { CSSProperties } from 'react'
 import { Waves } from 'lucide-react'
 import { useEarthquakes } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
+import type { EarthquakeEvent } from '@/lib/api'
 import { StatCard } from '@/components/ui/StatCard'
-import { DataTable } from '@/components/ui/DataTable'
+import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MagnitudeScaleBar } from '@/components/ui/MagnitudeScaleBar'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
@@ -37,7 +38,7 @@ function magnitudeStyle(mag: number): CSSProperties {
   return { color: 'var(--color-muted-foreground)' }
 }
 
-const columns = [
+const columns: Column<EarthquakeEvent>[] = [
   {
     key: 'magnitude',
     header: 'Magnitud',
@@ -185,9 +186,9 @@ export function Terremotos({ location }: Props) {
               </ElectricBorder>
             </div>
 
-            <DataTable
+            <DataTable<EarthquakeEvent>
               columns={columns}
-              data={events as unknown as Record<string, unknown>[]}
+              data={events}
               emptyMessage="Sin sismos registrados en el área."
             />
             <div className="mt-2">

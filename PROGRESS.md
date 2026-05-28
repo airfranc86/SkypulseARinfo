@@ -5,6 +5,76 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-28 — audit.md footer actualizado ✅
+
+**Done:**
+- Línea footer de `audit.md` actualizada de "Wave 1 completada..." → estado real: Waves 1–5 completas, próxima Wave 6
+
+**Files changed:**
+- `docs/plans/audit.md` — footer line 386
+
+**Tests:** n/a
+
+**Next:**
+- Wave 6: cobertura `fire_danger` (22%), `oavv` (33%), `openmeteo` (42%), `moon_phase` (0%)
+
+---
+
+## 2026-05-28 — Audit Wave 5: cierre de hallazgos pendientes ✅
+
+**Done:**
+- **S-02**: CSP `default-src 'none'` + `X-Frame-Options: DENY` en `security_headers` middleware
+- **S-04 + R-03**: tests rotos solucionados (base_ts dinámico) + `_filter_future` timezone-aware
+- **S-05**: `console.warn` → `throw new Error(...)` para `VITE_API_BASE_URL` en producción
+- **S-07/T-03**: `escapeHtml(word)` + `escapeHtml(highlightClass)` en FallingText innerHTML
+- **S-08**: CORS origins leído desde env var `CORS_ORIGINS` con `field_validator` + comma-split
+- **S-16**: log `%.4f` → `%.2f` en incendios router
+- **S-17**: `.env` / `.env.*` / `!.env.example` en `apps/frontend/.gitignore`
+- **S-19**: `services/smn.py` y `services/oavv.py` migrados a `get_client()` compartido
+- **R-01**: 3 `except Exception: pass` → `except Exception as exc: logger.warning(...)` en weather.py
+- **R-02**: clamp `min(1.5, ...)` → `min(1.0, ...)` — position_pct máximo es 1.0
+- **R-04**: `fire_danger.py` distingue `httpx.TimeoutException` vs `HTTPStatusError` vs genérico
+- **R-19**: wrapper no-op `_score_fn` eliminado; `calculators.score_tender_ropa` directo
+- **T-04**: `refetchInterval` eliminado de `useEarthquakes` y `useVolcanes`
+- **T-05**: `isModelStatusState()` guard en `loadFromSession()` antes de usar el parsed JSON
+- **T-07**: `DataTable<T extends object>` genérico + `Column<T>` exportado; Terremotos sin double cast
+- **T-09**: hooks movidos a `hooks/useModelStatus.ts`; imports actualizados en App.tsx y ModelStatusBar.tsx
+- **T-10**: `if (lat === null || lon === null) throw new Error(...)` en todos los `queryFn`
+- **T-16**: `canvasContainerRef.current` capturado en variable antes del cleanup effect
+- **audit.md**: Wave 5 documentada, todos los hallazgos resueltos marcados ✅, Wave 6 = cobertura
+
+**Files changed:**
+- `apps/backend/app/main.py` — S-02
+- `apps/backend/app/core/config.py` — S-08 (field_validator CORS)
+- `apps/backend/app/routers/incendios.py` — S-16
+- `apps/backend/app/routers/weather.py` — R-01, R-02
+- `apps/backend/app/routers/tools.py` — R-03, R-19
+- `apps/backend/app/services/smn.py` — S-19
+- `apps/backend/app/services/oavv.py` — S-19
+- `apps/backend/app/services/fire_danger.py` — R-04
+- `apps/backend/tests/test_tools_router.py` — S-04
+- `apps/frontend/.gitignore` — S-17
+- `apps/frontend/src/lib/api.ts` — S-05
+- `apps/frontend/src/components/animated/FallingText.tsx` — T-03, T-16
+- `apps/frontend/src/hooks/useWeather.ts` — T-04, T-10
+- `apps/frontend/src/contexts/ModelStatusContext.tsx` — T-05, T-09 (export contexts)
+- `apps/frontend/src/hooks/useModelStatus.ts` — NUEVO (T-09)
+- `apps/frontend/src/components/ui/DataTable.tsx` — T-07 (genérico)
+- `apps/frontend/src/pages/Terremotos.tsx` — T-07 (sin double cast)
+- `apps/frontend/src/App.tsx` — T-09 (import update)
+- `apps/frontend/src/components/ui/ModelStatusBar.tsx` — T-09 (import update)
+- `docs/plans/audit.md` — Wave 5 completa
+
+**Tests:**
+- Backend: 352 passed, 0 failed
+- Frontend: build ✓ 2513 modules, 0 errores TS
+
+**Next:**
+- Wave 6: cobertura — `fire_danger.py` (22%), `oavv.py` (33%), `openmeteo.py` (42%), `moon_phase.py` (S-14)
+- S-06: diseñar y registrar endpoint `/api/metar` (requiere decisión)
+
+---
+
 ## 2026-05-27 — fix(niebla): hourly slots → próxima hora AR redonda ✅
 
 **Done:**

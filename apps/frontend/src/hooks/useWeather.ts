@@ -8,7 +8,7 @@ const STALE_VOLCANES    = 2 * 60 * 60 * 1000  // 2 horas
 export function useWeatherCurrent(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['weather-current', lat, lon],
-    queryFn: () => api.weatherCurrent(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.weatherCurrent(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -17,7 +17,7 @@ export function useWeatherCurrent(lat: number | null, lon: number | null) {
 export function useTenderRopa(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['tender-ropa', lat, lon],
-    queryFn: () => api.tenderRopa(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.tenderRopa(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -26,7 +26,7 @@ export function useTenderRopa(lat: number | null, lon: number | null) {
 export function useSensacionTermica(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['sensacion-termica', lat, lon],
-    queryFn: () => api.sensacionTermica(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.sensacionTermica(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -35,7 +35,7 @@ export function useSensacionTermica(lat: number | null, lon: number | null) {
 export function useCotaDeNieve(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['cota-de-nieve', lat, lon],
-    queryFn: () => api.cotaDeNieve(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.cotaDeNieve(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -44,7 +44,7 @@ export function useCotaDeNieve(lat: number | null, lon: number | null) {
 export function useHacerDeporte(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['hacer-deporte', lat, lon],
-    queryFn: () => api.hacerDeporte(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.hacerDeporte(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -53,9 +53,8 @@ export function useHacerDeporte(lat: number | null, lon: number | null) {
 export function useEarthquakes(lat: number | null, lon: number | null, radius_km = 500) {
   return useQuery({
     queryKey: ['earthquakes', lat, lon, radius_km],
-    queryFn: () => api.earthquakes(lat!, lon!, radius_km),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.earthquakes(lat, lon, radius_km) },
     staleTime: STALE_EARTHQUAKES,
-    refetchInterval: STALE_EARTHQUAKES,
     enabled: lat !== null && lon !== null,
   })
 }
@@ -63,7 +62,7 @@ export function useEarthquakes(lat: number | null, lon: number | null, radius_km
 export function useLavarCoche(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['lavar-coche', lat, lon],
-    queryFn: () => api.lavarCoche(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.lavarCoche(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -72,7 +71,7 @@ export function useLavarCoche(lat: number | null, lon: number | null) {
 export function useWeatherDashboard(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['weather-dashboard', lat, lon],
-    queryFn: () => api.weatherDashboard(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.weatherDashboard(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -83,14 +82,13 @@ export function useVolcanes() {
     queryKey: ['volcanes'],
     queryFn: () => api.volcanes(),
     staleTime: STALE_VOLCANES,
-    refetchInterval: STALE_VOLCANES,
   })
 }
 
 export function useLaundryForecast(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['laundry-forecast', lat, lon],
-    queryFn: () => api.laundryForecast(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.laundryForecast(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })
@@ -99,7 +97,7 @@ export function useLaundryForecast(lat: number | null, lon: number | null) {
 export function useFireDanger(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['fire-danger', lat, lon],
-    queryFn: () => api.fireDanger(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.fireDanger(lat, lon) },
     enabled: lat !== null && lon !== null,
     staleTime: 1000 * 60 * 60, // 1 hora
   })
@@ -108,7 +106,7 @@ export function useFireDanger(lat: number | null, lon: number | null) {
 export function useNiebla(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['niebla', lat, lon],
-    queryFn: () => api.niebla(lat!, lon!),
+    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.niebla(lat, lon) },
     enabled: lat !== null && lon !== null,
     staleTime: 5 * 60 * 1000,  // 5 minutos
   })

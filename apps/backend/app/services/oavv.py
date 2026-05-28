@@ -18,6 +18,7 @@ from cachetools import TTLCache
 from PIL import Image
 
 from app.core.config import settings
+from app.core.http_client import get_client
 from app.schemas.volcanes import ALERT_HEX, AlertLevel, Volcan, VolcanesResponse
 
 logger = logging.getLogger(__name__)
@@ -114,9 +115,9 @@ async def _fetch_alert_image(client: httpx.AsyncClient, volcan_id: int) -> bytes
 
 async def _fetch_all_volcanes() -> list[Volcan]:
     """Fetchea y analiza el nivel de alerta de todos los volcanes en paralelo."""
-    async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-        tasks = [_fetch_alert_image(client, v["id"]) for v in _CATALOG]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+    client = get_client()
+    tasks = [_fetch_alert_image(client, v["id"]) for v in _CATALOG]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
     volcanes: list[Volcan] = []
     for entry, result in zip(_CATALOG, results):

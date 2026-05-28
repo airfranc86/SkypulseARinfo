@@ -104,7 +104,7 @@ async def get_incendios(
         - Primario: Windy fireDanger model (FWI / DSR / DC / DMC / FFMC).
         - Fallback: estimación desde parámetros GFS (temp, humedad, viento, precip).
     """
-    logger.info("GET /api/incendios lat=%.4f lon=%.4f", lat, lon)
+    logger.info("GET /api/incendios lat=%.2f lon=%.2f", lat, lon)
 
     try:
         entries = await get_fire_danger(lat, lon)

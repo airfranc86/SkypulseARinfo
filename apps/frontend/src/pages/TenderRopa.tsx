@@ -1,5 +1,5 @@
 import { Shirt } from 'lucide-react'
-import { useLaundryForecast, useTenderRopa } from '@/hooks/useWeather'
+import { useLaundryForecast } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { LaundryDayCard } from '@/components/ui/LaundryDayCard'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -18,10 +18,6 @@ function sourceToModel(source?: string): ModelKey {
 
 export function TenderRopa({ location }: Props) {
   const { data, isLoading, error } = useLaundryForecast(
-    location?.lat ?? null,
-    location?.lon ?? null,
-  )
-  const { data: todayData } = useTenderRopa(
     location?.lat ?? null,
     location?.lon ?? null,
   )
@@ -54,8 +50,6 @@ export function TenderRopa({ location }: Props) {
               key={day.date}
               day={day}
               index={i}
-              hourlyScores={i === 0 ? (todayData?.hourly ?? undefined) : undefined}
-              bestWindow={i === 0 ? (todayData?.best_window ?? undefined) : undefined}
               isOpenMeteoFallback={isOpenMeteoFallback}
             />
           ))}

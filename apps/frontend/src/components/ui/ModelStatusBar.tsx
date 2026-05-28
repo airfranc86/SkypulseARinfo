@@ -1,4 +1,5 @@
-import { useModelStatus, type ModelCategory } from '@/contexts/ModelStatusContext'
+import { type ModelCategory } from '@/contexts/ModelStatusContext'
+import { useModelStatus } from '@/hooks/useModelStatus'
 
 // ── Label map ─────────────────────────────────────────────────────────────────
 

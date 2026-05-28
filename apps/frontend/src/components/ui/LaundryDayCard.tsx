@@ -1,57 +1,64 @@
-import { type ReactElement, useState } from 'react'
-import type { LaundryDay, HourlyScore } from '@/lib/api'
-import { IndexGauge } from '@/components/ui/IndexGauge'
+import { type ReactElement } from 'react'
+import type { LaundryDay } from '@/lib/api'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 
 interface LaundryDayCardProps {
   day: LaundryDay
   index: number
-  hourlyScores?: HourlyScore[]
-  bestWindow?: string | null
   isOpenMeteoFallback?: boolean
 }
 
-function confidenceBadgeColor(pct: number): string {
-  if (pct >= 85) return '#3ecf7a'
-  if (pct >= 70) return '#f0a030'
-  return '#e07b30'
-}
-
-function scoreColor(score: number): string {
+function scoreLabelColor(score: number): string {
   if (score >= 70) return '#3ecf7a'
-  if (score >= 40) return '#f0a030'
-  return '#e05050'
+  if (score >= 45) return '#f0a030'
+  return '#e05545'
 }
 
 export function LaundryDayCard({
   day,
   index,
-  hourlyScores,
-  bestWindow,
   isOpenMeteoFallback = false,
 }: LaundryDayCardProps): ReactElement {
-  const [isExpanded, setIsExpanded] = useState(false)
-
   const isBest = day.is_best
-  const borderColor = 'var(--color-border)'
-  const badgeColor = isBest ? '#c8a84b' : confidenceBadgeColor(day.confidence_pct)
+  const labelColor = isBest ? '#c8a84b' : scoreLabelColor(day.score)
   const showPrecipChip = !isOpenMeteoFallback || day.precip_prob > 0
+  const showLowConfidence = !isBest && day.confidence_pct < 70
 
   const cardContent = (
     <div
-      className="rounded-2xl px-4 py-3 cursor-pointer hover:scale-[1.01] transition-transform duration-[180ms]"
+      className="rounded-2xl px-4 py-3"
       style={{
         background: 'var(--color-card)',
-        border: isBest ? 'none' : `1px solid ${borderColor}`,
+        border: isBest ? 'none' : `1px solid var(--color-border)`,
       }}
-      onClick={() => setIsExpanded(v => !v)}
     >
-      {/* Main row */}
-      <div className="flex items-center gap-4">
-        {/* Mini gauge */}
-        <div className="shrink-0">
-          <IndexGauge value={day.score} label={day.label} size={80} />
+      <div className="flex items-center gap-3">
+        {/* Score label pill */}
+        <div
+          className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full"
+          style={{
+            background: `${labelColor}1a`,
+            border: `1px solid ${labelColor}55`,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              color: labelColor,
+              textShadow: `0 0 6px ${labelColor}55`,
+              fontSize: '0.55rem',
+              lineHeight: 1,
+            }}
+          >
+            ●
+          </span>
+          <span
+            className="text-xs font-semibold whitespace-nowrap"
+            style={{ color: labelColor }}
+          >
+            {day.label}
+          </span>
         </div>
 
         {/* Content */}
@@ -71,7 +78,6 @@ export function LaundryDayCard({
               </span>
             </span>
 
-            {/* Badge: best day OR confidence */}
             {isBest ? (
               <span
                 className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full"
@@ -84,29 +90,24 @@ export function LaundryDayCard({
               >
                 ✦ Mejor día
               </span>
-            ) : (
-              <div className="shrink-0 flex flex-col items-end gap-0.5">
-                <span
-                  className="text-xs font-medium px-2 py-0.5 rounded-full"
-                  style={{
-                    background: `${badgeColor}1a`,
-                    color: badgeColor,
-                    border: `1px solid ${badgeColor}55`,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {Math.round(day.confidence_pct)}% {day.confidence_label}
-                </span>
-                <span style={{ fontSize: '9px', color: 'var(--color-muted-foreground)', paddingRight: '2px' }}>
-                  Pronóstico
-                </span>
-              </div>
-            )}
+            ) : showLowConfidence ? (
+              <span
+                className="shrink-0 text-xs px-2 py-0.5 rounded-full"
+                style={{
+                  background: 'rgba(224,117,48,0.12)',
+                  color: '#e07b30',
+                  border: '1px solid rgba(224,117,48,0.3)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ⚠ Baja confianza
+              </span>
+            ) : null}
           </div>
 
           {/* Headline */}
           <p
-            className={`text-xs mb-2 ${isExpanded ? '' : 'line-clamp-2'}`}
+            className="text-xs mb-2"
             style={{ color: 'var(--color-muted-foreground)' }}
           >
             {day.headline}
@@ -124,7 +125,7 @@ export function LaundryDayCard({
               🌡 {day.temp_max_c.toFixed(0)}°C
             </span>
             <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-              💧 {day.humidity}%
+              💧 {Math.round(day.humidity)}%
             </span>
             <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
               💨 {day.wind_speed_kmh.toFixed(0)} km/h
@@ -136,34 +137,7 @@ export function LaundryDayCard({
             )}
           </div>
         </div>
-
-        {/* Expand chevron */}
-        <div
-          className="shrink-0 text-xs transition-transform duration-200"
-          style={{
-            color: 'var(--color-muted-foreground)',
-            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-          }}
-        >
-          ▼
-        </div>
       </div>
-
-      {/* Expanded section */}
-      {isExpanded && (
-        <div
-          className="mt-3 pt-3"
-          style={{ borderTop: '1px solid var(--color-border)' }}
-        >
-          {hourlyScores && hourlyScores.length > 0 ? (
-            <HourlyBreakdown hourlyScores={hourlyScores} bestWindow={bestWindow} />
-          ) : (
-            <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-              Desglose horario disponible solo para hoy.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   )
 
@@ -190,58 +164,5 @@ export function LaundryDayCard({
     <FadeContent delay={index * 60}>
       {cardContent}
     </FadeContent>
-  )
-}
-
-interface HourlyBreakdownProps {
-  hourlyScores: HourlyScore[]
-  bestWindow?: string | null
-}
-
-function HourlyBreakdown({ hourlyScores, bestWindow }: HourlyBreakdownProps): ReactElement {
-  return (
-    <div>
-      {bestWindow && (
-        <p
-          className="text-xs font-medium mb-2"
-          style={{ color: '#3ecf7a' }}
-        >
-          ✓ Mejor franja: {bestWindow}
-        </p>
-      )}
-      <div className="space-y-1.5">
-        {hourlyScores.map(h => (
-          <div key={h.timestamp} className="flex items-center gap-2">
-            <span
-              className="text-xs w-11 shrink-0"
-              style={{
-                color: h.is_best ? '#3ecf7a' : 'var(--color-muted-foreground)',
-                fontWeight: h.is_best ? 600 : 400,
-              }}
-            >
-              {h.hour_label}
-            </span>
-            <div
-              className="flex-1 rounded-full overflow-hidden"
-              style={{ height: 5, background: 'var(--color-muted)' }}
-            >
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{ width: `${h.score}%`, background: scoreColor(h.score) }}
-              />
-            </div>
-            <span
-              className="text-xs w-7 text-right shrink-0"
-              style={{ color: scoreColor(h.score), fontWeight: 500 }}
-            >
-              {h.score}
-            </span>
-            {h.is_best && (
-              <span className="text-xs shrink-0" style={{ color: '#3ecf7a' }}>✓</span>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }

@@ -12,6 +12,7 @@ import httpx
 from cachetools import TTLCache
 
 from app.core.config import settings
+from app.core.http_client import get_client
 from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)
@@ -81,10 +82,10 @@ def _parse_observed_at(date_str: str) -> datetime:
 
 async def _fetch_stations(url: str) -> list[dict]:
     """Hace el HTTP GET a SMN y devuelve el array JSON."""
-    async with httpx.AsyncClient(timeout=settings.http_timeout_seconds, headers=_HEADERS) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        return response.json()
+    client = get_client()
+    response = await client.get(url, headers=_HEADERS, timeout=settings.http_timeout_seconds)
+    response.raise_for_status()
+    return response.json()
 
 
 async def get_nearest_observation(lat: float, lon: float) -> SmnObservation | None:

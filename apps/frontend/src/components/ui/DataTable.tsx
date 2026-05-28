@@ -1,25 +1,25 @@
 import { type CSSProperties, type ReactElement, type ReactNode } from 'react'
 
-interface Column {
+export interface Column<T extends object = Record<string, unknown>> {
   key: string
   header: string
-  render?: (value: unknown, row: Record<string, unknown>) => ReactNode
+  render?: (value: unknown, row: T) => ReactNode
   className?: string
   /** Inline style aplicado a <th> y <td> — necesario para anchos fijos en WebKit mobile */
   style?: CSSProperties
 }
 
-interface DataTableProps {
-  columns: Column[]
-  data: Record<string, unknown>[]
+interface DataTableProps<T extends object = Record<string, unknown>> {
+  columns: Column<T>[]
+  data: T[]
   emptyMessage?: string
 }
 
-export function DataTable({
+export function DataTable<T extends object = Record<string, unknown>>({
   columns,
   data,
   emptyMessage = 'Sin datos disponibles.',
-}: DataTableProps): ReactElement {
+}: DataTableProps<T>): ReactElement {
   return (
     <div
       className="overflow-hidden rounded-xl border"
@@ -68,8 +68,8 @@ export function DataTable({
                       style={{ color: 'var(--color-foreground)', ...col.style }}
                     >
                       {col.render
-                        ? col.render(row[col.key], row)
-                        : String(row[col.key] ?? '—')}
+                        ? col.render((row as Record<string, unknown>)[col.key], row)
+                        : String((row as Record<string, unknown>)[col.key] ?? '—')}
                     </td>
                   ))}
                 </tr>
