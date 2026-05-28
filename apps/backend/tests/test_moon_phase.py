@@ -5,7 +5,12 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.utils.moon_phase import MoonPhaseInfo, compute_moon_phase
+from app.utils.moon_phase import (
+    MoonPhaseInfo,
+    MoonPositionInfo,
+    compute_moon_phase,
+    compute_moon_position,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -146,3 +151,52 @@ def test_all_returned_icons_are_non_empty():
         d = KNOWN_NEW_MOON + dt.timedelta(days=day)
         result = compute_moon_phase(d)
         assert result.icon in valid_icons, f"Día {day}: icon '{result.icon}' no reconocido"
+
+
+# ---------------------------------------------------------------------------
+# compute_moon_position() — tests de contrato (S-14)
+# ---------------------------------------------------------------------------
+
+BUENOS_AIRES_LAT = -34.6037
+BUENOS_AIRES_LON = -58.3816
+
+
+def test_compute_moon_position_returns_correct_type():
+    """Contrato: retorna MoonPositionInfo en casos normales."""
+    now = datetime(2024, 1, 25, 17, 54, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    assert isinstance(result, MoonPositionInfo)
+
+
+def test_moon_moonrise_label_format():
+    """Cuando hay rise/set definidos, el formato es HH:MM (5 chars con ':' en índice 2)."""
+    now = datetime(2024, 1, 25, 20, 0, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    if result.moonrise_label is not None:
+        assert len(result.moonrise_label) == 5
+        assert result.moonrise_label[2] == ":"
+    if result.moonset_label is not None:
+        assert len(result.moonset_label) == 5
+        assert result.moonset_label[2] == ":"
+
+
+def test_position_pct_none_when_below_horizon():
+    """Contrato: position_pct es None si la luna no está sobre el horizonte."""
+    now = datetime(2024, 1, 25, 6, 0, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    if not result.is_above_horizon:
+        assert result.position_pct is None
+
+
+def test_naive_datetime_handled():
+    """Datetime sin tzinfo: la función lo trata como UTC sin crashear."""
+    naive = datetime(2024, 6, 22, 12, 0, 0)
+    result = compute_moon_position(naive, BUENOS_AIRES_LAT, BUENOS_AIRES_LON)
+    assert isinstance(result, MoonPositionInfo)
+
+
+def test_polar_coordinates_no_crash():
+    """Coordenadas polares: no debe lanzar excepción, retorna estructura válida."""
+    now = datetime(2024, 1, 25, 12, 0, 0, tzinfo=timezone.utc)
+    result = compute_moon_position(now, lat=-89.9, lon=0.0)
+    assert isinstance(result, MoonPositionInfo)

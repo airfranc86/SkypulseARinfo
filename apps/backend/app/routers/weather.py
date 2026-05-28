@@ -16,11 +16,11 @@ import asyncio
 import logging
 import math
 from datetime import datetime, timezone, timedelta, date as _Date
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from app.core.config import settings
+from app.core.params import LatParam, LonParam, SOURCE_WINDY, SOURCE_OPENMETEO, SOURCE_MIXED
 from app.core.rate_limit import limiter
 from app.schemas.weather import (
     CurrentDetailedSchema,
@@ -176,28 +176,14 @@ def _build_synthetic_daily_multi(
 
 
 # ---------------------------------------------------------------------------
-# Parámetros compartidos
+# Constantes locales
 # ---------------------------------------------------------------------------
-
-LatParam = Annotated[
-    float,
-    Query(ge=-55, le=-21, description="Latitud (Argentina: -55 a -21)"),
-]
-LonParam = Annotated[
-    float,
-    Query(ge=-74, le=-53, description="Longitud (Argentina: -74 a -53)"),
-]
 
 # Meses en español para day_label_long
 _MONTHS_ES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
-
-# Etiquetas de fuentes para `forecast_source`.
-SOURCE_WINDY = "windy_gfs"
-SOURCE_OPENMETEO = "openmeteo_fallback"
-SOURCE_MIXED = "mixed"  # Windy para datos, Open-Meteo para weather codes / uv / sun
 
 
 # ---------------------------------------------------------------------------
@@ -757,19 +743,19 @@ def _build_7d_forecast(
     entries: list[DailyEntrySchema] = []
     models_list = list(daily_multi.models.values())
 
+    def _om_vals(idx: int, attr: str) -> list[float]:
+        result = []
+        for m in models_list:
+            lst = getattr(m, attr)
+            if idx < len(lst) and lst[idx] is not None:
+                result.append(lst[idx])
+        return result
+
     for i in range(len(ref.dates)):
         date_str = ref.dates[i]
 
         # ---------- Datos meteorológicos: Windy primario, OM fallback ----------
         w = windy_by_date.get(date_str)
-
-        def _om_vals(attr: str) -> list[float]:
-            result = []
-            for m in models_list:
-                lst = getattr(m, attr)
-                if i < len(lst) and lst[i] is not None:
-                    result.append(lst[i])
-            return result
 
         if w is not None:
             temp_max = w.temp_max_c
@@ -778,11 +764,11 @@ def _build_7d_forecast(
             precip_prob = w.precip_prob
             wind_max = w.wind_speed_max_kmh
         else:
-            temps_max_om = _om_vals("temp_max")
-            temps_min_om = _om_vals("temp_min")
-            precips_om = _om_vals("precip_sum")
-            precip_probs_om = _om_vals("precip_prob_max")
-            winds_om = _om_vals("wind_speed_max")
+            temps_max_om = _om_vals(i, "temp_max")
+            temps_min_om = _om_vals(i, "temp_min")
+            precips_om = _om_vals(i, "precip_sum")
+            precip_probs_om = _om_vals(i, "precip_prob_max")
+            winds_om = _om_vals(i, "wind_speed_max")
             temp_max = round(sum(temps_max_om) / len(temps_max_om), 1) if temps_max_om else None
             temp_min = round(sum(temps_min_om) / len(temps_min_om), 1) if temps_min_om else None
             precip_sum = round(sum(precips_om) / len(precips_om), 1) if precips_om else None

@@ -94,6 +94,9 @@ class WindyDailyEntry:
 # públicas reutilizan este payload para evitar gastar cuota innecesariamente.
 _raw_cache: TTLCache = TTLCache(maxsize=256, ttl=3600)
 _cache_lock = asyncio.Lock()
+# Eventos para coordinar coroutines concurrentes que piden el mismo cache_key.
+# Previene el race condition TOCTOU: dos coroutines miss-check simultáneo → doble fetch.
+_fetch_events: dict[tuple[float, float], asyncio.Event] = {}
 
 # Alias legacy retained for backward compatibility with tests/scripts that
 # referenced the old in-memory cache.
@@ -158,6 +161,9 @@ async def _fetch_raw(lat: float, lon: float) -> dict:
     Devuelve el payload crudo de Windy para (lat, lon).
     Cachea por (lat, lon) redondeado a 4 decimales durante 1 h.
 
+    Patrón de deduplicación: si dos coroutines solicitan el mismo cache_key
+    simultáneamente, solo una hace el fetch; la otra espera via asyncio.Event.
+
     Raises:
         WindyNotConfiguredError: Si windy_api_key está vacío.
         Exception: Cualquier error de red o HTTP de Windy.
@@ -172,28 +178,50 @@ async def _fetch_raw(lat: float, lon: float) -> dict:
             logger.debug("Windy cache hit for %s", cache_key)
             return _raw_cache[cache_key]
 
-    payload = {
-        "lat": lat,
-        "lon": lon,
-        "model": settings.windy_model,
-        "parameters": _WINDY_PARAMETERS,
-        "levels": _WINDY_LEVELS,
-        "key": settings.windy_api_key,
-    }
+        if cache_key in _fetch_events:
+            # Otra coroutine ya está haciendo el fetch — subscribirse
+            event: asyncio.Event | None = _fetch_events[cache_key]
+        else:
+            # Primera en llegar — registrar intención de fetch
+            event = asyncio.Event()
+            _fetch_events[cache_key] = event
+            event = None  # sentinel: esta coroutine debe hacer el fetch
 
-    client = get_client()
-    response = await client.post(
-        settings.windy_base_url,
-        json=payload,
-        timeout=10.0,
-    )
-    response.raise_for_status()
-    data = response.json()
+    if event is not None:
+        # Esperar fuera del lock a que la coroutine fetcher termine
+        await event.wait()
+        async with _cache_lock:
+            return _raw_cache[cache_key]
 
-    async with _cache_lock:
-        _raw_cache[cache_key] = data
+    # Esta coroutine es la responsable del fetch
+    try:
+        payload = {
+            "lat": lat,
+            "lon": lon,
+            "model": settings.windy_model,
+            "parameters": _WINDY_PARAMETERS,
+            "levels": _WINDY_LEVELS,
+            "key": settings.windy_api_key,
+        }
 
-    return data
+        client = get_client()
+        response = await client.post(
+            settings.windy_base_url,
+            json=payload,
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        async with _cache_lock:
+            _raw_cache[cache_key] = data
+        return data
+    finally:
+        # Señalar a las coroutines esperando y limpiar el evento
+        async with _cache_lock:
+            ev = _fetch_events.pop(cache_key, None)
+        if ev is not None:
+            ev.set()
 
 
 # ---------------------------------------------------------------------------

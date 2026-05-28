@@ -110,6 +110,8 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
   const totalDragDelta = useRef(0) // used to suppress NavLink click on real drags
 
   const rafRef = useRef<number>(0)
+  // Stable ref to the latest animate — avoids stale-closure self-reference
+  const animateRef = useRef<() => void>(() => {})
 
   // Cursor state — only this needs a re-render
   const [cursor, setCursor] = useState<'grab' | 'grabbing'>('grab')
@@ -158,8 +160,7 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
    */
   const animate = useCallback(() => {
     if (!halfWidthRef.current) {
-      // Measurement not ready — wait one frame and retry
-      rafRef.current = requestAnimationFrame(animate)
+      rafRef.current = requestAnimationFrame(animateRef.current)
       return
     }
     if (!isDragging.current) {
@@ -167,8 +168,11 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
       wrapPosition()
       applyTransform()
     }
-    rafRef.current = requestAnimationFrame(animate)
+    rafRef.current = requestAnimationFrame(animateRef.current)
   }, [speed, wrapPosition, applyTransform])
+
+  // Keep animateRef pointing to the latest version (avoids stale closure)
+  animateRef.current = animate
 
   useEffect(() => {
     rafRef.current = requestAnimationFrame(animate)

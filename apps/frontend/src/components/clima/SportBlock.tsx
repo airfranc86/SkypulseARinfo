@@ -208,8 +208,8 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
             )
           ) : (
             <div className="space-y-1">
-              {indicators.map((ind, i) => (
-                <div key={i} className="flex items-start gap-2">
+              {indicators.map((ind) => (
+                <div key={ind.text} className="flex items-start gap-2">
                   <span className="text-xs mt-px">⚠️</span>
                   <span
                     className="text-xs leading-snug"

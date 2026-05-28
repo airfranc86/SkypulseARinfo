@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Callable
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from app.core.config import settings
+from app.core.params import LatParam, LonParam, SOURCE_WINDY, SOURCE_OPENMETEO, SOURCE_UNAVAILABLE
 from app.core.rate_limit import limiter
 from app.schemas.tools import (
     CarWashDay,
@@ -30,6 +31,7 @@ from app.schemas.tools import (
 )
 from app.services import calculators
 from app.services.openmeteo import (
+    HourlyForecastData,
     get_daily_forecast,
     get_hourly_forecast,
 )
@@ -50,32 +52,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
-# Parámetros de coordenadas reutilizables
-# ---------------------------------------------------------------------------
-
-LatParam = Annotated[
-    float,
-    Query(ge=-55, le=-21, description="Latitud (Argentina: -55 a -21)"),
-]
-LonParam = Annotated[
-    float,
-    Query(ge=-74, le=-53, description="Longitud (Argentina: -74 a -53)"),
-]
-
-
-# ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
 
-# Fuentes de datos canónicas (literales) — usadas por endpoints en `source`.
-SOURCE_WINDY = "windy_gfs"
-SOURCE_OPENMETEO = "openmeteo_fallback"
-SOURCE_UNAVAILABLE = "unavailable"
-
 
 def _build_hourly_scores(
-    forecast,
-    score_fn,
+    forecast: HourlyForecastData,
+    score_fn: Callable[[float | None, float | None, float | None, float | None], ToolResult],
     hours: int,
 ) -> list[HourlyScore]:
     """Construye la lista de HourlyScore para las primeras `hours` horas del forecast."""
@@ -99,7 +82,7 @@ def _build_hourly_scores(
 
 def _build_hourly_scores_from_windy(
     hourly: list[WindyHourlyEntry],
-    score_fn,
+    score_fn: Callable[[float | None, float | None, float | None, float | None], ToolResult],
     hours: int,
 ) -> list[HourlyScore]:
     """Versión que toma WindyHourlyEntry. Cada slot puede ser de 3 h en GFS."""

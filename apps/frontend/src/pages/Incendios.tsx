@@ -254,11 +254,11 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
         Próximas 24 h
       </p>
       <div className="flex items-end gap-1.5 h-14">
-        {groups.map((g, i) => {
+        {groups.map((g) => {
           const heightPct = (g.maxScore / globalMax) * 100
           return (
             <div
-              key={i}
+              key={g.hourLabel}
               className="flex-1 flex flex-col items-center justify-end gap-1 cursor-help"
               title={`${g.hourLabel} — ${g.label} (${g.maxScore})`}
             >
@@ -279,8 +279,8 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
       </div>
       {/* Hour labels */}
       <div className="flex items-center mt-1.5">
-        {groups.map((g, i) => (
-          <div key={i} className="flex-1 text-center">
+        {groups.map((g) => (
+          <div key={g.hourLabel} className="flex-1 text-center">
             <span
               className="text-[.5rem]"
               style={{

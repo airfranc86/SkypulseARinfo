@@ -414,8 +414,8 @@ function IcaoModal({
 
   useEffect(() => {
     if (open) {
-      setSearch('')
-      setTimeout(() => searchRef.current?.focus(), 80)
+      const t = setTimeout(() => searchRef.current?.focus(), 80)
+      return () => clearTimeout(t)
     }
   }, [open])
 
@@ -692,7 +692,7 @@ function MetarWidget() {
         </div>
       )}
 
-      <IcaoModal open={modalOpen} onClose={() => setModalOpen(false)} onSelect={handleSelect} />
+      <IcaoModal key={String(modalOpen)} open={modalOpen} onClose={() => setModalOpen(false)} onSelect={handleSelect} />
     </>
   )
 }

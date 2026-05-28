@@ -5,6 +5,133 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-28 — Wave 6b COMPLETA: strict TS + Python cleanup ✅
+
+**Done:**
+- T-01: `strict: true` en `tsconfig.app.json` — 0 errores TS (build limpio sin cambios de código adicionales).
+- T-02: `InfiniteNavRail.tsx` — `animateRef` para romper self-reference en `useCallback`; `animateRef.current = animate` post-declaración.
+- T-13: `SportBlock.tsx` — `key={ind.text}` en lista de indicadores.
+- T-14: `Incendios.tsx` — `key={g.hourLabel}` en RiskTimeline (2 maps).
+- T-17: `Metar.tsx` — `IcaoModal` con `key={String(modalOpen)}` para reset de estado vía remount; `clearTimeout` cleanup en useEffect de focus.
+- R-11: `routers/tools.py` — `Callable[...]` + `HourlyForecastData` en `_build_hourly_scores` y `_build_hourly_scores_from_windy`.
+- R-12: `utils/geo.py` creado con `degrees_to_cardinal` (8 puntos); `weather_aggregator.py` migrado a `utils.geo`.
+- R-13: `services/windy.py` — patrón `asyncio.Event` en `_fetch_raw` para eliminar TOCTOU: primera coroutine fetchea, las demás esperan y leen del cache.
+- R-16: `routers/weather.py` — `_om_vals(attr)` → `_om_vals(idx, attr)` extraído fuera del loop `for i`.
+- R-17: `core/params.py` creado con `LatParam`/`LonParam`; eliminados de `weather.py` y `tools.py`.
+- R-18: `SOURCE_WINDY/OPENMETEO/MIXED/UNAVAILABLE` consolidados en `core/params.py`; eliminados de los 2 routers.
+
+**Files changed:**
+- `apps/frontend/tsconfig.app.json` — `strict: true`
+- `apps/frontend/src/components/ui/InfiniteNavRail.tsx` — animateRef pattern
+- `apps/frontend/src/components/clima/SportBlock.tsx` — key estable
+- `apps/frontend/src/pages/Incendios.tsx` — keys estables en maps
+- `apps/frontend/src/pages/Metar.tsx` — key prop + clearTimeout
+- `apps/backend/app/core/params.py` — NUEVO (LatParam, LonParam, SOURCE_*)
+- `apps/backend/app/utils/geo.py` — NUEVO (degrees_to_cardinal)
+- `apps/backend/app/services/weather_aggregator.py` — import desde utils.geo
+- `apps/backend/app/services/windy.py` — asyncio.Event TOCTOU fix + _fetch_events dict
+- `apps/backend/app/routers/tools.py` — type hints + imports desde core.params
+- `apps/backend/app/routers/weather.py` — closure fix + imports desde core.params
+- `docs/plans/auditoria-seguridad.md` — Wave 6b ✅, 62/65 hallazgos resueltos (95%)
+
+**Tests:**
+- `uv run pytest -q` → 523 passed, 0 failed
+- `pnpm run build` → ✓ 0 errores TS, built in 1.97s
+- `pnpm tsc --noEmit` → 0 errores con `strict: true`
+
+**Next:**
+- Wave 7: S-06 (endpoint `/api/metar` + encodeURIComponent en Metar.tsx)
+- Ops pendiente: S-09 (requirements.lock en Render)
+
+---
+
+## 2026-05-28 23:45 — Wave 6a COMPLETA: S-11, S-12, S-13 coverage ✅
+
+**Done:**
+- S-11 resuelto: 68 tests para `openmeteo.py` — `_cap_vis`, `_classify_visibility` (todos los niveles), `get_hourly_forecast`, `get_daily_forecast`, `get_daily_forecast_ext` (incl. model param injection), `get_multi_model_daily` (consenso lluvia), `get_hourly_forecast_ext` (is_day bool), `get_visibility_forecast`, `get_fog_inference_forecast` (5 niveles de niebla + WMO 45/48).
+- S-12 resuelto: 25 tests para `oavv.py` — `_detect_alert_level` (verde/amarillo/naranja/rojo + bytes corruptos), `_fetch_alert_image`, `_fetch_all_volcanes` (degradación controlada ante timeout), `get_volcanes` (caché TTL).
+- S-13 resuelto: 10 tests para `http_client.py` — lifecycle completo (create/get/close).
+- Wave 6a CERRADA: todos los 6 items resueltos (H-08, S-10, S-11, S-12, S-13, S-14).
+- Suite completa: 523 passed / 0 failed.
+
+**Files changed:**
+- `apps/backend/tests/test_openmeteo_extended.py` — creado (68 tests)
+- `apps/backend/tests/test_oavv.py` — creado (25 tests)
+- `apps/backend/tests/test_http_client.py` — creado (10 tests)
+- `docs/plans/auditoria-seguridad.md` — Wave 6a ✅ completa, 523 tests
+
+**Tests:**
+- `uv run pytest -q` → 523 passed, 0 failed
+
+**Next:**
+- Wave 6b: T-01 (`strict: true` en tsconfig), T-02 (useCallback), R-11–R-18 (Python code quality)
+- Wave 7: S-06 (METAR endpoint)
+- GTM/GA4/Sentry: implementar config plan cuando esté listo
+
+---
+
+## 2026-05-28 22:30 — Wave 6a: S-10 fire_danger coverage ✅
+
+**Done:**
+- S-10 resuelto: 63 tests unitarios nuevos para `fire_danger.py` — `_compute_fire_risk` (todos los umbrales), `_fwi_to_label` (escala CFFDRS completa), `_fwi_to_score`, `_parse_fire_entries_from_fwi`, `_parse_fire_entries_from_gfs`, `_fetch_raw_fire` (caché, timeout, 403, fallback), `get_fire_danger` (FWI path y GFS path).
+- Suite completa: 420 passed / 0 failed (era 357 antes de S-14, 357+5=362... fue 357 con S-14 ya incluido; ahora 357+63=420).
+- `auditoria-seguridad.md` actualizado (S-10 ✅, contadores).
+
+**Files changed:**
+- `apps/backend/tests/test_fire_danger.py` — creado (63 tests)
+- `docs/plans/auditoria-seguridad.md` — S-10 marcado resuelto, 420 tests
+
+**Tests:**
+- `uv run pytest tests/test_fire_danger.py -v` → 63 passed, 0 failed
+- `uv run pytest -q` → 420 passed, 0 failed
+
+**Next:**
+- S-11: `openmeteo.py` (42% → 80%)
+- S-12: `oavv.py` (33% → 80%)
+- S-13: `http_client.py` (46% → 80%)
+
+---
+
+## 2026-05-28 18:00 — Integración auditoría + Ops Wave (S-01, H-04, H-05) ✅
+
+**Done:**
+- Integrados `audit.md` (interno, waves 1–5) y `auditoria-seguridad.md` (black-box externo) en un único documento unificado con cross-references, estado por hallazgo y roadmap.
+- S-03 (`.env.example`) eliminado como requisito — no era necesario.
+- S-01 resuelto: `render.yaml` con bloque `envVars` (`ENV=prod`, `WINDY_API_KEY sync:false`, `CORS_ORIGINS sync:false`).
+- H-04 + H-05 resueltos: `vercel.json` actualizado con CSP, X-Frame-Options, X-Content-Type-Options y Permissions-Policy.
+- S-09 (lock file) identificado como pendiente de ops: requiere `pip freeze` en entorno Render, no resolvible localmente.
+
+**Files changed:**
+- `docs/plans/auditoria-seguridad.md` — documento unificado (reemplaza audit separado externo/interno)
+- `apps/backend/render.yaml` — bloque envVars agregado
+- `apps/frontend/vercel.json` — headers de seguridad agregados
+
+**Tests:** no aplica (cambios de configuración e infra únicamente)
+
+**Next:**
+- Wave 6a: cobertura `fire_danger` (22%), `oavv` (33%), `openmeteo` (42%), `http_client` (46%), `moon_phase` (0%) + H-08 (`radius_km le=2000`)
+
+---
+
+## 2026-05-28 — fix(incendios) + LaundryDayCard redesign ✅
+
+**Done:**
+- **fix incendios**: `fire_danger.py` usaba `httpx.TimeoutException`/`httpx.HTTPStatusError` sin importar `httpx` → `NameError` en runtime → 503. Añadido `from httpx import HTTPStatusError, TimeoutException as HttpxTimeout`.
+- **LaundryDayCard redesign**: `IndexGauge` (medialuna) reemplazado por label pill de color (`● Excelente`, `● Bueno`, etc.). Badge derecho simplificado: solo muestra `⚠ Baja confianza` cuando `confidence_pct < 70`.
+- **Humidity integer**: `{Math.round(day.humidity)}%` en condition chips.
+- **Desglose horario**: eliminado de `LaundryDayCard` y `TenderRopa`.
+
+**Files changed:**
+- `apps/backend/app/services/fire_danger.py` — import explícito de excepciones httpx
+- `apps/frontend/src/components/ui/LaundryDayCard.tsx` — redesign completo, sin IndexGauge
+
+**Tests:** 9/9 incendios router tests pasan; frontend build limpio (1.59s)
+
+**Next:**
+- Wave 6: cobertura `fire_danger` (22%), `oavv` (33%), `openmeteo` (42%), `moon_phase` (0%)
+
+---
+
 ## 2026-05-28 — audit.md footer actualizado ✅
 
 **Done:**

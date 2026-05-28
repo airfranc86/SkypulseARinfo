@@ -15,20 +15,9 @@ from app.schemas.weather import (
 )
 from app.services import smn, openmeteo
 from app.services.calculators import compute_sensacion_termica
+from app.utils.geo import degrees_to_cardinal
 
 logger = logging.getLogger(__name__)
-
-# Direcciones cardinales en 8 puntos — cada sector abarca 45°
-_CARDINALS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
-
-
-def degrees_to_cardinal(deg: float) -> str:
-    """Convierte grados (0–360) a dirección cardinal de 8 puntos."""
-    # Normalizar a [0, 360)
-    deg = deg % 360
-    # Cada sector es 45°. Desplazamos 22.5° para centrar N en 0.
-    index = int((deg + 22.5) / 45) % 8
-    return _CARDINALS[index]
 
 
 async def aggregate_current(lat: float, lon: float) -> WeatherCurrentResponse:
