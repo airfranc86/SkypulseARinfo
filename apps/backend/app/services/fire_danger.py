@@ -18,6 +18,8 @@ from datetime import datetime
 
 from cachetools import TTLCache
 
+from httpx import HTTPStatusError, TimeoutException as HttpxTimeout
+
 from app.core.config import settings
 from app.core.http_client import get_client
 from app.services.windy import (
@@ -181,10 +183,10 @@ async def _fetch_raw_fire(lat: float, lon: float) -> dict | None:
 
         return data
 
-    except httpx.TimeoutException as exc:
+    except HttpxTimeout as exc:
         logger.warning("fireDanger model timeout — will use GFS fallback: %s", exc)
         return None
-    except httpx.HTTPStatusError as exc:
+    except HTTPStatusError as exc:
         logger.warning("fireDanger model HTTP %s — will use GFS fallback", exc.response.status_code)
         return None
     except Exception as exc:
