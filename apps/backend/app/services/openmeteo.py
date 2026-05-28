@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from app.core.config import settings
@@ -180,6 +180,7 @@ class DailyForecastData:
     precip_sum: list[float | None]          # mm totales del día
     wind_speed_max: list[float | None]      # km/h
     humidity_mean: list[float | None]       # %
+    precip_prob_max: list[float | None] = field(default_factory=list)  # % probabilidad diaria
 
 
 async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyForecastData | None:
@@ -192,11 +193,12 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
         "longitude": lon,
         "daily": (
             "temperature_2m_max,temperature_2m_min,precipitation_sum,"
-            "wind_speed_10m_max,relative_humidity_2m_mean"
+            "precipitation_probability_max,wind_speed_10m_max,relative_humidity_2m_mean"
         ),
         "forecast_days": days,
         "timezone": "America/Argentina/Buenos_Aires",
         "wind_speed_unit": "kmh",
+        "models": "gfs_seamless",
     }
 
     try:
@@ -229,6 +231,7 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
             precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
             wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
             humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
+            precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
         )
     except (KeyError, TypeError) as exc:
         logger.warning("Open-Meteo daily parse error: %s", exc)

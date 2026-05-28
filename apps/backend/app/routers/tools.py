@@ -694,6 +694,11 @@ async def get_laundry_forecast_endpoint(
 
         raw_days = []
         for i in range(len(daily.dates)):
+            prob = (
+                daily.precip_prob_max[i]
+                if daily.precip_prob_max and i < len(daily.precip_prob_max) and daily.precip_prob_max[i] is not None
+                else None
+            )
             raw_days.append(
                 LaundryDayRaw(
                     date=daily.dates[i],
@@ -702,7 +707,7 @@ async def get_laundry_forecast_endpoint(
                     humidity_mean=daily.humidity_mean[i] or 0.0,
                     wind_speed_kmh=daily.wind_speed_max[i] or 0.0,
                     precip_sum_mm=daily.precip_sum[i] or 0.0,
-                    precip_prob=0.0,  # Open-Meteo basic daily has no prob — leave 0
+                    precip_prob=prob if prob is not None else 0.0,
                 )
             )
 

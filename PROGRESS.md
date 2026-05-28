@@ -5,6 +5,78 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-27 — fix(niebla): hourly slots → próxima hora AR redonda ✅
+
+**Done:**
+- TAF/fog-inference/OM visibility ahora empiezan desde la próxima hora AR redonda (02:00, 03:00…)
+- Elimina solapamiento temporal entre línea "Ahora" (METAR) y barras de pronóstico (TAF)
+- Elimina labels con minutos exactos (01:43) → horas limpias en todos los sources
+- `_next_ar_hour_idx()` helper en openmeteo.py para alinear slices de OM hourly
+- TAF usa datetime AR en lugar de offset UTC crudo
+- Commit `b5c8427` pushed — 321 tests ✅
+
+**Files changed:**
+- `apps/backend/app/services/metar.py` — TAF start → next full AR hour
+- `apps/backend/app/services/openmeteo.py` — helper + fix para OM visibility y fog inference
+
+**Tests:**
+- `uv run pytest tests/ -x -q --ignore=tests/test_tools_router.py`
+- Result: 321 passed, 0 failed
+
+**Next:**
+- Aguardando dirección del usuario
+
+---
+
+## 2026-05-27 — fix(niebla): AWC timeout 12s→5s + production diagnosis ✅
+
+**Done:**
+- Diagnóstico: `aviationweather.gov` inaccesible desde Render (bloqueo de red) — mismo problema que METAR
+- Fog inference funciona correctamente como fallback (300–1000m de niebla detectada vs 10km de OM raw)
+- AWC timeout reducido 12s→5s para fallo rápido cuando AWC no responde (evita 12s de latencia extra)
+- Confirmado: cuando AWC falla, `hourly_source = "openmeteo_inference"` → badge "Inferencia OM" ✅
+- Commit `b4552a9` pushed — Render deploy pendiente al momento del checkpoint
+
+**Files changed:**
+- `apps/backend/app/services/metar.py` — `_HTTP_TIMEOUT = 5.0`
+
+**Tests:**
+- 321 passed (no regresiones), verificado flujo de fallback manualmente
+
+**Next:**
+- Verificar en producción que badge "Inferencia OM" aparece tras deploy de Render
+- Aguardando siguiente dirección del usuario
+
+---
+
+## 2026-05-27 — feat(niebla): TAF hourly + fog inference + METAR fix ✅
+
+**Done:**
+- Fix METAR TTLCache: ya NO cachea None en fallos → permite reintentos automáticos
+- Timeout METAR/TAF aumentado 8s→12s para Render
+- TAF (Terminal Aerodrome Forecast) como fuente primaria del pronóstico 12h
+- Inferencia de niebla OM (humedad/rocío/viento) como fallback (captura niebla de radiación)
+- `hourly_source` field en schema/api.ts/frontend: badge verde "TAF · Aviación" en timeline
+- 4-way asyncio.gather en router (METAR + OM visibility + TAF + fog inference)
+- 321 tests pasando, 0 fallas. Commit `2d5283e`.
+
+**Files changed:**
+- `apps/backend/app/services/metar.py` — fix cache + timeout + TAF functions
+- `apps/backend/app/services/openmeteo.py` — get_fog_inference_forecast()
+- `apps/backend/app/schemas/niebla.py` — hourly_source field
+- `apps/backend/app/routers/niebla.py` — 4-way gather, TAF→inference→OM priority
+- `apps/frontend/src/lib/api.ts` — hourly_source?: string
+- `apps/frontend/src/pages/Niebla.tsx` — hourly source badge en timeline header
+
+**Tests:**
+- `uv run pytest tests/ -x -q --ignore=tests/test_tools_router.py`
+- Result: 321 passed, 0 failed
+
+**Next:**
+- Aguardando dirección del usuario
+
+---
+
 ## 2026-05-27 — feat(earthquakes): EMSC primario + USGS fallback ✅
 
 **Done:**

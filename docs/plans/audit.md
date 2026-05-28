@@ -350,3 +350,5 @@ apps/frontend/.gitignore   ← sin .env.* (S-17)
 ---
 
 *Wave 1 completada 2026-05-26 · Actualizar al cerrar Wave 2.*
+
+agregá de revisar y modificar : En la seccion de Niebla vamos a refinar un poco. Reemplaza Niebla por Neblina y Niebla densa por Niebla. y quita la linea punteada naranja de "Ahora"

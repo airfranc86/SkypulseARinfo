@@ -1,5 +1,5 @@
 import { Shirt } from 'lucide-react'
-import { useLaundryForecast } from '@/hooks/useWeather'
+import { useLaundryForecast, useTenderRopa } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { LaundryDayCard } from '@/components/ui/LaundryDayCard'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -13,7 +13,7 @@ function sourceToModel(source?: string): ModelKey {
   if (source === 'windy_gfs') return 'gfs'
   if (source === 'windy_ecmwf') return 'windy_ecmwf'
   if (source?.startsWith('openmeteo')) return 'openmeteo'
-  return 'gfs' // default esperado
+  return 'gfs'
 }
 
 export function TenderRopa({ location }: Props) {
@@ -21,8 +21,14 @@ export function TenderRopa({ location }: Props) {
     location?.lat ?? null,
     location?.lon ?? null,
   )
+  const { data: todayData } = useTenderRopa(
+    location?.lat ?? null,
+    location?.lon ?? null,
+  )
 
   if (location === null) return <PageSkeleton />
+
+  const isOpenMeteoFallback = data?.source === 'openmeteo_fallback'
 
   return (
     <div>
@@ -44,7 +50,14 @@ export function TenderRopa({ location }: Props) {
       {data && (
         <div className="space-y-3">
           {data.days.map((day, i) => (
-            <LaundryDayCard key={day.date} day={day} index={i} />
+            <LaundryDayCard
+              key={day.date}
+              day={day}
+              index={i}
+              hourlyScores={i === 0 ? (todayData?.hourly ?? undefined) : undefined}
+              bestWindow={i === 0 ? (todayData?.best_window ?? undefined) : undefined}
+              isOpenMeteoFallback={isOpenMeteoFallback}
+            />
           ))}
         </div>
       )}
