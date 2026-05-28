@@ -13,12 +13,14 @@ interface DataTableProps<T extends object = Record<string, unknown>> {
   columns: Column<T>[]
   data: T[]
   emptyMessage?: string
+  rowStyle?: (row: T, index: number) => CSSProperties | undefined
 }
 
 export function DataTable<T extends object = Record<string, unknown>>({
   columns,
   data,
   emptyMessage = 'Sin datos disponibles.',
+  rowStyle,
 }: DataTableProps<T>): ReactElement {
   return (
     <div
@@ -56,9 +58,11 @@ export function DataTable<T extends object = Record<string, unknown>>({
                 <tr
                   key={rowIndex}
                   style={
-                    rowIndex % 2 === 0
-                      ? undefined
-                      : { background: 'color-mix(in oklch, var(--color-muted) 20%, transparent)' }
+                    rowStyle
+                      ? rowStyle(row, rowIndex)
+                      : rowIndex % 2 !== 0
+                        ? { background: 'color-mix(in oklch, var(--color-muted) 20%, transparent)' }
+                        : undefined
                   }
                 >
                   {columns.map((col) => (

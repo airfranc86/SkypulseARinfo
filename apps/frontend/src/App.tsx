@@ -243,15 +243,7 @@ function RootLayout() {
 
       {/* SplashCursor — only on pointer:fine devices with ≥4 CPU cores */}
       {enableHeavyEffects && (
-        <SplashCursor
-          RAINBOW_MODE={false}
-          COLOR="#9d7a0f"
-          SPLAT_FORCE={12500}
-          CURL={11}
-          COLOR_UPDATE_SPEED={8}
-          PRESSURE={0.2}
-          DENSITY_DISSIPATION={2}
-        />
+        <SplashCursor />
       )}
 
       <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/60">

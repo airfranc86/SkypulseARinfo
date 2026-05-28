@@ -115,6 +115,36 @@ const DANGER_COLORS = {
 }
 
 // ---------------------------------------------------------------------------
+// Visibility scale — 6 levels with perceptually distinct colors
+// ---------------------------------------------------------------------------
+
+const VISIBILITY_SCALE = [
+  { label: 'Niebla',    range: '< 500 m',      color: '#e03535' },  // vivid red
+  { label: 'Neblina',   range: '500 m – 1 km', color: '#c84c10' },  // burnt sienna (clearly ≠ amber)
+  { label: 'Bruma',     range: '1 – 2 km',     color: '#f0a020' },  // amber
+  { label: 'Reducida',  range: '2 – 5 km',     color: '#a8c820' },  // lime (clearly ≠ amber)
+  { label: 'Buena',     range: '5 – 10 km',    color: '#5aaad8' },  // blue
+  { label: 'Despejada', range: '> 10 km',       color: '#3ecf7a' },  // green
+] as const
+
+/**
+ * Normaliza colores heredados del backend a la paleta de 6 niveles con
+ * mayor contraste perceptual. Mapeo defensivo: si el backend envía un color
+ * que no está en la tabla, lo pasa tal cual.
+ */
+const FOG_COLOR_OVERRIDE: Record<string, string> = {
+  '#e05545': '#e03535',  // Niebla  — rojo más puro
+  '#e07030': '#c84c10',  // Neblina — siena quemada (antes demasiado similar al ámbar)
+  '#f0a030': '#f0a020',  // Bruma   — ámbar (mínima corrección)
+  '#c8a84b': '#a8c820',  // Reducida — lima/chartreuse (antes confundible con ámbar)
+}
+
+function normalizeFogColor(c: string | null | undefined): string {
+  if (!c) return '#3ecf7a'
+  return FOG_COLOR_OVERRIDE[c] ?? FOG_COLOR_OVERRIDE[c.toLowerCase()] ?? c
+}
+
+// ---------------------------------------------------------------------------
 // Visibility utils
 // ---------------------------------------------------------------------------
 
@@ -526,6 +556,28 @@ function VisibilityTimeline({
           </span>
         ))}
       </div>
+
+      {/* ── Fog level label per bar — desambigua cuando los colores son similares ── */}
+      <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+        {slots.map((s) => (
+          <span
+            key={s.hour_label}
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: '7px',
+              fontWeight: 600,
+              color: s.fog_color,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'clip',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            {s.fog_label}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -590,10 +642,10 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
           <VisibilityMeter
             visibilityM={data.visibility_m}
             fogLabel={data.fog_label}
-            fogColor={data.fog_color}
+            fogColor={normalizeFogColor(data.fog_color)}
           />
           <VisibilityTimeline
-            slots={data.hourly}
+            slots={data.hourly.map(h => ({ ...h, fog_color: normalizeFogColor(h.fog_color) }))}
             hourlySource={data.hourly_source}
           />
         </>
@@ -647,63 +699,79 @@ export function Niebla({ location }: Props) {
         <VisibilityBlock location={location} />
 
         {/* ── Visibility scale reference ───────────────────────────────── */}
-        <section>
+        <section
+          style={{
+            background: 'var(--color-card)',
+            border: '1px solid var(--color-border)',
+            borderRadius: '16px',
+            padding: '20px',
+          }}
+        >
           <h2
             style={{
-              margin: '0 0 14px',
-              fontSize: '13px',
+              margin: '0 0 16px',
+              fontSize: '11px',
               fontWeight: 600,
               color: 'var(--color-muted-foreground)',
               textTransform: 'uppercase',
-              letterSpacing: '.05em',
+              letterSpacing: '.08em',
             }}
           >
-            Escala de visibilidad
+            Escala de visibilidad (peor → mejor)
           </h2>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: '8px',
-            }}
-          >
-            {[
-              { label: 'Despejada',    range: '> 10 km',     color: '#3ecf7a' },
-              { label: 'Buena',        range: '5–10 km',     color: '#5aaad8' },
-              { label: 'Reducida',     range: '2–5 km',      color: '#c8a84b' },
-              { label: 'Bruma',        range: '1–2 km',      color: '#f0a030' },
-              { label: 'Neblina',      range: '500 m–1 km',  color: '#e07030' },
-              { label: 'Niebla',       range: '< 500 m',     color: '#e05545' },
-            ].map(({ label, range, color }) => (
+
+          {/* Segmented bar — colores en contexto, el ojo distingue mejor con adyacentes */}
+          <div style={{ display: 'flex', gap: '3px', marginBottom: '8px' }}>
+            {VISIBILITY_SCALE.map(({ label, color }) => (
               <div
                 key={label}
+                title={label}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  background: 'var(--color-card)',
-                  border: '1px solid var(--color-border)',
+                  flex: 1,
+                  height: '10px',
+                  borderRadius: '99px',
+                  background: color,
                 }}
+              />
+            ))}
+          </div>
+
+          {/* Column labels — nombre + rango debajo de cada segmento */}
+          <div style={{ display: 'flex', gap: '3px' }}>
+            {VISIBILITY_SCALE.map(({ label, range, color }) => (
+              <div
+                key={label}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
               >
                 <span
                   style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    background: color,
-                    flexShrink: 0,
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color,
+                    textAlign: 'center',
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '100%',
                   }}
-                />
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-foreground)' }}>
-                    {label}
-                  </div>
-                  <div style={{ fontSize: '10px', color: 'var(--color-muted-foreground)' }}>
-                    {range}
-                  </div>
-                </div>
+                >
+                  {label}
+                </span>
+                <span
+                  style={{
+                    fontSize: '8px',
+                    color: 'var(--color-muted-foreground)',
+                    textAlign: 'center',
+                    lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '100%',
+                  }}
+                >
+                  {range}
+                </span>
               </div>
             ))}
           </div>

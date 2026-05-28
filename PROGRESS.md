@@ -5,6 +5,43 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-28 — UX/Visual: Terremotos + Niebla + SplashCursor + /bolder ✅
+
+**Done:**
+- `SplashCursor`: App.tsx simplificado a `<SplashCursor />` — defaults del componente son la fuente de verdad.
+- `Terremotos.tsx` — 3 cambios funcionales:
+  - Solo últimos 10 eventos visibles por defecto.
+  - Botón desplegable "▼ Ver N registros más" para ver registros anteriores.
+  - `MagnitudeScaleBar` movida al tope de la sección.
+- `Terremotos.tsx` — amplificación visual `/bolder` (Urgente · Precisa · Nocturna):
+  - Filas con fondo tintado por magnitud (ámbar M4+, rojo creciente M5/6+).
+  - Celda magnitud: dot pulsante con glow + número escalado (0.9–1.35rem).
+  - Tiempo relativo prominente ("hace 45 min") encima de la fecha absoluta.
+  - Hero callout con dot animado si hay evento M≥4.5 en últimas 2h.
+  - `DataTable` extendido con prop `rowStyle` opcional (backwards compatible).
+- `Niebla.tsx` — escala de visibilidad rediseñada:
+  - 3 naranjas similares reemplazados por colores perceptualmente distintos: `#e03535` (rojo), `#c84c10` (siena quemada), `#a8c820` (lima).
+  - Chip grid → barra segmentada continua con labels de nivel + rango.
+  - `fog_label` visible debajo de cada barra del timeline (no solo en hover).
+  - `normalizeFogColor()` centraliza el mapeo backend→frontend en un solo lugar.
+- `.impeccable.md` creado: Design Context del proyecto (teach flow de /bolder).
+
+**Files changed:**
+- `apps/frontend/src/App.tsx` — SplashCursor sin props explícitos
+- `apps/frontend/src/components/animated/SplashCursor.tsx` — defaults corregidos (ya commitado en wave 6b)
+- `apps/frontend/src/components/ui/DataTable.tsx` — prop `rowStyle` opcional
+- `apps/frontend/src/pages/Terremotos.tsx` — top 10 + collapsible + bolder visual
+- `apps/frontend/src/pages/Niebla.tsx` — escala rediseñada + colores distintos + fog_label
+
+**Tests:**
+- `pnpm run build` → ✓ built in 1.68s, 0 errores TS
+
+**Next:**
+- Wave 7: S-06 (endpoint `/api/metar` + encodeURIComponent en Metar.tsx)
+- Ops pendiente: S-09 (requirements.lock en Render)
+
+---
+
 ## 2026-05-28 — Wave 6b COMPLETA: strict TS + Python cleanup ✅
 
 **Done:**
