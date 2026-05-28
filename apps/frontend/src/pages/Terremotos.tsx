@@ -75,7 +75,7 @@ const columns = [
       const d = new Date(String(v))
       if (isNaN(d.getTime())) return String(v)
       const fecha = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
-      const hora  = d.toLocaleTimeString('es-AR',  { hour: '2-digit', minute: '2-digit' })
+      const hora  = `${d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })} Hs`
       return (
         <span style={{ display: 'flex', flexDirection: 'column', gap: '1px', lineHeight: 1.3 }}>
           <span className="text-xs font-medium">{fecha}</span>

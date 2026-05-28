@@ -11,7 +11,7 @@ pueda mostrar de dónde provienen los datos.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -186,7 +186,7 @@ def _filter_future(hourly: list[HourlyScore], grace_s: int = 1800) -> list[Hourl
     Filtra entradas claramente pasadas.
     grace_s: margen de gracia (default 30 min) para incluir el slot activo actual.
     """
-    now_ts = int(datetime.now().timestamp())
+    now_ts = int(datetime.now(timezone.utc).timestamp())
     return [h for h in hourly if h.timestamp >= now_ts - grace_s]
 
 

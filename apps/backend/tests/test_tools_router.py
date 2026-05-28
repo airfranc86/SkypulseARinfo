@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+import time
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient
@@ -58,9 +59,10 @@ def _make_hourly_forecast(
     elevation_m: float = 25.0,
 ) -> HourlyForecastData:
     """Construye un HourlyForecastData sintético con n horas."""
-    base_ts = 1705320000  # 2024-01-15T14:00 UTC
+    base_ts = int(time.time()) + 3600  # 1h en el futuro — _filter_future conserva todos los slots
+    base_hour = datetime.fromtimestamp(base_ts, tz=timezone.utc).hour
     timestamps = [base_ts + i * 3600 for i in range(n)]
-    hour_labels = [f"{(14 + i) % 24:02d}:00" for i in range(n)]
+    hour_labels = [f"{(base_hour + i) % 24:02d}:00" for i in range(n)]
     return HourlyForecastData(
         timestamps=timestamps,
         hour_labels=hour_labels,

@@ -417,14 +417,12 @@ const HOURLY_SOURCE_LABEL: Record<string, string> = {
   openmeteo:            'Open-Meteo',
 }
 
-/** 12-hour visibility timeline bars with a reference line at current visibility */
+/** 12-hour visibility timeline bars */
 function VisibilityTimeline({
   slots,
-  currentVisibilityM,
   hourlySource,
 }: {
   slots: NieblaResponse['hourly']
-  currentVisibilityM?: number | null
   hourlySource?: string | null
 }) {
   if (!slots.length) return null
@@ -433,20 +431,6 @@ function VisibilityTimeline({
   const CHART_H = 80 // px — chart area height (labels rendered outside)
   const BAR_MIN = 6  // minimum bar height in px (same as max(..., 6) below)
   const BAR_PAD = 8  // base offset so 0-visibility bar is still visible
-
-  /**
-   * Bar height formula: fraction × (CHART_H - BAR_PAD) + BAR_PAD
-   * Reference line must use the SAME formula so it aligns with bar tops.
-   * Cap at CHART_H - 1 to prevent clipping by overflow:hidden.
-   */
-  const refBottom = (currentVisibilityM != null)
-    ? Math.min(
-        Math.round(
-          (Math.min(currentVisibilityM, maxM) / maxM) * (CHART_H - BAR_PAD) + BAR_PAD,
-        ),
-        CHART_H - 2,
-      )
-    : null
 
   return (
     <div>
@@ -523,50 +507,6 @@ function VisibilityTimeline({
           )
         })}
 
-        {/* Reference line + "Ahora" label — painted after bars, always on top */}
-        {refBottom != null && (
-          <>
-            {/* Dashed line — leaves 44px on right for the label */}
-            <div
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: '44px',
-                bottom: `${refBottom}px`,
-                height: '2px',
-                pointerEvents: 'none',
-                backgroundImage: [
-                  'repeating-linear-gradient(',
-                  '90deg,',
-                  'rgba(200,168,75,0.9) 0px,',
-                  'rgba(200,168,75,0.9) 7px,',
-                  'transparent 7px,',
-                  'transparent 11px',
-                  ')',
-                ].join(''),
-              }}
-            />
-            {/* Label "Ahora" — right edge, vertically centred on the 2px line */}
-            <span
-              aria-label="Nivel de visibilidad actual"
-              style={{
-                position: 'absolute',
-                right: 0,
-                bottom: `${refBottom - 4}px`,
-                fontSize: '8px',
-                fontWeight: 700,
-                color: 'rgba(200,168,75,0.95)',
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-                letterSpacing: '.02em',
-                pointerEvents: 'none',
-              }}
-            >
-              Ahora
-            </span>
-          </>
-        )}
       </div>
 
       {/* ── Hour labels — outside chart area, never clipped ── */}
@@ -654,7 +594,6 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
           />
           <VisibilityTimeline
             slots={data.hourly}
-            currentVisibilityM={data.visibility_m}
             hourlySource={data.hourly_source}
           />
         </>
@@ -733,8 +672,8 @@ export function Niebla({ location }: Props) {
               { label: 'Buena',        range: '5–10 km',     color: '#5aaad8' },
               { label: 'Reducida',     range: '2–5 km',      color: '#c8a84b' },
               { label: 'Bruma',        range: '1–2 km',      color: '#f0a030' },
-              { label: 'Niebla',       range: '500 m–1 km',  color: '#e07030' },
-              { label: 'Niebla densa', range: '< 500 m',     color: '#e05545' },
+              { label: 'Neblina',      range: '500 m–1 km',  color: '#e07030' },
+              { label: 'Niebla',       range: '< 500 m',     color: '#e05545' },
             ].map(({ label, range, color }) => (
               <div
                 key={label}
