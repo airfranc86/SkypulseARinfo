@@ -8,7 +8,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com https://upload.wikimedia.org https://images.unsplash.com https://zmescience.com https://www.ucar.edu; connect-src 'self' https://skypulse-api-mund.onrender.com https://www.google-analytics.com https://www.googletagmanager.com https://analytics.google.com https://*.ingest.sentry.io; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com https://upload.wikimedia.org https://images.unsplash.com https://cdn.zmescience.com https://scied.ucar.edu; connect-src 'self' https://skypulse-api-mund.onrender.com https://www.google-analytics.com https://www.googletagmanager.com https://analytics.google.com https://*.ingest.sentry.io; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'"
         },
         {
           "key": "X-Frame-Options",
