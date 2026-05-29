@@ -16,7 +16,7 @@ from slowapi import _rate_limit_exceeded_handler
 from .core.config import settings
 from .core.http_client import create_client, close_client
 from .core.rate_limit import limiter
-from .routers import earthquakes, incendios, niebla, tools, volcanes, weather
+from .routers import earthquakes, incendios, metar, niebla, tools, volcanes, weather
 
 
 def setup_logging() -> None:
@@ -164,3 +164,4 @@ app.include_router(earthquakes.router, prefix="/api/earthquakes", tags=["earthqu
 app.include_router(volcanes.router,   prefix="/api/volcanes",   tags=["volcanes"])
 app.include_router(incendios.router,  prefix="/api/incendios",  tags=["incendios"])
 app.include_router(niebla.router,    prefix="/api/niebla",    tags=["niebla"])
+app.include_router(metar.router,     prefix="/api/metar",     tags=["metar"])

@@ -569,7 +569,7 @@ function MetarWidget() {
 
   const fetchTAF = useCallback(async (code: string) => {
     try {
-      const res = await fetch(`/api/metar?icao=${code}&type=taf`)
+      const res = await fetch(`/api/metar?icao=${encodeURIComponent(code)}&type=taf`)
       if (!res.ok) return
       const data = await res.json()
       if (data.data?.[0]?.raw_text) setTaf(data.data[0].raw_text)
@@ -584,7 +584,7 @@ function MetarWidget() {
     setTaf(null)
     setError(null)
     try {
-      const res = await fetch(`/api/metar?icao=${clean}`)
+      const res = await fetch(`/api/metar?icao=${encodeURIComponent(clean)}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (!data.data || data.data.length === 0) throw new Error(`ICAO ${clean} no encontrado`)
