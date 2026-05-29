@@ -29,7 +29,7 @@ export function TenderRopa({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Shirt className="size-8" style={{ color: '#3ecf7a' }} />}
+        icon={<Shirt className="size-8" style={{ color: 'var(--color-safe)' }} />}
         title="Tender ropa"
         subtitle={location.label}
         accentColor="#3ecf7a"

@@ -137,7 +137,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
           style={{ background: 'rgba(224,85,69,0.08)', border: '1px solid rgba(224,85,69,0.25)' }}
         >
           <span className="text-base">⛈️</span>
-          <p className="text-xs font-medium" style={{ color: '#e05545' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--color-warn)' }}>
             Tormentas previstas en las próximas horas — no salir
           </p>
         </div>

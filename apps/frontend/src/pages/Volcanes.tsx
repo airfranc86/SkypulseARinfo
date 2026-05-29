@@ -75,7 +75,7 @@ function VolcanCard({ volcan, featured = false }: { volcan: Volcan; featured?: b
         <span className="text-[.6rem]" style={{ color: 'var(--color-muted-foreground)' }}>
           {volcan.lat.toFixed(2)}° S · {Math.abs(volcan.lon).toFixed(2)}° O
         </span>
-        <span className="text-[.6rem]" style={{ color: '#5aaad8' }}>Ver en SEGEMAR →</span>
+        <span className="text-[.6rem]" style={{ color: 'var(--color-info)' }}>Ver en SEGEMAR →</span>
       </div>
     </a>
   )
@@ -114,7 +114,7 @@ function ActiveAlertBanner({ volcanes }: { volcanes: Volcan[] }) {
           href="https://oavv.segemar.gob.ar"
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: '#5aaad8' }}
+          style={{ color: 'var(--color-info)' }}
         >
           oavv.segemar.gob.ar
         </a>
@@ -202,7 +202,7 @@ export function Volcanes() {
               href="https://oavv.segemar.gob.ar/monitoreo-volcanico/"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: '#5aaad8' }}
+              style={{ color: 'var(--color-info)' }}
             >
               Ver mapa completo
             </a>

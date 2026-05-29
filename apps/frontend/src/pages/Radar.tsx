@@ -99,7 +99,7 @@ export function Radar() {
       <FadeContent>
         {/* Header */}
         <div className="mb-10 text-center">
-          <p className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4" style={{ color: '#c8a84b' }}>
+          <p className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4" style={{ color: 'var(--color-primary)' }}>
             Leer el cielo digital
           </p>
           <h1
@@ -107,7 +107,7 @@ export function Radar() {
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
           >
             Radar y satélite{' '}
-            <em style={{ color: '#c8a84b', fontStyle: 'italic' }}>en lenguaje simple</em>
+            <em style={{ color: 'var(--color-primary)', fontStyle: 'italic' }}>en lenguaje simple</em>
           </h1>
           <p className="text-sm max-w-lg mx-auto leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
             No hace falta ser meteorólogo para leer un radar o una imagen satelital. Dos herramientas, un idioma.
@@ -227,9 +227,9 @@ export function Radar() {
 
           {/* Golden rule */}
           <div className="rounded-xl p-5" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}>
-            <p className="text-[.63rem] font-medium tracking-widest uppercase mb-2" style={{ color: '#c8a84b' }}>Regla de oro</p>
+            <p className="text-[.63rem] font-medium tracking-widest uppercase mb-2" style={{ color: 'var(--color-primary)' }}>Regla de oro</p>
             <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
-              Radar y satélite son complementarios: el radar muestra <strong style={{ color: 'var(--color-foreground)' }}>dónde llueve ahora</strong>, el satélite muestra <strong style={{ color: 'var(--color-foreground)' }}>qué están haciendo las nubes</strong>. Usados juntos dan la imagen más completa. Si el satélite muestra blanco brillante pero el radar todavía no muestra rojo, la tormenta está <em style={{ color: '#c8a84b' }}>creciendo</em> — y el rojo llega en minutos.
+              Radar y satélite son complementarios: el radar muestra <strong style={{ color: 'var(--color-foreground)' }}>dónde llueve ahora</strong>, el satélite muestra <strong style={{ color: 'var(--color-foreground)' }}>qué están haciendo las nubes</strong>. Usados juntos dan la imagen más completa. Si el satélite muestra blanco brillante pero el radar todavía no muestra rojo, la tormenta está <em style={{ color: 'var(--color-primary)' }}>creciendo</em> — y el rojo llega en minutos.
             </p>
           </div>
 

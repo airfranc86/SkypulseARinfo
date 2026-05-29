@@ -273,7 +273,7 @@ function Card({ card }: { card: DisasterCard }) {
             <h3 className="text-2xl font-semibold leading-tight mb-1" style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}>
               {card.title}
             </h3>
-            <p className="text-[.63rem] font-medium tracking-widest uppercase" style={{ color: '#c8a84b' }}>
+            <p className="text-[.63rem] font-medium tracking-widest uppercase" style={{ color: 'var(--color-primary)' }}>
               {card.subtitle}
             </p>
           </div>
@@ -373,7 +373,7 @@ export function Desastres() {
 
         {/* Header */}
         <div className="mb-8 text-center">
-          <p className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4" style={{ color: '#c8a84b' }}>
+          <p className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4" style={{ color: 'var(--color-primary)' }}>
             Desastres naturales mundiales
           </p>
           <h1
@@ -381,7 +381,7 @@ export function Desastres() {
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
           >
             Cuando la Tierra{' '}
-            <em style={{ color: '#c8a84b', fontStyle: 'italic' }}>no avisa</em>
+            <em style={{ color: 'var(--color-primary)', fontStyle: 'italic' }}>no avisa</em>
           </h1>
           <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
             Diez fenómenos de impacto global. Datos históricos verificados, fuentes oficiales de seguimiento y una sola cosa que hacer.
@@ -398,7 +398,7 @@ export function Desastres() {
               className="px-4 py-3 rounded-full text-xs font-medium transition-all"
               style={
                 filter === id
-                  ? { background: '#c8a84b', color: '#060d1a', border: '1px solid #c8a84b' }
+                  ? { background: 'var(--color-primary)', color: '#060d1a', border: '1px solid var(--color-primary)' }
                   : { background: 'transparent', color: 'var(--color-muted-foreground)', border: '1px solid var(--color-border)' }
               }
             >

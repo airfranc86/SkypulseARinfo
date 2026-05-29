@@ -58,7 +58,7 @@ export function HourlyStrip({ hourly, badge }: Props) {
               : rainPct < 60
                 ? 'rgba(240,160,48,0.12)'
                 : 'rgba(224,85,69,0.12)',
-            color: rainPct < 20 ? '#3ecf7a' : rainPct < 60 ? '#f0a030' : '#e05545',
+            color: rainPct < 20 ? 'var(--color-safe)' : rainPct < 60 ? 'var(--color-watch)' : 'var(--color-warn)',
           }}
         >
           {hourly.rain_consensus_label}

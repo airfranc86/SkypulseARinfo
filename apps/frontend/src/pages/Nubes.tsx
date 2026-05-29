@@ -464,7 +464,7 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
             >
               {cloud.name}
             </div>
-            <div className="text-[.63rem] font-medium tracking-widest uppercase mt-1" style={{ color: '#c8a84b' }}>
+            <div className="text-[.63rem] font-medium tracking-widest uppercase mt-1" style={{ color: 'var(--color-primary)' }}>
               {cloud.latin}
             </div>
           </div>
@@ -562,7 +562,7 @@ function AeroCardItem({ item }: { item: AeroItem }) {
             >
               {item.name}
             </div>
-            <div className="text-[.63rem] font-medium tracking-widest uppercase mt-1" style={{ color: '#c8a84b' }}>
+            <div className="text-[.63rem] font-medium tracking-widest uppercase mt-1" style={{ color: 'var(--color-primary)' }}>
               {item.latin}
             </div>
           </div>

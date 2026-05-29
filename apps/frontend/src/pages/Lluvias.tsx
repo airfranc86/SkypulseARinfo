@@ -130,7 +130,7 @@ export function Lluvias() {
         <div className="mb-10 text-center">
           <p
             className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4"
-            style={{ color: '#c8a84b' }}
+            style={{ color: 'var(--color-primary)' }}
           >
             Lluvias según el cielo
           </p>
@@ -139,7 +139,7 @@ export function Lluvias() {
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
           >
             Qué lluvia esperar{' '}
-            <em style={{ color: '#c8a84b', fontStyle: 'italic' }}>según las nubes</em>
+            <em style={{ color: 'var(--color-primary)', fontStyle: 'italic' }}>según las nubes</em>
           </h1>
           <p className="text-sm max-w-lg mx-auto leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
             Cada tipo de nube produce un tipo de lluvia distinto — o ninguna.
@@ -275,7 +275,7 @@ export function Lluvias() {
           className="mt-8 rounded-xl p-6"
           style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
         >
-          <p className="text-[.63rem] font-medium tracking-widest uppercase mb-4" style={{ color: '#c8a84b' }}>
+          <p className="text-[.63rem] font-medium tracking-widest uppercase mb-4" style={{ color: 'var(--color-primary)' }}>
             Regla práctica rápida
           </p>
           <div className="grid grid-cols-3 gap-4 text-center">

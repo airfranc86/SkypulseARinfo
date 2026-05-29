@@ -55,7 +55,7 @@ export function Forecast7dTable({ days }: Props) {
                 <td className="px-4 py-3" style={{ color: 'var(--color-muted-foreground)' }}>
                   {day.temp_min !== null ? `${Math.round(day.temp_min)}°C` : '—'}
                 </td>
-                <td className="px-4 py-3" style={{ color: '#5aaad8' }}>
+                <td className="px-4 py-3" style={{ color: 'var(--color-info)' }}>
                   {day.precip_prob !== null ? `${Math.round(day.precip_prob)}%` : '—'}
                 </td>
                 <td className="px-4 py-3" style={{ color: 'var(--color-muted-foreground)' }}>

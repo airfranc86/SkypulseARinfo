@@ -106,7 +106,7 @@ function DayRow({ day }: { day: CarWashDay }) {
           >
             {day.day_label}
             {day.is_best && (
-              <span className="ml-1 text-[#f0a030]" title="Mejor día">★</span>
+              <span className="ml-1" style={{ color: 'var(--color-watch)' }} title="Mejor día">★</span>
             )}
           </span>
           <span
@@ -167,7 +167,7 @@ function DayRow({ day }: { day: CarWashDay }) {
             💨 {day.wind_speed_kmh.toFixed(0)}km/h
           </span>
           {day.precip_mm > 0 && (
-            <span className="text-xs" style={{ color: '#5aaad8' }}>
+            <span className="text-xs" style={{ color: 'var(--color-info)' }}>
               🌧 {day.precip_mm.toFixed(1)}mm
             </span>
           )}

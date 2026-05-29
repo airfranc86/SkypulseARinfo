@@ -114,7 +114,7 @@ export function CotaDeNieve({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Mountain className="size-8" style={{ color: '#90aabb' }} />}
+        icon={<Mountain className="size-8" style={{ color: 'var(--color-muted-foreground)' }} />}
         title="Cota de nieve"
         subtitle={location.label}
         accentColor="#90aabb"

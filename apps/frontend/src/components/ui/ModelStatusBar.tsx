@@ -78,7 +78,7 @@ export function ModelStatusBar() {
           <span
             aria-hidden="true"
             style={{
-              color: badge.active ? '#3ecf7a' : '#e05545',
+              color: badge.active ? 'var(--color-safe)' : 'var(--color-warn)',
               textShadow: badge.active ? '0 0 6px #3ecf7a55' : 'none',
               fontSize: '0.65rem',
               lineHeight: 1,

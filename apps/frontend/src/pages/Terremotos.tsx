@@ -255,7 +255,7 @@ export function Terremotos({ location }: Props) {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#e05545', marginBottom: 2 }}>
+                    <p style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--color-warn)', marginBottom: 2 }}>
                       Evento reciente
                     </p>
                     <p style={{ color: textColor, fontSize, fontWeight: 700, lineHeight: 1.2 }}>

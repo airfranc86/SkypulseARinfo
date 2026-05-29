@@ -70,7 +70,7 @@ export function RainForecastCard({ rain }: Props) {
           {windowDuration !== null && windowDuration > 0 && (
             <span
               className="text-xs px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(62,207,122,0.12)', color: '#3ecf7a', border: '1px solid rgba(62,207,122,0.25)' }}
+              style={{ background: 'rgba(62,207,122,0.12)', color: 'var(--color-safe)', border: '1px solid rgba(62,207,122,0.25)' }}
             >
               {windowDuration}h continuas
             </span>
@@ -121,7 +121,7 @@ export function RainForecastCard({ rain }: Props) {
             <Link
               to="/tender-ropa"
               className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-opacity hover:opacity-80"
-              style={{ background: 'rgba(62,207,122,0.12)', color: '#3ecf7a', border: '1px solid rgba(62,207,122,0.25)' }}
+              style={{ background: 'rgba(62,207,122,0.12)', color: 'var(--color-safe)', border: '1px solid rgba(62,207,122,0.25)' }}
             >
               <Shirt className="size-3" />
               Ideal para tender
