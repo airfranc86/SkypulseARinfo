@@ -40,7 +40,7 @@ const DISASTERS: DisasterCard[] = [
     badge: 'crit',
     badgeLabel: 'Sin aviso · Acción inmediata',
     description: 'El suelo se abre o desplaza súbitamente — edificios colapsan, el polvo llena el aire y las grietas pueden extenderse kilómetros. Liberación súbita de energía acumulada en la corteza terrestre. Puede desencadenar deslizamientos y tsunamis secundarios.',
-    dateFact: '1960 Valdivia (Chile), M9.5 — el más poderoso jamás registrado. Destruyó el 40% de las viviendas del país y generó un tsunami que llegó a Japón y Hawaii.',
+    dateFact: '1960 Valdivia (Chile), M9.5 — el más poderoso jamás registrado. Dejó 2 millones de personas afectadas y un tsunami que cruzó el Pacífico hasta Japón y Hawaii.',
     curiosity: 'La energía liberada en Valdivia equivale a 178 megatones de TNT — más que la suma de todos los ensayos nucleares de la historia combinados.',
     action: 'Cubrí cabeza y cuello bajo mesa sólida; alejate de ventanas y paredes externas',
     sources: [
@@ -61,7 +61,7 @@ const DISASTERS: DisasterCard[] = [
     badgeLabel: 'Aviso posible · Evacuación prioritaria',
     description: 'El agua marrón sube rápidamente cubriendo calles, casas y vehículos. La corriente puede arrastrar autos sin previo aviso. Desborde de ríos, lluvias extremas o rotura de diques — destruyen infraestructura y contaminan el agua potable durante meses.',
     dateFact: '1931 China — entre 1 y 4 millones de muertos en las inundaciones del Yangtsé y Huang He. La mayor catástrofe hídrica registrada en la historia.',
-    curiosity: 'El 40% de todos los desastres naturales del mundo son inundaciones — el tipo más frecuente y el más costoso económicamente a nivel global.',
+    curiosity: 'Solo 15 cm de agua en movimiento rápido alcanzan para derribar a un adulto; con 60 cm, un auto es arrastrado — velocidad y profundidad hacen al agua en movimiento más letal que su volumen.',
     action: 'Subí al piso más alto disponible; nunca cruces agua en movimiento a pie ni en auto',
     sources: [
       { label: 'Copernicus Emergency', url: 'https://emergency.copernicus.eu/' },
@@ -80,7 +80,7 @@ const DISASTERS: DisasterCard[] = [
     badge: 'crit',
     badgeLabel: 'Aviso de minutos · Buscar refugio YA',
     description: 'Columna giratoria de aire visible que desciende desde las nubes hasta el suelo. Puede ser gris oscuro o casi invisible hasta que levanta tierra. Vórtice de hasta 500 km/h que destruye todo en su trayectoria — puede durar segundos o varias horas.',
-    dateFact: '1925 Tri-State Tornado (Missouri–Illinois–Indiana, EE.UU.) — 695 muertos, 352 km de trayecto, el más letal de la historia de Norteamérica.',
+    dateFact: 'Abril 1973, San Justo (Santa Fe, Argentina) — un tornado EF4 destruyó el 80% de la ciudad, mató al menos 58 personas y dejó 3.000 sin hogar; el más letal documentado en la historia argentina.',
     curiosity: 'El 75% de los tornados del mundo ocurren en EE.UU., en el "Tornado Alley". Argentina tiene la 2ª mayor actividad tornádica del planeta.',
     action: 'Bajá al sótano o habitación interior sin ventanas en planta baja; nunca busques refugio bajo un puente',
     sources: [
@@ -100,9 +100,9 @@ const DISASTERS: DisasterCard[] = [
     badge: 'warn',
     badgeLabel: 'Aviso de días · Evacuación planificada',
     description: 'Desde satélite: espiral perfecta de nubes blancas con ojo central despejado. En tierra: vientos sostenidos, lluvia torrencial y marejadas que inundan costas. Sistema tropical con vientos superiores a 119 km/h que se alimenta del calor oceánico.',
-    dateFact: 'Huracán Patricia (octubre 2015, México) — 325 km/h de viento sostenido. El más intenso jamás registrado en el hemisferio occidental.',
+    dateFact: 'Huracán Patricia (octubre 2015, México) — 345 km/h de viento sostenido; el más intenso jamás registrado en el hemisferio occidental según el NHC.',
     curiosity: 'Un huracán maduro libera por día la energía de medio millón de bombas atómicas — toda proveniente únicamente del vapor de agua del océano cálido.',
-    action: 'Evacuá la zona costera antes de que llegue; no esperes el impacto para salir',
+    action: 'Evacuá la zona costera al menos 48 horas antes del impacto previsto; después de ese plazo, las rutas colapsan',
     sources: [
       { label: 'National Hurricane Center', url: 'https://www.nhc.noaa.gov/' },
       { label: 'IBTrACS Histórico', url: 'https://www.ncei.noaa.gov/products/international-best-track-archive' },
@@ -120,9 +120,9 @@ const DISASTERS: DisasterCard[] = [
     badge: 'warn',
     badgeLabel: 'Aviso variable · Evacuar si hay orden',
     description: 'Llamas naranjas y rojas consumen árboles a gran velocidad. El cielo se vuelve naranja o rojizo por el humo; la ceniza cae como nieve. Fuego incontrolado impulsado por viento seco, vegetación reseca y temperaturas extremas — puede avanzar más rápido que muchos corredores.',
-    dateFact: '2019–2020 Australia (Black Summer) — 18,6 millones de hectáreas quemadas. 3.000 millones de animales muertos o desplazados en cuatro meses.',
+    dateFact: 'Corrientes, Argentina, enero–febrero 2022 — más de 900.000 hectáreas de humedales y bosque nativo destruidas en semanas; el 13% del territorio provincial quemado, el peor incendio en la historia moderna de la provincia.',
     curiosity: 'Los incendios intensos generan pirocúmulos — nubes de tormenta de hasta 15 km de altura que producen rayos propios y encienden nuevos focos a kilómetros.',
-    action: 'Evacuá inmediatamente siguiendo la ruta oficial; no volvás a buscar pertenencias',
+    action: 'Evacuá inmediatamente en dirección contraria al humo y el viento; no volvás a buscar pertenencias',
     sources: [
       { label: 'NASA FIRMS (satélite)', url: 'https://firms.modaps.eosdis.nasa.gov/map/' },
       { label: 'Global Wildfire GWIS', url: 'https://gwis.jrc.ec.europa.eu/' },
@@ -132,7 +132,7 @@ const DISASTERS: DisasterCard[] = [
     id: 'tsunamis',
     family: 'oce',
     title: 'Tsunamis',
-    subtitle: 'Los que vienen del fondo del mar · Maremoto',
+    subtitle: 'Los de las profundidades · Maremoto',
     img: 'https://upload.wikimedia.org/wikipedia/commons/2/2b/2004_Indian_Ocean_earthquake_Maldives_tsunami_wave.jpg',
     imgAlt: 'Tsunami — ola inundando Malé, Maldivas, 26 diciembre 2004',
     tags: ['🌊 800 km/h en mar abierto', '📍 Costas del Pacífico / Índico', '⏱ Minutos de aviso'],
@@ -166,6 +166,66 @@ const DISASTERS: DisasterCard[] = [
     sources: [
       { label: 'NOAA Tides & Currents', url: 'https://tidesandcurrents.noaa.gov/' },
       { label: 'DART Buoy Network', url: 'https://www.ndbc.noaa.gov/dart.shtml' },
+    ],
+  },
+  {
+    id: 'ola-de-calor',
+    family: 'hidro',
+    title: 'Ola de calor',
+    subtitle: 'Las silenciosas · Heat wave · Canícula',
+    img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Cracked_earth.jpg/640px-Cracked_earth.jpg',
+    imgAlt: 'Ola de calor — tierra reseca y agrietada bajo sol extremo',
+    tags: ['🌡 +3 días de temperatura extrema', '🌍 Más letal que huracanes por año', '⏱ Aviso de días'],
+    dangerLevel: 3,
+    badge: 'watch',
+    badgeLabel: 'Aviso de días · Hidratarse y buscar fresco',
+    description: 'El sol pega sin nubes, el asfalto brilla de calor y el horizonte tiembla con ondas de aire caliente. No hay viento y la noche no refresca. Período de tres o más días con temperaturas muy por encima del promedio histórico — el calor extremo es más letal por año que los tornados, huracanes e inundaciones juntos en la mayoría de países.',
+    dateFact: 'Europa, agosto 2003 — ola de calor con temperaturas récord de hasta 47,9°C dejó más de 70.000 muertos en dos semanas, principalmente adultos mayores en Francia e Italia.',
+    curiosity: 'El cuerpo humano tolera 48°C en aire seco, pero a 35°C con 100% de humedad la sudoración deja de enfriar y el organismo colapsa en menos de una hora — sin importar la condición física.',
+    action: 'Tomá agua antes de sentir sed, cerrá persianas al mediodía y buscá un espacio con aire acondicionado al menos 3 horas por día',
+    sources: [
+      { label: 'SMN Argentina', url: 'https://www.smn.gob.ar/' },
+      { label: 'Copernicus Climate', url: 'https://climate.copernicus.eu/' },
+    ],
+  },
+  {
+    id: 'granizo-severo',
+    family: 'hidro',
+    title: 'Granizo severo',
+    subtitle: 'Los proyectiles del cielo · Hailstorm · Pedrisco',
+    img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Large_Hailstones.jpg/640px-Large_Hailstones.jpg',
+    imgAlt: 'Granizo severo — piedras de hielo de gran tamaño sobre superficie',
+    tags: ['🌨 Hasta 150 km/h al caer', '🌍 Argentina lidera el Corredor del Granizo', '⏱ Minutos de aviso'],
+    dangerLevel: 3,
+    badge: 'watch',
+    badgeLabel: 'Aviso de minutos · Buscar cobertura YA',
+    description: 'Piedras de hielo caen a más de 150 km/h, rompiendo vidrios, perforando techos y dejando el suelo blanco como si hubiera nevado. Una tormenta puede durar menos de 10 minutos. Formado dentro de cumulonimbos gigantes donde las corrientes ascendentes llevan gotas de agua hasta capas de -50°C — una sola tormenta puede destruir una cosecha entera en minutos.',
+    dateFact: 'Córdoba, Argentina, febrero 2015 — granizo de hasta 14 cm de diámetro afectó más de 40.000 viviendas y fue declarado desastre nacional; uno de los eventos más documentados de América del Sur.',
+    curiosity: 'El granizo se forma en capas como una cebolla: cada anillo representa un viaje completo de la piedra hacia arriba y abajo dentro de la nube — algunas hacen ese recorrido hasta 25 veces antes de caer.',
+    action: 'Entrá al interior de un edificio y alejate de ventanas; con granizo grande, 30 segundos al aire libre pueden romper el parabrisas',
+    sources: [
+      { label: 'SMN Argentina', url: 'https://www.smn.gob.ar/' },
+      { label: 'NOAA Severe Weather', url: 'https://www.weather.gov/safety/thunderstorm-hail' },
+    ],
+  },
+  {
+    id: 'erupcion-volcanica',
+    family: 'geo',
+    title: 'Erupción volcánica',
+    subtitle: 'Las que reescriben el paisaje · Volcanic eruption',
+    img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Kilauea_Volcano_Lava_Flow.jpg/640px-Kilauea_Volcano_Lava_Flow.jpg',
+    imgAlt: 'Erupción volcánica — ríos de lava y columna de ceniza',
+    tags: ['🌋 Hasta 700°C en flujos piroclásticos', '🌍 28 volcanes activos afectan Argentina', '⏱ Aviso variable'],
+    dangerLevel: 4,
+    badge: 'warn',
+    badgeLabel: 'Aviso variable · Evacuá la zona de exclusión',
+    description: 'Columnas de ceniza negra suben 20 km y oscurecen el sol durante días; ríos de lava naranja avanzan lentos pero imparables. Los flujos piroclásticos — nubes de gas y roca a 700°C — descienden la ladera a más de 100 km/h. La ceniza puede paralizar aeropuertos a miles de kilómetros y los gases modifican el clima global durante años.',
+    dateFact: 'Nevado del Ruiz, Colombia, noviembre 1985 — una erupción moderada fundió parte del glaciar y sepultó la ciudad de Armero en minutos; 23.000 muertos, la tercera erupción más letal del siglo XX.',
+    curiosity: 'La erupción del Pinatubo (Filipinas, 1991) enfrió el planeta entero 0,5°C durante dos años al inyectar 20 millones de toneladas de dióxido de azufre en la estratosfera — más que todas las emisiones industriales de ese año.',
+    action: 'Si llueve ceniza, cubrí nariz y boca con tela húmeda y sellá puertas y ventanas con cinta; la ceniza fina es más peligrosa que el humo',
+    sources: [
+      { label: 'Smithsonian Volcanoes', url: 'https://volcano.si.edu/' },
+      { label: 'INPRES Argentina', url: 'https://www.inpres.gob.ar/' },
     ],
   },
 ]
@@ -346,7 +406,7 @@ export function Desastres() {
             <em style={{ color: '#c8a84b', fontStyle: 'italic' }}>no avisa</em>
           </h1>
           <p className="text-sm max-w-md mx-auto leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
-            Siete fenómenos de impacto global. Datos históricos verificados, fuentes oficiales de seguimiento y una sola cosa que hacer.
+            Diez fenómenos de impacto global. Datos históricos verificados, fuentes oficiales de seguimiento y una sola cosa que hacer.
           </p>
         </div>
 

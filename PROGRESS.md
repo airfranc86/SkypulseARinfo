@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-05-29 — Auditoría visual + refinamiento catálogo desastres ✅
+
+**Done:**
+- Plan de auditoría frontend completo creado y revisado por Opus 4.7
+- Corrección crítica: propuesta `src/lib/colors.ts` eliminada → adoptar tokens `@theme` existentes en `index.css`
+- `CATALOG_desastres.md` — 10 correcciones factuales y de contenido aplicadas
+- Plan de expansión del catálogo creado con 3 nuevos fenómenos listos para implementar
+
+**Files changed:**
+- `docs/plans/frontend-audit-visual-consistency.md` — plan completo (5 fases) revisado por Opus, riesgos documentados
+- `docs/CATALOG_desastres.md` — correcciones: Valdivia (% viviendas), Patricia (325→345 km/h), Tornados (Tri-State→San Justo 1973), Incendios (Australia→Corrientes 2022 + acción sin "ruta oficial"), Inundaciones (curiosidad→física del agua), Tsunamis (etiqueta acortada), capitalización uniforme en acciones
+- `docs/plans/catalog-desastres-expansion.md` — 3 tarjetas propuestas: Ola de calor / Granizo severo / Erupción volcánica
+
+**Tests:** sin cambios de código — no aplica
+
+**Next:**
+- Ejecutar Fase 1 del plan de auditoría frontend (`index.css` tokens + correcciones de color + DangerScale compartido)
+- Aprobar e implementar los 3 fenómenos nuevos del catálogo en `Desastres.tsx`
+
+---
+
+## 2026-05-28 — gauge fix + PROGRESS.md compression ✅
+
+- `Incendios.tsx` — eliminado `/ 100` del texto central del gauge SVG (quedó solo el número).
+- `PROGRESS.md` — comprimido 1351 → 56 líneas (historial → tabla).
+
+**Commit:** `46e067f` · **Tests:** 0 errores TS
+
+**Next:** Awaiting user direction.
+
+---
+
 ## 2026-05-28 — /bolder: Lluvias + CotaDeNieve + Radar + CSP fix ✅
 
 - `Lluvias.tsx` — `IntensityScaleBar` (5 niveles), hero callout `animate-ping` (Cumulonimbo/Mammatus), filas `crit` tintadas, fix BAN1 educational cards (`borderLeftWidth:3px` → full tinted border).

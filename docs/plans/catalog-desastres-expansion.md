@@ -1,8 +1,11 @@
 # SkyPulse — Catálogo de Desastres Naturales Mundiales
+**Revisado:** 2026-05-29 · **Estado del catálogo:** 7 activos · 3 propuestos  
+**Fuente de verdad única** — reemplaza `CATALOG_desastres.md`
 
-Módulo extendido: 7 fenómenos de impacto global con datos históricos, curiosidades y fuentes oficiales de seguimiento en tiempo real.
+---
 
-**Formato de tarjeta (6 bloques):**
+## Formato de tarjeta (6 bloques)
+
 ```
 [Nombre]: [Etiqueta corta]
 
@@ -16,7 +19,9 @@ Seguimiento oficial: → 2 URLs de organismos reconocidos
 
 ---
 
-## 1. Terremotos
+## Catálogo activo
+
+### 1. Terremotos
 
 **Prompt de imagen:**
 ```
@@ -36,7 +41,7 @@ Liberación súbita de energía acumulada en la corteza terrestre.
 Puede desencadenar derrumbes, licuefacción del suelo y tsunamis secundarios.
 
 Dato histórico:
-1960 Valdivia (Chile), M9.5 — el más poderoso jamás registrado; destruyó el 40% de las viviendas del país y generó un tsunami que llegó a Japón y Hawaii.
+1960 Valdivia (Chile), M9.5 — el más poderoso jamás registrado; dejó 2 millones de personas afectadas y un tsunami que cruzó el Pacífico hasta Japón y Hawaii.
 
 Curiosidad:
 La energía liberada en Valdivia equivale a 178 megatones de TNT —
@@ -51,7 +56,7 @@ Seguimiento oficial:
 
 ---
 
-## 2. Inundaciones
+### 2. Inundaciones
 
 **Prompt de imagen:**
 ```
@@ -75,8 +80,8 @@ Dato histórico:
 la mayor catástrofe hídrica registrada en la historia humana.
 
 Curiosidad:
-El 40% de todos los desastres naturales del mundo son inundaciones.
-Son el tipo de desastre más frecuente y el más costoso económicamente a nivel global.
+Solo 15 cm de agua en movimiento rápido alcanzan para derribar a un adulto; con 60 cm, un auto es arrastrado.
+Velocidad y profundidad juntas hacen al agua en movimiento más letal que su volumen.
 
 Acción:
 Subí al piso más alto disponible; nunca cruces agua en movimiento a pie ni en auto
@@ -87,7 +92,7 @@ Seguimiento oficial:
 
 ---
 
-## 3. Tornados
+### 3. Tornados
 
 **Prompt de imagen:**
 ```
@@ -107,8 +112,8 @@ Vórtice de viento de hasta 500 km/h que destruye todo en su trayectoria.
 Puede durar desde segundos hasta varias horas, recorriendo cientos de kilómetros.
 
 Dato histórico:
-1925 Tri-State Tornado (Missouri–Illinois–Indiana, EE.UU.) — 695 muertos, 352 km de trayecto,
-el tornado más letal y de mayor alcance en la historia de Norteamérica.
+Abril 1973, San Justo (Santa Fe, Argentina) — un tornado EF4 destruyó el 80% de la ciudad, mató al menos 58 personas y dejó 3.000 sin hogar;
+el más letal documentado en la historia argentina.
 
 Curiosidad:
 El 75% de los tornados del mundo ocurren en EE.UU., en la región llamada "Tornado Alley".
@@ -123,7 +128,7 @@ Seguimiento oficial:
 
 ---
 
-## 4. Huracanes
+### 4. Huracanes
 
 **Prompt de imagen:**
 ```
@@ -143,15 +148,15 @@ Sistema tropical con vientos sostenidos superiores a 119 km/h que se alimenta de
 Su ojo central puede medir 40 km de diámetro, rodeado de las bandas de lluvia más destructivas.
 
 Dato histórico:
-Huracán Patricia (octubre 2015, México) — 325 km/h de viento sostenido y 400 km/h en ráfagas;
-el más intenso jamás registrado en el hemisferio occidental.
+Huracán Patricia (octubre 2015, México) — 345 km/h de viento sostenido;
+el más intenso jamás registrado en el hemisferio occidental según el NHC.
 
 Curiosidad:
 Un huracán maduro libera por día la misma energía que media millón de bombas atómicas —
 y toda esa energía proviene únicamente del vapor de agua del océano cálido.
 
 Acción:
-Evacuá la zona costera antes de que llegue; no esperes el impacto para salir
+Evacuá la zona costera al menos 48 horas antes del impacto previsto; después de ese plazo, las rutas colapsan
 
 Seguimiento oficial:
 - National Hurricane Center NOAA → https://www.nhc.noaa.gov/
@@ -159,7 +164,7 @@ Seguimiento oficial:
 
 ---
 
-## 5. Incendios
+### 5. Incendios
 
 **Prompt de imagen:**
 ```
@@ -179,15 +184,15 @@ Fuego incontrolado impulsado por viento seco, vegetación reseca y temperaturas 
 Puede avanzar a más de 20 km/h y crear sus propios patrones de viento.
 
 Dato histórico:
-2019–2020 Australia (Black Summer) — 18,6 millones de hectáreas quemadas, 33 muertos directos
-y 3.000 millones de animales muertos o desplazados en cuatro meses.
+Corrientes, Argentina, enero–febrero 2022 — más de 900.000 hectáreas de humedales y bosque nativo destruidas en semanas;
+el 13% del territorio provincial quemado, el peor incendio en la historia moderna de la provincia.
 
 Curiosidad:
 Los incendios intensos generan pirocúmulos — nubes de tormenta propias que alcanzan los 15 km de altura
 y producen rayos internos que encienden nuevos focos a kilómetros de distancia.
 
 Acción:
-evacuá inmediatamente siguiendo la ruta oficial; no volvás a buscar pertenencias
+Evacuá inmediatamente en dirección contraria al humo y el viento; no volvás a buscar pertenencias
 
 Seguimiento oficial:
 - NASA FIRMS (Satélite en tiempo real) → https://firms.modaps.eosdis.nasa.gov/map/
@@ -195,7 +200,7 @@ Seguimiento oficial:
 
 ---
 
-## 6. Tsunamis
+### 6. Tsunamis
 
 **Prompt de imagen:**
 ```
@@ -204,7 +209,7 @@ tsunami massive wave approaching coastline, enormous dark wall of ocean water, c
 
 ---
 
-Tsunamis: Los que vienen del fondo del mar
+Tsunamis: Los de las profundidades
 
 Cómo se ve:
 El mar retrocede metros revelando el fondo antes del golpe; luego llega una pared de agua oscura.
@@ -223,7 +228,7 @@ En mar abierto, un tsunami puede tener solo 1 metro de altura pero viajar a la v
 es completamente imperceptible para barcos en aguas profundas.
 
 Acción:
-si el mar retrocede rápido sin razón aparente, corré hacia tierra alta sin esperar la alerta oficial
+Si el mar retrocede rápido sin razón aparente, corré hacia tierra alta sin esperar la alerta oficial
 
 Seguimiento oficial:
 - Pacific Tsunami Warning Center (PTWC) → https://tsunami.gov/
@@ -231,7 +236,7 @@ Seguimiento oficial:
 
 ---
 
-## 7. Micro Tsunamis (Meteotsunamis)
+### 7. Micro Tsunamis (Meteotsunamis)
 
 **Prompt de imagen:**
 ```
@@ -259,7 +264,7 @@ Pueden producirse en días completamente soleados, sin ninguna tormenta visible 
 A veces el evento meteorológico que los genera está a miles de kilómetros de distancia, en otro océano.
 
 Acción:
-alejate del borde del muelle si el agua oscila de forma irregular; no des la espalda al mar
+Alejate del borde del muelle si el agua oscila de forma irregular; no des la espalda al mar
 
 Seguimiento oficial:
 - NOAA Tides and Currents → https://tidesandcurrents.noaa.gov/
@@ -267,14 +272,141 @@ Seguimiento oficial:
 
 ---
 
+## Fenómenos propuestos *(pendiente aprobación — no implementados aún)*
+
+### 8. Ola de calor
+
+**Prompt de imagen:**
+```
+extreme heat wave, cracked dry earth, city streets shimmering with heat haze, thermometer in background, wilting trees, harsh white sunlight, realistic, high detail, educational style
+```
+
+---
+
+Ola de calor: Las silenciosas
+
+Cómo se ve:
+El sol pega sin nubes, el asfalto brilla de calor y el horizonte tiembla con ondas de aire caliente.
+No hay viento, los árboles no se mueven y la noche no refresca.
+
+Qué significa:
+Período de tres o más días con temperaturas muy por encima del promedio histórico para la zona.
+El calor extremo es más letal por año que los tornados, huracanes e inundaciones juntos en la mayoría de países.
+
+Dato histórico:
+Europa, agosto 2003 — ola de calor con temperaturas récord de hasta 47,9°C dejó más de 70.000 muertos en dos semanas, principalmente adultos mayores en Francia e Italia.
+
+Curiosidad:
+El cuerpo humano tolera 48°C en aire seco, pero a 35°C con 100% de humedad la sudoración deja de enfriar y el organismo colapsa en menos de una hora — sin importar la condición física.
+
+Acción:
+Tomá agua antes de sentir sed, cerrá persianas al mediodía y buscá un espacio con aire acondicionado al menos 3 horas por día.
+
+Seguimiento oficial:
+- SMN Argentina (alertas por calor) → https://www.smn.gob.ar/
+- Copernicus Climate Change Service → https://climate.copernicus.eu/
+
+---
+
+### 9. Granizo severo
+
+**Prompt de imagen:**
+```
+severe hailstorm, large hailstones falling on city, car windshields shattered, streets covered in white ice balls, dark green storm sky, crops flattened in field, realistic, high detail, educational style
+```
+
+---
+
+Granizo severo: Los proyectiles del cielo
+
+Cómo se ve:
+Piedras de hielo caen a más de 150 km/h, rompiendo vidrios, perforando techos y dejando el suelo blanco como si hubiera nevado.
+Una tormenta puede durar menos de 10 minutos y los granizos pueden superar el tamaño de una pelota de golf.
+
+Qué significa:
+Granizo formado dentro de cumulonimbos gigantes donde las corrientes ascendentes llevan gotas de agua hasta capas de -50°C.
+Una sola tormenta puede destruir una cosecha entera y causar daños de cientos de millones de dólares en minutos.
+
+Dato histórico:
+Córdoba, Argentina, febrero 2015 — granizo de hasta 14 cm de diámetro afectó más de 40.000 viviendas y fue declarado desastre nacional; uno de los eventos de granizo más documentados de América del Sur.
+
+Curiosidad:
+El granizo se forma en capas como una cebolla: cada anillo representa un viaje completo de la piedra hacia arriba y abajo dentro de la nube — algunas hacen ese recorrido hasta 25 veces antes de caer.
+
+Acción:
+Entrá al interior de un edificio y alejate de ventanas; con granizo grande, 30 segundos al aire libre pueden romper el parabrisas de un auto.
+
+Seguimiento oficial:
+- SMN Argentina (alertas de tormentas severas) → https://www.smn.gob.ar/
+- NOAA Severe Weather → https://www.weather.gov/safety/thunderstorm-hail
+
+---
+
+### 10. Erupción volcánica
+
+**Prompt de imagen:**
+```
+volcanic eruption at night, massive lava fountains, pyroclastic flow descending mountain slopes, ash cloud reaching stratosphere, glowing red rivers of lava, realistic, dramatic scale, educational style
+```
+
+---
+
+Erupción volcánica: Las que reescriben el paisaje
+
+Cómo se ve:
+Columnas de ceniza negra suben 20 km y oscurecen el sol durante días; ríos de lava naranja avanzan lentos pero imparables.
+Los flujos piroclásticos — nubes de gas y roca a 700°C — descienden la ladera a más de 100 km/h.
+
+Qué significa:
+Expulsión violenta de magma, gas y ceniza desde el interior de la Tierra.
+La ceniza puede paralizar aeropuertos a miles de kilómetros y los gases pueden modificar el clima global durante años.
+
+Dato histórico:
+Nevado del Ruiz, Colombia, noviembre 1985 — una erupción moderada fundió parte del glaciar y generó un lahar que sepultó la ciudad de Armero en minutos; 23.000 muertos, la tercera erupción más letal del siglo XX.
+
+Curiosidad:
+La erupción del Pinatubo (Filipinas, 1991) enfrió el planeta entero 0,5°C durante dos años al inyectar 20 millones de toneladas de dióxido de azufre en la estratosfera — más que todas las emisiones industriales de ese año.
+
+Acción:
+Si llueve ceniza, cubrí nariz y boca con tela húmeda y sellá puertas y ventanas con cinta; la ceniza fina es más peligrosa que el humo.
+
+Seguimiento oficial:
+- Smithsonian Global Volcanism Program → https://volcano.si.edu/
+- INPRES Argentina (sismología y volcanes) → https://www.inpres.gob.ar/
+
+---
+
+## Candidatos descartados *(esta iteración)*
+
+| Fenómeno | Razón |
+|----------|-------|
+| Sequía | No tiene "punto máximo" visual claro — incompatible con el bloque "Cómo se ve" |
+| Aludes / avalanchas | Nicho (turismo de montaña); prioridad menor |
+| Tormenta eléctrica severa | Curiosidad excelente (NOA = mayor densidad de rayos del planeta), pero fenómeno difuso para acción concreta |
+
+---
+
 ## Resumen del catálogo
 
-| # | Fenómeno | Etiqueta | Fuente primaria |
-|---|----------|----------|-----------------|
-| 1 | Terremotos | Los catastróficos | earthquake.usgs.gov |
-| 2 | Inundaciones | Las que todo lo cubren | emergency.copernicus.eu |
-| 3 | Tornados | Los imprevisibles | spc.noaa.gov |
-| 4 | Huracanes | Los gigantes del mar | nhc.noaa.gov |
-| 5 | Incendios | Los que no tienen freno | firms.modaps.eosdis.nasa.gov |
-| 6 | Tsunamis | Los que vienen del fondo del mar | tsunami.gov |
-| 7 | Micro tsunamis | Los invisibles | tidesandcurrents.noaa.gov |
+| # | Fenómeno | Etiqueta | Fuente primaria | Estado |
+|---|----------|----------|-----------------|--------|
+| 1 | Terremotos | Los catastróficos | earthquake.usgs.gov | ✅ activo |
+| 2 | Inundaciones | Las que todo lo cubren | emergency.copernicus.eu | ✅ activo |
+| 3 | Tornados | Los imprevisibles | spc.noaa.gov | ✅ activo |
+| 4 | Huracanes | Los gigantes del mar | nhc.noaa.gov | ✅ activo |
+| 5 | Incendios | Los que no tienen freno | firms.modaps.eosdis.nasa.gov | ✅ activo |
+| 6 | Tsunamis | Los de las profundidades | tsunami.gov | ✅ activo |
+| 7 | Micro tsunamis | Los invisibles | tidesandcurrents.noaa.gov | ✅ activo |
+| 8 | Ola de calor | Las silenciosas | smn.gob.ar | 🟡 propuesto |
+| 9 | Granizo severo | Los proyectiles del cielo | smn.gob.ar | 🟡 propuesto |
+| 10 | Erupción volcánica | Las que reescriben el paisaje | volcano.si.edu | 🟡 propuesto |
+
+---
+
+## Checklist de implementación *(cuando se aprueben los propuestos)*
+
+- [ ] Tarjetas 8, 9, 10 agregadas a este archivo con estado `✅ activo`
+- [ ] `Desastres.tsx` — array `DISASTERS` actualizado con los 3 nuevos
+- [ ] `DangerScale` asignado con nivel correcto para cada fenómeno nuevo
+- [ ] Prompts de imagen documentados y probados
+- [ ] `Desastres.tsx` — tabla de resumen actualizada
