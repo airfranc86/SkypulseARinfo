@@ -15,3 +15,5 @@ services:
         sync: false
       - key: CHECKWX_API_KEY
         sync: false
+      - key: SENTRY_DSN
+        sync: false

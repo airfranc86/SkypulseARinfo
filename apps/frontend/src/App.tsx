@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation as useRouterLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useLocation as useLocationState } from '@/hooks/useLocation'
+import { useGTMPageView } from '@/hooks/useGTMPageView'
 import { LocationPicker } from '@/components/LocationPicker'
 import { SplashCursor } from '@/components/animated/SplashCursor'
 import { Threads } from '@/components/animated/Threads'
@@ -125,25 +126,6 @@ function useMotionPreferences() {
   }, [])
 }
 
-// ── GA4 — page-view tracking for React Router SPA ────────────────────────────
-
-declare global {
-  interface Window {
-    gtag: (...args: unknown[]) => void
-  }
-}
-
-function usePageTracking() {
-  const { pathname, search } = useRouterLocation()
-  useEffect(() => {
-    if (typeof window.gtag !== 'function') return
-    window.gtag('event', 'page_view', {
-      page_path: pathname + search,
-      page_title: document.title,
-    })
-  }, [pathname, search])
-}
-
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
 /** Live-data tools — require location + backend (Row 1, scrolls ←) */
@@ -209,7 +191,7 @@ function RootLayout() {
     [volcanesData, volcanAlertColor],
   )
 
-  usePageTracking()
+  useGTMPageView()
 
   // Wire dispatch into the shared ref so QueryCache callbacks can reach it
   const dispatch = useModelStatusDispatch()

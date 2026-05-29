@@ -6,6 +6,19 @@ import math
 import os
 from contextlib import asynccontextmanager
 
+import sentry_sdk
+
+_SENTRY_DSN = os.getenv('SENTRY_DSN')
+if _SENTRY_DSN and os.getenv('ENV') == 'prod':
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        environment=os.getenv('ENV', 'dev'),
+        release=os.getenv('RENDER_GIT_COMMIT', 'unknown'),
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.05,
+        send_default_pii=False,
+    )
+
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
