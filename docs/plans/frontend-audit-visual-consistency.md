@@ -271,7 +271,7 @@ Fase 1 bloquea todo. Fases 3–5 son independientes entre sí una vez que 1 y 2 
 - [x] `index.css` declara `--color-crit-soft` y `--color-fog` ✅
 - [x] `Volcanes.tsx` usa `PageHeader` ✅
 - [x] `animate-ping` en `Lluvias.tsx` Cb/Mammatus → excepción intencional documentada ✅
-- [ ] `Incendios.tsx` usa `ModelBadge` en `PageHeader` (ya lo usa — verificar con grep)
+- [x] `Incendios.tsx` usa `ModelBadge` en `PageHeader` — `windy_ecmwf` / `gfs` según `is_estimated` ✅
 - [x] `pnpm run build` pasa sin errores ✅
 
 ---
