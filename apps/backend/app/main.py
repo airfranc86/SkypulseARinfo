@@ -166,6 +166,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
