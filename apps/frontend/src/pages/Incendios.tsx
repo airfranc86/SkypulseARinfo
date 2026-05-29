@@ -25,6 +25,17 @@ const RISK_COLORS: Record<string, string> = {
   'Extremo':  '#ff3333',
 }
 
+const RISK_SCALE = [
+  { label: 'Muy bajo', color: '#3ecf7a' },
+  { label: 'Bajo',     color: '#7ec855' },
+  { label: 'Moderado', color: '#f0a030' },
+  { label: 'Alto',     color: '#e05545' },
+  { label: 'Muy alto', color: '#e03535' },
+  { label: 'Extremo',  color: '#ff3333' },
+] as const
+
+const HIGH_RISK_LABELS = new Set(['Alto', 'Muy alto', 'Extremo'])
+
 // Condition thresholds that trigger critical styling
 function isCriticalCondition(label: string, value: string | number | null): boolean {
   if (value === null || value === undefined) return false
@@ -176,18 +187,25 @@ function ConditionChip({
     <div
       className="rounded-xl px-4 py-3 flex flex-col gap-1"
       style={{
-        background: 'var(--color-card)',
+        background: critical ? 'rgba(224,85,69,0.07)' : 'var(--color-card)',
         border: critical
-          ? '1.5px solid rgba(224,85,69,0.6)'
+          ? '1.5px solid rgba(224,85,69,0.55)'
           : '1px solid var(--color-border)',
-        boxShadow: critical ? '0 0 0 3px rgba(224,85,69,0.08)' : undefined,
+        boxShadow: critical ? '0 0 18px rgba(224,85,69,0.12)' : undefined,
       }}
     >
-      <div className="flex items-center gap-1.5">
-        <span className="text-sm leading-none" aria-hidden="true">{icon}</span>
-        <span className="text-[.6rem] uppercase tracking-widest" style={{ color: 'var(--color-muted-foreground)' }}>
-          {label}
-        </span>
+      <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm leading-none" aria-hidden="true">{icon}</span>
+          <span className="text-[.6rem] uppercase tracking-widest" style={{ color: 'var(--color-muted-foreground)' }}>
+            {label}
+          </span>
+        </div>
+        {critical && (
+          <span className="text-[.5rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: '#e05545', background: 'rgba(224,85,69,0.12)' }}>
+            ⚠ crítico
+          </span>
+        )}
       </div>
       <span
         className="text-base font-semibold"
@@ -297,6 +315,49 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
   )
 }
 
+/** Barra segmentada que muestra los 6 niveles de riesgo con el nivel actual resaltado. */
+function RiskScaleBar({ currentLabel }: { currentLabel: string }) {
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+    >
+      <p className="text-[.55rem] uppercase tracking-widest mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
+        Escala de riesgo
+      </p>
+      <div className="flex gap-[3px] h-[10px]">
+        {RISK_SCALE.map((r) => (
+          <div
+            key={r.label}
+            className="flex-1 rounded-full transition-opacity"
+            style={{
+              background: r.color,
+              opacity: r.label === currentLabel ? 1 : 0.25,
+              outline: r.label === currentLabel ? `2px solid ${r.color}` : undefined,
+              outlineOffset: r.label === currentLabel ? '2px' : undefined,
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex mt-2.5">
+        {RISK_SCALE.map((r) => (
+          <div key={r.label} className="flex-1 text-center">
+            <span
+              className="text-[.48rem] leading-tight block"
+              style={{
+                color: r.label === currentLabel ? r.color : 'var(--color-muted-foreground)',
+                fontWeight: r.label === currentLabel ? 700 : undefined,
+              }}
+            >
+              {r.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Skeleton de carga. */
 function PageSkeleton() {
   return (
@@ -339,6 +400,7 @@ export function Incendios({ location }: Props) {
 
   const current = data?.slots[0] ?? null
   const peakColor = RISK_COLORS[data?.peak_label ?? ''] ?? '#f0a030'
+  const isHighRisk = HIGH_RISK_LABELS.has(data?.current_label ?? '')
 
   return (
     <div>
@@ -355,10 +417,47 @@ export function Incendios({ location }: Props) {
       {data && (
         <FadeContent>
           <div className="space-y-5">
+            {/* Hero callout — solo cuando el riesgo es Alto o superior */}
+            {isHighRisk && (
+              <div
+                className="rounded-xl px-5 py-4 flex items-start gap-4"
+                style={{
+                  background: `${data.current_color}0f`,
+                  border: `1.5px solid ${data.current_color}45`,
+                }}
+              >
+                <div className="relative flex-shrink-0 mt-1">
+                  <span
+                    className="absolute inset-0 rounded-full animate-ping opacity-50"
+                    style={{ background: data.current_color }}
+                  />
+                  <span
+                    className="relative block w-3 h-3 rounded-full"
+                    style={{ background: data.current_color }}
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-bold leading-tight" style={{ color: data.current_color }}>
+                    Riesgo {data.current_label}
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
+                    Las condiciones actuales favorecen la propagación de incendios forestales.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Escala de referencia */}
+            <RiskScaleBar currentLabel={data.current_label} />
+
             {/* Score gauge + label central */}
             <div
               className="rounded-2xl p-6 flex flex-col items-center gap-3"
-              style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+              style={{
+                background: 'var(--color-card)',
+                border: `1px solid ${isHighRisk ? `${data.current_color}40` : 'var(--color-border)'}`,
+                boxShadow: isHighRisk ? `0 0 48px ${data.current_color}15` : undefined,
+              }}
             >
               {/* Responsive gauge: fills on mobile, capped on desktop */}
               <div className="w-full max-w-xs mx-auto">
@@ -427,39 +526,39 @@ export function Incendios({ location }: Props) {
             {/* Timeline de riesgo */}
             {data.slots.length > 1 && <RiskTimeline slots={data.slots} />}
 
-            {/* Pico de riesgo — compact single-row */}
+            {/* Pico de riesgo */}
             <div
-              className="rounded-xl px-5 py-3 flex items-center justify-between gap-3"
+              className="rounded-xl px-5 py-4 flex items-center justify-between gap-3"
               style={{
-                background: 'var(--color-card)',
-                border: `1.5px solid ${peakColor}55`,
+                background: `${peakColor}08`,
+                border: `1.5px solid ${peakColor}45`,
               }}
             >
-              <p
-                className="text-[.6rem] font-semibold uppercase tracking-widest"
-                style={{ color: 'var(--color-muted-foreground)' }}
-              >
-                Pico de riesgo
-              </p>
-              <div className="flex items-center gap-2">
+              <div>
+                <p
+                  className="text-[.55rem] font-semibold uppercase tracking-widest mb-1"
+                  style={{ color: 'var(--color-muted-foreground)' }}
+                >
+                  Pico de riesgo
+                </p>
                 <span
-                  className="text-xs font-medium"
+                  className="text-sm font-medium"
                   style={{ color: 'var(--color-foreground)' }}
                 >
                   {formatPeakTime(data.peak_hour_label)}
                 </span>
-                <span
-                  className="text-xs font-bold px-2.5 py-0.5 rounded-full"
-                  style={{
-                    color: peakColor,
-                    background: `${peakColor}20`,
-                    border: `1.5px solid ${peakColor}55`,
-                    fontFamily: 'var(--font-serif)',
-                  }}
-                >
-                  {data.peak_label}
-                </span>
               </div>
+              <span
+                className="text-sm font-bold px-3 py-1 rounded-full"
+                style={{
+                  color: peakColor,
+                  background: `${peakColor}20`,
+                  border: `1.5px solid ${peakColor}55`,
+                  fontFamily: 'var(--font-serif)',
+                }}
+              >
+                {data.peak_label}
+              </span>
             </div>
 
             {/* Footer — compact single line */}
