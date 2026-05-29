@@ -150,16 +150,6 @@ function ScoreGauge({ score, color }: { score: number; color: string }) {
       >
         {score}
       </text>
-      <text
-        x={cx}
-        y={cy + 6}
-        textAnchor="middle"
-        fontSize="8"
-        fill="var(--color-muted-foreground)"
-        fontFamily="var(--font-sans)"
-      >
-        / 100
-      </text>
       {/* Min/Max labels */}
       <text x={startX + 2} y={cy + 18} fontSize="8" fill="var(--color-muted-foreground)">0</text>
       <text x={endX - 10} y={cy + 18} fontSize="8" fill="var(--color-muted-foreground)">100</text>
