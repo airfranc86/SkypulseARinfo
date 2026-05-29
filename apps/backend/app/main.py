@@ -166,13 +166,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-@app.get("/health")
-async def health():
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health() -> dict:
     return {"status": "ok"}
 
 
 @app.get("/healthz")
-async def healthz():
+async def healthz() -> dict:
     return {"status": "ok"}
 
 
