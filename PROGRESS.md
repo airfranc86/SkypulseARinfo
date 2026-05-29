@@ -5,6 +5,61 @@ Written by the `/progress-save` skill after each completed task.
 
 ---
 
+## 2026-05-28 — Wave 7 + /bolder Incendios & LavarCoche + S-09 ops ✅
+
+**Done:**
+- `Incendios.tsx` — `/bolder` visual completo:
+  - `RISK_SCALE` + `RiskScaleBar` en barra segmentada de 6 niveles (igual patrón que Niebla).
+  - Hero callout con `animate-ping` para riesgo Alto / Muy alto / Extremo.
+  - Gauge card con glow ambiental (`box-shadow`) proporcional al nivel de riesgo.
+  - `ConditionChip` crítico: background tintado + badge "⚠ crítico" + shadow más visible.
+  - Peak risk row: background tintado al color del pico + badge más grande.
+- **S-06** — endpoint `/api/metar` implementado (Wave 7):
+  - `app/routers/metar.py` — valida ICAO `^[A-Z0-9]{4}$`, llama CheckWX `/metar/{code}/decoded` o `/taf/{code}`, 503 si la key no está configurada, rate limit 20/min.
+  - `config.py` — `checkwx_api_key`, `checkwx_base_url`, `cache_ttl_metar_seconds`.
+  - `main.py` — router registrado en `/api/metar`.
+  - `render.yaml` — `CHECKWX_API_KEY sync:false` agregado.
+  - `Metar.tsx` — `encodeURIComponent` en ambas llamadas fetch (líneas 572 y 587).
+  - `CHECKWX_API_KEY` configurada en Render → deploy activo.
+- **S-09** — dependencias de producción pinneadas:
+  - `requirements-lock.txt` creado con 28 paquetes exactos (closure completo, sin dev packages).
+  - `requirements-dev.txt` pinneado con versiones exactas.
+  - `render.yaml` actualizado: `pip install -r requirements-lock.txt`.
+- `LavarCoche.tsx` — `/bolder` visual completo:
+  - `QUALITY_SCALE` + `QualityScaleBar` en barra segmentada de 4 niveles (Excelente → No apto).
+  - Hero callout con `animate-ping` para el mejor día de la semana.
+  - Row backgrounds tintados por calidad (verde/rojo proporcional al score).
+  - Score number escalado por nivel (0.8–1.15rem, font-weight 400–700).
+  - Chip `🌧 Xmm` visible cuando `precip_mm > 0`.
+  - Score bar: color sólido (reemplaza gradient).
+
+**Files changed:**
+- `apps/frontend/src/pages/Incendios.tsx` — bolder visual
+- `apps/backend/app/routers/metar.py` — NUEVO
+- `apps/backend/app/core/config.py` — checkwx settings
+- `apps/backend/app/main.py` — router metar registrado
+- `apps/backend/render.yaml` — lock file + CHECKWX_API_KEY
+- `apps/backend/requirements-lock.txt` — NUEVO (pinned production deps)
+- `apps/backend/requirements-dev.txt` — versiones pinneadas
+- `apps/frontend/src/pages/Metar.tsx` — encodeURIComponent fix
+- `apps/frontend/src/pages/LavarCoche.tsx` — bolder visual
+
+**Tests:**
+- `uv run pytest -q` → 523 passed, 0 failed
+- `npx tsc --noEmit` → 0 errores TS
+
+**Commits:**
+- `3b7f90f` feat(incendios): bolder visual
+- `561eafd` feat(metar): S-06 — /api/metar + encodeURIComponent
+- `b5de2db` ops(S-09): requirements-lock.txt + render.yaml
+- `8e982dd` feat(lavar-coche): bolder visual
+
+**Next:**
+- Páginas sin tratamiento /bolder aún: TenderRopa, Lluvias, CotaDeNieve, Volcanes, Desastres.
+- Verificar que `/api/metar` responde correctamente en producción (Render deploy en curso).
+
+---
+
 ## 2026-05-28 — UX/Visual: Terremotos + Niebla + SplashCursor + /bolder ✅
 
 **Done:**
