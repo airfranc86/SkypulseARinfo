@@ -94,9 +94,9 @@ export function LaundryDayCard({
               <span
                 className="shrink-0 text-xs px-2 py-0.5 rounded-full"
                 style={{
-                  background: 'rgba(224,117,48,0.12)',
-                  color: '#e07b30',
-                  border: '1px solid rgba(224,117,48,0.3)',
+                  background: 'rgba(240,160,48,0.12)',
+                  color: '#f0a030',
+                  border: '1px solid rgba(240,160,48,0.3)',
                   whiteSpace: 'nowrap',
                 }}
               >

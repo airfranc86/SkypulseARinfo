@@ -34,10 +34,10 @@ const CLOUDS: CloudRow[] = [
 
 const BADGE_STYLES: Record<BadgeVariant, { color: string; bg: string; border: string }> = {
   no:    { color: '#90aabb', bg: 'rgba(96,112,128,.07)',  border: 'rgba(96,112,128,.28)'  },
-  maybe: { color: '#f0a030', bg: 'rgba(212,135,15,.07)',  border: 'rgba(212,135,15,.32)'  },
-  yes:   { color: '#5aaad8', bg: 'rgba(43,143,212,.07)',  border: 'rgba(43,143,212,.32)'  },
-  heavy: { color: '#e05545', bg: 'rgba(192,57,43,.07)',   border: 'rgba(192,57,43,.32)'   },
-  crit:  { color: '#ff6b6b', bg: 'rgba(255,0,0,.07)',     border: 'rgba(255,0,0,.32)'     },
+  maybe: { color: 'var(--color-watch)', bg: 'rgba(212,135,15,.07)',  border: 'rgba(212,135,15,.32)'  },
+  yes:   { color: 'var(--color-info)', bg: 'rgba(43,143,212,.07)',  border: 'rgba(43,143,212,.32)'  },
+  heavy: { color: 'var(--color-warn)', bg: 'rgba(192,57,43,.07)',   border: 'rgba(192,57,43,.32)'   },
+  crit:  { color: 'var(--color-crit-soft)', bg: 'rgba(255,0,0,.07)',     border: 'rgba(255,0,0,.32)'     },
 }
 
 const INTENSITY_COLORS: Record<IntensityLevel, string> = {
@@ -153,11 +153,11 @@ export function Lluvias() {
           style={{ background: 'rgba(255,51,51,0.06)', border: '1.5px solid rgba(255,51,51,0.28)' }}
         >
           <div className="relative flex-shrink-0 mt-1">
-            <span className="absolute inset-0 rounded-full animate-ping opacity-50" style={{ background: '#ff3333' }} />
-            <span className="relative block w-3 h-3 rounded-full" style={{ background: '#ff3333' }} />
+            <span className="absolute inset-0 rounded-full animate-ping opacity-50" style={{ background: 'var(--color-crit)' }} />
+            <span className="relative block w-3 h-3 rounded-full" style={{ background: 'var(--color-crit)' }} />
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight" style={{ color: '#ff3333' }}>
+            <p className="text-sm font-bold leading-tight" style={{ color: 'var(--color-crit)' }}>
               Cumulonimbo y Mammatus — peligro severo
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted-foreground)' }}>

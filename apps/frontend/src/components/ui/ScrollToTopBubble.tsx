@@ -20,6 +20,7 @@ export function ScrollToTopBubble() {
     <button
       onClick={handleClick}
       aria-label="Volver al inicio"
+      className="rounded-full"
       style={{
         position: 'fixed',
         bottom: '24px',
@@ -27,7 +28,6 @@ export function ScrollToTopBubble() {
         zIndex: 50,
         width: '44px',
         height: '44px',
-        borderRadius: '50%',
         border: '1px solid var(--color-border)',
         background: 'color-mix(in srgb, var(--color-background) 80%, transparent)',
         backdropFilter: 'blur(8px)',
@@ -59,10 +59,10 @@ export function ScrollToTopBubble() {
       <img
         src="/Logo.png"
         alt="SkyPulse"
+        className="rounded-full"
         style={{
           width: '28px',
           height: '28px',
-          borderRadius: '50%',
           objectFit: 'cover',
           display: 'block',
         }}

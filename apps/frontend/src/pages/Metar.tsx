@@ -164,10 +164,10 @@ const REGIONS = [
 // ---------------------------------------------------------------------------
 
 const CAT_STYLES: Record<string, { color: string; bg: string; border: string }> = {
-  VFR:     { color: '#3ecf7a', bg: 'rgba(39,174,96,.12)',   border: 'rgba(39,174,96,.4)'   },
+  VFR:     { color: '#3ecf7a', bg: 'rgba(62,207,122,.12)',  border: 'rgba(62,207,122,.4)'  },
   MVFR:    { color: '#5aaad8', bg: 'rgba(43,143,212,.12)',  border: 'rgba(43,143,212,.4)'  },
   IFR:     { color: '#e05545', bg: 'rgba(192,57,43,.12)',   border: 'rgba(192,57,43,.4)'   },
-  LIFR:    { color: '#cc66ff', bg: 'rgba(128,0,128,.12)',   border: 'rgba(128,0,128,.4)'   },
+  LIFR:    { color: '#cc66ff', bg: 'rgba(204,102,255,.12)', border: 'rgba(204,102,255,.4)' },
   UNKNOWN: { color: '#90aabb', bg: 'rgba(96,112,128,.12)',  border: 'rgba(96,112,128,.4)'  },
 }
 
@@ -322,6 +322,32 @@ function MetarResult({ metar, taf }: { metar: MetarData; taf: string | null }) {
         </div>
         {metar.flight_category && <FlightCatBadge cat={metar.flight_category} />}
       </div>
+
+      {/* Hero callout — IFR / LIFR */}
+      {(metar.flight_category === 'IFR' || metar.flight_category === 'LIFR') && (() => {
+        const isLIFR = metar.flight_category === 'LIFR'
+        const color = isLIFR ? '#cc66ff' : 'var(--color-warn)'
+        const colorSoft = isLIFR ? 'rgba(204,102,255,.8)' : 'var(--color-crit-soft)'
+        const bg = isLIFR ? 'rgba(204,102,255,.06)' : 'rgba(224,85,69,.06)'
+        const border = isLIFR ? 'rgba(204,102,255,.25)' : 'rgba(224,85,69,.25)'
+        const msg = isLIFR
+          ? 'Visibilidad extremadamente reducida — condición LIFR activa. Operaciones VFR prohibidas.'
+          : 'Condición IFR activa — techo bajo o visibilidad reducida. Verificar NOTAMs antes de operar.'
+        return (
+          <div
+            className="flex items-center gap-3 rounded-xl px-5 py-4"
+            style={{ background: bg, border: `1px solid ${border}` }}
+          >
+            <span className="relative flex size-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: color }} />
+              <span className="relative inline-flex size-2 rounded-full" style={{ background: color }} />
+            </span>
+            <span className="text-[.8rem] font-medium" style={{ color: colorSoft }}>
+              {msg}
+            </span>
+          </div>
+        )
+      })()}
 
       {/* Raw */}
       <div>

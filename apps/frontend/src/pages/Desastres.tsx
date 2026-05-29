@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
+import { DangerScale } from '../components/ui/DangerScale'
 
 // ---------------------------------------------------------------------------
 // Types & Data
@@ -237,38 +238,15 @@ const SECTIONS: { family: Exclude<Family, 'all'>; title: string; subtitle: strin
 ]
 
 const BADGE_STYLE: Record<BadgeVariant, { color: string; bg: string; border: string }> = {
-  crit:    { color: '#ff6b6b', bg: 'rgba(255,0,0,.06)',    border: 'rgba(255,0,0,.28)'     },
-  warn:    { color: '#e05545', bg: 'rgba(192,57,43,.06)',  border: 'rgba(192,57,43,.28)'   },
-  watch:   { color: '#f0a030', bg: 'rgba(212,135,15,.06)', border: 'rgba(212,135,15,.28)'  },
+  crit:    { color: 'var(--color-crit-soft)', bg: 'rgba(255,0,0,.06)',    border: 'rgba(255,0,0,.28)'     },
+  warn:    { color: 'var(--color-warn)', bg: 'rgba(192,57,43,.06)',  border: 'rgba(192,57,43,.28)'   },
+  watch:   { color: 'var(--color-watch)', bg: 'rgba(212,135,15,.06)', border: 'rgba(212,135,15,.28)'  },
   neutral: { color: '#90aabb', bg: 'rgba(96,112,128,.06)', border: 'rgba(96,112,128,.28)'  },
-}
-
-const DANGER_COLORS: Record<number, string> = {
-  1: '#3ecf7a',
-  2: '#f0a030',
-  3: '#f0a030',
-  4: '#e05545',
-  5: '#ff3333',
 }
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function DangerScale({ level }: { level: 1 | 2 | 3 | 4 | 5 }) {
-  const activeColor = DANGER_COLORS[level]
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map(i => (
-        <div
-          key={i}
-          className="flex-1 h-1.5 rounded-sm"
-          style={{ background: i <= level ? activeColor : 'var(--color-border)' }}
-        />
-      ))}
-    </div>
-  )
-}
 
 function Card({ card }: { card: DisasterCard }) {
   const badge = BADGE_STYLE[card.badge]
@@ -317,7 +295,16 @@ function Card({ card }: { card: DisasterCard }) {
             </div>
           </div>
 
-          <p className="text-sm leading-relaxed" style={{ color: 'rgba(226,232,240,.82)' }}>
+          {/* Action — arriba del texto largo para que sea visible sin scroll */}
+          <div
+            className="rounded-lg px-4 py-3"
+            style={{ background: 'rgba(255,0,0,.04)', border: '1px solid rgba(255,107,107,.18)' }}
+          >
+            <p className="text-[.63rem] font-medium tracking-widest uppercase mb-1" style={{ color: 'var(--color-warn)' }}>Acción</p>
+            <p className="text-sm font-medium" style={{ color: '#fca5a5' }}>{card.action}</p>
+          </div>
+
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
             {card.description}
           </p>
 
@@ -337,15 +324,6 @@ function Card({ card }: { card: DisasterCard }) {
             💡 <em>{card.curiosity}</em>
           </p>
 
-          {/* Action */}
-          <div
-            className="rounded-lg px-4 py-3"
-            style={{ background: 'rgba(255,0,0,.04)', border: '1px solid rgba(255,107,107,.18)' }}
-          >
-            <p className="text-[.63rem] font-medium tracking-widest uppercase mb-1" style={{ color: '#e05545' }}>Acción</p>
-            <p className="text-sm font-medium" style={{ color: '#fca5a5' }}>{card.action}</p>
-          </div>
-
           {/* Sources */}
           <div className="flex gap-2 flex-wrap">
             {card.sources.map(({ label, url }) => (
@@ -355,7 +333,7 @@ function Card({ card }: { card: DisasterCard }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[.68rem] px-3 py-1 rounded transition-colors hover:bg-sky-950"
-                style={{ color: '#5aaad8', border: '1px solid rgba(43,143,212,.25)' }}
+                style={{ color: 'var(--color-info)', border: '1px solid rgba(43,143,212,.25)' }}
               >
                 🔗 {label}
               </a>
@@ -417,7 +395,7 @@ export function Desastres() {
               key={id}
               type="button"
               onClick={() => setFilter(id)}
-              className="px-4 py-1.5 rounded-full text-xs font-medium transition-all"
+              className="px-4 py-3 rounded-full text-xs font-medium transition-all"
               style={
                 filter === id
                   ? { background: '#c8a84b', color: '#060d1a', border: '1px solid #c8a84b' }
@@ -429,8 +407,18 @@ export function Desastres() {
           ))}
         </div>
 
+        {/* Empty state */}
+        {visible.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <span className="text-4xl" style={{ opacity: 0.3 }}>🌍</span>
+            <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+              No hay desastres en esta categoría.
+            </p>
+          </div>
+        )}
+
         {/* Sections */}
-        {SECTIONS.map(section => {
+        {visible.length > 0 && SECTIONS.map(section => {
           const sectionCards = visible.filter(d => d.family === section.family)
           if (sectionCards.length === 0) return null
           return (

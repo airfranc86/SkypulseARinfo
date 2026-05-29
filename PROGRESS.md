@@ -2,6 +2,171 @@
 
 ---
 
+## 2026-05-29 — P2 Desastres: reorganización card + empty state ✅
+
+**Done:**
+- `Desastres.tsx` — acción (`Acción`) movida de la última posición a justo después del DangerScale+badge — visible sin scroll para contenido safety-critical
+- `Desastres.tsx` — empty state defensivo cuando `visible.length === 0`: emoji + mensaje centrado
+
+**Files changed:**
+- `apps/frontend/src/pages/Desastres.tsx`
+
+**Tests:** `pnpm run build` → ✓ 1.48s ✅
+
+**Next:**
+- P3 restante: DANGER_COLORS hex no migrables (template literal `${activeColor}88` en glow)
+- GTM/GA4/Sentry: `docs/plans/config-gtm-ga4-sentry.md` (sin empezar)
+- P2 PrevisionClima: header antes de datos (polish opcional)
+
+---
+
+## 2026-05-29 — Fase 3 + P1 PrevisionClima + P3 tokens (paralelo) ✅
+
+**Fase 3 — /bolder Nubes + Metar:**
+- `DangerScale.tsx` — glow `boxShadow` en segmentos activos cuando `level >= 4`
+- `Nubes.tsx` — hero callout `animate-ping` rojo cuando hay nubes `dangerLevel === 5` visibles; borde izquierdo 3px crit/warn en cards con dangerLevel 4-5
+- `Metar.tsx` — hero callout `animate-ping` IFR (rojo) / LIFR (violeta `--color-fog`); LIFR CAT_STYLES corregido a `rgba(204,102,255,...)`
+
+**P1 PrevisionClima — badge modelo durante fetch:**
+- `modelBadge` en `PageHeader` ahora condicionado a `data ? ... : undefined` — no muestra `gfs` incorrecto durante carga
+
+**P3 — 15 reemplazos de tokens semánticos:**
+- `Lluvias.tsx` — 7 reemplazos: `BADGE_STYLES.{maybe,yes,heavy,crit}.color` + ping/dot/párrafo `animate-ping`
+- `Desastres.tsx` — 5 reemplazos: `BADGE_STYLE.{crit,warn,watch}.color`, label "Acción", link fuente
+- `Incendios.tsx` — 3 reemplazos: badge crítico, value span, badge fuente (ternario)
+- Skipeados correctamente: template literals alfa, DANGER_COLORS (glow usa `${activeColor}88`), MagnitudeScaleBar gradientes, colores no semánticos
+
+**Files changed:**
+- `components/ui/DangerScale.tsx`
+- `pages/Nubes.tsx`, `pages/Metar.tsx`, `pages/PrevisionClima.tsx`
+- `pages/Lluvias.tsx`, `pages/Desastres.tsx`, `pages/Incendios.tsx`
+
+**Tests:** `pnpm run build` → ✓ 1.47s ✅
+
+**Next:**
+- P2 Desastres: DangerScale enterrado bajo descripción + sin empty state para filtro vacío
+- P3 restante: DANGER_COLORS (`activeColor` actualmente en template literal `${activeColor}88` de glow)
+- Fase 3 Nubes/Metar: `/bolder` completado ✅
+
+---
+
+## 2026-05-29 — P1 Desastres.tsx — touch targets + color token ✅
+
+- Filter bar: `py-1.5` → `py-3` (32px → ≥44px, WCAG AA touch targets)
+- Description color: `rgba(226,232,240,.82)` → `var(--color-muted-foreground)`
+- `tsc --noEmit` → 0 errores
+
+**Next:** Fase 3 diferida (/bolder Nubes + Metar) · P1 PrevisionClima (badge modelo durante fetch) · P3 tokens 27 archivos
+
+---
+
+## 2026-05-29 — Fases 4 + 5 auditoría frontend (paralelo) ✅
+
+**Fase 4 — PageHeader + UI/UX audit:**
+- `Volcanes.tsx` → header hardcodeado reemplazado por `<PageHeader>` (import agregado, 25 líneas → 6 líneas)
+- Auditoría `PrevisionClima.tsx`: P1 (badge modelo incorrecto durante fetch inicial), P2 (header fuera del skeleton), P3 (hex hardcodeado `#c8a84b`)
+- Auditoría `Desastres.tsx`: P1 (filter bar 32px < 44px WCAG, color `rgba(226,232,240,.82)` fuera de tokens), P2 (DangerScale enterrado, sin empty state para filtro vacío), P3 (header sin comentario de excepción, imágenes sin crossOrigin)
+
+**Fase 5 — Code quality:**
+- `DangerScale.tsx` → runtime guard agregado (`import.meta.env.DEV`, correcto para Vite)
+- `HourlyTimeline.tsx` → eliminado (0 imports, sucesor es `HourlyStrip`)
+- `IntensityScaleBar` → sin `activeLevel` (página educativa estática, sin datos en tiempo real)
+- Auditoría tokens P3: 27 archivos con hex literales candidatos a `var(--color-*)` (no urgente)
+
+**Fase 3 → diferida** (hero callouts Nubes + Metar — /bolder)
+
+**Files changed:**
+- `apps/frontend/src/pages/Volcanes.tsx` — PageHeader migration
+- `apps/frontend/src/components/ui/DangerScale.tsx` — runtime guard
+- `apps/frontend/src/components/ui/HourlyTimeline.tsx` — eliminado
+
+**Tests:** `pnpm run build` → ✓ 1.47s ✅
+
+**Next:**
+- Fase 3 diferida: /bolder Nubes + Metar (hero callouts, DangerScale 4-5 glow, FlightCatBadge)
+- P1 Desastres: filter bar touch targets (py-1.5 → py-3), color rgba hardcodeado
+- P1 PrevisionClima: badge modelo durante fetch inicial
+- P3 mantenimiento: migrar 27 archivos de hex literales a `var(--color-*)`
+
+---
+
+## 2026-05-29 — Fase 2 auditoría frontend — borderRadius → clases Tailwind ✅
+
+**Done:**
+- `Niebla.tsx` — 17 `borderRadius` inline → Tailwind (`rounded-full`, `rounded-2xl`, `rounded-[10px]`, etc.)
+- `Terremotos.tsx` — dot de magnitud `50%` → `rounded-full`
+- `Nubes.tsx` — `pillStyle()` reestructurada: `borderRadius` eliminado, `rounded-full` en los 3 `<button>` consumidores
+- `components/ui/InfiniteNavRail.tsx` → `rounded-full`
+- `components/ui/ScrollToTopBubble.tsx` — 2 ocurrencias → `rounded-full`
+- `components/ui/MagnitudeScaleBar.tsx` — dot activo → `rounded-full`
+- `components/ui/TrendChart.tsx` — 2 barras → `rounded-full`
+- Excepción justificada: `Niebla.tsx:532` `'4px 4px 2px 2px'` (barra gráfica asimétrica, sin equiv. Tailwind)
+
+**Criterio de done:**
+- `rg "borderRadius:" src/pages` → solo `Niebla.tsx:532` ✅
+- `rg "borderRadius:" src/components/ui` → 0 resultados ✅
+- `pnpm run build` → ✓ 2.26s ✅
+
+**Next:**
+- Fase 3 — /bolder: `Nubes.tsx` + `Metar.tsx` (hero callouts, flight category badges)
+- O Fase 4 — /ui-ux-pro-max full audit
+
+---
+
+## 2026-05-29 — Fase 1 auditoría frontend — tokens + colores + DangerScale ✅
+
+**Done:**
+- `index.css` → tokens `--color-crit-soft: #ff6b6b` y `--color-fog: #cc66ff` agregados al bloque `@theme`
+- `Nubes.tsx` → 4 correcciones `rgba(39,174,96,...)` → `rgba(62,207,122,...)` + `DANGER_COLORS[1] #27ae60` → `#3ecf7a`
+- `Metar.tsx` → VFR badge `rgba(39,174,96,...)` → `rgba(62,207,122,...)`
+- `LaundryDayCard.tsx` → badge "Baja confianza" `#e07b30` / `rgba(224,117,48,...)` → `#f0a030` / `rgba(240,160,48,...)`
+- `CotaDeNieve.tsx` → opacidad scale bar inactiva `0.22` → `0.25`
+- `components/ui/DangerScale.tsx` → creado con `DangerLevel`, `DANGER_COLORS`, `DangerScale` exportados
+- `Nubes.tsx` + `Desastres.tsx` → eliminadas copias locales, import desde componente compartido
+- Fix `verbatimModuleSyntax`: `import { type DangerLevel }` en Nubes.tsx
+
+**Files changed:**
+- `apps/frontend/src/index.css`
+- `apps/frontend/src/pages/Nubes.tsx`
+- `apps/frontend/src/pages/Metar.tsx`
+- `apps/frontend/src/pages/CotaDeNieve.tsx`
+- `apps/frontend/src/pages/Desastres.tsx`
+- `apps/frontend/src/components/ui/LaundryDayCard.tsx`
+- `apps/frontend/src/components/ui/DangerScale.tsx` ← nuevo
+
+**Tests:** `pnpm run build` → ✓ 0 errores, built in 2.23s
+
+**Next:**
+- Fase 2 — Pills & Badges (shapes): eliminar `borderRadius` hardcodeados en `Niebla.tsx` y otras páginas
+- O Fase 3 — /bolder: `Nubes.tsx` + `Metar.tsx`
+
+---
+
+## 2026-05-29 — Desastres: +3 fenómenos + correcciones factuales + planes docs ✅
+
+**Done:**
+- `Desastres.tsx` — 8 correcciones factuales (Patricia 325→345 km/h, Valdivia, Tornados San Justo 1973, Incendios Corrientes 2022, Inundaciones curiosidad, Huracanes 48h, acción sin "ruta oficial", etiqueta Tsunamis)
+- `Desastres.tsx` — 3 nuevos fenómenos: Ola de calor / Granizo severo / Erupción volcánica (familia, dangerLevel, badge, contenido completo)
+- Header actualizado: "Siete" → "Diez fenómenos"
+- `CATALOG_desastres.md` eliminado → consolidado en `docs/plans/catalog-desastres-expansion.md`
+- `docs/plans/frontend-audit-visual-consistency.md` — plan de auditoría frontend (5 fases, revisado por Opus 4.7)
+
+**Files changed:**
+- `apps/frontend/src/pages/Desastres.tsx` — 8 correcciones + 3 entradas nuevas
+- `docs/plans/catalog-desastres-expansion.md` — fuente de verdad única del catálogo (7 activos + 3 propuestos → ahora 10 activos)
+- `docs/plans/frontend-audit-visual-consistency.md` — plan creado
+- `docs/CATALOG_desastres.md` — eliminado
+
+**Tests:** `pnpm exec tsc --noEmit` → 0 errores
+
+**Commit:** `fd36bdb` · **Push:** ✅ origin/main
+
+**Next:**
+- Ejecutar Fase 1 del plan de auditoría frontend (`index.css` tokens + DangerScale compartido + correcciones de color)
+- Implementar plan GTM/GA4/Sentry (`docs/plans/config-gtm-ga4-sentry.md`)
+
+---
+
 ## 2026-05-29 — Auditoría visual + refinamiento catálogo desastres ✅
 
 **Done:**

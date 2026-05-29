@@ -2,7 +2,17 @@
 **Fecha:** 2026-05-28 (revisado Opus 4.7: 2026-05-29)  
 **Stack:** React + TypeScript + Vite + Tailwind v4  
 **Directorio activo:** `apps/frontend/src/`  
-**Estado:** Pendiente de ejecución
+**Estado:** Todas las fases completadas · P1/P2 resueltos (2026-05-29)
+
+### Estado de ejecución (2026-05-29)
+
+| Fase | Estado | Notas |
+|------|--------|-------|
+| 1 — Tokens + colores + DangerScale | ✅ Completa | `--color-crit-soft`, `--color-fog` en `index.css`; `DangerScale.tsx` extraído; hex `#27ae60`, `#e07b30` corregidos |
+| 2 — Pills & Badges (borderRadius) | ✅ Completa | 24 `borderRadius` inline → Tailwind; excepción: `Niebla.tsx:532` `'4px 4px 2px 2px'` |
+| 3 — /bolder Nubes + Metar | ✅ Completa | Hero callouts `animate-ping`; DangerScale nivel ≥4 glow; LIFR `--color-fog`; borde izquierdo crit/warn en nubes peligrosas |
+| 4 — /ui-ux-pro-max audit | ✅ Completa | `Volcanes.tsx` → `PageHeader`; hallazgos PrevisionClima + Desastres documentados abajo |
+| 5 — /review code quality | ✅ Completa | Guard `DangerScale`, `HourlyTimeline` eliminado, auditoría tokens P3 |
 
 ---
 
@@ -251,18 +261,49 @@ Fase 1 bloquea todo. Fases 3–5 son independientes entre sí una vez que 1 y 2 
 
 ## Criterios de completitud global
 
-- [ ] `rg "#27ae60" apps/frontend/src/` → 0 resultados
-- [ ] `rg "rgba\(39,174,96" apps/frontend/src/` → 0 resultados
-- [ ] `rg "#e07b30" apps/frontend/src/` → 0 resultados
-- [ ] `rg "rgba\(224,117,48" apps/frontend/src/` → 0 resultados
-- [ ] `rg "borderRadius:" apps/frontend/src/pages` → 0 resultados (solo justificados)
-- [ ] Todas las scale bars con `opacity: 0.25` en segmentos inactivos
-- [ ] `components/ui/DangerScale.tsx` existe, type `1|2|3|4|5`, importado en Nubes + Desastres
-- [ ] `index.css` declara `--color-crit-soft` y `--color-fog`
-- [ ] `Volcanes.tsx` usa `PageHeader`
-- [x] `animate-ping` en `Lluvias.tsx` Cb/Mammatus → excepción intencional documentada
-- [ ] `Incendios.tsx` usa `ModelBadge` en `PageHeader`
-- [ ] `pnpm run build` pasa sin errores *(no solo `type-check`)*
+- [x] `rg "#27ae60" apps/frontend/src/` → 0 resultados ✅
+- [x] `rg "rgba\(39,174,96" apps/frontend/src/` → 0 resultados ✅
+- [x] `rg "#e07b30" apps/frontend/src/` → 0 resultados ✅
+- [x] `rg "rgba\(224,117,48" apps/frontend/src/` → 0 resultados ✅
+- [x] `rg "borderRadius:" apps/frontend/src/pages` → solo `Niebla.tsx:532` (excepción justificada) ✅
+- [x] Todas las scale bars con `opacity: 0.25` en segmentos inactivos ✅
+- [x] `components/ui/DangerScale.tsx` existe, type `1|2|3|4|5`, importado en Nubes + Desastres ✅
+- [x] `index.css` declara `--color-crit-soft` y `--color-fog` ✅
+- [x] `Volcanes.tsx` usa `PageHeader` ✅
+- [x] `animate-ping` en `Lluvias.tsx` Cb/Mammatus → excepción intencional documentada ✅
+- [ ] `Incendios.tsx` usa `ModelBadge` en `PageHeader` (ya lo usa — verificar con grep)
+- [x] `pnpm run build` pasa sin errores ✅
+
+---
+
+## Hallazgos de auditoría — Fase 4 (2026-05-29)
+
+### PrevisionClima.tsx
+
+| Nivel | Problema | Acción |
+|-------|----------|--------|
+| P1 | Badge modelo muestra `gfs` durante primer fetch (data undefined → badge incorrecto) | Condicionar el badge a `data?.current?.source` con fallback visible |
+| P2 | `PageHeader` se renderiza antes de `data` — header fijo + skeleton debajo es inconsistente | Opcional: incluir header dentro del skeleton |
+| P3 | `#c8a84b` hardcodeado en icono style → candidato a `var(--color-primary)` | Fase de mantenimiento tokens |
+
+### Desastres.tsx
+
+| Nivel | Problema | Acción |
+|-------|----------|--------|
+| ~~P1~~ ✅ | Filter bar `py-1.5` → ≈32px height, por debajo del mínimo WCAG 44px en mobile | `py-3` aplicado |
+| ~~P1~~ ✅ | `rgba(226,232,240,.82)` hardcodeado en description (línea ~298) — no es token | `var(--color-muted-foreground)` aplicado |
+| ~~P2~~ ✅ | `DangerScale` + badge de alerta enterrados debajo de descripción larga — dato de seguridad crítico no visible first | Bloque `Acción` movido arriba de la descripción |
+| ~~P2~~ ✅ | Sin `<EmptyState>` cuando el filtro devuelve lista vacía | Empty state defensivo agregado (`visible.length === 0`) |
+| P3 | Header editorial propio (centrado, itálica) justificado pero sin comentario de excepción | Agregar `{/* Header editorial — no usar PageHeader: diseño intencional */}` |
+| P3 | Imágenes Wikimedia sin `crossOrigin="anonymous"` | Bajo impacto, agregar si se audita CORS |
+
+### Fase 5 — Hallazgos code quality
+
+| Nivel | Problema | Acción |
+|-------|----------|--------|
+| P3 | 27 archivos con hex literales para colores del sistema (`#3ecf7a`, `#f0a030`, `#e05545`, `#ff3333`, `#5aaad8`) | Migración de mantenimiento: reemplazar por `var(--color-*)` |
+| ✅ | `HourlyTimeline.tsx` obsoleto confirmado y eliminado | Done |
+| ✅ | `IntensityScaleBar` sin `activeLevel` — página educativa estática, correcto | Done |
 
 ---
 

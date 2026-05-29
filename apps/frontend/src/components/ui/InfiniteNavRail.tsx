@@ -39,7 +39,6 @@ interface MarqueeStripProps {
 
 const PILL_BASE: CSSProperties = {
   padding: '8px 13px',
-  borderRadius: '9999px',
   fontSize: '0.72rem',
   minHeight: '38px',
   display: 'inline-flex',
@@ -265,6 +264,7 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
             role="listitem"
             aria-label={item.label}
             draggable={false}
+            className="rounded-full"
             style={({ isActive }) => pillStyle(item.color, isActive)}
           >
             <span aria-hidden="true">{item.emoji}</span>

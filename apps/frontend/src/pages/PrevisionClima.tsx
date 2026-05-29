@@ -35,7 +35,7 @@ export function PrevisionClima({ location }: Props) {
         icon={<CloudSun className="size-8" style={{ color: '#c8a84b' }} />}
         title="Previsión del clima"
         subtitle={location.label}
-        modelBadge={<ModelBadge model={badgeModel} variant="header" />}
+        modelBadge={data ? <ModelBadge model={badgeModel} variant="header" /> : undefined}
       />
 
       {isLoading && <PageSkeleton />}

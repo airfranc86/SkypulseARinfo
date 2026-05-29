@@ -189,6 +189,7 @@ function SourcePill({ status, source, stationName, distanceKm }: SourcePillProps
   return (
     <span
       title={isMetar ? 'Visibilidad medida en aeropuerto más cercano (dato real)' : 'Estimación numérica Open-Meteo'}
+      className="rounded-full"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -200,17 +201,16 @@ function SourcePill({ status, source, stationName, distanceKm }: SourcePillProps
           ? 'rgba(255,255,255,.06)'
           : `${color}14`,
         border: `1px solid ${status === 'loading' ? 'var(--color-border)' : `${color}35`}`,
-        borderRadius: '99px',
         padding: '2px 9px 2px 6px',
         whiteSpace: 'nowrap',
       }}
     >
       <span
         aria-hidden="true"
+        className="rounded-full"
         style={{
           width: '6px',
           height: '6px',
-          borderRadius: '50%',
           background: color,
           display: 'inline-block',
           flexShrink: 0,
@@ -225,10 +225,10 @@ function FogCard({ fog }: { fog: FogType }) {
   const d = DANGER_COLORS[fog.danger]
   return (
     <article
+      className="rounded-2xl"
       style={{
         background: 'var(--color-card)',
         border: '1px solid var(--color-border)',
-        borderRadius: '16px',
         padding: '20px',
         display: 'flex',
         flexDirection: 'column',
@@ -238,10 +238,10 @@ function FogCard({ fog }: { fog: FogType }) {
       {/* Icon + title row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         <div
+          className="rounded-[10px]"
           style={{
             width: '40px',
             height: '40px',
-            borderRadius: '10px',
             background: `${d.color}12`,
             border: `1px solid ${d.color}30`,
             display: 'flex',
@@ -276,6 +276,7 @@ function FogCard({ fog }: { fog: FogType }) {
         </div>
         {/* Danger badge */}
         <span
+          className="rounded-md"
           style={{
             flexShrink: 0,
             fontSize: '10px',
@@ -283,7 +284,6 @@ function FogCard({ fog }: { fog: FogType }) {
             color: d.color,
             background: d.bg,
             border: `1px solid ${d.border}`,
-            borderRadius: '6px',
             padding: '3px 7px',
             whiteSpace: 'nowrap',
           }}
@@ -307,24 +307,24 @@ function FogCard({ fog }: { fog: FogType }) {
       {/* When / Where pills */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
         <span
+          className="rounded-[20px]"
           style={{
             fontSize: '11px',
             color: 'var(--color-muted-foreground)',
             background: 'rgba(255,255,255,.04)',
             border: '1px solid var(--color-border)',
-            borderRadius: '20px',
             padding: '3px 9px',
           }}
         >
           🗓️ {fog.when}
         </span>
         <span
+          className="rounded-[20px]"
           style={{
             fontSize: '11px',
             color: 'var(--color-muted-foreground)',
             background: 'rgba(255,255,255,.04)',
             border: '1px solid var(--color-border)',
-            borderRadius: '20px',
             padding: '3px 9px',
           }}
         >
@@ -334,12 +334,12 @@ function FogCard({ fog }: { fog: FogType }) {
 
       {/* Tip */}
       <div
+        className="rounded-[10px]"
         style={{
           fontSize: '12px',
           color: 'var(--color-foreground)',
           background: 'rgba(255,255,255,.03)',
           border: '1px solid var(--color-border)',
-          borderRadius: '10px',
           padding: '10px 12px',
         }}
       >
@@ -379,13 +379,13 @@ function VisibilityMeter({
           {kmLabel}
         </span>
         <span
+          className="rounded-lg"
           style={{
             fontSize: '13px',
             fontWeight: 600,
             color: fogColor,
             background: `${fogColor}18`,
             border: `1px solid ${fogColor}40`,
-            borderRadius: '8px',
             padding: '3px 9px',
           }}
         >
@@ -395,11 +395,11 @@ function VisibilityMeter({
 
       {/* Bar track */}
       <div
+        className="rounded-full"
         style={{
           position: 'relative',
           height: '8px',
           background: 'rgba(255,255,255,.07)',
-          borderRadius: '99px',
           overflow: 'hidden',
         }}
         role="meter"
@@ -409,6 +409,7 @@ function VisibilityMeter({
         aria-label={`Visibilidad actual: ${kmLabel}`}
       >
         <div
+          className="rounded-full"
           style={{
             position: 'absolute',
             left: 0,
@@ -416,7 +417,6 @@ function VisibilityMeter({
             height: '100%',
             width: `${fraction * 100}%`,
             background: fogColor,
-            borderRadius: '99px',
             transition: 'width 0.8s ease',
           }}
         />
@@ -487,13 +487,13 @@ function VisibilityTimeline({
                 ? 'Estimado a partir de humedad, rocío y viento (Open-Meteo)'
                 : 'Pronóstico numérico Open-Meteo'
             }
+            className="rounded-[20px]"
             style={{
               fontSize: '10px',
               fontWeight: 500,
               color: hourlySource === 'taf' ? '#3ecf7a' : 'var(--color-muted-foreground)',
               background: hourlySource === 'taf' ? 'rgba(62,207,122,.08)' : 'rgba(255,255,255,.04)',
               border: `1px solid ${hourlySource === 'taf' ? 'rgba(62,207,122,.3)' : 'var(--color-border)'}`,
-              borderRadius: '20px',
               padding: '2px 8px',
               whiteSpace: 'nowrap',
             }}
@@ -588,10 +588,10 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
 
   return (
     <section
+      className="rounded-[20px]"
       style={{
         background: 'var(--color-card)',
         border: '1px solid var(--color-border)',
-        borderRadius: '20px',
         padding: '24px',
         display: 'flex',
         flexDirection: 'column',
@@ -622,9 +622,9 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
 
       {isLoading && (
         <div
+          className="rounded-[10px]"
           style={{
             height: '80px',
-            borderRadius: '10px',
             background: 'rgba(255,255,255,.04)',
             animation: 'pulse 1.5s ease-in-out infinite',
           }}
@@ -664,9 +664,9 @@ function PageSkeleton() {
       {[...Array(3)].map((_, i) => (
         <div
           key={i}
+          className="rounded-2xl"
           style={{
             height: '140px',
-            borderRadius: '16px',
             background: 'rgba(255,255,255,.04)',
             animation: 'pulse 1.5s ease-in-out infinite',
           }}
@@ -700,10 +700,10 @@ export function Niebla({ location }: Props) {
 
         {/* ── Visibility scale reference ───────────────────────────────── */}
         <section
+          className="rounded-2xl"
           style={{
             background: 'var(--color-card)',
             border: '1px solid var(--color-border)',
-            borderRadius: '16px',
             padding: '20px',
           }}
         >
@@ -726,10 +726,10 @@ export function Niebla({ location }: Props) {
               <div
                 key={label}
                 title={label}
+                className="rounded-full"
                 style={{
                   flex: 1,
                   height: '10px',
-                  borderRadius: '99px',
                   background: color,
                 }}
               />

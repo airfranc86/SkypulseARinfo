@@ -66,8 +66,9 @@ const columns: Column<EarthquakeEvent>[] = [
       return (
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span
+            className="rounded-full"
             style={{
-              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              width: 7, height: 7, flexShrink: 0,
               background: dotColor,
               boxShadow: glow ? `0 0 7px 2px ${dotColor}99` : undefined,
             }}

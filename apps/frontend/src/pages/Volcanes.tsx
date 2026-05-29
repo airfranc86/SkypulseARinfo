@@ -5,6 +5,7 @@ import { FadeContent } from '@/components/animated/FadeContent'
 import { ElectricBorder } from '@/components/animated/ElectricBorder'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { PageHeader } from '@/components/ui/PageHeader'
 
 // ---------------------------------------------------------------------------
 // Alert level config
@@ -152,31 +153,13 @@ export function Volcanes() {
   return (
     <div>
       {/* Header */}
-      <header className="mb-8 flex items-start gap-4">
-        <div
-          className="shrink-0 size-16 rounded-2xl flex items-center justify-center"
-          style={{
-            background: 'linear-gradient(135deg, rgba(224,85,69,0.22) 0%, rgba(224,85,69,0.06) 100%)',
-            border: '1px solid rgba(224,85,69,0.2)',
-          }}
-        >
-          <Mountain className="size-8" style={{ color: '#e05545' }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h1
-            className="text-2xl font-semibold leading-tight mb-1"
-            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
-          >
-            Volcanes activos en Argentina
-          </h1>
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
-              10 volcanes · OAVV-SEGEMAR
-            </p>
-            <ModelBadge model="segemar" variant="header" />
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        icon={<Mountain className="size-8" style={{ color: '#e05545' }} />}
+        title="Volcanes activos en Argentina"
+        subtitle="10 volcanes · OAVV-SEGEMAR"
+        accentColor="#e05545"
+        modelBadge={<ModelBadge model="segemar" variant="header" />}
+      />
 
       {/* Scale legend */}
       <div className="flex gap-3 flex-wrap mb-6">

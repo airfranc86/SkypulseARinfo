@@ -78,7 +78,7 @@ function SnowLevelBar({ avg }: { avg: number }) {
             className="flex-1 rounded-full transition-opacity"
             style={{
               background: s.color,
-              opacity: s.label === currentLabel ? 1 : 0.22,
+              opacity: s.label === currentLabel ? 1 : 0.25,
               outline: s.label === currentLabel ? `2px solid ${s.color}` : undefined,
               outlineOffset: s.label === currentLabel ? '2px' : undefined,
             }}

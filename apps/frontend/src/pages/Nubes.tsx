@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
+import { type DangerLevel, DangerScale } from '../components/ui/DangerScale'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -9,8 +10,6 @@ import { Dither } from '@/components/animated/Dither'
 type Family = 'all' | 'alta' | 'media' | 'baja' | 'vertical' | 'especial' | 'aero'
 type BadgeVariant = 'clear' | 'watch' | 'warn' | 'crit' | 'neutral' | 'info'
 type PillVariant = 'danger' | 'caution' | 'note'
-type DangerLevel = 1 | 2 | 3 | 4 | 5
-
 interface CloudItem {
   id: string
   family: Exclude<Family, 'all' | 'aero'>
@@ -390,7 +389,7 @@ const AERO: AeroItem[] = [
 // ---------------------------------------------------------------------------
 
 const BADGE_STYLES: Record<BadgeVariant, { color: string; bg: string; border: string }> = {
-  clear:   { color: '#3ecf7a', bg: 'rgba(39,174,96,.1)',   border: 'rgba(39,174,96,.35)'  },
+  clear:   { color: '#3ecf7a', bg: 'rgba(62,207,122,.1)',  border: 'rgba(62,207,122,.35)' },
   watch:   { color: '#f0a030', bg: 'rgba(212,135,15,.1)',  border: 'rgba(212,135,15,.35)' },
   warn:    { color: '#e05545', bg: 'rgba(192,57,43,.1)',   border: 'rgba(192,57,43,.35)'  },
   crit:    { color: '#ff6b6b', bg: 'rgba(255,0,0,.09)',    border: 'rgba(255,0,0,.3)'     },
@@ -404,32 +403,9 @@ const PILL_STYLES: Record<PillVariant, { color: string; bg: string; border: stri
   note:    { color: '#5aaad8', bg: 'rgba(43,143,212,.06)', border: 'rgba(43,143,212,.3)' },
 }
 
-const DANGER_COLORS: Record<DangerLevel, string> = {
-  1: '#27ae60',
-  2: '#f0a030',
-  3: '#f0a030',
-  4: '#e05545',
-  5: '#ff3333',
-}
-
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function DangerScale({ level }: { level: DangerLevel }) {
-  const activeColor = DANGER_COLORS[level]
-  return (
-    <div className="flex gap-[3px] items-center mt-0.5">
-      {([1, 2, 3, 4, 5] as const).map(i => (
-        <span
-          key={i}
-          className="flex-1 h-1.5 rounded-sm"
-          style={{ background: i <= level ? activeColor : 'var(--color-border)' }}
-        />
-      ))}
-    </div>
-  )
-}
 
 function StatusBadge({ variant, label }: { variant: BadgeVariant; label: string }) {
   const s = BADGE_STYLES[variant]
@@ -450,7 +426,14 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
   return (
     <article
       className="border-b py-8 sm:py-10"
-      style={{ borderColor: 'var(--color-border)' }}
+      style={{
+        borderColor: 'var(--color-border)',
+        ...(cloud.dangerLevel >= 5
+          ? { borderLeft: '3px solid var(--color-crit)', paddingLeft: '12px' }
+          : cloud.dangerLevel === 4
+          ? { borderLeft: '3px solid var(--color-warn)', paddingLeft: '12px' }
+          : {}),
+      }}
     >
       <div className="flex flex-col sm:flex-row gap-0">
         {/* Image */}
@@ -685,7 +668,7 @@ function QuickIdGuide() {
                 ],
               },
               {
-                color: 'rgba(39,174,96,.4)',
+                color: 'rgba(62,207,122,.4)',
                 q: '4. ¿Tiene forma de coliflor o torre?',
                 answers: [
                   { hint: '→ Blanca, pequeña, base plana', name: 'Cúmulo (buen tiempo)', nameColor: '#3ecf7a' },
@@ -746,7 +729,7 @@ function AltitudeDiagram() {
         <rect x="210" y="132" width="52" height="40" rx="4" fill="rgba(96,112,128,.12)" stroke="rgba(96,112,128,.35)" strokeWidth="1"/>
         <text x="236" y="156" fill="#90aabb" fontSize="9" textAnchor="middle" fontWeight="500">St · Sc · Ns</text>
         <text x="236" y="167" fill="#8a9ab0" fontSize="8" textAnchor="middle">Bajas</text>
-        <rect x="295" y="100" width="44" height="74" rx="4" fill="rgba(39,174,96,.1)" stroke="rgba(39,174,96,.3)" strokeWidth="1"/>
+        <rect x="295" y="100" width="44" height="74" rx="4" fill="rgba(62,207,122,.1)" stroke="rgba(62,207,122,.3)" strokeWidth="1"/>
         <text x="317" y="142" fill="#3ecf7a" fontSize="9" textAnchor="middle" fontWeight="500">Cu</text>
         <text x="317" y="167" fill="#8a9ab0" fontSize="8" textAnchor="middle">~3 km</text>
         <rect x="355" y="22" width="44" height="152" rx="4" fill="rgba(255,0,0,.08)" stroke="rgba(255,80,80,.35)" strokeWidth="1"/>
@@ -801,7 +784,6 @@ function FilterBar({
   function pillStyle(isActive: boolean): React.CSSProperties {
     return {
       padding: '6px 14px',
-      borderRadius: '9999px',
       fontSize: '0.72rem',
       fontWeight: isActive ? 600 : 400,
       border: `1px solid ${isActive ? '#c8a84b' : 'rgba(200,168,75,.25)'}`,
@@ -821,6 +803,7 @@ function FilterBar({
       style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
     >
       <button
+        className="rounded-full"
         style={pillStyle(active === 'all')}
         onClick={() => { onChange('all'); setNubesLabel('☁ Nubes ▾') }}
       >
@@ -830,6 +813,7 @@ function FilterBar({
       {/* Nubes dropdown */}
       <div ref={ddRef} className="relative">
         <button
+          className="rounded-full"
           style={pillStyle(isNubesActive)}
           onClick={() => setDdOpen(v => !v)}
         >
@@ -861,6 +845,7 @@ function FilterBar({
       </div>
 
       <button
+        className="rounded-full"
         style={pillStyle(active === 'aero')}
         onClick={() => { onChange('aero'); setNubesLabel('☁ Nubes ▾') }}
       >
@@ -954,6 +939,26 @@ export function Nubes() {
         <div className="mt-8">
           <FilterBar active={filter} onChange={setFilter} />
         </div>
+
+        {/* Hero callout — nubes de peligro extremo */}
+        {(filteredClouds.some(c => c.dangerLevel === 5) ||
+          (showAero && AERO.some(a => a.dangerLevel === 5))) && (
+          <div
+            className="flex items-center gap-3 rounded-xl px-5 py-4 mt-6"
+            style={{
+              background: 'rgba(255,51,51,.06)',
+              border: '1px solid rgba(255,51,51,.25)',
+            }}
+          >
+            <span className="relative flex size-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--color-crit)' }} />
+              <span className="relative inline-flex size-2 rounded-full" style={{ background: 'var(--color-crit)' }} />
+            </span>
+            <span className="text-[.8rem] font-medium" style={{ color: 'var(--color-crit-soft)' }}>
+              Esta vista incluye nubes de peligro extremo — revisá los indicadores antes de volar o salir.
+            </span>
+          </div>
+        )}
 
         {/* Cloud sections */}
         {cloudFamiliesVisible.map(family => {

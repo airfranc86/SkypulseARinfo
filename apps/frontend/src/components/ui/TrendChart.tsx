@@ -63,16 +63,16 @@ export function TrendChart({ data, unit = 'm', title }: TrendChartProps): ReactE
               </span>
               <div className="flex-1">
                 <div
+                  className="rounded-full"
                   style={{
                     height: '8px',
-                    borderRadius: '9999px',
                     background: 'var(--color-muted)',
                   }}
                 >
                   <div
+                    className="rounded-full"
                     style={{
                       height: '8px',
-                      borderRadius: '9999px',
                       background: barColor,
                       width: `${pct}%`,
                       transition: 'all 0.5s ease',

@@ -93,6 +93,7 @@ export function MagnitudeScaleBar({ activeMagnitude }: MagnitudeScaleBarProps) {
         {activeIdx >= 0 && (
           <div
             aria-label={`Magnitud activa: ${LEVELS[activeIdx].label}`}
+            className="rounded-full"
             style={{
               position: 'absolute',
               left: `${(activeIdx / (n - 1)) * 100}%`,
@@ -100,7 +101,6 @@ export function MagnitudeScaleBar({ activeMagnitude }: MagnitudeScaleBarProps) {
               transform: 'translateX(-50%)',
               width: '12px',
               height: '12px',
-              borderRadius: '50%',
               background: LEVELS[activeIdx].color,
               boxShadow: `0 0 8px 2px ${LEVELS[activeIdx].color}88`,
               border: '2px solid var(--color-background)',

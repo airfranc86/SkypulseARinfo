@@ -37,6 +37,8 @@
   --color-warn:              #e05545;
   --color-crit:              #ff3333;
   --color-info:              #5aaad8;
+  --color-crit-soft:         #ff6b6b;
+  --color-fog:               #cc66ff;
 
   /* Destructive */
   --color-destructive:       #e05545;

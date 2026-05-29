@@ -192,14 +192,14 @@ function ConditionChip({
           </span>
         </div>
         {critical && (
-          <span className="text-[.5rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: '#e05545', background: 'rgba(224,85,69,0.12)' }}>
+          <span className="text-[.5rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: 'var(--color-warn)', background: 'rgba(224,85,69,0.12)' }}>
             ⚠ crítico
           </span>
         )}
       </div>
       <span
         className="text-base font-semibold"
-        style={{ color: critical ? '#e05545' : 'var(--color-foreground)' }}
+        style={{ color: critical ? 'var(--color-warn)' : 'var(--color-foreground)' }}
       >
         {display}
       </span>
@@ -471,7 +471,7 @@ export function Incendios({ location }: Props) {
                 <span
                   className="text-[.6rem] font-semibold uppercase tracking-wide px-2.5 py-1 rounded"
                   style={{
-                    color: data.is_estimated ? '#f0a030' : '#3ecf7a',
+                    color: data.is_estimated ? 'var(--color-watch)' : 'var(--color-safe)',
                     background: data.is_estimated ? 'rgba(240,160,48,.08)' : 'rgba(62,207,122,.08)',
                     border: `1px solid ${data.is_estimated ? 'rgba(240,160,48,.25)' : 'rgba(62,207,122,.25)'}`,
                   }}

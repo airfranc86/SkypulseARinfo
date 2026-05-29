@@ -1,5 +1,5 @@
 # SkyPulse — Catálogo de Desastres Naturales Mundiales
-**Revisado:** 2026-05-29 · **Estado del catálogo:** 7 activos · 3 propuestos  
+**Revisado:** 2026-05-29 (implementación completa) · **Estado del catálogo:** 10 activos · 0 propuestos  
 **Fuente de verdad única** — reemplaza `CATALOG_desastres.md`
 
 ---
@@ -272,7 +272,7 @@ Seguimiento oficial:
 
 ---
 
-## Fenómenos propuestos *(pendiente aprobación — no implementados aún)*
+## Fenómenos implementados en la segunda iteración *(completado 2026-05-29)*
 
 ### 8. Ola de calor
 
@@ -397,16 +397,16 @@ Seguimiento oficial:
 | 5 | Incendios | Los que no tienen freno | firms.modaps.eosdis.nasa.gov | ✅ activo |
 | 6 | Tsunamis | Los de las profundidades | tsunami.gov | ✅ activo |
 | 7 | Micro tsunamis | Los invisibles | tidesandcurrents.noaa.gov | ✅ activo |
-| 8 | Ola de calor | Las silenciosas | smn.gob.ar | 🟡 propuesto |
-| 9 | Granizo severo | Los proyectiles del cielo | smn.gob.ar | 🟡 propuesto |
-| 10 | Erupción volcánica | Las que reescriben el paisaje | volcano.si.edu | 🟡 propuesto |
+| 8 | Ola de calor | Las silenciosas | smn.gob.ar | ✅ activo |
+| 9 | Granizo severo | Los proyectiles del cielo | smn.gob.ar | ✅ activo |
+| 10 | Erupción volcánica | Las que reescriben el paisaje | volcano.si.edu | ✅ activo |
 
 ---
 
-## Checklist de implementación *(cuando se aprueben los propuestos)*
+## Checklist de implementación *(completado 2026-05-29)*
 
-- [ ] Tarjetas 8, 9, 10 agregadas a este archivo con estado `✅ activo`
-- [ ] `Desastres.tsx` — array `DISASTERS` actualizado con los 3 nuevos
-- [ ] `DangerScale` asignado con nivel correcto para cada fenómeno nuevo
-- [ ] Prompts de imagen documentados y probados
-- [ ] `Desastres.tsx` — tabla de resumen actualizada
+- [x] Tarjetas 8, 9, 10 agregadas a `Desastres.tsx` con estado `✅ activo`
+- [x] `Desastres.tsx` — array `DISASTERS` actualizado con los 3 nuevos
+- [x] `DangerScale` asignado con nivel correcto para cada fenómeno nuevo
+- [x] Prompts de imagen documentados y probados
+- [x] Header `Desastres.tsx` actualizado: "Siete" → "Diez fenómenos"
