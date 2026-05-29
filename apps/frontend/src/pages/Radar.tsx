@@ -126,7 +126,7 @@ export function Radar() {
                 { accent: '#4ade80', title: 'Radar meteorológico', body: <>Emite pulsos de microondas y mide la energía que <strong style={{ color: 'var(--color-foreground)' }}>rebotan las gotas de lluvia</strong> al recibirse de vuelta. Cuanto más intensa la reflexión, más agua hay en el aire. Ve lo que está pasando <em>ahora mismo</em>.</> },
                 { accent: '#7dd3fc', title: 'Satélite meteorológico', body: <>Fotografía las nubes desde 36 000 km de altura. En modo <strong style={{ color: 'var(--color-foreground)' }}>infrarrojo (IR)</strong> mide la temperatura de la cima de las nubes: las más frías y brillantes son las más altas — y suelen ser las más peligrosas.</> },
               ].map(({ accent, title, body }) => (
-                <div key={title} className="rounded-xl p-5" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderLeftColor: accent, borderLeftWidth: '3px' }}>
+                <div key={title} className="rounded-xl p-5" style={{ background: `${accent}08`, border: `1px solid ${accent}25` }}>
                   <p className="text-[.63rem] font-medium tracking-widest uppercase mb-2" style={{ color: accent }}>{title}</p>
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>{body}</p>
                 </div>
@@ -216,7 +216,7 @@ export function Radar() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {REC_CARDS.map(({ color, emoji, title, desc }) => (
-                <div key={title} className="rounded-xl p-5 text-center" style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderTopColor: color, borderTopWidth: '3px' }}>
+                <div key={title} className="rounded-xl p-5 text-center" style={{ background: `${color}08`, border: `1px solid ${color}25` }}>
                   <div className="text-3xl mb-3">{emoji}</div>
                   <p className="text-[.72rem] font-medium tracking-wide uppercase mb-2" style={{ color }}>{title}</p>
                   <p className="text-[.75rem] leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>{desc}</p>

@@ -9,6 +9,15 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const SNOW_SCALE = [
+  { label: 'Excelente', color: '#3ecf7a' },
+  { label: 'Buena',     color: '#5aaad8' },
+  { label: 'Moderada',  color: '#f0a030' },
+  { label: 'Baja',      color: '#e05545' },
+] as const
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function snowStatus(avg: number): { emoji: string; label: string; msg: string; color: string; bg: string } {
@@ -46,6 +55,55 @@ function precisionLabel(
   return { spread, label: 'Estimación variable', color: '#e05545' }
 }
 
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SnowLevelBar({ avg }: { avg: number }) {
+  const currentLabel =
+    avg >= 2500 ? 'Excelente' :
+    avg >= 1800 ? 'Buena' :
+    avg >= 1000 ? 'Moderada' : 'Baja'
+
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+    >
+      <p className="text-[.55rem] uppercase tracking-widest mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
+        Nivel de cota de nieve
+      </p>
+      <div className="flex gap-[3px] h-[10px]">
+        {SNOW_SCALE.map((s) => (
+          <div
+            key={s.label}
+            className="flex-1 rounded-full transition-opacity"
+            style={{
+              background: s.color,
+              opacity: s.label === currentLabel ? 1 : 0.22,
+              outline: s.label === currentLabel ? `2px solid ${s.color}` : undefined,
+              outlineOffset: s.label === currentLabel ? '2px' : undefined,
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex mt-2.5">
+        {SNOW_SCALE.map((s) => (
+          <div key={s.label} className="flex-1 text-center">
+            <span
+              className="text-[.48rem] leading-tight block"
+              style={{
+                color: s.label === currentLabel ? s.color : 'var(--color-muted-foreground)',
+                fontWeight: s.label === currentLabel ? 700 : undefined,
+              }}
+            >
+              {s.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 interface Props { location: LocationState | null }
 
 export function CotaDeNieve({ location }: Props) {
@@ -71,12 +129,30 @@ export function CotaDeNieve({ location }: Props) {
             {/* Semáforo — estado de la cota */}
             {(() => {
               const status = snowStatus(data.average_m)
+              const isLowCota = data.average_m < 1000
               return (
                 <div
-                  className="rounded-xl px-4 py-3 flex items-start gap-3"
-                  style={{ background: status.bg, border: `1px solid ${status.color}28` }}
+                  className="rounded-xl px-5 py-4 flex items-start gap-4"
+                  style={{
+                    background: status.bg,
+                    border: `${isLowCota ? '1.5px' : '1px'} solid ${status.color}${isLowCota ? '45' : '28'}`,
+                    boxShadow: isLowCota ? `0 0 36px ${status.color}10` : undefined,
+                  }}
                 >
-                  <span className="text-xl mt-0.5">{status.emoji}</span>
+                  {isLowCota ? (
+                    <div className="relative flex-shrink-0 mt-1">
+                      <span
+                        className="absolute inset-0 rounded-full animate-ping opacity-50"
+                        style={{ background: status.color }}
+                      />
+                      <span
+                        className="relative block w-3 h-3 rounded-full"
+                        style={{ background: status.color }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-xl mt-0.5">{status.emoji}</span>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold" style={{ color: status.color }}>
                       {status.label}
@@ -85,7 +161,6 @@ export function CotaDeNieve({ location }: Props) {
                       {status.msg}
                     </p>
                   </div>
-                  {/* Cota promedio prominente */}
                   <div className="shrink-0 text-right">
                     <p
                       className="text-2xl font-bold leading-none"
@@ -100,6 +175,9 @@ export function CotaDeNieve({ location }: Props) {
                 </div>
               )
             })()}
+
+            {/* Snow level scale bar */}
+            <SnowLevelBar avg={data.average_m} />
 
             {/* Gráfico de los 3 métodos */}
             <TrendChart

@@ -48,17 +48,44 @@ const INTENSITY_COLORS: Record<IntensityLevel, string> = {
   4: '#ff3333',
 }
 
-const INTENSITY_LEGEND = [
-  { color: 'var(--color-border)', label: 'Sin lluvia' },
-  { color: '#5aaad8', label: 'Llovizna' },
-  { color: '#f0a030', label: 'Moderada' },
-  { color: '#e05545', label: 'Intensa' },
-  { color: '#ff3333', label: 'Severa' },
-]
+const INTENSITY_SCALE = [
+  { label: 'Sin lluvia', color: '#2d3748' },
+  { label: 'Llovizna',   color: '#5aaad8' },
+  { label: 'Moderada',   color: '#f0a030' },
+  { label: 'Intensa',    color: '#e05545' },
+  { label: 'Severa',     color: '#ff3333' },
+] as const
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function IntensityScaleBar() {
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+    >
+      <p className="text-[.55rem] uppercase tracking-widest mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
+        Escala de intensidad
+      </p>
+      <div className="flex gap-[3px] h-[10px]">
+        {INTENSITY_SCALE.map((item) => (
+          <div key={item.label} className="flex-1 rounded-full" style={{ background: item.color }} />
+        ))}
+      </div>
+      <div className="flex mt-2.5">
+        {INTENSITY_SCALE.map((item) => (
+          <div key={item.label} className="flex-1 text-center">
+            <span className="text-[.48rem] leading-tight block" style={{ color: 'var(--color-muted-foreground)' }}>
+              {item.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function Badge({ variant, label }: { variant: BadgeVariant; label: string }) {
   const s = BADGE_STYLES[variant]
@@ -120,8 +147,30 @@ export function Lluvias() {
           </p>
         </div>
 
+        {/* Critical cloud callout */}
+        <div
+          className="rounded-xl px-5 py-4 flex items-start gap-4 mb-6"
+          style={{ background: 'rgba(255,51,51,0.06)', border: '1.5px solid rgba(255,51,51,0.28)' }}
+        >
+          <div className="relative flex-shrink-0 mt-1">
+            <span className="absolute inset-0 rounded-full animate-ping opacity-50" style={{ background: '#ff3333' }} />
+            <span className="relative block w-3 h-3 rounded-full" style={{ background: '#ff3333' }} />
+          </div>
+          <div>
+            <p className="text-sm font-bold leading-tight" style={{ color: '#ff3333' }}>
+              Cumulonimbo y Mammatus — peligro severo
+            </p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
+              Son las únicas nubes que producen tormenta severa, granizo y rayos. Si las ves crecer en torres, buscá refugio antes de que lleguen.
+            </p>
+          </div>
+        </div>
+
+        {/* Escala de referencia */}
+        <IntensityScaleBar />
+
         {/* Table */}
-        <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="overflow-x-auto rounded-xl border mt-6" style={{ borderColor: 'var(--color-border)' }}>
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--color-card)' }}>
@@ -141,7 +190,10 @@ export function Lluvias() {
                 <tr
                   key={row.name}
                   className="border-t transition-colors hover:bg-white/[.02]"
-                  style={{ borderColor: 'var(--color-border)' }}
+                  style={{
+                    borderColor: 'var(--color-border)',
+                    background: row.badge === 'crit' ? 'rgba(255,51,51,0.04)' : undefined,
+                  }}
                 >
                   <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-foreground)' }}>
                     {row.name}
@@ -165,20 +217,6 @@ export function Lluvias() {
               ))}
             </tbody>
           </table>
-        </div>
-
-        {/* Intensity legend */}
-        <div className="flex flex-wrap gap-4 mt-3 px-1">
-          {INTENSITY_LEGEND.map(({ color, label }) => (
-            <span key={label} className="flex items-center gap-1.5 text-[.67rem]" style={{ color: 'var(--color-muted-foreground)' }}>
-              <span className="flex gap-0.5">
-                {[0, 1, 2, 3].map(i => (
-                  <span key={i} className="w-2 h-2 rounded-full inline-block" style={{ background: color }} />
-                ))}
-              </span>
-              {label}
-            </span>
-          ))}
         </div>
 
         {/* Educational cards */}
@@ -217,10 +255,8 @@ export function Lluvias() {
                 key={title}
                 className="rounded-xl p-5"
                 style={{
-                  background: 'var(--color-card)',
-                  border: `1px solid var(--color-border)`,
-                  borderLeftColor: accent,
-                  borderLeftWidth: '3px',
+                  background: `${accent}0a`,
+                  border: `1px solid ${accent}30`,
                 }}
               >
                 <p className="text-[.63rem] font-medium tracking-widest uppercase mb-2" style={{ color: accent }}>
