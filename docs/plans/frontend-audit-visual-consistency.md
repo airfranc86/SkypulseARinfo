@@ -2,7 +2,7 @@
 **Fecha:** 2026-05-28 (revisado Opus 4.7: 2026-05-29)  
 **Stack:** React + TypeScript + Vite + Tailwind v4  
 **Directorio activo:** `apps/frontend/src/`  
-**Estado:** Todas las fases completadas · P1/P2 resueltos (2026-05-29)
+**Estado:** ✅ CERRADO — Todos los criterios cumplidos (2026-05-29)
 
 ### Estado de ejecución (2026-05-29)
 
@@ -34,9 +34,9 @@ El frontend tiene 14 páginas y ~30 componentes. Se han aplicado tratamientos `/
 | Amber | `#f0a030` | `--color-watch` | Precaución / moderado |
 | Rojo estándar | `#e05545` | `--color-warn` / `--color-destructive` | Alerta / alto riesgo |
 | Rojo crítico | `#ff3333` | `--color-crit` | Extremo |
-| Rojo crit suave | `#ff6b6b` | `--color-crit-soft` *(agregar)* | Texto crítico sobre dark |
+| Rojo crit suave | `#ff6b6b` | `--color-crit-soft` | Texto crítico sobre dark |
 | Muted | `#90aabb` | `--color-foreground-muted` | Neutral / sin dato |
-| **Violeta** | `#cc66ff` | `--color-fog` *(agregar)* | LIFR (Metar) + Niebla |
+| **Violeta** | `#cc66ff` | `--color-fog` | LIFR (Metar) + Niebla |
 
 > `#cc66ff` es una excepción semántica deliberada — baja visibilidad en aviación y fenómenos de niebla. NO usar para otro propósito.
 
@@ -319,3 +319,20 @@ Fase 1 bloquea todo. Fases 3–5 son independientes entre sí una vez que 1 y 2 
 | 🟡 Medio | `Niebla.tsx` `FOG_COLOR_OVERRIDE` coordina con backend — cambiar tokens implica revisar esa lógica | Usar token como destino del override, no reemplazarlo |
 | 🟢 Bajo | Cambio visual de `#e07b30` → `#f0a030` altera percepción del badge "Baja confianza" | Screenshot before/after |
 | 🟢 Bajo | Fase 1 solo tiene `type-check` como gate — CSS vars no son detectadas por TS | Agregar `pnpm run build` como gate obligatorio |
+
+---
+
+## Cierre del plan (2026-05-29)
+
+Todos los criterios del checklist global están marcados ✅. Build limpio en `1.48s`.
+
+**Deuda técnica registrada para mantenimiento futuro (no bloqueante):**
+
+| Nivel | Item | Archivo(s) |
+|-------|------|-----------|
+| P3 | 27 archivos con hex literales candidatos a `var(--color-*)` | varios `pages/` y `components/` |
+| P3 | `DANGER_COLORS` no migrable a tokens — usa `${activeColor}88` en template literal de glow | `components/ui/DangerScale.tsx` |
+| P2 | Header `PrevisionClima` renderiza antes de datos (polish opcional) | `pages/PrevisionClima.tsx` |
+| P3 | Desastres header editorial sin comentario de excepción | `pages/Desastres.tsx` |
+
+Estos ítems no requieren sesión dedicada — se pueden resolver inline en la próxima wave de mantenimiento.
