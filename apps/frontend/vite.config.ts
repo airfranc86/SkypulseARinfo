@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import svgr from 'vite-plugin-svgr'
-import { sentryVitePlugin } from '@sentry/vite-plugin'
 import path from 'path'
 
 export default defineConfig({
@@ -24,16 +23,8 @@ export default defineConfig({
     }),
     react(),
     tailwindcss(),
-    sentryVitePlugin({
-      org: process.env.SENTRY_ORG,
-      project: 'skypulse-frontend',
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      disable: !process.env.SENTRY_AUTH_TOKEN,
-    }),
   ],
-  build: {
-    sourcemap: 'hidden',
-  },
+  build: {},
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
