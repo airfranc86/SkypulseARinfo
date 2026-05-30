@@ -2,6 +2,57 @@
 
 ---
 
+## 2026-05-30 — Fase 2 animated titles: RainText + ScanText
+
+**Done:**
+- `RainText.tsx`: letras caen rápido como gotas, stagger mínimo (lluvia simultánea), aplicado en Lluvias.tsx
+- `ScanText.tsx`: letras se revelan L→R con flash verde radar, `animationFillMode:'both'` para que colapsen a opacity:0 al click y se revelen en secuencia, aplicado en Radar.tsx
+- `index.css`: agregados @keyframes charRain, charScan
+- Patrón custom header: h1 existente → `sr-only` (a11y preservada), div `aria-hidden` con componente animado al costado
+- Roadmap actualizado: Lluvias ✅, Radar ✅
+
+**Files changed:**
+- `apps/frontend/src/index.css` — charRain + charScan keyframes
+- `apps/frontend/src/components/animated/RainText.tsx` — nuevo
+- `apps/frontend/src/components/animated/ScanText.tsx` — nuevo
+- `apps/frontend/src/pages/Lluvias.tsx` — h1 sr-only + RainText
+- `apps/frontend/src/pages/Radar.tsx` — h1 sr-only + ScanText
+
+**Tests:**
+- `pnpm exec tsc --noEmit` → 0 errores
+
+**Next:**
+- Fase 3 opcional: DriftText → Nubes
+
+---
+
+## 2026-05-30 — Fase 1 animated titles: MeltText + FogText + FrostText
+
+**Done:**
+- `MeltText.tsx`: letras se derriten hacia abajo como lava, stagger izquierda→derecha, aplicado en Volcanes.tsx
+- `FogText.tsx`: letras se desvanecen con blur y deriva aleatoria (sin orden — la niebla no tiene dirección), aplicado en Niebla.tsx
+- `FrostText.tsx`: letras tiemblan, se congelan en azul hielo y suben como vapor, stagger derecha→izquierda, aplicado en CotaDeNieve.tsx
+- `index.css`: agregados @keyframes charMelt, charFog, charFrost
+- Roadmap actualizado: Volcanes ✅, Niebla ✅, CotaDeNieve ✅
+
+**Files changed:**
+- `apps/frontend/src/index.css` — charMelt + charFog + charFrost keyframes
+- `apps/frontend/src/components/animated/MeltText.tsx` — nuevo
+- `apps/frontend/src/components/animated/FogText.tsx` — nuevo
+- `apps/frontend/src/components/animated/FrostText.tsx` — nuevo
+- `apps/frontend/src/pages/Volcanes.tsx` — titleNode MeltText
+- `apps/frontend/src/pages/Niebla.tsx` — titleNode FogText
+- `apps/frontend/src/pages/CotaDeNieve.tsx` — titleNode FrostText
+- `docs/plans/animated-titles-roadmap.md` — estado actualizado
+
+**Tests:**
+- `pnpm exec tsc --noEmit` → 0 errores
+
+**Next:**
+- Fase 2: RainText (Lluvias) + ScanText (Radar) — headers editoriales custom, patrón diferente
+
+---
+
 ## 2026-05-30 — ShatterText + BurnText: reemplazo matter-js + animación de fuego
 
 **Done:**

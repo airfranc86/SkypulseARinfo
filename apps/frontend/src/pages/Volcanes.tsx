@@ -6,6 +6,7 @@ import { ElectricBorder } from '@/components/animated/ElectricBorder'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { MeltText } from '@/components/animated/MeltText'
 
 // ---------------------------------------------------------------------------
 // Alert level config
@@ -154,6 +155,7 @@ export function Volcanes() {
     <div>
       {/* Header */}
       <PageHeader
+        titleNode={<MeltText text="Volcanes activos en Argentina" fontSize="1.5rem" />}
         icon={<Mountain className="size-8" style={{ color: '#e05545' }} />}
         title="Volcanes activos en Argentina"
         subtitle="10 volcanes · OAVV-SEGEMAR"

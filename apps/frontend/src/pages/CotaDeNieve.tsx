@@ -6,6 +6,7 @@ import { TrendChart } from '@/components/ui/TrendChart'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { FrostText } from '@/components/animated/FrostText'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 
@@ -114,6 +115,7 @@ export function CotaDeNieve({ location }: Props) {
   return (
     <div>
       <PageHeader
+        titleNode={<FrostText text="Cota de nieve" fontSize="1.5rem" />}
         icon={<Mountain className="size-8" style={{ color: 'var(--color-muted-foreground)' }} />}
         title="Cota de nieve"
         subtitle={location.label}

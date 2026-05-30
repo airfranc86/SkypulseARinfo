@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
+import { ScanText } from '@/components/animated/ScanText'
 
 // ---------------------------------------------------------------------------
 // Data
@@ -102,13 +103,10 @@ export function Radar() {
           <p className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4" style={{ color: 'var(--color-primary)' }}>
             Leer el cielo digital
           </p>
-          <h1
-            className="text-4xl sm:text-5xl font-semibold leading-tight mb-4"
-            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
-          >
-            Radar y satélite{' '}
-            <em style={{ color: 'var(--color-primary)', fontStyle: 'italic' }}>en lenguaje simple</em>
-          </h1>
+          <h1 className="sr-only">Radar y satélite en lenguaje simple</h1>
+          <div aria-hidden="true" className="mb-4 flex justify-center">
+            <ScanText text="Radar y satélite en lenguaje simple" fontSize="2.25rem" />
+          </div>
           <p className="text-sm max-w-lg mx-auto leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
             No hace falta ser meteorólogo para leer un radar o una imagen satelital. Dos herramientas, un idioma.
           </p>

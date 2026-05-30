@@ -139,6 +139,48 @@ body::before {
   100% { opacity: 0; transform: translateY(var(--fall-dist)) translateX(var(--fall-drift)) rotate(var(--fall-rot)) scale(0.65); }
 }
 
+/* ── MeltText — char melts downward like lava on click ── */
+@keyframes charMelt {
+  0%   { opacity: 1; transform: translateY(0) scaleY(1); transform-origin: top; color: inherit; text-shadow: none; }
+  25%  { opacity: 1; transform: translateY(2px) scaleY(1.3); transform-origin: top; color: #ff6622; text-shadow: 0 6px 12px #ff330066; }
+  65%  { opacity: 0.7; transform: translateY(8px) scaleY(1.8); transform-origin: top; color: #cc3300; text-shadow: 0 8px 16px #cc220044; }
+  100% { opacity: 0; transform: translateY(var(--melt-drop)) scaleY(0.2); transform-origin: top; color: #441100; text-shadow: none; }
+}
+
+/* ── FogText — char fades into blur-drift on click ── */
+@keyframes charFog {
+  0%   { opacity: 1; filter: blur(0px); transform: translateX(0) translateY(0); color: inherit; }
+  30%  { opacity: 0.8; filter: blur(2px); transform: translateX(var(--fog-drift-x)) translateY(-1px); color: #aabbcc; }
+  70%  { opacity: 0.35; filter: blur(6px); transform: translateX(calc(var(--fog-drift-x) * 1.6)) translateY(-3px); }
+  100% { opacity: 0; filter: blur(14px); transform: translateX(calc(var(--fog-drift-x) * 2.5)) translateY(-5px); }
+}
+
+/* ── RainText — chars fall fast like raindrops on click ── */
+@keyframes charRain {
+  0%   { opacity: 1; transform: translateY(0) scaleY(1); }
+  15%  { opacity: 1; transform: translateY(-4px) scaleY(0.9); }
+  100% { opacity: 0; transform: translateY(var(--rain-drop)) scaleY(1.2); }
+}
+
+/* ── ScanText — chars revealed L→R with radar-green flash on click ── */
+@keyframes charScan {
+  0%   { opacity: 0; color: #33ff66; text-shadow: 0 0 20px #33ff6699, 0 0 40px #33ff6644; transform: scaleX(1.2); }
+  25%  { opacity: 1; color: #33ff66; text-shadow: 0 0 12px #33ff6666; transform: scaleX(1); }
+  70%  { opacity: 1; color: var(--scan-final-color); text-shadow: none; }
+  100% { opacity: 1; color: var(--scan-final-color); text-shadow: none; }
+}
+
+/* ── FrostText — char shivers, freezes blue, rises as vapor on click ── */
+@keyframes charFrost {
+  0%   { opacity: 1; transform: translateX(0) translateY(0); color: inherit; text-shadow: none; }
+  10%  { transform: translateX(-2px) translateY(0); }
+  20%  { transform: translateX(2px) translateY(0); color: #a8d8ea; text-shadow: 0 0 8px #a8d8ea88; }
+  30%  { transform: translateX(-1px) translateY(0); }
+  40%  { transform: translateX(0) translateY(0); color: #c8eaf8; text-shadow: 0 0 16px #c8eaf899, 0 0 32px #88ccee55; }
+  70%  { opacity: 0.7; transform: translateY(calc(var(--frost-rise) * 0.5)); color: #e8f6ff; text-shadow: 0 0 12px #aaddff66; }
+  100% { opacity: 0; transform: translateY(var(--frost-rise)); color: #ffffff; text-shadow: none; }
+}
+
 /* ── Nav marquee — JS-driven (InfiniteNavRail uses requestAnimationFrame) ── */
 /* CSS animation removed; transform is applied directly via JS */
 
