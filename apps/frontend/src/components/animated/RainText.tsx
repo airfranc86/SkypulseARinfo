@@ -52,7 +52,7 @@ export function RainText({ text, fontSize = '1rem', className = '' }: RainTextPr
             : {}
 
         return (
-          <span key={i} style={{ display: 'inline-block', ...animStyle }}>
+          <span key={i} style={{ display: 'inline-block', ...(isSpace ? { minWidth: '0.3em' } : {}), ...animStyle }}>
             {char}
           </span>
         )
