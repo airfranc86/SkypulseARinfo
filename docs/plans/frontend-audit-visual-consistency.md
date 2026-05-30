@@ -301,7 +301,7 @@ Fase 1 bloquea todo. Fases 3–5 son independientes entre sí una vez que 1 y 2 
 
 | Nivel | Problema | Acción |
 |-------|----------|--------|
-| P3 | 27 archivos con hex literales para colores del sistema (`#3ecf7a`, `#f0a030`, `#e05545`, `#ff3333`, `#5aaad8`) | Migración de mantenimiento: reemplazar por `var(--color-*)` |
+| ~~P3~~ ✅ | ~~27 archivos con hex literales para colores del sistema~~ | Migración completada: 28 reemplazos en 15 archivos · commit `546f91e` |
 | ✅ | `HourlyTimeline.tsx` obsoleto confirmado y eliminado | Done |
 | ✅ | `IntensityScaleBar` sin `activeLevel` — página educativa estática, correcto | Done |
 
@@ -326,13 +326,11 @@ Fase 1 bloquea todo. Fases 3–5 son independientes entre sí una vez que 1 y 2 
 
 Todos los criterios del checklist global están marcados ✅. Build limpio en `1.48s`.
 
-**Deuda técnica registrada para mantenimiento futuro (no bloqueante):**
+**Deuda técnica — estado al 2026-05-29:**
 
-| Nivel | Item | Archivo(s) |
-|-------|------|-----------|
-| P3 | 27 archivos con hex literales candidatos a `var(--color-*)` | varios `pages/` y `components/` |
-| P3 | `DANGER_COLORS` no migrable a tokens — usa `${activeColor}88` en template literal de glow | `components/ui/DangerScale.tsx` |
-| P2 | Header `PrevisionClima` renderiza antes de datos (polish opcional) | `pages/PrevisionClima.tsx` |
-| P3 | Desastres header editorial sin comentario de excepción | `pages/Desastres.tsx` |
-
-Estos ítems no requieren sesión dedicada — se pueden resolver inline en la próxima wave de mantenimiento.
+| Nivel | Item | Archivo(s) | Estado |
+|-------|------|-----------|--------|
+| ~~P3~~ ✅ | 27 archivos con hex literales candidatos a `var(--color-*)` | 15 archivos migrados · `546f91e` | ✅ Resuelto |
+| P3 | `DANGER_COLORS` no migrable a tokens — usa `${activeColor}88` en template literal de glow | `components/ui/DangerScale.tsx` | pendiente (técnicamente irresoluble con CSS vars) |
+| P2 | Header `PrevisionClima` renderiza antes de datos (polish opcional) | `pages/PrevisionClima.tsx` | pendiente |
+| P3 | Desastres header editorial sin comentario de excepción | `pages/Desastres.tsx` | pendiente |

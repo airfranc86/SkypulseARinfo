@@ -2,6 +2,84 @@
 
 ---
 
+## 2026-05-29 — P3 token migration: hex → CSS vars
+
+**Done:**
+- Migré 28 hex literals directos a CSS vars en 15 archivos
+- Excluídos correctamente: template literals, rgba(), gradients, datos en arrays, WMO colors, DANGER_COLORS, FOG_COLOR_OVERRIDE
+- Build TypeScript limpio (0 errores)
+- Commit `546f91e`: `refactor(tokens): migrate hex literals to CSS vars across 15 files`
+
+**Files changed:**
+- `components/clima/Forecast7dTable.tsx`, `HourlyStrip.tsx`, `RainForecastCard.tsx`, `SportBlock.tsx`
+- `components/ui/ModelStatusBar.tsx`
+- `pages/CotaDeNieve.tsx`, `Desastres.tsx`, `LavarCoche.tsx`, `Lluvias.tsx`, `Nubes.tsx`
+- `pages/PrevisionClima.tsx`, `Radar.tsx`, `TenderRopa.tsx`, `Terremotos.tsx`, `Volcanes.tsx`
+
+**Next:**
+- Push a main (pendiente decisión usuario)
+- Manual config pendiente: Vercel env vars VITE_SENTRY_DSN / SENTRY_AUTH_TOKEN / SENTRY_ORG · Render SENTRY_DSN
+- GTM console: GA4 Config tag + Virtual Pageview trigger + GA4 Event SPA tag
+
+---
+
+## 2026-05-29 17:45 — Cierre de sesión (frontend audit + GTM/Sentry)
+
+**Done:**
+- P2 Desastres: acción movida arriba de descripción + empty state defensivo
+- Docs actualizados: `frontend-audit-visual-consistency.md`, `auditoria-seguridad.md`, `catalog-desastres-expansion.md`
+- GTM virtual pageview hook + analytics.ts helper + Sentry frontend + backend
+- CSP actualizada: `*.ingest.sentry.io` + `worker-src blob:`
+- 2 commits pusheados: `cd8eb66` (design audit fases 1-5) · `99e2e0c` (GTM/Sentry)
+
+**Files changed (resumen):**
+- `apps/frontend/src/pages/Desastres.tsx`, `Nubes.tsx`, `Metar.tsx`, `PrevisionClima.tsx`, `Volcanes.tsx`, `Lluvias.tsx`, `Incendios.tsx`, `CotaDeNieve.tsx`, `Niebla.tsx`, `Terremotos.tsx`
+- `apps/frontend/src/components/ui/DangerScale.tsx` ← nuevo · `HourlyTimeline.tsx` ← eliminado
+- `apps/frontend/src/hooks/useGTMPageView.ts`, `src/lib/analytics.ts`, `src/types/global.d.ts` ← nuevos
+- `apps/frontend/src/main.tsx`, `App.tsx`, `vite.config.ts`, `index.html`, `vercel.json`
+- `apps/backend/app/main.py`, `requirements.txt`, `render.yaml`
+- `docs/plans/frontend-audit-visual-consistency.md`, `auditoria-seguridad.md`, `catalog-desastres-expansion.md`
+
+**Tests:** `pnpm run build` → ✓ 1.48s ✅
+
+**Next:**
+- Configurar Sentry + GTM en sus consolas (manual — fuera del código)
+- P2 PrevisionClima: header renderiza antes de datos (polish opcional, baja prioridad)
+- P3 DANGER_COLORS: hex en template literal `${activeColor}88` — no migrable sin refactor del glow
+
+---
+
+## 2026-05-29 — GTM virtual pageview + Sentry frontend + backend ✅
+
+**Done:**
+- `index.html` — bloque `gtag.js` directo eliminado (GA4 ahora exclusivamente vía GTM)
+- `src/hooks/useGTMPageView.ts` — nuevo hook, pushea `virtual_pageview` a `dataLayer` en cada navegación SPA
+- `src/lib/analytics.ts` — nuevo helper `pushEvent()` para eventos custom a GTM
+- `src/App.tsx` — `RouterLayout` invoca `useGTMPageView()` dentro de `<BrowserRouter>`
+- `src/types/global.d.ts` — `Window.dataLayer` tipado globalmente
+- `src/main.tsx` — `Sentry.init` (solo `PROD` + `VITE_SENTRY_DSN` presente), `ErrorBoundary`
+- `vite.config.ts` — `sentryVitePlugin` + `build.sourcemap: 'hidden'`
+- `vercel.json` — CSP: `+connect-src *.ingest.sentry.io`, `+worker-src 'self' blob:`
+- `apps/backend/app/main.py` — `sentry_sdk.init` (condicional `ENV=prod` + `SENTRY_DSN`)
+- `apps/backend/requirements.txt` — `sentry-sdk[fastapi]>=2.0.0`
+- `apps/backend/render.yaml` — `SENTRY_DSN sync: false`
+
+**Variables de entorno a configurar manualmente:**
+- Vercel: `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_AUTH_TOKEN` (build-only)
+- Render: `SENTRY_DSN` (ya en render.yaml con sync: false)
+
+**Files changed:** 11 modificados + 3 nuevos
+**Tests:** `pnpm run build` → ✓ 1.48s, source maps hidden ✅
+**Commit:** `99e2e0c` · **Push:** ✅
+
+**Next:**
+- Configurar variables de entorno en Vercel + Render (manual)
+- GTM console: crear tag GA4 Config + trigger Virtual Pageview (manual)
+- Sentry: crear proyectos frontend/backend, obtener DSNs (manual)
+- P2 PrevisionClima: header antes de datos (polish opcional)
+
+---
+
 ## 2026-05-29 — P2 Desastres: reorganización card + empty state ✅
 
 **Done:**
