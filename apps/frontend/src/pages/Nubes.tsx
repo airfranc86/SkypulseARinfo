@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
+import { DriftText } from '@/components/animated/DriftText'
 import { type DangerLevel, DangerScale } from '../components/ui/DangerScale'
 
 // ---------------------------------------------------------------------------
@@ -920,13 +921,10 @@ export function Nubes() {
             Catálogo visual del cielo
             <span className="block w-7 h-px" style={{ background: 'rgba(110,88,32,.6)' }} />
           </p>
-          <h1
-            className="text-5xl sm:text-6xl font-normal leading-[1.06]"
-            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
-          >
-            Lo que el cielo<br />
-            <em style={{ color: '#c8a84b', fontStyle: 'italic' }}>te está diciendo</em>
-          </h1>
+          <h1 className="sr-only">Lo que el cielo te está diciendo</h1>
+          <div aria-hidden="true" className="flex justify-center">
+            <DriftText text="Lo que el cielo te está diciendo" fontSize="3rem" />
+          </div>
           <p className="mt-5 text-[.96rem] max-w-md mx-auto leading-[1.8]" style={{ color: 'var(--color-muted-foreground)' }}>
             Nubes, fenómenos y señales invisibles. Todo lo que pasa allá arriba tiene nombre — y algo que contarte sobre lo que viene.
           </p>
