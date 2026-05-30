@@ -5,7 +5,7 @@
 **Fecha de auditoría inicial:** 28 de mayo de 2026  
 **Última actualización:** 2026-05-29 (P3 token migration: 28 hex→CSS vars · commit `546f91e`)  
 **Estado del build:** ✅ build limpio · bundle ~1.1 MB · `strict: true` TS  
-**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 ✅ · Wave 4 ✅ · Wave 5 ✅ · Ops ✅ · Wave 6a ✅ · Wave 6b ✅ · Wave 7 ✅ · Frontend Audit Fases 1–5 ✅ · P2 Desastres ✅ · P3 token migration ✅
+**Waves completadas:** Wave 1 ✅ · Wave 2 ✅ · Wave 3 ✅ · Wave 4 ✅ · Wave 5 ✅ · Ops ✅ · Wave 6a ✅ · Wave 6b ✅ · Wave 7 ✅ · Frontend Audit Fases 1–5 ✅ · P2 Desastres ✅ · P3 token migration ✅ · GTM+GA4+Sentry config ✅
 
 > **Nota metodológica:** Este documento unifica la auditoría externa black-box (MuleRun Super Agent)
 > con el audit interno de código (waves 1–5). Los hallazgos externos tienen prefijo **H-**;

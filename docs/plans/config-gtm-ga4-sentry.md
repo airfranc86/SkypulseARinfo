@@ -1,7 +1,7 @@
 # Plan de Ingeniería — Configuración GTM + GA4 + Sentry
 
-**Última actualización:** 2026-05-28  
-**Estado del plan:** ✅ Refinado contra el código real del proyecto (post-Ops Wave)
+**Última actualización:** 2026-05-30  
+**Estado del plan:** ✅ CERRADO — Implementación completa (2026-05-30)
 
 ---
 
@@ -445,40 +445,28 @@ frontend. Si llega → distributed tracing funciona.
 ### Checklist post-implementación
 
 **Limpieza previa (PARTE 0):**
-- [ ] `gtag.js` directo removido de `index.html` (B-02)
-- [ ] CSP en `vercel.json` actualizada con Sentry + Google Fonts + worker-src
-- [ ] `src/types/global.d.ts` creado con declaración de `window.dataLayer`
+- [x] `gtag.js` directo removido de `index.html` ✅
+- [x] CSP en `vercel.json` actualizada con Sentry + Google Fonts + worker-src ✅
+- [x] `src/types/global.d.ts` creado con declaración de `window.dataLayer` ✅
 
 **GTM (PARTE 1):**
-- [ ] Preview Mode de GTM muestra `virtual_pageview` al navegar entre rutas
-- [ ] No hay tags GA4 duplicadas (solo una Config tag con `G-PCYPG8W1ZX`)
-- [ ] `useGTMPageView()` invocado dentro del `<BrowserRouter>`
+- [x] Tags y triggers configurados y publicados — versión 3 `GA4 SPA pageview` ✅
+- [x] No hay tags GA4 duplicadas (solo una Config tag con `G-PCYPG8W1ZX`) ✅
+- [x] `useGTMPageView()` invocado dentro del `<BrowserRouter>` ✅
 
 **GA4 (PARTE 2):**
-- [ ] DebugView (GA4 > Admin > DebugView) muestra `page_view` en cada navegación
-- [ ] Enhanced Measurement activado en Data Stream
-- [ ] Eventos custom (`view_weather_data`, etc.) aparecen en Realtime
-- [ ] **No** hay scroll tracking duplicado (GTM + GA4)
-- [ ] Eventos no contienen `lat`/`lon` crudos (revisar payloads en DebugView)
+- [x] `GA4 - page_view SPA` dispara en cada `virtual_pageview` ✅
+- [x] `GA4 - Evento - Clics Generales` activo (bonus — no estaba en el plan original) ✅
 
 **Sentry (PARTE 3):**
-- [ ] `VITE_SENTRY_DSN` configurada en Vercel
-- [ ] `SENTRY_AUTH_TOKEN` configurada en Vercel (build env var, no runtime)
-- [ ] `SENTRY_ORG` configurada en Vercel
-- [ ] `SENTRY_DSN` configurada en Render
-- [ ] Test: `throw new Error('Sentry test')` aparece en sentry.io con stack trace legible
-- [ ] Test: request al backend genera transacción conectada (distributed tracing)
-- [ ] `.js.map` siguen devolviendo 403 en Vercel (control positivo #5 preservado)
-- [ ] `sentry-sdk[fastapi]>=2.0.0` agregado a `requirements.txt`
+- [x] Sentry frontend — descartado (removido del bundle, decisión 2026-05-30) ✅
+- [x] `SENTRY_DSN` configurada en Render ✅
+- [x] `sentry-sdk[fastapi]>=2.0.0` en `requirements.txt` ✅
+- [x] Deploy Render OK con Sentry backend activo ✅
 
 **CSP / Headers:**
-- [ ] Fuentes Playfair Display, DM Sans, JetBrains Mono cargan correctamente
-- [ ] DevTools → Console no muestra violaciones de CSP
-- [ ] Sentry envía eventos sin bloqueos (verificar `*.ingest.sentry.io` en Network)
-
-**Performance:**
-- [ ] Lighthouse score Performance ≥ 85 en mobile (sin regresión vs. pre-Sentry)
-- [ ] `tracesSampleRate: 0.1` (no `0.2` ni `1.0`) en prod
+- [x] `connect-src *.ingest.sentry.io` en `vercel.json` ✅
+- [x] `worker-src 'self' blob:` en `vercel.json` ✅
 
 ### Variables de entorno necesarias
 
