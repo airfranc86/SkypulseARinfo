@@ -371,7 +371,7 @@ export function Desastres() {
 
       <FadeContent>
 
-        {/* Header */}
+        {/* Header editorial — diseño intencional, no usar PageHeader aquí */}
         <div className="mb-8 text-center">
           <p className="text-[.62rem] font-medium tracking-[.28em] uppercase mb-4" style={{ color: 'var(--color-primary)' }}>
             Desastres naturales mundiales

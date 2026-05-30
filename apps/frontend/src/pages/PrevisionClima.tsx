@@ -24,8 +24,6 @@ function pageModel(source: string | undefined): ModelKey {
 export function PrevisionClima({ location }: Props) {
   const { data, isLoading, error } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null)
 
-  if (location === null) return <PageSkeleton />
-
   // Badge dinámico: 'mixed' cuando SMN está activo, 'gfs' cuando cae a Open-Meteo
   const badgeModel = pageModel(data?.current?.source)
 
@@ -34,14 +32,14 @@ export function PrevisionClima({ location }: Props) {
       <PageHeader
         icon={<CloudSun className="size-8" style={{ color: 'var(--color-primary)' }} />}
         title="Previsión del clima"
-        subtitle={location.label}
+        subtitle={location?.label}
         modelBadge={data ? <ModelBadge model={badgeModel} variant="header" /> : undefined}
       />
 
-      {isLoading && <PageSkeleton />}
+      {(location === null || isLoading) && <PageSkeleton />}
       {error && <ErrorMessage message={(error as Error).message} />}
 
-      {data && (
+      {data && location && (
         <FadeContent>
           <div className="space-y-5">
             {/* Hero (SMN) + Arc — WeatherHero ya tiene su badge inline */}
