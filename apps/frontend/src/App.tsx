@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-qu
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useLocation as useLocationState } from '@/hooks/useLocation'
 import { useGTMPageView } from '@/hooks/useGTMPageView'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { LocationPicker } from '@/components/LocationPicker'
 import { SplashCursor } from '@/components/animated/SplashCursor'
 import { Threads } from '@/components/animated/Threads'
@@ -191,6 +192,7 @@ function RootLayout() {
     [volcanesData, volcanAlertColor],
   )
 
+  usePageTitle()
   useGTMPageView()
 
   // Wire dispatch into the shared ref so QueryCache callbacks can reach it
