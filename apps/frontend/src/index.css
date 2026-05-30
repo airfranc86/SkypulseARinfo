@@ -124,6 +124,21 @@ body::before {
   100% { background-position:  200% 0; }
 }
 
+/* ── BurnText — char burn-and-rise on click ── */
+@keyframes charBurn {
+  0%   { opacity: 1; transform: translateY(0) rotate(0deg) scaleX(1); color: inherit; text-shadow: none; }
+  20%  { opacity: 1; transform: translateY(-3px) rotate(var(--char-lean)) scaleX(1); color: #ff8833; text-shadow: 0 0 16px #ff660099, 0 -4px 8px #ff330044; }
+  55%  { opacity: 0.6; transform: translateY(-12px) rotate(var(--char-lean)) scaleX(0.85); color: #ff4411; text-shadow: 0 0 8px #ff330055; }
+  100% { opacity: 0; transform: translateY(var(--char-rise)) rotate(var(--char-lean)) scaleX(0.5); color: #441100; text-shadow: none; }
+}
+
+/* ── ShatterText — word scatter on click ── */
+@keyframes shatterFall {
+  0%   { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+  15%  { opacity: 1; transform: translateY(calc(var(--fall-dist) * -0.08)) rotate(calc(var(--fall-rot) * 0.1)) scale(1.05); }
+  100% { opacity: 0; transform: translateY(var(--fall-dist)) translateX(var(--fall-drift)) rotate(var(--fall-rot)) scale(0.6); }
+}
+
 /* ── Nav marquee — JS-driven (InfiniteNavRail uses requestAnimationFrame) ── */
 /* CSS animation removed; transform is applied directly via JS */
 

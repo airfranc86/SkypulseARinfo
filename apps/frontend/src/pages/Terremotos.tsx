@@ -10,7 +10,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { ElectricBorder } from '@/components/animated/ElectricBorder'
-import { FallingText } from '@/components/animated/FallingText'
+import { ShatterText } from '@/components/animated/ShatterText'
 
 interface Props { location: LocationState | null }
 
@@ -176,12 +176,9 @@ export function Terremotos({ location }: Props) {
               Sismos en Argentina
             </h1>
             <div aria-hidden="true" title="Hacé click para ver el efecto" style={{ height: '56px' }}>
-              <FallingText
+              <ShatterText
                 text="Sismos en Argentina"
-                trigger="click"
                 fontSize="1.4rem"
-                gravity={0.30}
-                mouseConstraintStiffness={1}
               />
             </div>
           </div>

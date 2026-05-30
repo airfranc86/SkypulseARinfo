@@ -4,6 +4,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ModelBadge } from '@/components/ui/ModelBadge'
+import { BurnText } from '@/components/animated/BurnText'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -398,6 +399,7 @@ export function Incendios({ location }: Props) {
       <PageHeader
         icon={<span className="text-3xl">🔥</span>}
         title="Incendios"
+        titleNode={<BurnText text="Incendios" fontSize="1.5rem" />}
         subtitle="Riesgo de incendio forestal por ubicación"
         accentColor="#e05545"
         modelBadge={data ? <ModelBadge model={data.is_estimated ? 'gfs' : 'windy_ecmwf'} variant="header" /> : undefined}

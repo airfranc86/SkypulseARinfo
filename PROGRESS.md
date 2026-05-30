@@ -2,6 +2,53 @@
 
 ---
 
+## 2026-05-30 — ShatterText + BurnText: reemplazo matter-js + animación de fuego
+
+**Done:**
+- Reemplazado `FallingText` (matter-js ~90 kB gzip) por `ShatterText` (CSS puro): chunk Terremotos 98 kB → 12.6 kB (−87%)
+- Eliminado `matter-js` y `@types/matter-js` del `package.json`
+- Creado `BurnText.tsx`: letras individuales arden y suben como ceniza al hacer click (stagger izquierda→derecha)
+- Extendido `PageHeader` con prop `titleNode?: ReactNode` (backwards-compatible, h1 queda sr-only para a11y)
+- `Incendios.tsx` usa `BurnText` vía `titleNode`
+
+**Files changed:**
+- `apps/frontend/src/index.css` — @keyframes shatterFall + charBurn
+- `apps/frontend/src/components/animated/ShatterText.tsx` — nuevo componente CSS-only
+- `apps/frontend/src/components/animated/BurnText.tsx` — nuevo componente CSS-only
+- `apps/frontend/src/components/animated/FallingText.tsx` — eliminado
+- `apps/frontend/src/components/ui/PageHeader.tsx` — prop titleNode opcional
+- `apps/frontend/src/pages/Terremotos.tsx` — FallingText → ShatterText
+- `apps/frontend/src/pages/Incendios.tsx` — BurnText vía titleNode
+- `apps/frontend/package.json` — removido matter-js + @types/matter-js
+
+**Tests:**
+- `pnpm exec tsc --noEmit` → 0 errores
+- `pnpm build` → 0 errores, chunks verificados
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-05-30 — S-15 bundle analysis + parsing.py coverage
+
+**Done:**
+- S-15: bundle analizado — critical path 318 kB raw / 101 kB gzip (sano); Terremotos 98 kB por matter-js (ya lazy-loaded, sin impacto en critical path); sin acción requerida
+- utils/parsing.py: cobertura 75% → 100% con 6 tests parametrizados (cubre ValueError y TypeError branches)
+- auditoria-seguridad.md: todos los ítems cerrados, resumen ejecutivo 65/65 (100%), doc actualizado
+
+**Files changed:**
+- `apps/backend/tests/test_parsing.py` — creado, 6 tests parametrizados
+- `docs/plans/auditoria-seguridad.md` — resumen ejecutivo 100%, roadmap y mapa de archivos cerrados
+
+**Tests:**
+- `uv run pytest tests/` → 529 passed, 0 failed
+
+**Next:**
+- Awaiting user direction — auditoría completada al 100%
+
+---
+
 ## 2026-05-29 — P3 token migration: hex → CSS vars
 
 **Done:**
@@ -20,63 +67,6 @@
 - Push a main (pendiente decisión usuario)
 - Manual config pendiente: Vercel env vars VITE_SENTRY_DSN / SENTRY_AUTH_TOKEN / SENTRY_ORG · Render SENTRY_DSN
 - GTM console: GA4 Config tag + Virtual Pageview trigger + GA4 Event SPA tag
-
----
-
-## 2026-05-29 17:45 — Cierre de sesión (frontend audit + GTM/Sentry)
-
-**Done:**
-- P2 Desastres: acción movida arriba de descripción + empty state defensivo
-- Docs actualizados: `frontend-audit-visual-consistency.md`, `auditoria-seguridad.md`, `catalog-desastres-expansion.md`
-- GTM virtual pageview hook + analytics.ts helper + Sentry frontend + backend
-- CSP actualizada: `*.ingest.sentry.io` + `worker-src blob:`
-- 2 commits pusheados: `cd8eb66` (design audit fases 1-5) · `99e2e0c` (GTM/Sentry)
-
-**Files changed (resumen):**
-- `apps/frontend/src/pages/Desastres.tsx`, `Nubes.tsx`, `Metar.tsx`, `PrevisionClima.tsx`, `Volcanes.tsx`, `Lluvias.tsx`, `Incendios.tsx`, `CotaDeNieve.tsx`, `Niebla.tsx`, `Terremotos.tsx`
-- `apps/frontend/src/components/ui/DangerScale.tsx` ← nuevo · `HourlyTimeline.tsx` ← eliminado
-- `apps/frontend/src/hooks/useGTMPageView.ts`, `src/lib/analytics.ts`, `src/types/global.d.ts` ← nuevos
-- `apps/frontend/src/main.tsx`, `App.tsx`, `vite.config.ts`, `index.html`, `vercel.json`
-- `apps/backend/app/main.py`, `requirements.txt`, `render.yaml`
-- `docs/plans/frontend-audit-visual-consistency.md`, `auditoria-seguridad.md`, `catalog-desastres-expansion.md`
-
-**Tests:** `pnpm run build` → ✓ 1.48s ✅
-
-**Next:**
-- Configurar Sentry + GTM en sus consolas (manual — fuera del código)
-- P2 PrevisionClima: header renderiza antes de datos (polish opcional, baja prioridad)
-- P3 DANGER_COLORS: hex en template literal `${activeColor}88` — no migrable sin refactor del glow
-
----
-
-## 2026-05-29 — GTM virtual pageview + Sentry frontend + backend ✅
-
-**Done:**
-- `index.html` — bloque `gtag.js` directo eliminado (GA4 ahora exclusivamente vía GTM)
-- `src/hooks/useGTMPageView.ts` — nuevo hook, pushea `virtual_pageview` a `dataLayer` en cada navegación SPA
-- `src/lib/analytics.ts` — nuevo helper `pushEvent()` para eventos custom a GTM
-- `src/App.tsx` — `RouterLayout` invoca `useGTMPageView()` dentro de `<BrowserRouter>`
-- `src/types/global.d.ts` — `Window.dataLayer` tipado globalmente
-- `src/main.tsx` — `Sentry.init` (solo `PROD` + `VITE_SENTRY_DSN` presente), `ErrorBoundary`
-- `vite.config.ts` — `sentryVitePlugin` + `build.sourcemap: 'hidden'`
-- `vercel.json` — CSP: `+connect-src *.ingest.sentry.io`, `+worker-src 'self' blob:`
-- `apps/backend/app/main.py` — `sentry_sdk.init` (condicional `ENV=prod` + `SENTRY_DSN`)
-- `apps/backend/requirements.txt` — `sentry-sdk[fastapi]>=2.0.0`
-- `apps/backend/render.yaml` — `SENTRY_DSN sync: false`
-
-**Variables de entorno a configurar manualmente:**
-- Vercel: `VITE_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_AUTH_TOKEN` (build-only)
-- Render: `SENTRY_DSN` (ya en render.yaml con sync: false)
-
-**Files changed:** 11 modificados + 3 nuevos
-**Tests:** `pnpm run build` → ✓ 1.48s, source maps hidden ✅
-**Commit:** `99e2e0c` · **Push:** ✅
-
-**Next:**
-- Configurar variables de entorno en Vercel + Render (manual)
-- GTM console: crear tag GA4 Config + trigger Virtual Pageview (manual)
-- Sentry: crear proyectos frontend/backend, obtener DSNs (manual)
-- P2 PrevisionClima: header antes de datos (polish opcional)
 
 ---
 

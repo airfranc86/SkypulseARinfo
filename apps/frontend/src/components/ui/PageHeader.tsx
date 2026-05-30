@@ -9,6 +9,8 @@ interface PageHeaderProps {
   accentColor?: string
   /** Optional ModelBadge — shown inline next to the subtitle. */
   modelBadge?: ReactNode
+  /** Optional visual override for the title — rendered aria-hidden while title stays sr-only for a11y. */
+  titleNode?: ReactNode
 }
 
 /**
@@ -21,6 +23,7 @@ export function PageHeader({
   subtitle,
   accentColor = '#c8a84b',
   modelBadge,
+  titleNode,
 }: PageHeaderProps) {
   return (
     <header className="mb-8 flex items-start gap-4">
@@ -35,11 +38,16 @@ export function PageHeader({
       </div>
       <div className="flex-1 min-w-0">
         <h1
-          className="text-2xl font-semibold leading-tight"
-          style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
+          className={titleNode ? 'sr-only' : 'text-2xl font-semibold leading-tight'}
+          style={titleNode ? undefined : { fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
         >
           {title}
         </h1>
+        {titleNode && (
+          <div aria-hidden="true" className="text-2xl font-semibold leading-tight">
+            {titleNode}
+          </div>
+        )}
         {(subtitle || modelBadge) && (
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             {subtitle && (
