@@ -132,11 +132,11 @@ body::before {
   100% { opacity: 0; transform: translateY(var(--char-rise)) rotate(var(--char-lean)) scaleX(0.5); color: #441100; text-shadow: none; }
 }
 
-/* ── ShatterText — word scatter on click ── */
+/* ── ShatterText — word fall on click (gravity-like, always downward) ── */
 @keyframes shatterFall {
-  0%   { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
-  15%  { opacity: 1; transform: translateY(calc(var(--fall-dist) * -0.08)) rotate(calc(var(--fall-rot) * 0.1)) scale(1.05); }
-  100% { opacity: 0; transform: translateY(var(--fall-dist)) translateX(var(--fall-drift)) rotate(var(--fall-rot)) scale(0.6); }
+  0%   { opacity: 1; transform: translateY(0) translateX(0) rotate(0deg) scale(1); }
+  60%  { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(var(--fall-dist)) translateX(var(--fall-drift)) rotate(var(--fall-rot)) scale(0.65); }
 }
 
 /* ── Nav marquee — JS-driven (InfiniteNavRail uses requestAnimationFrame) ── */

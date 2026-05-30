@@ -34,11 +34,12 @@ export function ShatterText({ text, fontSize = '1rem', className = '' }: Shatter
       }}
     >
       {words.map((word, i) => {
-        const fallDist  = randomBetween(80, 220) * (Math.random() < 0.5 ? 1 : -1)
-        const fallDrift = randomBetween(0, 60)   * (Math.random() < 0.5 ? 1 : -1)
-        const fallRot   = randomBetween(0, 45)   * (Math.random() < 0.5 ? 1 : -1)
-        const duration  = randomBetween(700, 1100)
-        const delay     = randomBetween(0, 180)
+        // fallDist always positive → siempre cae hacia abajo
+        const fallDist  = randomBetween(140, 300)
+        const fallDrift = randomBetween(0, 70) * (Math.random() < 0.5 ? 1 : -1)
+        const fallRot   = randomBetween(15, 55) * (Math.random() < 0.5 ? 1 : -1)
+        const duration  = randomBetween(550, 850)
+        const delay     = randomBetween(0, 160)
 
         const animStyle: CSSProperties = shattered
           ? {
@@ -48,7 +49,7 @@ export function ShatterText({ text, fontSize = '1rem', className = '' }: Shatter
               animationName: 'shatterFall',
               animationDuration: `${duration}ms`,
               animationDelay: `${delay}ms`,
-              animationTimingFunction: 'cubic-bezier(0.36, 0, 0.66, -0.56)',
+              animationTimingFunction: 'cubic-bezier(0.55, 0, 1, 0.45)',
               animationFillMode: 'forwards',
             } as CSSProperties
           : {}
