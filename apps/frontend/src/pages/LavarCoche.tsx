@@ -63,11 +63,7 @@ function QualityScaleBar({ bestLabel }: { bestLabel: string }) {
           <div
             key={q.label}
             className="flex-1 rounded-full"
-            style={{
-              background: q.label === bestLabel ? q.color : 'var(--color-muted)',
-              outline: q.label === bestLabel ? `2px solid ${q.color}` : undefined,
-              outlineOffset: q.label === bestLabel ? '2px' : undefined,
-            }}
+            style={{ background: q.color, opacity: 0.55 }}
           />
         ))}
       </div>
