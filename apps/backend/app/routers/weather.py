@@ -17,7 +17,8 @@ import logging
 import math
 from datetime import datetime, timezone, timedelta, date as _Date
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
+from typing import Literal
 
 from app.core.config import settings
 from app.core.params import LatParam, LonParam, SOURCE_WINDY, SOURCE_OPENMETEO, SOURCE_MIXED
@@ -246,9 +247,10 @@ async def _safe_windy_daily(lat: float, lon: float, days: int) -> list[WindyDail
     response_model=WeatherDashboardResponse,
     summary="Dashboard meteorológico completo",
     description=(
-        "Retorna condiciones actuales (SMN), pronóstico horario 48h (Windy GFS), "
+        "Retorna condiciones actuales (SMN), pronóstico horario 7 días (Windy GFS), "
         "pronóstico 7 días (Windy GFS con weather codes/uv/sunrise/sunset desde Open-Meteo), "
-        "fase lunar, arco solar y pronóstico de lluvia."
+        "fase lunar, arco solar y pronóstico de lluvia. "
+        "El parámetro `model` permite seleccionar GFS, ECMWF o el consenso multi-modelo."
     ),
 )
 @limiter.limit("30/minute")
@@ -256,6 +258,7 @@ async def get_dashboard(
     request: Request,
     lat: LatParam,
     lon: LonParam,
+    model: Literal['gfs', 'ecmwf', 'consensus'] = Query(default='consensus'),
 ) -> WeatherDashboardResponse:
     logger.info("GET /dashboard lat=%.2f lon=%.2f", lat, lon)
 
@@ -268,7 +271,7 @@ async def get_dashboard(
     #   - Open-Meteo hourly_ext: fallback de horario si Windy falla.
     current_task = aggregate_current(lat, lon)
     om_daily_task = get_multi_model_daily(lat, lon, days=7)
-    om_hourly_task = get_hourly_forecast_ext(lat, lon, days=2)
+    om_hourly_task = get_hourly_forecast_ext(lat, lon, days=7)
     windy_hourly_task = _safe_windy_hourly(lat, lon)
     windy_daily_task = _safe_windy_daily(lat, lon, days=7)
 
@@ -481,6 +484,7 @@ async def get_dashboard(
         daily_multi=daily_multi,
         windy_daily=windy_daily_data,
         snow_level_m=snow_level_m,
+        selected_model=model,
     )
 
     return WeatherDashboardResponse(
@@ -725,6 +729,7 @@ def _build_7d_forecast(
     daily_multi: MultiModelDailyData,
     windy_daily: list[WindyDailyEntry] | None,
     snow_level_m: float | None,
+    selected_model: str = 'consensus',
 ) -> list[DailyEntrySchema]:
     """
     Combina:
@@ -742,6 +747,12 @@ def _build_7d_forecast(
 
     entries: list[DailyEntrySchema] = []
     models_list = list(daily_multi.models.values())
+
+    _MODEL_KEY: dict[str, str] = {'gfs': 'gfs_seamless', 'ecmwf': 'ecmwf_ifs025'}
+    if selected_model in _MODEL_KEY:
+        _mk = _MODEL_KEY[selected_model]
+        if _mk in daily_multi.models:
+            models_list = [daily_multi.models[_mk]]
 
     def _om_vals(idx: int, attr: str) -> list[float]:
         result = []
@@ -795,17 +806,21 @@ def _build_7d_forecast(
         month_name = _MONTHS_ES[date_obj.month - 1]
         day_label_long = f"{weekday_full}, {date_obj.day} de {month_name}"
 
-        confidence_pct = (
-            daily_multi.consensus_pct_per_day[i]
-            if i < len(daily_multi.consensus_pct_per_day)
-            else 50.0
-        )
-        if confidence_pct >= 75:
-            conf_label: str = "ALTA"
-        elif confidence_pct >= 50:
-            conf_label = "MEDIA"
+        if len(models_list) == 1 or selected_model != 'consensus':
+            confidence_pct = 100.0
+            conf_label: str = 'ALTA'
         else:
-            conf_label = "BAJA"
+            confidence_pct = (
+                daily_multi.consensus_pct_per_day[i]
+                if i < len(daily_multi.consensus_pct_per_day)
+                else 50.0
+            )
+            if confidence_pct >= 75:
+                conf_label = 'ALTA'
+            elif confidence_pct >= 50:
+                conf_label = 'MEDIA'
+            else:
+                conf_label = 'BAJA'
 
         most_common_code: int | None = (
             max(set(codes), key=codes.count) if codes else None

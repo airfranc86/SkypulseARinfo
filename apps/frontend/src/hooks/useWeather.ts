@@ -68,10 +68,17 @@ export function useLavarCoche(lat: number | null, lon: number | null) {
   })
 }
 
-export function useWeatherDashboard(lat: number | null, lon: number | null) {
+export function useWeatherDashboard(
+  lat: number | null,
+  lon: number | null,
+  model: 'gfs' | 'ecmwf' | 'consensus' = 'consensus'
+) {
   return useQuery({
-    queryKey: ['weather-dashboard', lat, lon],
-    queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.weatherDashboard(lat, lon) },
+    queryKey: ['weather-dashboard', lat, lon, model],
+    queryFn: () => {
+      if (lat === null || lon === null) throw new Error('coordinates required')
+      return api.weatherDashboard(lat, lon, model)
+    },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
   })

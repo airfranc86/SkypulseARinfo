@@ -336,8 +336,8 @@ export const api = {
   lavarCoche: (lat: number, lon: number) =>
     request<CarWashForecastResponse>('/api/tools/lavar-coche', { lat, lon }),
 
-  weatherDashboard: (lat: number, lon: number) =>
-    request<WeatherDashboardResponse>('/api/weather/dashboard', { lat, lon }),
+  weatherDashboard: (lat: number, lon: number, model: 'gfs' | 'ecmwf' | 'consensus' = 'consensus') =>
+    request<WeatherDashboardResponse>('/api/weather/dashboard', { lat, lon, model }),
 
   laundryForecast: (lat: number, lon: number) =>
     request<LaundryForecastResponse>('/api/tools/tender-ropa/forecast', { lat, lon }),

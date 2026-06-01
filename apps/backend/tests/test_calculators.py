@@ -29,12 +29,13 @@ class TestTenderRopa:
         assert result.color == "green"
 
     def test_invierno_humedo_con_viento_medio(self):
-        # hum=85→0, temp=8→5, wind=5∈[5,20]→25×0.9=22.5, precip=2>1→5, bonus≈0 → raw=32.5→32 → "Regular"
+        # hum=85→0, temp=8→5, wind=5∈[5,20]→25×0.9=22.5, precip=2>1→5, bonus≈0 → raw=32.5→32
+        # hum≥80 → veto duro → cap 25 → "No apto"
         result = score_tender_ropa(
             temp_c=8.0, humidity=85.0, wind_speed_kmh=5.0, precip_mm=2.0,
         )
-        assert result.score == 32
-        assert result.label == "Regular"
+        assert result.score == 25
+        assert result.label == "No apto"
         assert result.color == "red"
 
     def test_condiciones_muy_malas_no_apto(self):
@@ -81,16 +82,36 @@ class TestTenderRopa:
         # 0 + 10 + 12.5 + 10 = 32.5 → round(32.5)=32 (banker's)
         assert r.score == 32
 
-    def test_humidity_70_gives_5_hum_score(self):
-        # hum=70 → hum_score=5; neutrales resto
+    def test_humidity_70_veto_cap_44(self):
+        # hum=70 → hum_score=0 (≥65); neutrales resto
+        # raw = 0+10+12.5+10 = 32.5 → 32; veto hum≥70 → cap 44 → 32 (no cambia)
         r = score_tender_ropa(temp_c=None, humidity=70.0, wind_speed_kmh=None, precip_mm=None)
-        # 5 + 10 + 12.5 + 10 = 37.5 → 38
-        assert r.score == 38
-
-    def test_humidity_above_70_gives_zero_hum_score(self):
-        r = score_tender_ropa(temp_c=None, humidity=80.0, wind_speed_kmh=None, precip_mm=None)
-        # 0 + 10 + 12.5 + 10 = 32.5 → round(32.5)=32 (banker's)
         assert r.score == 32
+        assert r.label == "Regular"
+
+    def test_humidity_70_perfect_conditions_capped_at_44(self):
+        # Con condiciones perfectas de temp/viento/precip pero hum=71% → máximo "Regular"
+        r = score_tender_ropa(
+            temp_c=25.0, humidity=71.0, wind_speed_kmh=15.0,
+            precip_mm=0.0, wind_dir_cardinal="S",
+        )
+        assert r.score <= 44
+        assert r.label in ("Regular", "No apto")
+
+    def test_humidity_above_70_hard_veto(self):
+        # hum=80 → raw=32 → veto hum≥80 → cap 25 → "No apto"
+        r = score_tender_ropa(temp_c=None, humidity=80.0, wind_speed_kmh=None, precip_mm=None)
+        assert r.score == 25
+        assert r.label == "No apto"
+
+    def test_humidity_80_perfect_conditions_capped_at_25(self):
+        # Condiciones perfectas con hum=80% → siempre "No apto"
+        r = score_tender_ropa(
+            temp_c=25.0, humidity=80.0, wind_speed_kmh=15.0,
+            precip_mm=0.0, wind_dir_cardinal="S",
+        )
+        assert r.score <= 25
+        assert r.label == "No apto"
 
     # ------------------------------------------------------------------ #
     # Temperatura — umbral 12 °C                                          #

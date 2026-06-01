@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { CloudSun } from 'lucide-react'
 import { useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
@@ -13,6 +14,8 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 
+type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
+
 interface Props { location: LocationState | null }
 
 /** Derives the page-level badge from the actual current observation source. */
@@ -22,7 +25,8 @@ function pageModel(source: string | undefined): ModelKey {
 }
 
 export function PrevisionClima({ location }: Props) {
-  const { data, isLoading, error } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null)
+  const [forecastModel, setForecastModel] = useState<ForecastModel>('consensus')
+  const { data, isLoading, error } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
 
   // Badge dinámico: 'mixed' cuando SMN está activo, 'gfs' cuando cae a Open-Meteo
   const badgeModel = pageModel(data?.current?.source)
@@ -67,7 +71,11 @@ export function PrevisionClima({ location }: Props) {
             <HourlyStrip hourly={data.hourly} />
 
             {/* 7-day forecast — GFS */}
-            <Forecast7d days={data.forecast_7d} />
+            <Forecast7d
+              days={data.forecast_7d}
+              selectedModel={forecastModel}
+              onModelChange={setForecastModel}
+            />
 
             {/* Rain today — GFS, al final */}
             <RainForecastCard rain={data.rain_today} />

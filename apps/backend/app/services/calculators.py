@@ -187,7 +187,7 @@ def score_tender_ropa(
         precip_mm = precip_next_6h
 
     # ------------------------------------------------------------------
-    # A) Humedad (35 pts) — curva continua
+    # A) Humedad (35 pts) — curva continua; >65 % penaliza con veto duro
     # ------------------------------------------------------------------
     if humidity is None:
         hum_score = 17.5
@@ -195,9 +195,7 @@ def score_tender_ropa(
         hum_score = 35.0
     elif humidity <= 65:
         hum_score = 35.0 * (65.0 - humidity) / 15.0
-    elif humidity <= 70:
-        hum_score = 5.0
-    else:
+    else:  # >65 %: evaporación cae drásticamente
         hum_score = 0.0
 
     # ------------------------------------------------------------------
@@ -285,9 +283,21 @@ def score_tender_ropa(
     raw_score = hum_score + temp_score + wind_score + precip_score + bonus
     score = max(0, min(100, round(raw_score)))
 
+    # Veto por humedad: a >70 % la evaporación es tan baja que la ropa no seca
+    # sin importar temperatura o viento.
+    if humidity is not None:
+        if humidity >= 80:
+            score = min(score, 25)
+        elif humidity >= 70:
+            score = min(score, 44)
+
     label, color = _label_and_color(score)
 
-    if score >= 75:
+    if humidity is not None and humidity >= 80:
+        headline = "Humedad excesiva — ropa no secará"
+    elif humidity is not None and humidity >= 70:
+        headline = "Humedad alta — secado muy lento"
+    elif score >= 75:
         headline = "Día ideal para tender"
     elif score >= 50:
         headline = "Buenas condiciones para tender"
@@ -307,7 +317,14 @@ def score_tender_ropa(
     if precip_mm == 0:
         factors.append("sin lluvia")
 
-    reason = f"Factores favorables: {', '.join(factors)}." if factors else "Condiciones desfavorables."
+    if humidity is not None and humidity >= 70:
+        reason = f"Humedad {humidity:.0f}% — la ropa no seca bien por encima del 70%."
+        if factors:
+            reason += f" Factores favorables: {', '.join(factors)}."
+    elif factors:
+        reason = f"Factores favorables: {', '.join(factors)}."
+    else:
+        reason = "Condiciones desfavorables."
 
     return ToolResult(
         tool="tender-ropa",
