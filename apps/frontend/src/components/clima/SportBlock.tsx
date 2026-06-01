@@ -127,7 +127,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
             border: `1px solid ${labelColor}44`,
           }}
         >
-          {data.label}
+          {data.label ?? ''}
         </span>
       </div>
 

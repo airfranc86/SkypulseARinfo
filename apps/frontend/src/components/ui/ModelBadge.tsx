@@ -95,6 +95,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const meta = MODELS[model]
+  if (!meta) return null
 
   useEffect(() => {
     if (!open) return

@@ -211,15 +211,15 @@ class TestClassifyVisibility:
         assert level == 3
         assert label == "Bruma"
 
-    def test_500_to_999_is_niebla(self):
+    def test_500_to_999_is_neblina(self):
         level, label, _ = _classify_visibility(700.0)
         assert level == 4
-        assert label == "Niebla"
+        assert label == "Neblina"
 
-    def test_below_500_is_niebla_densa(self):
+    def test_below_500_is_niebla(self):
         level, label, _ = _classify_visibility(200.0)
         assert level == 5
-        assert label == "Niebla densa"
+        assert label == "Niebla"
 
     def test_returns_hex_color(self):
         _, _, color = _classify_visibility(8000.0)

@@ -601,8 +601,8 @@ def _classify_visibility(v: float | None) -> tuple[int, str, str]:
     if v >= 1_000:
         return 3, "Bruma",         "#f0a030"
     if v >= 500:
-        return 4, "Niebla",        "#e07030"
-    return     5, "Niebla densa",  "#e05545"
+        return 4, "Neblina",       "#c84c10"
+    return     5, "Niebla",        "#e03535"
 
 
 async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | None:
@@ -694,8 +694,8 @@ async def get_fog_inference_forecast(
 
     Algoritmo (prioridad):
       1. WMO code 45/48 (niebla confirmada) → 300 m
-      2. T - Td < 2°C + HR ≥ 95 % + viento < 5 km/h  → niebla densa  (300 m)
-      3. T - Td < 3°C + HR ≥ 90 % + viento < 8 km/h  → niebla        (1000 m)
+      2. T - Td < 2°C + HR ≥ 95 % + viento < 5 km/h  → niebla    (300 m)
+      3. T - Td < 3°C + HR ≥ 90 % + viento < 8 km/h  → neblina   (1000 m)
       4. T - Td < 5°C + HR ≥ 80 %                     → reducida      (3000 m)
       5. Resto                                          → despejada     (10 000 m)
     """
@@ -760,9 +760,9 @@ async def get_fog_inference_forecast(
                 ):
                     dep = temp - td   # depresión del punto de rocío
                     if dep < 2.0 and rh >= 95.0 and wind < 5.0:
-                        vis_m = 300.0      # niebla densa
+                        vis_m = 300.0      # niebla
                     elif dep < 3.0 and rh >= 90.0 and wind < 8.0:
-                        vis_m = 1_000.0    # niebla / bruma
+                        vis_m = 1_000.0    # neblina / bruma
                     elif dep < 5.0 and rh >= 80.0:
                         vis_m = 3_000.0    # reducida
                     else:

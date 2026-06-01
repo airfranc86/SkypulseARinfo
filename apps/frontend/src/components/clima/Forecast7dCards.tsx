@@ -1,14 +1,9 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import type { DailyEntry } from '@/lib/api'
+import { confidenceColor } from '@/lib/confidence'
 
 interface Props {
   days: DailyEntry[]
-}
-
-const CONFIDENCE_COLOR: Record<string, string> = {
-  ALTA:  '#3ecf7a',
-  MEDIA: '#f0a030',
-  BAJA:  '#e05545',
 }
 
 export function Forecast7dCards({ days }: Props) {
@@ -23,7 +18,7 @@ export function Forecast7dCards({ days }: Props) {
 }
 
 function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: boolean }) {
-  const confColor = CONFIDENCE_COLOR[day.confidence_label] ?? '#c8a84b'
+  const confColor = confidenceColor(day.confidence_label)
   const hasPrecip = (day.precip_prob ?? 0) > 15
 
   return (

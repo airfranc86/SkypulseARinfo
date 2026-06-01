@@ -57,7 +57,7 @@ export function LaundryDayCard({
             className="text-xs font-semibold whitespace-nowrap"
             style={{ color: labelColor }}
           >
-            {day.label}
+            {day.label ?? ''}
           </span>
         </div>
 

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Shirt } from 'lucide-react'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import type { RainForecastInfo } from '@/lib/api'
+import { confidenceColor } from '@/lib/confidence'
 
 interface Props {
   rain: RainForecastInfo
@@ -11,12 +12,6 @@ const CONFIDENCE_COLOR: Record<string, string> = {
   alta:  'rgba(62,207,122,0.15)',
   media: 'rgba(240,160,48,0.15)',
   baja:  'rgba(224,85,69,0.15)',
-}
-
-const CONFIDENCE_TEXT: Record<string, string> = {
-  alta:  '#3ecf7a',
-  media: '#f0a030',
-  baja:  '#e05545',
 }
 
 const CONFIDENCE_LABEL: Record<string, string> = {
@@ -34,7 +29,7 @@ function windowDurationHours(start: string, end: string): number {
 
 export function RainForecastCard({ rain }: Props) {
   const confBg   = CONFIDENCE_COLOR[rain.confidence_label] ?? 'rgba(200,168,75,0.1)'
-  const confText = CONFIDENCE_TEXT[rain.confidence_label]  ?? '#c8a84b'
+  const confText = confidenceColor(rain.confidence_label)
   const confLbl  = CONFIDENCE_LABEL[rain.confidence_label] ?? rain.confidence_label
 
   // Título dinámico según estado

@@ -10,15 +10,10 @@ import {
   ReferenceLine,
 } from 'recharts'
 import type { DailyEntry } from '@/lib/api'
+import { confidenceColor } from '@/lib/confidence'
 
 interface Props {
   days: DailyEntry[]
-}
-
-const CONFIDENCE_DOT_COLOR: Record<string, string> = {
-  ALTA:  '#3ecf7a',
-  MEDIA: '#f0a030',
-  BAJA:  '#e05545',
 }
 
 interface ChartDot {
@@ -29,7 +24,7 @@ interface ChartDot {
 
 function ConfidenceDot({ cx = 0, cy = 0, payload }: ChartDot) {
   if (!payload) return null
-  const color = CONFIDENCE_DOT_COLOR[payload.confidence_label] ?? '#c8a84b'
+  const color = confidenceColor(payload.confidence_label)
   return <circle cx={cx} cy={cy} r={5} fill={color} stroke="var(--color-background)" strokeWidth={2} />
 }
 
