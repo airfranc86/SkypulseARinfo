@@ -512,8 +512,12 @@ async def test_dashboard_uses_windy_when_available(
     data = response.json()
     # Con Windy disponible la fuente es 'mixed' (Windy datos + OM weather codes)
     assert data["forecast_source"] == "mixed"
-    # El temp_max de los días debe coincidir con Windy (23.0), no con OM (22.0)
-    assert data["forecast_7d"][0]["temp_max"] == pytest.approx(23.0)
+    # temp_max viene de OM (primario para agregados nativos del modelo), no de Windy (max snapshots 3h)
+    assert data["forecast_7d"][0]["temp_max"] == pytest.approx(22.0)
+    # precip_prob viene de OM (Windy no tiene este campo nativo); fixture OM = 5.0
+    assert data["forecast_7d"][0]["precip_prob"] == pytest.approx(5.0)
+    # precip_sum viene de Windy (mayor resolución temporal 3h); fixture Windy = 0.0
+    assert data["forecast_7d"][0]["precip_sum"] == pytest.approx(0.0)
 
 
 @pytest.mark.asyncio

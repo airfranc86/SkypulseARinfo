@@ -34,6 +34,7 @@ from app.schemas.weather import (
     WeatherCurrentResponse,
     WeatherDashboardResponse,
 )
+from app.services.forecast_merge import merge_daily_fields
 from app.services.weather_aggregator import aggregate_current
 from app.services.openmeteo import (
     get_multi_model_daily,
@@ -731,70 +732,39 @@ def _build_7d_forecast(
     snow_level_m: float | None,
     selected_model: str = 'consensus',
 ) -> list[DailyEntrySchema]:
-    """
-    Combina:
-        - Windy GFS daily para temp/precip/wind/humidity (cuando disponible).
-        - Open-Meteo multi-model para weather_codes, confidence_pct y armazón.
-    """
+    """Combina Windy + Open-Meteo siguiendo FIELD_SOURCES (ver services/forecast_merge.py)."""
     ref = next(iter(daily_multi.models.values()))
     today = _Date.today()
 
-    # Indexar Windy por fecha
-    windy_by_date: dict[str, WindyDailyEntry] = {}
-    if windy_daily:
-        for d in windy_daily:
-            windy_by_date[d.date] = d
+    windy_by_date: dict[str, WindyDailyEntry] = (
+        {d.date: d for d in windy_daily} if windy_daily else {}
+    )
 
-    entries: list[DailyEntrySchema] = []
     models_list = list(daily_multi.models.values())
-
     _MODEL_KEY: dict[str, str] = {'gfs': 'gfs_seamless', 'ecmwf': 'ecmwf_ifs025'}
     if selected_model in _MODEL_KEY:
         _mk = _MODEL_KEY[selected_model]
         if _mk in daily_multi.models:
             models_list = [daily_multi.models[_mk]]
 
-    def _om_vals(idx: int, attr: str) -> list[float]:
-        result = []
-        for m in models_list:
-            lst = getattr(m, attr)
-            if idx < len(lst) and lst[idx] is not None:
-                result.append(lst[idx])
-        return result
+    entries: list[DailyEntrySchema] = []
 
-    for i in range(len(ref.dates)):
-        date_str = ref.dates[i]
+    for i, date_str in enumerate(ref.dates):
+        merged = merge_daily_fields(
+            day_index=i,
+            windy_entry=windy_by_date.get(date_str),
+            om_models=models_list,
+        )
 
-        # ---------- Datos meteorológicos: Windy primario, OM fallback ----------
-        w = windy_by_date.get(date_str)
-
-        if w is not None:
-            temp_max = w.temp_max_c
-            temp_min = w.temp_min_c
-            precip_sum = w.precip_sum_mm
-            precip_prob = w.precip_prob
-            wind_max = w.wind_speed_max_kmh
-        else:
-            temps_max_om = _om_vals(i, "temp_max")
-            temps_min_om = _om_vals(i, "temp_min")
-            precips_om = _om_vals(i, "precip_sum")
-            precip_probs_om = _om_vals(i, "precip_prob_max")
-            winds_om = _om_vals(i, "wind_speed_max")
-            temp_max = round(sum(temps_max_om) / len(temps_max_om), 1) if temps_max_om else None
-            temp_min = round(sum(temps_min_om) / len(temps_min_om), 1) if temps_min_om else None
-            precip_sum = round(sum(precips_om) / len(precips_om), 1) if precips_om else None
-            precip_prob = max(precip_probs_om) if precip_probs_om else None
-            wind_max = round(sum(winds_om) / len(winds_om), 1) if winds_om else None
-
-        # ---------- Weather code: SIEMPRE Open-Meteo (Windy no lo provee) ----------
-        codes: list[int] = []
-        for m in models_list:
-            if i < len(m.weather_codes) and m.weather_codes[i] is not None:
-                codes.append(m.weather_codes[i])  # type: ignore[arg-type]
+        # Weather code: SIEMPRE Open-Meteo (Windy no lo provee)
+        codes: list[int] = [
+            m.weather_codes[i]
+            for m in models_list
+            if i < len(m.weather_codes) and m.weather_codes[i] is not None
+        ]  # type: ignore[misc]
 
         date_obj = _Date.fromisoformat(date_str)
         days_ahead = (date_obj - today).days
-
         if days_ahead == 0:
             day_label = "Hoy"
         elif days_ahead == 1:
@@ -815,16 +785,9 @@ def _build_7d_forecast(
                 if i < len(daily_multi.consensus_pct_per_day)
                 else 50.0
             )
-            if confidence_pct >= 75:
-                conf_label = 'ALTA'
-            elif confidence_pct >= 50:
-                conf_label = 'MEDIA'
-            else:
-                conf_label = 'BAJA'
+            conf_label = 'ALTA' if confidence_pct >= 75 else ('MEDIA' if confidence_pct >= 50 else 'BAJA')
 
-        most_common_code: int | None = (
-            max(set(codes), key=codes.count) if codes else None
-        )
+        most_common_code: int | None = max(set(codes), key=codes.count) if codes else None
         icon = describe_wmo(most_common_code, is_day=True)[1]
 
         entries.append(
@@ -832,11 +795,11 @@ def _build_7d_forecast(
                 date=date_str,
                 day_label=day_label,
                 day_label_long=day_label_long,
-                temp_max=temp_max,
-                temp_min=temp_min,
-                precip_sum=precip_sum,
-                precip_prob=precip_prob,
-                wind_speed_max=wind_max,
+                temp_max=merged["temp_max"],
+                temp_min=merged["temp_min"],
+                precip_sum=merged["precip_sum"],
+                precip_prob=merged["precip_prob"],
+                wind_speed_max=merged["wind_speed_max"],
                 snow_level_m=snow_level_m,
                 weather_code=most_common_code,
                 icon=icon,

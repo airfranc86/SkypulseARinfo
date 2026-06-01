@@ -371,10 +371,11 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 7) -> list[Wind
             mean_deg = math.degrees(math.atan2(sin_sum, cos_sum)) % 360
             wind_dir_cardinal = _degrees_to_cardinal(mean_deg)
 
-        # Probabilidad de lluvia: % de slots con precipitación notable
-        n_total = len(slots) or 1
+        # Probabilidad de lluvia: % de slots con dato que superan el umbral.
+        # Denominador = slots con dato real (no None), no total de slots del día.
+        n_precip_slots = len(precips) or 1
         n_rainy = sum(1 for p in precips if p > 0.1)
-        precip_prob = (n_rainy / n_total) * 100.0 if precips else None
+        precip_prob = (n_rainy / n_precip_slots) * 100.0 if precips else None
 
         result.append(
             WindyDailyEntry(
