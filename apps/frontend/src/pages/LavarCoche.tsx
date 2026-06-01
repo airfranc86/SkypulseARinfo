@@ -16,11 +16,19 @@ const COLOR_MAP: Record<CarWashDay['color'], string> = {
   red:    '#e05545',
 }
 
+// 4 colores distintos — uno por label, incluido "No apto" ≠ "Regular"
+const LABEL_COLOR: Record<string, string> = {
+  Excelente: '#3ecf7a',
+  Bueno:     '#f0a030',
+  Regular:   '#e05545',
+  'No apto': '#9b2020',
+}
+
 const QUALITY_SCALE = [
-  { label: 'Excelente', color: '#3ecf7a' },
-  { label: 'Bueno',     color: '#f0a030' },
-  { label: 'Regular',   color: '#e05545' },
-  { label: 'No apto',   color: '#e05545' },
+  { label: 'Excelente', color: LABEL_COLOR['Excelente'] },
+  { label: 'Bueno',     color: LABEL_COLOR['Bueno'] },
+  { label: 'Regular',   color: LABEL_COLOR['Regular'] },
+  { label: 'No apto',   color: LABEL_COLOR['No apto'] },
 ] as const
 
 interface ScoreInfo {
@@ -33,6 +41,7 @@ function scoreInfo(color: CarWashDay['color'], score: number): ScoreInfo {
   if (color === 'green' && score >= 80) return { rowBg: 'rgba(62,207,122,0.08)', fontSize: '1.15rem', fontWeight: 700 }
   if (color === 'green')               return { rowBg: 'rgba(62,207,122,0.04)', fontSize: '1.0rem',  fontWeight: 600 }
   if (color === 'yellow')              return { rowBg: 'transparent',            fontSize: '0.9rem',  fontWeight: 500 }
+  if (score < 30)                      return { rowBg: 'rgba(155,32,32,0.10)',   fontSize: '0.75rem', fontWeight: 400 }
   return                                      { rowBg: 'rgba(224,85,69,0.07)',   fontSize: '0.8rem',  fontWeight: 400 }
 }
 
@@ -87,7 +96,7 @@ function QualityScaleBar({ bestLabel }: { bestLabel: string }) {
 // ---------------------------------------------------------------------------
 
 function DayRow({ day }: { day: CarWashDay }) {
-  const barColor = COLOR_MAP[day.color]
+  const barColor = LABEL_COLOR[day.label] ?? COLOR_MAP[day.color]
   const info = scoreInfo(day.color, day.score)
 
   const row = (

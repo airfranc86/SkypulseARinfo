@@ -7,6 +7,7 @@ from app.services.calculators import (
     compute_sensacion_termica,
     compute_cota_de_nieve,
     score_hacer_deporte,
+    score_lavar_coche,
     FeelsLikeResult,
     SnowLevelResult,
 )
@@ -458,3 +459,66 @@ class TestHacerDeporte:
         assert result.humidity == 50.0
         assert result.precip == 0.0
         assert result.wind_speed == 15.0
+
+
+class TestLavarCoche:
+    # ------------------------------------------------------------------ #
+    # Condiciones ideales / lluvia                                         #
+    # ------------------------------------------------------------------ #
+
+    def test_condiciones_ideales_excelente(self):
+        # sin lluvia, temp=25, viento=10, hum=40 → score=100 → "Excelente"
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=40.0)
+        assert r.score == 100
+        assert r.label == "Excelente"
+        assert r.tool == "lavar-coche"
+
+    def test_lluvia_intensa_no_apto(self):
+        # precip > 5 → -60 → score=40; "Regular"
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=8.0, wind_speed_kmh=10.0, humidity=50.0)
+        assert r.score <= 45
+        assert r.label in ("Regular", "No apto")
+
+    def test_tool_name(self):
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=50.0)
+        assert r.tool == "lavar-coche"
+
+    # ------------------------------------------------------------------ #
+    # Veto por humedad                                                     #
+    # ------------------------------------------------------------------ #
+
+    def test_humidity_90_perfect_conditions_capped_at_74(self):
+        # hum=90 → penalty -30, cap 74 → "Bueno" como máximo
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=90.0)
+        assert r.score <= 74
+        assert r.label in ("Bueno", "Regular", "No apto")
+
+    def test_humidity_80_perfect_conditions_not_excelente(self):
+        # hum=80 (borde exacto) → cap 74 → nunca "Excelente"
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=80.0)
+        assert r.score <= 74
+        assert r.label != "Excelente"
+
+    def test_humidity_75_capped(self):
+        # hum=75 → penalty -18, cap 74 → "Bueno" como máximo
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=75.0)
+        assert r.score <= 74
+
+    def test_humidity_70_veto_cap(self):
+        # hum=70 → penalty -18, cap 74
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=70.0)
+        assert r.score <= 74
+
+    def test_humidity_below_65_no_cap(self):
+        # hum=60 → sin veto → puede ser "Excelente"
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=60.0)
+        assert r.label == "Excelente"
+
+    def test_humidity_high_headline(self):
+        # hum≥80, sin lluvia → headline específica de humedad
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=85.0)
+        assert "humedad" in r.headline.lower()
+
+    def test_score_clamped_0_to_100(self):
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=0.0, humidity=10.0)
+        assert 0 <= r.score <= 100

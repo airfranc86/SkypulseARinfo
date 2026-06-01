@@ -439,12 +439,18 @@ def score_lavar_coche(
     elif w > 20:
         score = max(0, score - 12)
 
-    # Humedad
+    # Humedad — evaporación lenta, riesgo de manchas de agua
     h = humidity or 50.0
     if h > 80:
-        score = max(0, score - 15)
+        score = max(0, score - 30)   # was -15
+    elif h > 70:
+        score = max(0, score - 18)   # new tier
     elif h > 65:
-        score = max(0, score - 7)
+        score = max(0, score - 8)    # was -7
+
+    # Veto: humedad ≥70 % → sin "Excelente" (evaporación insuficiente)
+    if humidity is not None and humidity >= 70:
+        score = min(score, 74)
 
     label, color = _label_and_color(score)
 
@@ -452,6 +458,8 @@ def score_lavar_coche(
         headline = "Lluvia intensa esperada"
     elif p > 0:
         headline = "Precipitación posible"
+    elif humidity is not None and humidity >= 80:
+        headline = "Humedad alta — secado lento"
     elif score >= 75:
         headline = "Ideal para lavar"
     elif score >= 50:
