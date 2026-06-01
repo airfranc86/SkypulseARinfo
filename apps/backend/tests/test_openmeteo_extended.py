@@ -456,11 +456,37 @@ class TestGetMultiModelDaily:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_models_dict_has_gfs_seamless(self):
+    async def test_models_dict_has_both_models(self):
         payload = _make_daily_ext_payload(n=3)
         with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
             result = await get_multi_model_daily(-34.6, -58.4)
         assert "gfs_seamless" in result.models
+        assert "ecmwf_ifs025" in result.models
+
+    @pytest.mark.asyncio
+    async def test_partial_failure_returns_result_with_one_model(self):
+        """Si un modelo falla en todos sus intentos, el resultado usa solo el modelo disponible."""
+        from httpx import TimeoutException
+        payload = _make_daily_ext_payload(n=2)
+
+        async def selective_fail(method, url, **kwargs):
+            # Identificar el modelo por params — GFS siempre falla, ECMWF siempre tiene éxito
+            if kwargs.get("params", {}).get("models") == "gfs_seamless":
+                raise TimeoutException("gfs failed")
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json.return_value = payload
+            return mock_response
+
+        mock_client = MagicMock()
+        mock_client.request = selective_fail
+        with patch("app.services.openmeteo.get_client", return_value=mock_client):
+            result = await get_multi_model_daily(-34.6, -58.4, days=2)
+
+        assert result is not None
+        assert len(result.models) == 1
+        assert "ecmwf_ifs025" in result.models
 
     @pytest.mark.asyncio
     async def test_consensus_pct_length_matches_days(self):

@@ -392,15 +392,15 @@ async def get_multi_model_daily(
     days: int = 7,
 ) -> MultiModelDailyData | None:
     """
-    Llama 1 modelo de Open-Meteo (gfs_seamless) para obtener weather_code/uv/sunrise/sunset.
-    Reducido de 3 → 1 modelo para evitar rate-limiting en el plan gratuito de Open-Meteo.
-    Si falla, retorna None (el dashboard usará fallback sintético desde Windy GFS).
+    Consulta 2 modelos de Open-Meteo (GFS + ECMWF IFS 0.25°) para calcular consenso real.
+    La caché del Fix 1 absorbe el doble de llamadas sin riesgo de rate-limit.
+    Si ambos fallan retorna None; si solo uno falla, el consenso usa el modelo disponible.
     """
     # Synthetic key — captures all inputs including the hardcoded model list.
-    key = _cache_key({"latitude": lat, "longitude": lon, "forecast_days": days, "models": "gfs_seamless"})
+    key = _cache_key({"latitude": lat, "longitude": lon, "forecast_days": days, "models": "gfs_seamless,ecmwf_ifs025"})
 
     async def _fetch() -> MultiModelDailyData | None:
-        model_names = ["gfs_seamless"]
+        model_names = ["gfs_seamless", "ecmwf_ifs025"]
         tasks = [get_daily_forecast_ext(lat, lon, days, m) for m in model_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
