@@ -564,7 +564,41 @@ def _build_rain_forecast(
         else:
             run_start = None
 
-    status_text = "Lluvia esperada hoy" if has_rain else "Sin lluvia esperada"
+    # Detección de llovizna: sin precipitación registrada pero condiciones ambiguas
+    drizzle_risk = False
+    if not has_rain:
+        hum_curr = current.humidity
+        cloud_curr = current.cloud_cover
+        curr_drizzle = (
+            hum_curr is not None
+            and cloud_curr is not None
+            and hum_curr >= 80
+            and cloud_curr >= 70
+        )
+        slot_drizzle = False
+        if windy_hourly:
+            upcoming = windy_hourly[:4]
+            hum_vals = [s.humidity for s in upcoming if s.humidity is not None]
+            cloud_vals = [s.cloud_cover_pct for s in upcoming if s.cloud_cover_pct is not None]
+            hum_mean = sum(hum_vals) / len(hum_vals) if hum_vals else None
+            cloud_mean = sum(cloud_vals) / len(cloud_vals) if cloud_vals else None
+            slot_drizzle = (
+                hum_mean is not None
+                and cloud_mean is not None
+                and hum_mean >= 75
+                and cloud_mean >= 80
+            )
+        drizzle_risk = curr_drizzle or slot_drizzle
+
+    if has_rain:
+        status_text = "Lluvia esperada hoy"
+        confidence_label = "alta"
+    elif drizzle_risk:
+        status_text = "Llovizna posible"
+        confidence_label = "media"
+    else:
+        status_text = "Sin lluvia esperada"
+        confidence_label = "alta"
 
     # Condiciones de secado de ropa
     is_ideal_drying = False
@@ -596,7 +630,7 @@ def _build_rain_forecast(
 
     return RainForecastSchema(
         status_text=status_text,
-        confidence_label="alta",
+        confidence_label=confidence_label,
         has_rain_today=has_rain,
         best_window_start=next_hours[best_start] if best_start is not None else None,
         best_window_end=next_hours[best_end] if best_end is not None else None,

@@ -2,6 +2,138 @@
 
 ---
 
+## 2026-06-01 — API_Prediction plan cerrado: drizzle fix + 9 tests nuevos
+
+**Done:**
+- `_build_rain_forecast()`: detección de llovizna por condiciones ambientales (humidity≥80 + cloud_cover≥70 → "Llovizna posible" / "media"; Windy slot averages hum≥75+cloud≥80 también activan)
+- `confidence_label` ya no es hardcodeado a "alta" — varía según condiciones
+- 6 tests unitarios de drizzle (D1–D6): todos los escenarios de umbral cubiertos
+- 3 tests de integración del plan API_Prediction §6.3 (IT1–IT3): precip_prob, temp_max tolerancia, no-all-zero
+- `docs/plans/API_Prediction.md` actualizado: estado ✅ IMPLEMENTADO, checklist completo
+
+**Files changed:**
+- `apps/backend/app/routers/weather.py` — drizzle risk detection en `_build_rain_forecast()`
+- `apps/backend/tests/test_rain_forecast_drizzle.py` — **nuevo**, 6 tests D1–D6
+- `apps/backend/tests/test_dashboard_integration.py` — **nuevo**, 3 tests IT1–IT3
+- `docs/plans/API_Prediction.md` — status cerrado, checklist actualizado
+
+**Tests:**
+- `uv run pytest --tb=short -q` → **603 passed**, 0 failed
+
+**Next:**
+- Awaiting user direction (PR 4 Observabilidad o nueva feature)
+
+---
+
+## 2026-06-01 — LavarCoche.tsx pulido visual (escala aptitud + humedad int + colores labels)
+
+**Done:**
+- `QualityScaleBar`: segmentos inactivos usan `opacity: 0.55` uniforme (todos en su color real, sin distinción activo/inactivo). Fix perceptual: verde no aparece más brillante que el resto.
+- Labels de la escala: todos muestran su color (`q.color`) en lugar de solo el activo. Best day sigue en negrita.
+- Humedad en `DayRow`: `{day.humidity}%` → `{Math.round(day.humidity)}%` (entero, sin decimales).
+- "No apto" color: `#9b2020` → `#b91c1c` (visible a 25% opacidad en versión anterior, ahora irrelevante por cambio de diseño).
+
+**Files changed:**
+- `apps/frontend/src/pages/LavarCoche.tsx` — 4 commits de pulido visual
+
+**Tests:**
+- `pnpm exec tsc --noEmit` → 0 errores
+
+**Commits:** `eccb54c` → `d325813` → `9ac1581` → `044a4f9` → `a4c6c0d` · **Push:** ✅ origin/main
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-06-01 — score_lavar_coche veto humedad + distinción visual Regular/No apto
+
+**Done:**
+- `score_lavar_coche`: penalties de humedad aumentados (>65→-8, >70→-18, >80→-30) + hard cap ≥70%→max 74 → nunca "Excelente" con humedad alta. Headline específico cuando humidity ≥80%.
+- 10 tests nuevos en `TestLavarCoche` cubriendo caps y edge cases (0 tests previos existían).
+- `LavarCoche.tsx`: `LABEL_COLOR` map con 4 colores distintos — "No apto" usa `#9b2020` (crimson) vs "Regular" `#e05545`. `QUALITY_SCALE`, badges y barra de score ahora derivan color de `LABEL_COLOR[day.label]`. `scoreInfo` agrega rama `score<30` con fondo más oscuro.
+
+**Files changed:**
+- `apps/backend/app/services/calculators.py` — `score_lavar_coche` veto humedad + headline
+- `apps/backend/tests/test_calculators.py` — `TestLavarCoche` clase nueva (10 tests) + import
+- `apps/frontend/src/pages/LavarCoche.tsx` — `LABEL_COLOR`, `QUALITY_SCALE`, `scoreInfo`, `DayRow`
+
+**Tests:**
+- `uv run pytest` → 581 passed, 0 failed
+- `pnpm exec tsc --noEmit` → 0 errores
+
+**Commit:** `6b4d92a` · **Push:** ✅ origin/main
+
+**Next:**
+- Awaiting user direction
+
+---
+
+## 2026-06-01 — Wave robustez completa + UI fixes + Tender Ropa veto
+
+**Done:**
+- Fix 2 (Option A): multi-modelo real `["gfs_seamless", "ecmwf_ifs025"]` en `get_multi_model_daily`; consenso ahora informa divergencia real
+- Selector de modelo GFS/ECMWF/Consenso en Previsión: backend `?model=` param, frontend toggle en `Forecast7d.tsx`, estado en `PrevisionClima.tsx`
+- Fix iconos horarios: `days=2→7` en `get_hourly_forecast_ext` — ya no muestra cielo despejado desde el miércoles
+- 6 badge inconsistencies frontend: `confidenceColor()` util compartida en `lib/confidence.ts`, importada en Forecast7dCards/Table/Chart, RainForecastCard, SportBlock null-guard, LaundryDayCard null-guard + umbrales 70→75/45→50
+- LavarCoche: QUALITY_SCALE 'Bueno' amarillo corregido a `#f0a030`
+- Fog labels: backend `_classify_visibility` renombrado Niebla→Neblina (500m–1km) / Niebla densa→Niebla (<500m)
+- Niebla.tsx: VISIBILITY_SCALE con campo `note`, explicación científica Bruma vs Neblina en FOG_TYPES
+- Tender Ropa veto por humedad: ≥65% → 0 pts, ≥70% → cap 44 ("Regular" techo), ≥80% → cap 25 ("No apto"); headlines + reason actualizados
+
+**Files changed:**
+- `apps/backend/app/services/openmeteo.py` — Fix2: 2 modelos; fog labels renombrados
+- `apps/backend/app/routers/weather.py` — `days=7`, `model` param, `_build_7d_forecast` selector
+- `apps/backend/app/routers/niebla.py` — docstring fog labels
+- `apps/backend/app/services/calculators.py` — Tender Ropa veto humedad + headlines
+- `apps/backend/tests/test_calculators.py` — 3 tests renombrados/actualizados + 2 nuevos veto tests
+- `apps/backend/tests/test_openmeteo_extended.py` — fog label tests renombrados, both-models test
+- `apps/frontend/src/lib/confidence.ts` — nuevo util `confidenceColor()`
+- `apps/frontend/src/lib/api.ts` — `weatherDashboard` acepta `model?`
+- `apps/frontend/src/hooks/useWeather.ts` — `useWeatherDashboard` acepta `model`
+- `apps/frontend/src/pages/PrevisionClima.tsx` — state `forecastModel`
+- `apps/frontend/src/pages/Niebla.tsx` — VISIBILITY_SCALE notes + FOG_TYPES Bruma
+- `apps/frontend/src/components/clima/Forecast7d.tsx` — toggle GFS/ECMWF/Consenso
+- `apps/frontend/src/components/clima/Forecast7dCards.tsx`, `Table.tsx`, `Chart.tsx` — `confidenceColor` import
+- `apps/frontend/src/components/clima/RainForecastCard.tsx`, `SportBlock.tsx` — null-guards
+- `apps/frontend/src/components/ui/LaundryDayCard.tsx` — null-guard + umbrales
+- `apps/frontend/src/pages/LavarCoche.tsx` — QUALITY_SCALE color fix
+- `apps/frontend/src/components/ui/ModelBadge.tsx` — null-guard `!meta`
+
+**Tests:**
+- `uv run pytest` → 571 passed, 0 failed
+- `pnpm exec tsc --noEmit` → 0 errores (verificado antes del commit)
+
+**Commits:** `04a3116` (Fix2 + badges + fog + hourly) · `a41c22d` (iconos + selector + Tender Ropa veto)
+
+**Next:**
+- Pendientes menores — ver sección pendientes en PROGRESS.md
+
+---
+
+## 2026-06-01 — Fix 4c: fetch_with_retry helper + test suite fixes
+
+**Done:**
+- `fetch_with_retry` implementado en `http_client.py`: retry en 429/5xx/Timeout/TransportError, backoff exponencial ±25% jitter, respeto de Retry-After con cap
+- `openmeteo.py`: todos los `_fetch()` internos migrados a `fetch_with_retry`
+- Tests nuevos: `test_fetch_with_retry.py` (13 tests), incluye integración `get_current` 429→200
+- Tests fixes: `test_openmeteo_extended.py` — `_mock_http_client` migrado a `client.request` + `status_code` como int; 6 tests de timeout actualizados
+
+**Files changed:**
+- `apps/backend/app/core/http_client.py` — `_backoff_delay` + `fetch_with_retry`, limits httpx
+- `apps/backend/app/services/openmeteo.py` — todos los `_fetch()` usan `fetch_with_retry`
+- `apps/backend/tests/test_fetch_with_retry.py` — nuevo (13 tests)
+- `apps/backend/tests/test_openmeteo_extended.py` — `_mock_http_client` y 6 timeout tests adaptados
+
+**Tests:**
+- `uv run pytest` → 568 passed, 0 failed
+
+**Next:**
+- Fix 2 (pendiente decisión): multi-model Open-Meteo consensus (Option A: restaurar / Option B: simplificar)
+- Badge inconsistencies (deferred): 6 issues identificados en cards del frontend
+
+---
+
 ## 2026-05-30 — Fase 2 animated titles: RainText + ScanText
 
 **Done:**

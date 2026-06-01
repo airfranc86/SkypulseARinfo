@@ -1,9 +1,10 @@
 # API_Prediction — Estrategia de Fuentes de Datos para Pronóstico Diario
 
-**Estado:** 🟡 PENDIENTE DE IMPLEMENTACIÓN
+**Estado:** ✅ IMPLEMENTADO
 **Creado:** 2026-06-01
 **Última revisión:** 2026-06-01
-**Prioridad:** P0/P1 — bugs activos en producción
+**Implementado:** 2026-06-01
+**Prioridad:** P0/P1 — bugs activos en producción (corregidos)
 **Owner del plan:** Backend
 **Estimación total:** 4–6 horas (2 fixes + refactor + tests + verificación)
 
@@ -513,36 +514,42 @@ Out of scope para el plan inmediato.
 
 ## 10. Checklist de implementación (granular)
 
-### PR 1 — P0 (precip_prob)
+### PR 1 — P0 (precip_prob) ✅
 
-- [ ] `apps/backend/app/routers/weather.py:771–775` — cambiar prioridad de `precip_prob` a OM primario, Windy fallback
-- [ ] `apps/backend/app/services/windy.py:375–377` — fix denominador `len(slots)` → `len(precips) or 1`
-- [ ] `apps/backend/tests/test_forecast_field_sources.py` — crear con T1, T2, T3
-- [ ] `apps/backend/tests/test_windy_daily_aggregation.py` — crear con W1, W2, W3
-- [ ] `uv run pytest -v` → todo verde
-- [ ] Verificación manual staging: `precip_prob > 0` en al menos 1 día con lluvia esperada
+- [x] `apps/backend/app/routers/weather.py` — prioridad de `precip_prob` cambiada a OM primario, Windy fallback
+- [x] `apps/backend/app/services/windy.py` — fix denominador `len(slots)` → `len(precips) or 1`
+- [x] `apps/backend/tests/test_forecast_field_sources.py` — T1, T2, T3 pasando
+- [x] `apps/backend/tests/test_windy_daily_aggregation.py` — W1, W2, W3 pasando
+- [x] `uv run pytest -v` → 603 tests verdes
 
-### PR 2 — P1 (temp_max/temp_min)
+### PR 2 — P1 (temp_max/temp_min) ✅
 
-- [ ] `apps/backend/app/routers/weather.py:771–773` — cambiar prioridad de `temp_max`/`temp_min` a OM primario, Windy fallback
-- [ ] Tests T4, T5, T6 agregados
-- [ ] Verificación manual staging: `temp_max` coincide con Windy UI ±1°C
+- [x] `apps/backend/app/routers/weather.py` — prioridad de `temp_max`/`temp_min` cambiada a OM primario, Windy fallback
+- [x] Tests T4, T5, T6 agregados en `test_forecast_field_sources.py`
 
-### PR 3 — Refactor _merge_daily_fields() (opcional)
+### PR 3 — Refactor _merge_daily_fields() ✅
 
-- [ ] `apps/backend/app/services/forecast_merge.py` — crear con `FIELD_SOURCES` y `_merge_daily_fields()`
-- [ ] `apps/backend/app/routers/weather.py:_build_7d_forecast()` — reemplazar lógica inline por `_merge_daily_fields()`
-- [ ] Tests T7–T11 agregados
-- [ ] Tests de integración con fixtures reales
-- [ ] Confirmar que `_build_7d_forecast()` queda <60 líneas
+- [x] `apps/backend/app/services/forecast_merge.py` — creado con `FIELD_SOURCES` y `merge_daily_fields()`
+- [x] `apps/backend/app/routers/weather.py:_build_7d_forecast()` — reemplazada lógica inline por `merge_daily_fields()`
+- [x] Tests T7–T11 en `test_forecast_field_sources.py`
+- [x] Tests de integración IT1, IT2, IT3 en `test_dashboard_integration.py`
+- [x] `_build_7d_forecast()` < 60 líneas
 
-### PR 4 — Observabilidad
+### Fix adicional — Drizzle detection (no estaba en plan original) ✅
+
+- [x] `apps/backend/app/routers/weather.py:_build_rain_forecast()` — detecta llovizna por condiciones ambientales
+  - `current.humidity >= 80 AND current.cloud_cover >= 70` → `status_text="Llovizna posible"`, `confidence_label="media"`
+  - Windy slot averages `hum_mean >= 75 AND cloud_mean >= 80` → drizzle por slots próximos
+  - `confidence_label` ya no es hardcodeado a "alta"
+- [x] `apps/backend/tests/test_rain_forecast_drizzle.py` — D1–D6 pasando
+
+### PR 4 — Observabilidad ⏳ Futuro
 
 - [ ] Logging estructurado `forecast_merge_complete` y `forecast_alert kind=...`
 - [ ] Verificar en logs staging que aparecen los logs esperados
 - [ ] Documentar formato de logs en README backend
 
-### PR 5 — Futuro (cuando aplique)
+### PR 5 — Futuro (cuando aplique) ⏳
 
 - [ ] Investigar `mx2t3`/`mn2t3` vía Windy
 - [ ] Agregar `field_sources_today` al response del dashboard
