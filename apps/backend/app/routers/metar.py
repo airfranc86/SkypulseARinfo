@@ -2,6 +2,8 @@
 
 GET /api/metar?icao=SAEZ           → METAR decodificado
 GET /api/metar?icao=SAEZ&type=taf  → TAF raw
+
+⚠ No llamar CheckWX directamente desde aquí — usar services/checkwx.py.
 """
 from __future__ import annotations
 
@@ -12,8 +14,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.core.config import settings
-from app.core.http_client import get_client
+from app.core.counter import seconds_until_next_cycle
 from app.core.rate_limit import limiter
+from app.services import checkwx as checkwx_svc
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +44,20 @@ async def get_metar(
 
     code = _validate_icao(icao)
 
-    if type == "taf":
-        url = f"{settings.checkwx_base_url}/taf/{code}"
-    else:
-        url = f"{settings.checkwx_base_url}/metar/{code}/decoded"
-
-    headers = {"X-API-Key": settings.checkwx_api_key}
-    logger.info("GET /api/metar icao=%s type=%s", code, type)
-
-    client = get_client()
     try:
-        resp = await client.get(url, headers=headers, timeout=settings.http_timeout_seconds)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as exc:
-        logger.error("CheckWX request failed for %s/%s: %s", code, type, exc)
+        return await checkwx_svc.fetch_metar(code, kind=type)
+    except checkwx_svc.CheckWXQuotaExceededError as exc:
+        retry_after = seconds_until_next_cycle()
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "metar_quota_exceeded",
+                "message": "Cuota mensual de METAR agotada",
+                "cycle": exc.cycle,
+                "limit": settings.checkwx_monthly_limit,
+                "retry_after": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+    except checkwx_svc.CheckWXUnavailableError:
         raise HTTPException(status_code=503, detail="metar_unavailable")

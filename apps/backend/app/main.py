@@ -27,9 +27,12 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
 from .core.config import settings
+from .core.counter import MemoryCounter, RedisCounter
 from .core.http_client import create_client, close_client
 from .core.rate_limit import limiter
+from .core.upstash import UpstashRedis
 from .routers import earthquakes, incendios, metar, niebla, tools, volcanes, weather
+from .services import checkwx as checkwx_svc
 
 
 def setup_logging() -> None:
@@ -66,6 +69,13 @@ logger = logging.getLogger("skypulse")
 async def lifespan(app: FastAPI):
     setup_logging()
     await create_client()
+    if settings.upstash_redis_rest_url and settings.upstash_redis_rest_token:
+        redis = UpstashRedis(settings.upstash_redis_rest_url, settings.upstash_redis_rest_token)
+        checkwx_svc.set_counter(RedisCounter(redis))
+        logger.info("checkwx_counter=redis")
+    else:
+        checkwx_svc.set_counter(MemoryCounter())
+        logger.warning("checkwx_counter=memory — quota not persisted across restarts")
     logger.info("SkyPulse backend starting...")
     yield
     logger.info("SkyPulse backend shutting down")

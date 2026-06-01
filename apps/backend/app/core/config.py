@@ -35,8 +35,13 @@ class Settings(BaseSettings):
 
     checkwx_api_key: str = ""
     checkwx_base_url: str = "https://api.checkwx.com"
-    cache_ttl_metar_seconds: int = 1800  # 30 minutos — METAR/TAF
-    metar_timeout_seconds: float = 10.0   # reemplaza _HTTP_TIMEOUT local
+    cache_ttl_metar_seconds: int = 1800  # 30 minutos — METAR
+    cache_ttl_taf_seconds: int = 3600    # 1 hora — TAF
+    metar_timeout_seconds: float = 10.0
+    checkwx_monthly_limit: int = 198     # Free tier limit (configurable if plan changes)
+
+    upstash_redis_rest_url: str = ""
+    upstash_redis_rest_token: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
