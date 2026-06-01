@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
-import { ModelBadge } from '@/components/ui/ModelBadge'
-import type { ModelKey } from '@/components/ui/ModelBadge'
 
 const GUIDES: Array<{
   to: string
@@ -54,7 +52,6 @@ const TOOLS: Array<{
   title: string
   desc: string
   color: string
-  model: ModelKey
 }> = [
   {
     to: '/prevision',
@@ -62,7 +59,6 @@ const TOOLS: Array<{
     title: 'Previsión del clima',
     desc: 'El tiempo de hoy y los próximos días, en un vistazo.',
     color: '#c8a84b',
-    model: 'mixed',
   },
   {
     to: '/tender-ropa',
@@ -70,7 +66,6 @@ const TOOLS: Array<{
     title: 'Tender ropa',
     desc: '¿Es buen día para colgar la ropa afuera?',
     color: '#3ecf7a',
-    model: 'gfs',
   },
   {
     to: '/lavar-auto',
@@ -78,7 +73,6 @@ const TOOLS: Array<{
     title: 'Lavar el auto',
     desc: 'Los mejores días de la semana para lavar sin sorpresas.',
     color: '#5aaad8',
-    model: 'gfs',
   },
   {
     to: '/terremotos',
@@ -86,7 +80,6 @@ const TOOLS: Array<{
     title: 'Terremotos',
     desc: 'Sismos recientes cerca tuyo.',
     color: '#e05545',
-    model: 'usgs',
   },
   {
     to: '/cota-de-nieve',
@@ -94,7 +87,6 @@ const TOOLS: Array<{
     title: 'Cota de nieve',
     desc: '¿Hasta dónde llega la nieve en la cordillera?',
     color: '#90aabb',
-    model: 'gfs',
   },
   {
     to: '/niebla',
@@ -102,7 +94,6 @@ const TOOLS: Array<{
     title: 'Niebla y visibilidad',
     desc: 'Visibilidad actual y pronóstico de niebla hora a hora.',
     color: '#90aabb',
-    model: 'openmeteo',
   },
 ]
 
@@ -138,7 +129,7 @@ export function Landing() {
           Herramientas
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {TOOLS.map(({ to, emoji, title, desc, color, model }) => (
+          {TOOLS.map(({ to, emoji, title, desc, color }) => (
             <Link
               key={to}
               to={to}
@@ -160,9 +151,6 @@ export function Landing() {
                 el.style.boxShadow = 'none'
               }}
             >
-              {/* Badge de modelo — esquina superior derecha */}
-              <ModelBadge model={model} variant="inline" />
-
               <div
                 className="size-10 rounded-lg flex items-center justify-center"
                 style={{ background: `${color}1a`, color }}

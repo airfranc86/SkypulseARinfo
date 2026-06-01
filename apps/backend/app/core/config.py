@@ -29,11 +29,14 @@ class Settings(BaseSettings):
     windy_api_key: str = ""
     windy_base_url: str = "https://api.windy.com/api/point-forecast/v2"
     windy_model: str = "gfs"  # ecmwf requiere plan pago; gfs disponible en plan gratuito
+    windy_timeout_seconds: float = 10.0   # POST pesado con niveles + parámetros múltiples
     cache_ttl_fire_seconds: int = 3600  # 1 hora — riesgo de incendio
+    fire_timeout_seconds: float = 10.0    # mismo tipo de request que Windy
 
     checkwx_api_key: str = ""
     checkwx_base_url: str = "https://api.checkwx.com"
     cache_ttl_metar_seconds: int = 1800  # 30 minutos — METAR/TAF
+    metar_timeout_seconds: float = 10.0   # reemplaza _HTTP_TIMEOUT local
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

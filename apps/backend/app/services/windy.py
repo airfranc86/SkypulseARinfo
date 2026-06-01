@@ -16,7 +16,7 @@ import asyncio
 import logging
 import math
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 
 from cachetools import TTLCache
@@ -32,6 +32,19 @@ logger = logging.getLogger(__name__)
 
 class WindyNotConfiguredError(Exception):
     """Se lanza cuando windy_api_key no está configurada."""
+
+
+@dataclass
+class _WindySlot:
+    """Slot compartido entre la coroutine fetcher y las que esperan el mismo cache_key.
+
+    ``data`` o ``error`` se asignan ANTES de ``event.set()``, garantizando que
+    las waiters lean un estado consistente al despertar. Evita el KeyError que
+    ocurre cuando el fetcher falla y las waiters intentan leer una caché vacía.
+    """
+    event: asyncio.Event = field(default_factory=asyncio.Event)
+    data: dict | None = None
+    error: Exception | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -94,9 +107,10 @@ class WindyDailyEntry:
 # públicas reutilizan este payload para evitar gastar cuota innecesariamente.
 _raw_cache: TTLCache = TTLCache(maxsize=256, ttl=3600)
 _cache_lock = asyncio.Lock()
-# Eventos para coordinar coroutines concurrentes que piden el mismo cache_key.
+# Slots para coordinar coroutines concurrentes que piden el mismo cache_key.
 # Previene el race condition TOCTOU: dos coroutines miss-check simultáneo → doble fetch.
-_fetch_events: dict[tuple[float, float], asyncio.Event] = {}
+# Cada slot transporta dato o error para que las waiters nunca lean una caché vacía.
+_fetch_events: dict[tuple[float, float], _WindySlot] = {}
 
 # Alias legacy retained for backward compatibility with tests/scripts that
 # referenced the old in-memory cache.
@@ -179,21 +193,24 @@ async def _fetch_raw(lat: float, lon: float) -> dict:
             return _raw_cache[cache_key]
 
         if cache_key in _fetch_events:
-            # Otra coroutine ya está haciendo el fetch — subscribirse
-            event: asyncio.Event | None = _fetch_events[cache_key]
+            # Otra coroutine ya está haciendo el fetch — subscribirse al slot.
+            waiter_slot: _WindySlot | None = _fetch_events[cache_key]
+            responsible_slot: _WindySlot | None = None
         else:
-            # Primera en llegar — registrar intención de fetch
-            event = asyncio.Event()
-            _fetch_events[cache_key] = event
-            event = None  # sentinel: esta coroutine debe hacer el fetch
+            # Primera en llegar — crear slot y asumir el fetch.
+            responsible_slot = _WindySlot()
+            _fetch_events[cache_key] = responsible_slot
+            waiter_slot = None
 
-    if event is not None:
-        # Esperar fuera del lock a que la coroutine fetcher termine
-        await event.wait()
-        async with _cache_lock:
-            return _raw_cache[cache_key]
+    if waiter_slot is not None:
+        # Esperar fuera del lock a que la coroutine fetcher termine.
+        await waiter_slot.event.wait()
+        if waiter_slot.error is not None:
+            raise waiter_slot.error
+        return waiter_slot.data  # type: ignore[return-value]
 
-    # Esta coroutine es la responsable del fetch
+    # Esta coroutine es la responsable del fetch.
+    assert responsible_slot is not None
     try:
         payload = {
             "lat": lat,
@@ -208,20 +225,25 @@ async def _fetch_raw(lat: float, lon: float) -> dict:
         response = await client.post(
             settings.windy_base_url,
             json=payload,
-            timeout=10.0,
+            timeout=settings.windy_timeout_seconds,
         )
         response.raise_for_status()
         data = response.json()
 
         async with _cache_lock:
             _raw_cache[cache_key] = data
+        responsible_slot.data = data
         return data
+    except Exception as exc:
+        # El error se almacena en el slot para que las waiters lo reciban
+        # en vez de un KeyError por caché vacía.
+        responsible_slot.error = exc
+        raise
     finally:
-        # Señalar a las coroutines esperando y limpiar el evento
+        # Siempre señalar — en éxito o fallo — y limpiar el slot.
         async with _cache_lock:
-            ev = _fetch_events.pop(cache_key, None)
-        if ev is not None:
-            ev.set()
+            _fetch_events.pop(cache_key, None)
+        responsible_slot.event.set()
 
 
 # ---------------------------------------------------------------------------

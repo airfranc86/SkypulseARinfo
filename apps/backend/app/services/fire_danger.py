@@ -168,7 +168,7 @@ async def _fetch_raw_fire(lat: float, lon: float) -> dict | None:
         response = await client.post(
             settings.windy_base_url,
             json=payload,
-            timeout=10.0,
+            timeout=settings.fire_timeout_seconds,
         )
         response.raise_for_status()
         data = response.json()

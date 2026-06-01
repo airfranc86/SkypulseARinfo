@@ -87,7 +87,7 @@ OPENMETEO_SAMPLE_PAYLOAD = {
 
 
 # ---------------------------------------------------------------------------
-# Limpiar el cache de SMN entre tests para garantizar aislamiento
+# Limpiar caches entre tests para garantizar aislamiento
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
@@ -97,6 +97,19 @@ def clear_smn_cache():
     smn_module._station_cache.clear()
     yield
     smn_module._station_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_openmeteo_caches():
+    """Limpia los tres buckets de caché de Open-Meteo antes y después de cada test."""
+    import app.services.openmeteo as om_module
+    om_module._CACHE_CURRENT.clear()
+    om_module._CACHE_FORECAST.clear()
+    om_module._CACHE_NOWCAST.clear()
+    yield
+    om_module._CACHE_CURRENT.clear()
+    om_module._CACHE_FORECAST.clear()
+    om_module._CACHE_NOWCAST.clear()
 
 
 # ---------------------------------------------------------------------------

@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from app.core.cache import SingleFlightCache
 from app.core.config import settings
-from app.core.http_client import get_client
+from app.core.http_client import fetch_with_retry, get_client
 from app.utils.parsing import parse_float
 
 _DAY_LABELS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
@@ -25,6 +27,28 @@ _CURRENT_FIELDS = ",".join([
     "cloud_cover",
     "weather_code",
 ])
+
+# ---------------------------------------------------------------------------
+# Cache infrastructure — Fix 1
+# Three TTL buckets: current (10 min), forecast (30 min), nowcast (15 min).
+# ---------------------------------------------------------------------------
+
+def _cache_key(params: dict) -> str:
+    """Canonical cache key from a request params dict.
+
+    Rounds lat/lon to 4 decimals to collapse floating-point drift; sorts all
+    keys so insertion order never produces a different key for the same request.
+    """
+    normalized = {
+        k: (round(v, 4) if k in ("latitude", "longitude") and isinstance(v, float) else v)
+        for k, v in params.items()
+    }
+    return json.dumps(normalized, sort_keys=True)
+
+
+_CACHE_CURRENT: SingleFlightCache = SingleFlightCache(maxsize=256, ttl=600, name="om_current")
+_CACHE_FORECAST: SingleFlightCache = SingleFlightCache(maxsize=256, ttl=1800, name="om_forecast")
+_CACHE_NOWCAST: SingleFlightCache = SingleFlightCache(maxsize=256, ttl=900, name="om_nowcast")
 
 
 @dataclass(frozen=True)
@@ -56,42 +80,45 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
         "timezone": "America/Argentina/Buenos_Aires",
         "wind_speed_unit": "kmh",
     }
+    key = _cache_key(params)
 
-    try:
-        client = get_client()
-        response = await client.get(
-            settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo fetch failed: %s", exc)
-        return None
+    async def _fetch() -> OpenMeteoCurrent | None:
+        try:
+            client = get_client()
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo fetch failed: %s", exc)
+            return None
 
-    try:
-        current = data["current"]
-        wc_raw = current.get("weather_code")
-        weather_code = int(wc_raw) if wc_raw is not None else None
-        return OpenMeteoCurrent(
-            temp_c=parse_float(current.get("temperature_2m")),
-            feels_like_c=parse_float(current.get("apparent_temperature")),
-            humidity=parse_float(current.get("relative_humidity_2m")),
-            wind_speed_kmh=parse_float(current.get("wind_speed_10m")),
-            wind_dir_deg=(lambda d: d % 360 if d is not None else None)(
-                parse_float(current.get("wind_direction_10m"))
-            ),
-            pressure_hpa=parse_float(current.get("surface_pressure")),
-            precip_1h_mm=parse_float(current.get("precipitation")),
-            cloud_cover=parse_float(current.get("cloud_cover")),
-            weather_code=weather_code,
-            description=None,
-            fetched_at=datetime.now(timezone.utc),
-        )
-    except (KeyError, TypeError) as exc:
-        logger.warning("Open-Meteo payload parse error: %s", exc)
-        return None
+        try:
+            current = data["current"]
+            wc_raw = current.get("weather_code")
+            weather_code = int(wc_raw) if wc_raw is not None else None
+            return OpenMeteoCurrent(
+                temp_c=parse_float(current.get("temperature_2m")),
+                feels_like_c=parse_float(current.get("apparent_temperature")),
+                humidity=parse_float(current.get("relative_humidity_2m")),
+                wind_speed_kmh=parse_float(current.get("wind_speed_10m")),
+                wind_dir_deg=(lambda d: d % 360 if d is not None else None)(
+                    parse_float(current.get("wind_direction_10m"))
+                ),
+                pressure_hpa=parse_float(current.get("surface_pressure")),
+                precip_1h_mm=parse_float(current.get("precipitation")),
+                cloud_cover=parse_float(current.get("cloud_cover")),
+                weather_code=weather_code,
+                description=None,
+                fetched_at=datetime.now(timezone.utc),
+            )
+        except (KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo payload parse error: %s", exc)
+            return None
+
+    return await _CACHE_CURRENT.get_or_fetch(key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -127,44 +154,47 @@ async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | No
         "wind_speed_unit": "kmh",
         "forecast_days": 2,
     }
+    key = _cache_key(params)
 
-    try:
-        client = get_client()
-        response = await client.get(
-            settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo hourly forecast failed: %s", exc)
-        return None
+    async def _fetch() -> HourlyForecastData | None:
+        try:
+            client = get_client()
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo hourly forecast failed: %s", exc)
+            return None
 
-    try:
-        hourly = data["hourly"]
-        time_list: list[str] = hourly.get("time", [])
+        try:
+            hourly = data["hourly"]
+            time_list: list[str] = hourly.get("time", [])
 
-        timestamps: list[int] = []
-        hour_labels: list[str] = []
-        for t in time_list:
-            dt = datetime.fromisoformat(t)
-            timestamps.append(int(dt.timestamp()))
-            hour_labels.append(t[11:16])  # "14:00"
+            timestamps: list[int] = []
+            hour_labels: list[str] = []
+            for t in time_list:
+                dt = datetime.fromisoformat(t)
+                timestamps.append(int(dt.timestamp()))
+                hour_labels.append(t[11:16])  # "14:00"
 
-        return HourlyForecastData(
-            timestamps=timestamps,
-            hour_labels=hour_labels,
-            temps_c=[parse_float(v) for v in hourly.get("temperature_2m", [])],
-            humidities=[parse_float(v) for v in hourly.get("relative_humidity_2m", [])],
-            precipitations=[parse_float(v) for v in hourly.get("precipitation", [])],
-            wind_speeds_kmh=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
-            temps_850hpa=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
-            elevation_m=parse_float(data.get("elevation")),
-        )
-    except (KeyError, TypeError) as exc:
-        logger.warning("Open-Meteo hourly parse error: %s", exc)
-        return None
+            return HourlyForecastData(
+                timestamps=timestamps,
+                hour_labels=hour_labels,
+                temps_c=[parse_float(v) for v in hourly.get("temperature_2m", [])],
+                humidities=[parse_float(v) for v in hourly.get("relative_humidity_2m", [])],
+                precipitations=[parse_float(v) for v in hourly.get("precipitation", [])],
+                wind_speeds_kmh=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
+                temps_850hpa=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
+                elevation_m=parse_float(data.get("elevation")),
+            )
+        except (KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo hourly parse error: %s", exc)
+            return None
+
+    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -200,42 +230,45 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
         "wind_speed_unit": "kmh",
         "models": "gfs_seamless",
     }
+    key = _cache_key(params)
 
-    try:
-        client = get_client()
-        response = await client.get(
-            settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo daily forecast failed: %s", exc)
-        return None
+    async def _fetch() -> DailyForecastData | None:
+        try:
+            client = get_client()
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo daily forecast failed: %s", exc)
+            return None
 
-    try:
-        daily = data["daily"]
-        time_list: list[str] = daily.get("time", [])
+        try:
+            daily = data["daily"]
+            time_list: list[str] = daily.get("time", [])
 
-        day_labels: list[str] = []
-        for t in time_list:
-            dt = datetime.fromisoformat(t)
-            day_labels.append(_DAY_LABELS_ES[dt.weekday()])
+            day_labels: list[str] = []
+            for t in time_list:
+                dt = datetime.fromisoformat(t)
+                day_labels.append(_DAY_LABELS_ES[dt.weekday()])
 
-        return DailyForecastData(
-            dates=list(time_list),
-            day_labels=day_labels,
-            temp_max=[parse_float(v) for v in daily.get("temperature_2m_max", [])],
-            temp_min=[parse_float(v) for v in daily.get("temperature_2m_min", [])],
-            precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
-            wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
-            humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
-            precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
-        )
-    except (KeyError, TypeError) as exc:
-        logger.warning("Open-Meteo daily parse error: %s", exc)
-        return None
+            return DailyForecastData(
+                dates=list(time_list),
+                day_labels=day_labels,
+                temp_max=[parse_float(v) for v in daily.get("temperature_2m_max", [])],
+                temp_min=[parse_float(v) for v in daily.get("temperature_2m_min", [])],
+                precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
+                wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
+                humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
+                precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
+            )
+        except (KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo daily parse error: %s", exc)
+            return None
+
+    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -285,58 +318,61 @@ async def get_daily_forecast_ext(
     }
     if model:
         params["models"] = model
+    key = _cache_key(params)
 
-    try:
-        client = get_client()
-        response = await client.get(
-            settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo daily_ext forecast failed (model=%s): %s", model, exc)
-        return None
+    async def _fetch() -> DailyForecastDataExt | None:
+        try:
+            client = get_client()
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo daily_ext forecast failed (model=%s): %s", model, exc)
+            return None
 
-    try:
-        daily = data["daily"]
-        time_list: list[str] = daily.get("time", [])
+        try:
+            daily = data["daily"]
+            time_list: list[str] = daily.get("time", [])
 
-        day_labels: list[str] = []
-        for t in time_list:
-            dt = datetime.fromisoformat(t)
-            day_labels.append(_DAY_LABELS_ES[dt.weekday()])
+            day_labels: list[str] = []
+            for t in time_list:
+                dt = datetime.fromisoformat(t)
+                day_labels.append(_DAY_LABELS_ES[dt.weekday()])
 
-        # daylight_duration viene en segundos
-        daylight_raw = daily.get("daylight_duration", [])
-        daylight_seconds: list[float | None] = [parse_float(v) for v in daylight_raw]
+            # daylight_duration viene en segundos
+            daylight_raw = daily.get("daylight_duration", [])
+            daylight_seconds: list[float | None] = [parse_float(v) for v in daylight_raw]
 
-        # weather_code puede ser int
-        weather_codes: list[int | None] = []
-        for v in daily.get("weather_code", []):
-            pf = parse_float(v)
-            weather_codes.append(int(pf) if pf is not None else None)
+            # weather_code puede ser int
+            weather_codes: list[int | None] = []
+            for v in daily.get("weather_code", []):
+                pf = parse_float(v)
+                weather_codes.append(int(pf) if pf is not None else None)
 
-        return DailyForecastDataExt(
-            dates=list(time_list),
-            day_labels=day_labels,
-            temp_max=[parse_float(v) for v in daily.get("temperature_2m_max", [])],
-            temp_min=[parse_float(v) for v in daily.get("temperature_2m_min", [])],
-            precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
-            precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
-            wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
-            wind_gusts_max=[parse_float(v) for v in daily.get("wind_gusts_10m_max", [])],
-            humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
-            uv_max=[parse_float(v) for v in daily.get("uv_index_max", [])],
-            weather_codes=weather_codes,
-            sunrise=list(daily.get("sunrise", [])),
-            sunset=list(daily.get("sunset", [])),
-            daylight_seconds=daylight_seconds,
-        )
-    except (KeyError, TypeError) as exc:
-        logger.warning("Open-Meteo daily_ext parse error (model=%s): %s", model, exc)
-        return None
+            return DailyForecastDataExt(
+                dates=list(time_list),
+                day_labels=day_labels,
+                temp_max=[parse_float(v) for v in daily.get("temperature_2m_max", [])],
+                temp_min=[parse_float(v) for v in daily.get("temperature_2m_min", [])],
+                precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
+                precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
+                wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
+                wind_gusts_max=[parse_float(v) for v in daily.get("wind_gusts_10m_max", [])],
+                humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
+                uv_max=[parse_float(v) for v in daily.get("uv_index_max", [])],
+                weather_codes=weather_codes,
+                sunrise=list(daily.get("sunrise", [])),
+                sunset=list(daily.get("sunset", [])),
+                daylight_seconds=daylight_seconds,
+            )
+        except (KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo daily_ext parse error (model=%s): %s", model, exc)
+            return None
+
+    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -360,53 +396,59 @@ async def get_multi_model_daily(
     Reducido de 3 → 1 modelo para evitar rate-limiting en el plan gratuito de Open-Meteo.
     Si falla, retorna None (el dashboard usará fallback sintético desde Windy GFS).
     """
-    model_names = ["gfs_seamless"]
-    tasks = [get_daily_forecast_ext(lat, lon, days, m) for m in model_names]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Synthetic key — captures all inputs including the hardcoded model list.
+    key = _cache_key({"latitude": lat, "longitude": lon, "forecast_days": days, "models": "gfs_seamless"})
 
-    successful: dict[str, DailyForecastDataExt] = {
-        name: r
-        for name, r in zip(model_names, results)
-        if isinstance(r, DailyForecastDataExt)
-    }
+    async def _fetch() -> MultiModelDailyData | None:
+        model_names = ["gfs_seamless"]
+        tasks = [get_daily_forecast_ext(lat, lon, days, m) for m in model_names]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    if not successful:
-        logger.warning("get_multi_model_daily: todos los modelos fallaron para (%s, %s)", lat, lon)
-        return None
+        successful: dict[str, DailyForecastDataExt] = {
+            name: r
+            for name, r in zip(model_names, results)
+            if isinstance(r, DailyForecastDataExt)
+        }
 
-    # Calcular consenso por día
-    num_days = min(len(d.dates) for d in successful.values())
-    consensus_pct: list[float] = []
-    consensus_label: list[str] = []
+        if not successful:
+            logger.warning("get_multi_model_daily: todos los modelos fallaron para (%s, %s)", lat, lon)
+            return None
 
-    for i in range(num_days):
-        votes_rain = sum(
-            1 for d in successful.values()
-            if i < len(d.precip_sum) and (d.precip_sum[i] or 0.0) > 0.5
+        # Calcular consenso por día
+        num_days = min(len(d.dates) for d in successful.values())
+        consensus_pct: list[float] = []
+        consensus_label: list[str] = []
+
+        for i in range(num_days):
+            votes_rain = sum(
+                1 for d in successful.values()
+                if i < len(d.precip_sum) and (d.precip_sum[i] or 0.0) > 0.5
+            )
+            total = len(successful)
+            pct_rain = (votes_rain / total) * 100
+            # Confianza = qué tan unánime es el voto (cercano a 0% o 100% = alta)
+            agreement = max(pct_rain, 100 - pct_rain)
+            consensus_pct.append(round(agreement, 1))
+
+            if votes_rain == 0:
+                label = "all_agree_dry"
+            elif votes_rain == total:
+                label = "all_agree_rain"
+            elif votes_rain == 1:
+                label = "majority_dry"
+            elif votes_rain == total - 1:
+                label = "majority_rain"
+            else:
+                label = "split"
+            consensus_label.append(label)
+
+        return MultiModelDailyData(
+            models=successful,
+            consensus_pct_per_day=consensus_pct,
+            rain_consensus_per_day=consensus_label,
         )
-        total = len(successful)
-        pct_rain = (votes_rain / total) * 100
-        # Confianza = qué tan unánime es el voto (cercano a 0% o 100% = alta)
-        agreement = max(pct_rain, 100 - pct_rain)
-        consensus_pct.append(round(agreement, 1))
 
-        if votes_rain == 0:
-            label = "all_agree_dry"
-        elif votes_rain == total:
-            label = "all_agree_rain"
-        elif votes_rain == 1:
-            label = "majority_dry"
-        elif votes_rain == total - 1:
-            label = "majority_rain"
-        else:
-            label = "split"
-        consensus_label.append(label)
-
-    return MultiModelDailyData(
-        models=successful,
-        consensus_pct_per_day=consensus_pct,
-        rain_consensus_per_day=consensus_label,
-    )
+    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -446,57 +488,60 @@ async def get_hourly_forecast_ext(
         "timezone": "America/Argentina/Buenos_Aires",
         "wind_speed_unit": "kmh",
     }
+    key = _cache_key(params)
 
-    try:
-        client = get_client()
-        response = await client.get(
-            settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo hourly_ext forecast failed: %s", exc)
-        return None
+    async def _fetch() -> HourlyForecastExt | None:
+        try:
+            client = get_client()
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo hourly_ext forecast failed: %s", exc)
+            return None
 
-    try:
-        hourly = data["hourly"]
-        time_list: list[str] = hourly.get("time", [])
+        try:
+            hourly = data["hourly"]
+            time_list: list[str] = hourly.get("time", [])
 
-        timestamps: list[int] = []
-        hour_labels: list[str] = []
-        dates: list[str] = []
-        for t in time_list:
-            dt = datetime.fromisoformat(t)
-            timestamps.append(int(dt.timestamp()))
-            hour_labels.append(t[11:16])   # "14:00"
-            dates.append(t[:10])           # "2026-05-20"
+            timestamps: list[int] = []
+            hour_labels: list[str] = []
+            dates: list[str] = []
+            for t in time_list:
+                dt = datetime.fromisoformat(t)
+                timestamps.append(int(dt.timestamp()))
+                hour_labels.append(t[11:16])   # "14:00"
+                dates.append(t[:10])           # "2026-05-20"
 
-        # weather_code como int
-        weather_codes: list[int | None] = []
-        for v in hourly.get("weather_code", []):
-            pf = parse_float(v)
-            weather_codes.append(int(pf) if pf is not None else None)
+            # weather_code como int
+            weather_codes: list[int | None] = []
+            for v in hourly.get("weather_code", []):
+                pf = parse_float(v)
+                weather_codes.append(int(pf) if pf is not None else None)
 
-        # is_day puede ser 0/1 int de Open-Meteo
-        is_day_raw = hourly.get("is_day", [])
-        is_day: list[bool] = [bool(v) for v in is_day_raw]
+            # is_day puede ser 0/1 int de Open-Meteo
+            is_day_raw = hourly.get("is_day", [])
+            is_day: list[bool] = [bool(v) for v in is_day_raw]
 
-        return HourlyForecastExt(
-            timestamps=timestamps,
-            hour_labels=hour_labels,
-            dates=dates,
-            temps_c=[parse_float(v) for v in hourly.get("temperature_2m", [])],
-            precipitations=[parse_float(v) for v in hourly.get("precipitation", [])],
-            precip_probs=[parse_float(v) for v in hourly.get("precipitation_probability", [])],
-            wind_speeds=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
-            weather_codes=weather_codes,
-            is_day=is_day,
-        )
-    except (KeyError, TypeError) as exc:
-        logger.warning("Open-Meteo hourly_ext parse error: %s", exc)
-        return None
+            return HourlyForecastExt(
+                timestamps=timestamps,
+                hour_labels=hour_labels,
+                dates=dates,
+                temps_c=[parse_float(v) for v in hourly.get("temperature_2m", [])],
+                precipitations=[parse_float(v) for v in hourly.get("precipitation", [])],
+                precip_probs=[parse_float(v) for v in hourly.get("precipitation_probability", [])],
+                wind_speeds=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
+                weather_codes=weather_codes,
+                is_day=is_day,
+            )
+        except (KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo hourly_ext parse error: %s", exc)
+            return None
+
+    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -573,53 +618,56 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
         "timezone": "America/Argentina/Buenos_Aires",
         "forecast_days": 1,
     }
+    key = _cache_key(params)
 
-    try:
-        client = get_client()
-        response = await client.get(
-            settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo visibility fetch failed: %s", exc)
-        return None
+    async def _fetch() -> VisibilityData | None:
+        try:
+            client = get_client()
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo visibility fetch failed: %s", exc)
+            return None
 
-    try:
-        current = data["current"]
-        hourly = data["hourly"]
+        try:
+            current = data["current"]
+            hourly = data["hourly"]
 
-        current_m = _cap_vis(parse_float(current.get("visibility")))
-        wc_raw = current.get("weather_code")
-        weather_code = int(wc_raw) if wc_raw is not None else None
+            current_m = _cap_vis(parse_float(current.get("visibility")))
+            wc_raw = current.get("weather_code")
+            weather_code = int(wc_raw) if wc_raw is not None else None
 
-        level, label, color = _classify_visibility(current_m)
+            level, label, color = _classify_visibility(current_m)
 
-        # Empezar desde la próxima hora AR redonda para consistencia con TAF/fog inference
-        all_times: list[str] = hourly.get("time", [])
-        all_vis: list = hourly.get("visibility", [])
-        start_idx = _next_ar_hour_idx(all_times)
+            # Empezar desde la próxima hora AR redonda para consistencia con TAF/fog inference
+            all_times: list[str] = hourly.get("time", [])
+            all_vis: list = hourly.get("visibility", [])
+            start_idx = _next_ar_hour_idx(all_times)
 
-        time_list: list[str] = all_times[start_idx:start_idx + 12]
-        vis_list: list = all_vis[start_idx:start_idx + 12]
+            time_list: list[str] = all_times[start_idx:start_idx + 12]
+            vis_list: list = all_vis[start_idx:start_idx + 12]
 
-        hourly_m: list[float | None] = [_cap_vis(parse_float(v)) for v in vis_list]
-        hourly_labels: list[str] = [t[11:16] for t in time_list]   # "14:00"
+            hourly_m: list[float | None] = [_cap_vis(parse_float(v)) for v in vis_list]
+            hourly_labels: list[str] = [t[11:16] for t in time_list]   # "14:00"
 
-        return VisibilityData(
-            current_m=current_m,
-            weather_code=weather_code,
-            fog_level=level,
-            fog_label=label,
-            fog_color=color,
-            hourly_m=hourly_m,
-            hourly_labels=hourly_labels,
-        )
-    except (KeyError, TypeError) as exc:
-        logger.warning("Open-Meteo visibility parse error: %s", exc)
-        return None
+            return VisibilityData(
+                current_m=current_m,
+                weather_code=weather_code,
+                fog_level=level,
+                fog_label=label,
+                fog_color=color,
+                hourly_m=hourly_m,
+                hourly_labels=hourly_labels,
+            )
+        except (KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo visibility parse error: %s", exc)
+            return None
+
+    return await _CACHE_NOWCAST.get_or_fetch(key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -661,68 +709,71 @@ async def get_fog_inference_forecast(
         "timezone": "America/Argentina/Buenos_Aires",
         "forecast_days": 1,
     }
+    key = _cache_key(params)
 
-    try:
-        client = get_client()
-        response = await client.get(
-            settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo fog inference fetch failed: %s", exc)
-        return None
+    async def _fetch() -> list[FogInferenceSlot] | None:
+        try:
+            client = get_client()
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo fog inference fetch failed: %s", exc)
+            return None
 
-    try:
-        hourly = data["hourly"]
-        all_times = hourly.get("time", [])
-        si = _next_ar_hour_idx(all_times)   # start index: próxima hora AR redonda
+        try:
+            hourly = data["hourly"]
+            all_times = hourly.get("time", [])
+            si = _next_ar_hour_idx(all_times)   # start index: próxima hora AR redonda
 
-        time_list: list[str]   = all_times[si:si + hours]
-        rh_list                = hourly.get("relative_humidity_2m", [])[si:si + hours]
-        td_list                = hourly.get("dew_point_2m", [])[si:si + hours]
-        temp_list              = hourly.get("temperature_2m", [])[si:si + hours]
-        wind_list              = hourly.get("wind_speed_10m", [])[si:si + hours]
-        wcode_list             = hourly.get("weather_code", [])[si:si + hours]
+            time_list: list[str]   = all_times[si:si + hours]
+            rh_list                = hourly.get("relative_humidity_2m", [])[si:si + hours]
+            td_list                = hourly.get("dew_point_2m", [])[si:si + hours]
+            temp_list              = hourly.get("temperature_2m", [])[si:si + hours]
+            wind_list              = hourly.get("wind_speed_10m", [])[si:si + hours]
+            wcode_list             = hourly.get("weather_code", [])[si:si + hours]
 
-        slots: list[FogInferenceSlot] = []
-        for i, t in enumerate(time_list):
-            hour_label = t[11:16]   # "14:00"
+            slots: list[FogInferenceSlot] = []
+            for i, t in enumerate(time_list):
+                hour_label = t[11:16]   # "14:00"
 
-            rh    = parse_float(rh_list[i])    if i < len(rh_list)    else None
-            td    = parse_float(td_list[i])    if i < len(td_list)    else None
-            temp  = parse_float(temp_list[i])  if i < len(temp_list)  else None
-            wind  = parse_float(wind_list[i])  if i < len(wind_list)  else None
-            wc_r  = wcode_list[i]              if i < len(wcode_list) else None
-            wcode = int(wc_r) if wc_r is not None else None
+                rh    = parse_float(rh_list[i])    if i < len(rh_list)    else None
+                td    = parse_float(td_list[i])    if i < len(td_list)    else None
+                temp  = parse_float(temp_list[i])  if i < len(temp_list)  else None
+                wind  = parse_float(wind_list[i])  if i < len(wind_list)  else None
+                wc_r  = wcode_list[i]              if i < len(wcode_list) else None
+                wcode = int(wc_r) if wc_r is not None else None
 
-            vis_m: float | None = None
+                vis_m: float | None = None
 
-            if wcode in (45, 48):
-                # WMO fog / depositing rime fog — confirmado por código
-                vis_m = 300.0
-            elif (
-                rh is not None
-                and td is not None
-                and temp is not None
-                and wind is not None
-            ):
-                dep = temp - td   # depresión del punto de rocío
-                if dep < 2.0 and rh >= 95.0 and wind < 5.0:
-                    vis_m = 300.0      # niebla densa
-                elif dep < 3.0 and rh >= 90.0 and wind < 8.0:
-                    vis_m = 1_000.0    # niebla / bruma
-                elif dep < 5.0 and rh >= 80.0:
-                    vis_m = 3_000.0    # reducida
-                else:
-                    vis_m = 10_000.0   # despejada
+                if wcode in (45, 48):
+                    # WMO fog / depositing rime fog — confirmado por código
+                    vis_m = 300.0
+                elif (
+                    rh is not None
+                    and td is not None
+                    and temp is not None
+                    and wind is not None
+                ):
+                    dep = temp - td   # depresión del punto de rocío
+                    if dep < 2.0 and rh >= 95.0 and wind < 5.0:
+                        vis_m = 300.0      # niebla densa
+                    elif dep < 3.0 and rh >= 90.0 and wind < 8.0:
+                        vis_m = 1_000.0    # niebla / bruma
+                    elif dep < 5.0 and rh >= 80.0:
+                        vis_m = 3_000.0    # reducida
+                    else:
+                        vis_m = 10_000.0   # despejada
 
-            slots.append(FogInferenceSlot(hour_label=hour_label, visibility_m=vis_m))
+                slots.append(FogInferenceSlot(hour_label=hour_label, visibility_m=vis_m))
 
-        return slots if slots else None
+            return slots if slots else None
 
-    except (KeyError, TypeError, IndexError) as exc:
-        logger.warning("Open-Meteo fog inference parse error: %s", exc)
-        return None
+        except (KeyError, TypeError, IndexError) as exc:
+            logger.warning("Open-Meteo fog inference parse error: %s", exc)
+            return None
+
+    return await _CACHE_NOWCAST.get_or_fetch(key, _fetch)

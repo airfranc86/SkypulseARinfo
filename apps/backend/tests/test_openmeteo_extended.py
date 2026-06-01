@@ -135,20 +135,22 @@ def _make_fog_inference_payload(n: int = 14) -> dict:
 
 
 def _mock_http_client(payload: dict, status_code: int = 200) -> AsyncMock:
+    import httpx
+
     mock_response = MagicMock()
-    if status_code != 200:
-        from httpx import HTTPStatusError, Response
-        mock_response_obj = MagicMock(spec=Response)
-        mock_response_obj.status_code = status_code
-        mock_response.raise_for_status.side_effect = HTTPStatusError(
-            str(status_code), request=MagicMock(), response=mock_response_obj
+    mock_response.status_code = status_code
+    if status_code >= 400:
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            str(status_code),
+            request=MagicMock(),
+            response=MagicMock(status_code=status_code),
         )
     else:
         mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = payload
 
     mock_client = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.request = AsyncMock(return_value=mock_response)
     return mock_client
 
 
@@ -242,7 +244,7 @@ class TestGetHourlyForecast:
     async def test_returns_none_on_timeout(self):
         from httpx import TimeoutException
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=TimeoutException("timeout"))
+        mock_client.request = AsyncMock(side_effect=TimeoutException("timeout"))
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             result = await get_hourly_forecast(-34.6, -58.4)
         assert result is None
@@ -302,7 +304,7 @@ class TestGetDailyForecast:
     async def test_returns_none_on_timeout(self):
         from httpx import TimeoutException
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=TimeoutException("t"))
+        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             result = await get_daily_forecast(-34.6, -58.4)
         assert result is None
@@ -361,7 +363,7 @@ class TestGetDailyForecastExt:
     async def test_returns_none_on_error(self):
         from httpx import TimeoutException
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=TimeoutException("t"))
+        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             result = await get_daily_forecast_ext(-34.6, -58.4)
         assert result is None
@@ -384,18 +386,20 @@ class TestGetDailyForecastExt:
 
     @pytest.mark.asyncio
     async def test_model_param_injected_when_specified(self):
+        import httpx
         payload = _make_daily_ext_payload(n=2)
         captured = {}
 
-        async def capture_request(url, **kwargs):
+        async def capture_request(method, url, **kwargs):
             captured["params"] = kwargs.get("params", {})
             mock_response = MagicMock()
+            mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
             mock_response.json.return_value = payload
             return mock_response
 
         mock_client = MagicMock()
-        mock_client.get = capture_request
+        mock_client.request = capture_request
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             await get_daily_forecast_ext(-34.6, -58.4, model="gfs_seamless")
 
@@ -406,15 +410,16 @@ class TestGetDailyForecastExt:
         payload = _make_daily_ext_payload(n=2)
         captured = {}
 
-        async def capture_request(url, **kwargs):
+        async def capture_request(method, url, **kwargs):
             captured["params"] = kwargs.get("params", {})
             mock_response = MagicMock()
+            mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
             mock_response.json.return_value = payload
             return mock_response
 
         mock_client = MagicMock()
-        mock_client.get = capture_request
+        mock_client.request = capture_request
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             await get_daily_forecast_ext(-34.6, -58.4, model=None)
 
@@ -445,7 +450,7 @@ class TestGetMultiModelDaily:
     async def test_returns_none_when_all_models_fail(self):
         from httpx import TimeoutException
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=TimeoutException("t"))
+        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             result = await get_multi_model_daily(-34.6, -58.4)
         assert result is None
@@ -517,7 +522,7 @@ class TestGetHourlyForecastExt:
     async def test_returns_none_on_error(self):
         from httpx import TimeoutException
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=TimeoutException("t"))
+        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             result = await get_hourly_forecast_ext(-34.6, -58.4)
         assert result is None
@@ -586,7 +591,7 @@ class TestGetVisibilityForecast:
     async def test_returns_none_on_error(self):
         from httpx import TimeoutException
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=TimeoutException("t"))
+        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             result = await get_visibility_forecast(-34.6, -58.4)
         assert result is None
@@ -661,7 +666,7 @@ class TestGetFogInferenceForecast:
     async def test_returns_none_on_error(self):
         from httpx import TimeoutException
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(side_effect=TimeoutException("t"))
+        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
         with patch("app.services.openmeteo.get_client", return_value=mock_client):
             result = await get_fog_inference_forecast(-34.6, -58.4)
         assert result is None

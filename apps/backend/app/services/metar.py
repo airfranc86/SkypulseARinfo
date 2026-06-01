@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 from cachetools import TTLCache
 
+from app.core.config import settings
 from app.core.http_client import get_client
 
 logger = logging.getLogger(__name__)
@@ -28,8 +29,6 @@ logger = logging.getLogger(__name__)
 
 _SM_TO_M    = 1609.344    # statute miles → metros
 _MAX_VIS_M  = 10_000.0    # cap de visibilidad en metros (consistente con OM)
-_HTTP_TIMEOUT = 5.0       # segundos — fallo rápido si AWC no es alcanzable
-
 # Argentina time zone offset (no DST)
 _AR_TZ = timezone(timedelta(hours=-3))
 
@@ -165,7 +164,7 @@ async def get_metar_visibility(icao: str) -> float | None:
         response = await client.get(
             AWC_METAR_BASE,
             params={"ids": icao, "format": "json", "hours": "2"},
-            timeout=_HTTP_TIMEOUT,
+            timeout=settings.metar_timeout_seconds,
         )
         response.raise_for_status()
         data = response.json()
@@ -254,7 +253,7 @@ async def get_taf_for_icao(icao: str) -> list[dict] | None:
         response = await client.get(
             AWC_TAF_BASE,
             params={"ids": icao, "format": "json", "hours": "24"},
-            timeout=_HTTP_TIMEOUT,
+            timeout=settings.metar_timeout_seconds,
         )
         response.raise_for_status()
         data = response.json()
