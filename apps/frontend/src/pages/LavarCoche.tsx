@@ -73,7 +73,7 @@ function QualityScaleBar({ bestLabel }: { bestLabel: string }) {
             <span
               className="text-[.48rem] leading-tight block"
               style={{
-                color: q.label === bestLabel ? q.color : 'var(--color-muted-foreground)',
+                color: q.color,
                 fontWeight: q.label === bestLabel ? 700 : undefined,
               }}
             >
