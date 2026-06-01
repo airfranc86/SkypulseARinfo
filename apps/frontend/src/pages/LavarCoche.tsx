@@ -21,7 +21,7 @@ const LABEL_COLOR: Record<string, string> = {
   Excelente: '#3ecf7a',
   Bueno:     '#f0a030',
   Regular:   '#e05545',
-  'No apto': '#9b2020',
+  'No apto': '#b91c1c',  // rojo sangre — visible a 25% opacidad, claramente distinto de Regular
 }
 
 const QUALITY_SCALE = [
