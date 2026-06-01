@@ -165,7 +165,7 @@ function DayRow({ day }: { day: CarWashDay }) {
             🌡 {day.temp_max_c.toFixed(0)}°
           </span>
           <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-            💧 {day.humidity}%
+            💧 {Math.round(day.humidity)}%
           </span>
           <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
             💨 {day.wind_speed_kmh.toFixed(0)}km/h
