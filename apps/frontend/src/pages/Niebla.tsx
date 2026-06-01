@@ -62,13 +62,13 @@ const FOG_TYPES: FogType[] = [
   {
     id: 'sea',
     name: 'Bruma marina',
-    subtitle: 'Niebla sobre el Río de la Plata',
+    subtitle: 'Partículas suspendidas + agua · solo en costas',
     when: 'Primavera y verano, vientos del E-SE',
     where: 'Buenos Aires, Montevideo, costa rioplatense',
     danger: 'medium',
-    dangerLabel: 'Visibilidad 500–2000 m',
-    description: 'La evaporación del agua del Río de la Plata o el océano crea una capa baja de niebla que avanza tierra adentro con el viento. Frecuente en la madrugada y mañana en la costa porteña.',
-    tip: 'Visible como banco blanco sobre el río al amanecer desde la costanera.',
+    dangerLabel: 'Visibilidad 1–2 km',
+    description: 'A diferencia de la neblina (solo gotas de agua), la bruma contiene sales marinas, polvo y contaminantes en suspensión. Se forma principalmente en zonas costeras y sobre el Río de la Plata. Visibilidad superior a 1 km pero el aire aparece opaco o blanquecino. La neblina pura, en cambio, es agua condensada a ras del suelo y puede formarse en cualquier región con humedad relativa superior al 70–80 %.',
+    tip: 'En costa: si el horizonte marino se ve blanquecino sin nubes, es bruma. Si no podés ver a 1 km, ya es neblina.',
     Icon: Waves,
   },
   {
@@ -120,12 +120,12 @@ const DANGER_COLORS = {
 // ---------------------------------------------------------------------------
 
 const VISIBILITY_SCALE = [
-  { label: 'Niebla',    range: '< 500 m',      color: '#e03535' },  // vivid red
-  { label: 'Neblina',   range: '500 m – 1 km', color: '#c84c10' },  // burnt sienna (clearly ≠ amber)
-  { label: 'Bruma',     range: '1 – 2 km',     color: '#f0a020' },  // amber
-  { label: 'Reducida',  range: '2 – 5 km',     color: '#a8c820' },  // lime (clearly ≠ amber)
-  { label: 'Buena',     range: '5 – 10 km',    color: '#5aaad8' },  // blue
-  { label: 'Despejada', range: '> 10 km',       color: '#3ecf7a' },  // green
+  { label: 'Niebla',    range: '< 500 m',      color: '#e03535', note: 'Solo gotas de agua'         },
+  { label: 'Neblina',   range: '500 m – 1 km', color: '#c84c10', note: 'Gotas · humedad > 70 %'      },
+  { label: 'Bruma',     range: '1 – 2 km',     color: '#f0a020', note: 'Costera · sales + partículas' },
+  { label: 'Reducida',  range: '2 – 5 km',     color: '#a8c820', note: '' },
+  { label: 'Buena',     range: '5 – 10 km',    color: '#5aaad8', note: '' },
+  { label: 'Despejada', range: '> 10 km',       color: '#3ecf7a', note: '' },
 ] as const
 
 /**
@@ -740,7 +740,7 @@ export function Niebla({ location }: Props) {
 
           {/* Column labels — nombre + rango debajo de cada segmento */}
           <div style={{ display: 'flex', gap: '3px' }}>
-            {VISIBILITY_SCALE.map(({ label, range, color }) => (
+            {VISIBILITY_SCALE.map(({ label, range, color, note }) => (
               <div
                 key={label}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
@@ -774,6 +774,22 @@ export function Niebla({ location }: Props) {
                 >
                   {range}
                 </span>
+                {note && (
+                  <span
+                    style={{
+                      fontSize: '7px',
+                      color: 'var(--color-muted-foreground)',
+                      textAlign: 'center',
+                      lineHeight: 1.2,
+                      opacity: 0.7,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '100%',
+                    }}
+                  >
+                    {note}
+                  </span>
+                )}
               </div>
             ))}
           </div>

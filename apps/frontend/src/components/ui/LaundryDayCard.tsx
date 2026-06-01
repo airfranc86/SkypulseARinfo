@@ -10,8 +10,8 @@ interface LaundryDayCardProps {
 }
 
 function scoreLabelColor(score: number): string {
-  if (score >= 70) return '#3ecf7a'
-  if (score >= 45) return '#f0a030'
+  if (score >= 75) return '#3ecf7a'
+  if (score >= 50) return '#f0a030'
   return '#e05545'
 }
 

@@ -18,8 +18,8 @@ const COLOR_MAP: Record<CarWashDay['color'], string> = {
 
 const QUALITY_SCALE = [
   { label: 'Excelente', color: '#3ecf7a' },
-  { label: 'Bueno',     color: '#7ec855' },
-  { label: 'Regular',   color: '#f0a030' },
+  { label: 'Bueno',     color: '#f0a030' },
+  { label: 'Regular',   color: '#e05545' },
   { label: 'No apto',   color: '#e05545' },
 ] as const
 
