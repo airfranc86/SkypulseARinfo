@@ -2,6 +2,51 @@
 
 ---
 
+## 2026-06-01 — METAR Observability Fase MVP: verificación end-to-end ✅
+
+**Done:**
+- Upstash Redis configurado en Render → `checkwx_counter=redis` confirmado en logs de startup
+- Request real SAEZ → 200 con payload CheckWX completo
+- Counter `skypulse:checkwx:counter:2026-06` en Upstash Data Browser confirmado
+- `METAR_Observability.md` actualizado: Fase MVP 100% completa (checklist cerrado)
+
+**Files changed:**
+- `docs/plans/METAR_Observability.md` — checklist MVP cerrado, estado actualizado
+
+**Tests:** sin cambios — 18 passed (suite METAR)
+
+**Next:**
+- Fase B: stale-fallback + single-flight (opcional — ahorra ~30% cuota)
+- Fase C: cron Render monitor (detección pasiva cada 6h)
+- Fase D: webhook Discord/Telegram (opcional)
+- Awaiting user direction
+
+---
+
+## 2026-06-01 — METAR Observability Fase MVP: documentación cerrada + push
+
+**Done:**
+- `METAR_Observability.md` actualizado: estado → ✅ FASE MVP IMPLEMENTADA
+- Tabla de estado de implementación (archivos creados, tests implementados vs. planificados)
+- Verificación Sentry: SDK v2.61.0 confirmado, init solo en ENV=prod, push_scope() deprecado (funcional + noqa)
+- Corrección de umbrales en el doc: 80%→159, 95%→189 (división entera `int(count*100/198)`)
+- `render.yaml` + `METAR_Observability.md` commiteados y pusheados
+- 18 tests del MVP verdes (S1×3, S4×2, N1×2, N2, N3, N4, tags, R1–R7)
+
+**Files changed:**
+- `apps/backend/render.yaml` — UPSTASH_REDIS_REST_URL y TOKEN agregados (faltaban)
+- `docs/plans/METAR_Observability.md` — estado MVP ✅, checklist, Sentry audit, corrección umbrales
+
+**Tests:**
+- `uv run pytest test_checkwx_service.py test_checkwx_notifier.py test_metar_router.py -v`
+- Result: **18 passed**, 0 failed
+
+**Next:**
+- Usuario debe: crear cuenta Upstash, obtener REST URL + TOKEN, setearlos en Render dashboard
+- Fases B (stale + single-flight), C (cron Render), D (webhook) pendientes cuando el usuario lo decida
+
+---
+
 ## 2026-06-01 — API_Prediction plan cerrado: drizzle fix + 9 tests nuevos
 
 **Done:**

@@ -1,6 +1,6 @@
 # METAR Observability — Rate Limit, Conteo y Alertas para CheckWX
 
-**Estado:** ✅ FASE MVP IMPLEMENTADA | ⏳ Fases B/C/D pendientes
+**Estado:** ✅ FASE MVP COMPLETA (código + deploy + verificación end-to-end) | ⏳ Fases B/C/D pendientes
 **Creado:** 2026-06-01
 **Última revisión:** 2026-06-01
 **Owner del plan:** Backend
@@ -944,9 +944,9 @@ Objetivo: parar el sangrado. Sin caché sofisticado, sin webhook, solo Sentry.
 - [x] Crear `core/notifier.py` con `maybe_notify()` Sentry-only (sin webhook)
 - [x] Modificar `routers/metar.py` para delegar en el servicio + manejar 429
 - [x] Extender `core/config.py`: `upstash_redis_rest_url`, `upstash_redis_rest_token`, `checkwx_monthly_limit=198`, `cache_ttl_taf_seconds=3600`
-- [ ] **Setup Upstash + agregar env vars en Render** ← acción pendiente del usuario
+- [x] **Setup Upstash + agregar env vars en Render** — `checkwx_counter=redis` confirmado en logs `23:49:03`
 - [x] Tests: S1×3, S4×2, N1×2, N2, N3, N4, N7 (tags), R1–R6 + cache hit (18 tests)
-- [ ] Deploy y verificación en staging ← tras completar Setup Upstash
+- [x] Deploy y verificación end-to-end — METAR SAEZ respondió, counter Redis en `skypulse:checkwx:counter:2026-06`
 
 **Listo:** la cuota está protegida. Si pasa 80% recibimos alerta Sentry. Si pasa 100% el endpoint devuelve 429.
 
@@ -968,15 +968,7 @@ Objetivo: parar el sangrado. Sin caché sofisticado, sin webhook, solo Sentry.
 
 **Listo:** detección pasiva de umbrales aunque el web esté dormido.
 
-### Fase D (1 h, opcional) — Webhook externo
-
-- [ ] Agregar `_post_webhook()` en `core/notifier.py`
-- [ ] Tests: N5, N6
-- [ ] Configurar destino: Discord webhook / Telegram bot / Slack
-
-**Listo:** notificación instantánea fuera de Sentry.
-
-### Fase E (futuro) — Endpoint admin
+### Fase D (futuro) — Endpoint admin
 
 - [ ] `GET /api/admin/checkwx/status` → `{cycle, count, limit, percent, alerts_sent}` (auth required)
 - [ ] `POST /api/admin/cache/clear?source=metar` → invalidar caches
