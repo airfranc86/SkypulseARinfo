@@ -130,7 +130,7 @@ def _build_synthetic_daily_multi(
     sunrise/sunset y heurística para weather_codes.
     """
     dates = [w.date for w in windy_daily]
-    today_dt = _Date.today()
+    today_dt = datetime.now(_AR_TZ).date()
     day_labels: list[str] = []
     sunrise_list: list[str] = []
     sunset_list: list[str] = []
@@ -768,7 +768,7 @@ def _build_7d_forecast(
 ) -> list[DailyEntrySchema]:
     """Combina Windy + Open-Meteo siguiendo FIELD_SOURCES (ver services/forecast_merge.py)."""
     ref = next(iter(daily_multi.models.values()))
-    today = _Date.today()
+    today = datetime.now(_AR_TZ).date()
 
     windy_by_date: dict[str, WindyDailyEntry] = (
         {d.date: d for d in windy_daily} if windy_daily else {}
