@@ -24,8 +24,6 @@ export function TenderRopa({ location }: Props) {
 
   if (location === null) return <PageSkeleton />
 
-  const isOpenMeteoFallback = data?.source === 'openmeteo_fallback'
-
   return (
     <div>
       <PageHeader
@@ -50,7 +48,6 @@ export function TenderRopa({ location }: Props) {
               key={day.date}
               day={day}
               index={i}
-              isOpenMeteoFallback={isOpenMeteoFallback}
             />
           ))}
         </div>

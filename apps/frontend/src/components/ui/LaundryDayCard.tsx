@@ -6,7 +6,6 @@ import { BorderGlow } from '@/components/animated/BorderGlow'
 interface LaundryDayCardProps {
   day: LaundryDay
   index: number
-  isOpenMeteoFallback?: boolean
 }
 
 function scoreLabelColor(score: number): string {
@@ -18,11 +17,10 @@ function scoreLabelColor(score: number): string {
 export function LaundryDayCard({
   day,
   index,
-  isOpenMeteoFallback = false,
 }: LaundryDayCardProps): ReactElement {
   const isBest = day.is_best
   const labelColor = isBest ? '#c8a84b' : scoreLabelColor(day.score)
-  const showPrecipChip = !isOpenMeteoFallback || day.precip_prob > 0
+  const showPrecipChip = day.precip_prob > 0
   const showLowConfidence = !isBest && day.confidence_pct < 70
 
   const cardContent = (
