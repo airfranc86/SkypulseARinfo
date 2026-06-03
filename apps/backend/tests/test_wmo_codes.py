@@ -3,7 +3,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.utils.wmo_codes import WMO_CODE_MAP, describe_wmo
+from app.utils.wmo_codes import (
+    WMO_CODE_MAP,
+    describe_wmo,
+    icon_from_description_es,
+    resolve_daily_icon,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -124,3 +129,103 @@ def test_freezing_drizzle_uses_sleet():
 
     _, icon2 = describe_wmo(57)
     assert icon2 == "sleet"
+
+
+# ---------------------------------------------------------------------------
+# icon_from_description_es — texto español del SMN → ícono Meteocons
+# (el SMN entrega descripción en texto pero NO entrega weather_code)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "text, is_day, expected",
+    [
+        ("Cubierto", True, "overcast-day"),
+        ("Cubierto", False, "overcast-night"),
+        ("Nublado", True, "overcast-day"),
+        ("Mayormente nublado", True, "overcast-day"),
+        ("Algo nublado", True, "partly-cloudy-day"),
+        ("Algo nublado", False, "partly-cloudy-night"),
+        ("Parcialmente nublado", True, "partly-cloudy-day"),
+        ("Ligeramente nublado", True, "partly-cloudy-day"),
+        ("Despejado", True, "clear-day"),
+        ("Despejado", False, "clear-night"),
+        ("Cielo despejado", True, "clear-day"),
+        ("Lluvia", True, "rain"),
+        ("Lluvias", True, "rain"),
+        ("Lluvias débiles", True, "rain"),
+        ("Chaparrones", True, "rain"),
+        ("Llovizna", True, "drizzle"),
+        ("Lloviznas", True, "drizzle"),
+        ("Tormenta", True, "thunderstorms-day"),
+        ("Tormentas", False, "thunderstorms-night"),
+        ("Niebla", True, "fog-day"),
+        ("Neblina", True, "fog-day"),
+        ("Bruma", False, "fog-night"),
+        ("Nieve", True, "snow"),
+        ("Nevadas", True, "snow"),
+        ("Aguanieve", True, "sleet"),
+    ],
+)
+def test_icon_from_description_es_known(text: str, is_day: bool, expected: str):
+    assert icon_from_description_es(text, is_day) == expected
+
+
+def test_icon_from_description_es_accent_insensitive():
+    # Sin tilde debe matchear igual que con tilde.
+    assert icon_from_description_es("nino lluvia", True) == "rain"
+    assert icon_from_description_es("LLUVIA", True) == "rain"
+
+
+@pytest.mark.parametrize("text", [None, "", "   ", "valor inexistente xyz"])
+def test_icon_from_description_es_unknown_returns_none(text):
+    assert icon_from_description_es(text, True) is None
+
+
+def test_icon_from_description_es_tormenta_takes_priority_over_lluvia():
+    # "Tormenta con lluvia" debe resolver a tormenta, no a lluvia simple.
+    assert icon_from_description_es("Tormenta con lluvia", True) == "thunderstorms-day"
+
+
+def test_icon_from_description_es_llovizna_not_confused_with_lluvia():
+    assert icon_from_description_es("Llovizna", True) == "drizzle"
+
+
+# ---------------------------------------------------------------------------
+# resolve_daily_icon — pronóstico 7 días:
+# Cubierto (código 3) + prob de lluvia alta ⇒ ícono 'rain' (nube llena + lluvia).
+# Por decisión de producto, SOLO el código 3 dispara el override
+# (un día "parcialmente nublado" con prob alta NO cambia de ícono).
+# ---------------------------------------------------------------------------
+
+def test_resolve_daily_icon_overcast_high_prob_uses_rain():
+    assert resolve_daily_icon(3, 100.0, is_day=True) == "rain"
+
+
+def test_resolve_daily_icon_overcast_threshold_inclusive():
+    assert resolve_daily_icon(3, 60.0, is_day=True) == "rain"
+
+
+def test_resolve_daily_icon_overcast_below_threshold_stays_overcast():
+    assert resolve_daily_icon(3, 59.0, is_day=True) == "overcast-day"
+
+
+def test_resolve_daily_icon_overcast_none_prob_stays_overcast():
+    assert resolve_daily_icon(3, None, is_day=True) == "overcast-day"
+
+
+def test_resolve_daily_icon_partly_cloudy_high_prob_unchanged():
+    # Caso "Hoy": código parcial (2) con 92% NO cambia — decisión del usuario.
+    assert resolve_daily_icon(2, 92.0, is_day=True) == "partly-cloudy-day"
+
+
+def test_resolve_daily_icon_rain_has_no_day_night_variant():
+    assert resolve_daily_icon(3, 70.0, is_day=False) == "rain"
+
+
+def test_resolve_daily_icon_clear_unchanged():
+    assert resolve_daily_icon(0, 0.0, is_day=True) == "clear-day"
+
+
+def test_resolve_daily_icon_none_code_no_override():
+    # code != 3 ⇒ sin override, cae al fallback de describe_wmo.
+    assert resolve_daily_icon(None, 80.0, is_day=True) == "clear-day"

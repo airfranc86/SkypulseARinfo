@@ -52,7 +52,11 @@ from app.services.windy import (
     get_hourly_forecast as windy_get_hourly_forecast,
 )
 from app.utils.moon_phase import compute_moon_phase, compute_moon_position
-from app.utils.wmo_codes import describe_wmo
+from app.utils.wmo_codes import (
+    describe_wmo,
+    icon_from_description_es,
+    resolve_daily_icon,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +346,13 @@ async def get_dashboard(
     # Prefer the original source description (SMN text / OM derived).
     # Fall back to WMO-derived only when the source has no description.
     desc = current.description or wmo_desc
+    # SMN provides Spanish text but no weather_code, so describe_wmo(None) returns
+    # the 'clear-day' fallback and contradicts the text. Derive the icon from the
+    # text instead so "Cubierto" no longer shows a sunny icon.
+    if weather_code_current is None and current.description:
+        icon_from_text = icon_from_description_es(current.description, is_day_now)
+        if icon_from_text is not None:
+            icon = icon_from_text
 
     # UV: del primer día del pronóstico (Open-Meteo, único origen disponible)
     uv_index = ref_daily.uv_max[0] if ref_daily.uv_max else None
@@ -822,7 +833,7 @@ def _build_7d_forecast(
             conf_label = 'ALTA' if confidence_pct >= 75 else ('MEDIA' if confidence_pct >= 50 else 'BAJA')
 
         most_common_code: int | None = max(set(codes), key=codes.count) if codes else None
-        icon = describe_wmo(most_common_code, is_day=True)[1]
+        icon = resolve_daily_icon(most_common_code, merged["precip_prob"], is_day=True)
 
         entries.append(
             DailyEntrySchema(

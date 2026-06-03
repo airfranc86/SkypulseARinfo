@@ -1,6 +1,8 @@
 """Mapeo WMO weather code → descripción en español + ícono Meteocons."""
 from __future__ import annotations
 
+import unicodedata
+
 WMO_CODE_MAP: dict[int, dict[str, str]] = {
     0:  {"description": "Despejado",                    "icon_day": "clear-day",                        "icon_night": "clear-night"},
     1:  {"description": "Mayormente despejado",         "icon_day": "partly-cloudy-day",                "icon_night": "partly-cloudy-night"},
@@ -44,3 +46,73 @@ def describe_wmo(code: int | None, is_day: bool = True) -> tuple[str, str]:
     entry = WMO_CODE_MAP[code]
     icon_key = "icon_day" if is_day else "icon_night"
     return entry["description"], entry[icon_key]
+
+
+def _normalize_es(text: str) -> str:
+    """Minúsculas + sin tildes, para matchear texto del SMN de forma robusta."""
+    nfkd = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def icon_from_description_es(text: str | None, is_day: bool = True) -> str | None:
+    """
+    Deriva un ícono Meteocons desde el texto en español del SMN.
+
+    El SMN entrega una descripción ("Cubierto", "Lluvias", ...) pero NO entrega
+    weather_code, por lo que describe_wmo(None) caería al fallback 'clear-day'
+    contradiciendo el texto. Este helper traduce el texto al ícono correcto.
+
+    Retorna None cuando ninguna palabra clave matchea (el llamador conserva su
+    fallback actual ⇒ cero regresión).
+    """
+    if not text or not text.strip():
+        return None
+
+    t = _normalize_es(text)
+    suffix = "day" if is_day else "night"
+
+    # Precipitación (lo más específico primero para evitar falsos positivos).
+    if "tormenta" in t:
+        return f"thunderstorms-{suffix}"
+    if "llovizn" in t:
+        return "drizzle"
+    if "aguanieve" in t:
+        return "sleet"
+    if "nieve" in t or "nevad" in t:
+        return "snow"
+    if any(k in t for k in ("lluvia", "chaparr", "chubasco", "precipit")):
+        return "rain"
+    if any(k in t for k in ("niebla", "neblina", "bruma")):
+        return f"fog-{suffix}"
+
+    # Nubosidad ("algo/parcial/ligeramente nublado" antes que "nublado" pleno).
+    if "cubierto" in t:
+        return f"overcast-{suffix}"
+    if any(k in t for k in ("algo nublado", "parcial", "ligeramente")):
+        return f"partly-cloudy-{suffix}"
+    if "nublado" in t:
+        return f"overcast-{suffix}"
+    if "despejado" in t or "claro" in t:
+        return f"clear-{suffix}"
+
+    return None
+
+
+def resolve_daily_icon(
+    code: int | None,
+    precip_prob: float | None,
+    is_day: bool = True,
+    rain_threshold: float = 60.0,
+) -> str:
+    """
+    Ícono del pronóstico diario. weather_code y precip_prob son campos
+    independientes: un día Cubierto (código 3) puede tener prob de lluvia alta.
+    En ese caso usamos 'rain' (nube llena con lluvia) en vez del overcast seco.
+
+    Por decisión de producto el override aplica SOLO al código 3; un día
+    parcialmente nublado con prob alta conserva su ícono base.
+    """
+    icon = describe_wmo(code, is_day)[1]
+    if code == 3 and precip_prob is not None and precip_prob >= rain_threshold:
+        return "rain"
+    return icon
