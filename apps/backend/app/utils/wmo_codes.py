@@ -23,13 +23,13 @@ WMO_CODE_MAP: dict[int, dict[str, str]] = {
     71: {"description": "Nieve leve",                  "icon_day": "partly-cloudy-day-snow",           "icon_night": "partly-cloudy-night-snow"},
     73: {"description": "Nieve moderada",               "icon_day": "snow",                             "icon_night": "snow"},
     75: {"description": "Nieve intensa",                "icon_day": "snow",                             "icon_night": "snow"},
-    77: {"description": "Granizo de nieve",             "icon_day": "snow",                             "icon_night": "snow"},
+    77: {"description": "Granos de nieve",              "icon_day": "snow",                             "icon_night": "snow"},
     80: {"description": "Chubascos leves",              "icon_day": "partly-cloudy-day-rain",           "icon_night": "partly-cloudy-night-rain"},
     81: {"description": "Chubascos moderados",          "icon_day": "rain",                             "icon_night": "rain"},
     82: {"description": "Chubascos violentos",          "icon_day": "rain",                             "icon_night": "rain"},
     85: {"description": "Chubascos de nieve",           "icon_day": "snow",                             "icon_night": "snow"},
     86: {"description": "Chubascos de nieve intensos",  "icon_day": "snow",                             "icon_night": "snow"},
-    95: {"description": "Tormenta",                     "icon_day": "thunderstorms-day",                "icon_night": "thunderstorms-night"},
+    95: {"description": "Tormenta",                     "icon_day": "thunderstorms",                    "icon_night": "thunderstorms"},
     96: {"description": "Tormenta con granizo",         "icon_day": "hail",                             "icon_night": "hail"},
     99: {"description": "Tormenta intensa con granizo", "icon_day": "hail",                             "icon_night": "hail"},
 }
@@ -72,8 +72,9 @@ def icon_from_description_es(text: str | None, is_day: bool = True) -> str | Non
     suffix = "day" if is_day else "night"
 
     # Precipitación (lo más específico primero para evitar falsos positivos).
+    # 'thunderstorms' es neutro (rayo sin sol) ⇒ no lleva sufijo day/night.
     if "tormenta" in t:
-        return f"thunderstorms-{suffix}"
+        return "thunderstorms"
     if "llovizn" in t:
         return "drizzle"
     if "aguanieve" in t:

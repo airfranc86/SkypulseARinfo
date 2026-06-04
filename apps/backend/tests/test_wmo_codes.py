@@ -72,7 +72,15 @@ def test_rain_moderate_description():
 def test_storm_description():
     desc, icon = describe_wmo(95, is_day=True)
     assert desc == "Tormenta"
-    assert "thunderstorms" in icon
+    # Ícono neutro: el rayo no necesita sol (la variante -day embebe disco solar,
+    # incoherente con una tormenta — mismo criterio que 'overcast').
+    assert icon == "thunderstorms"
+
+
+def test_storm_day_night_agnostic():
+    _, icon_day = describe_wmo(95, is_day=True)
+    _, icon_night = describe_wmo(95, is_day=False)
+    assert icon_day == icon_night == "thunderstorms"
 
 
 def test_snow_heavy():
@@ -170,7 +178,19 @@ def test_hail_day_night_agnostic():
 def test_simple_storm_stays_thunderstorms():
     # Regresión: código 95 (tormenta SIN granizo) NO debe usar 'hail'.
     _, icon_day = describe_wmo(95, is_day=True)
-    assert icon_day == "thunderstorms-day"
+    assert icon_day == "thunderstorms"
+    assert icon_day != "hail"
+
+
+# ---------------------------------------------------------------------------
+# Snow grains (WMO 77): NO es granizo. Descripción correcta = "Granos de nieve".
+# ---------------------------------------------------------------------------
+
+def test_snow_grains_description():
+    desc, icon = describe_wmo(77, is_day=True)
+    assert desc == "Granos de nieve"
+    assert "granizo" not in desc.lower()
+    assert icon == "snow"
 
 
 def test_resolve_daily_icon_hail_storm():
@@ -204,8 +224,8 @@ def test_resolve_daily_icon_hail_storm():
         ("Chaparrones", True, "rain"),
         ("Llovizna", True, "drizzle"),
         ("Lloviznas", True, "drizzle"),
-        ("Tormenta", True, "thunderstorms-day"),
-        ("Tormentas", False, "thunderstorms-night"),
+        ("Tormenta", True, "thunderstorms"),
+        ("Tormentas", False, "thunderstorms"),
         ("Niebla", True, "fog-day"),
         ("Neblina", True, "fog-day"),
         ("Bruma", False, "fog-night"),
@@ -231,7 +251,7 @@ def test_icon_from_description_es_unknown_returns_none(text):
 
 def test_icon_from_description_es_tormenta_takes_priority_over_lluvia():
     # "Tormenta con lluvia" debe resolver a tormenta, no a lluvia simple.
-    assert icon_from_description_es("Tormenta con lluvia", True) == "thunderstorms-day"
+    assert icon_from_description_es("Tormenta con lluvia", True) == "thunderstorms"
 
 
 def test_icon_from_description_es_llovizna_not_confused_with_lluvia():
