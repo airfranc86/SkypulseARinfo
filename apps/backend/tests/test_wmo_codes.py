@@ -140,6 +140,46 @@ def test_freezing_drizzle_uses_sleet():
 
 
 # ---------------------------------------------------------------------------
+# Granizo — códigos 96/99 (tormenta con granizo) usan ícono 'hail' propio,
+# distinto del 95 (tormenta simple → thunderstorms).
+# ---------------------------------------------------------------------------
+
+def test_hail_storm_uses_hail_icon():
+    _, icon96 = describe_wmo(96, is_day=True)
+    assert icon96 == "hail"
+
+    _, icon99 = describe_wmo(99, is_day=True)
+    assert icon99 == "hail"
+
+
+def test_hail_descriptions_unchanged():
+    desc96, _ = describe_wmo(96)
+    assert desc96 == "Tormenta con granizo"
+
+    desc99, _ = describe_wmo(99)
+    assert desc99 == "Tormenta intensa con granizo"
+
+
+def test_hail_day_night_agnostic():
+    # 'hail' es neutro (nube + granizo, sin sol) ⇒ mismo ícono día y noche.
+    _, icon_day = describe_wmo(96, is_day=True)
+    _, icon_night = describe_wmo(96, is_day=False)
+    assert icon_day == icon_night == "hail"
+
+
+def test_simple_storm_stays_thunderstorms():
+    # Regresión: código 95 (tormenta SIN granizo) NO debe usar 'hail'.
+    _, icon_day = describe_wmo(95, is_day=True)
+    assert icon_day == "thunderstorms-day"
+
+
+def test_resolve_daily_icon_hail_storm():
+    # Pronóstico diario: 96/99 caen en 'hail' (code != 3 ⇒ sin override de lluvia).
+    assert resolve_daily_icon(96, 80.0, is_day=True) == "hail"
+    assert resolve_daily_icon(99, 50.0, is_day=False) == "hail"
+
+
+# ---------------------------------------------------------------------------
 # icon_from_description_es — texto español del SMN → ícono Meteocons
 # (el SMN entrega descripción en texto pero NO entrega weather_code)
 # ---------------------------------------------------------------------------

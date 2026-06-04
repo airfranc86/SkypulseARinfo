@@ -30,8 +30,8 @@ WMO_CODE_MAP: dict[int, dict[str, str]] = {
     85: {"description": "Chubascos de nieve",           "icon_day": "snow",                             "icon_night": "snow"},
     86: {"description": "Chubascos de nieve intensos",  "icon_day": "snow",                             "icon_night": "snow"},
     95: {"description": "Tormenta",                     "icon_day": "thunderstorms-day",                "icon_night": "thunderstorms-night"},
-    96: {"description": "Tormenta con granizo",         "icon_day": "thunderstorms-day",                "icon_night": "thunderstorms-night"},
-    99: {"description": "Tormenta intensa con granizo", "icon_day": "thunderstorms-day",                "icon_night": "thunderstorms-night"},
+    96: {"description": "Tormenta con granizo",         "icon_day": "hail",                             "icon_night": "hail"},
+    99: {"description": "Tormenta intensa con granizo", "icon_day": "hail",                             "icon_night": "hail"},
 }
 
 

@@ -29,6 +29,7 @@ import Sleet               from '@/assets/meteocons/sleet.svg?react'
 import Thunderstorms       from '@/assets/meteocons/thunderstorms.svg?react'
 import ThunderstormsDay    from '@/assets/meteocons/thunderstorms-day.svg?react'
 import ThunderstormsNight  from '@/assets/meteocons/thunderstorms-night.svg?react'
+import Hail                from '@/assets/meteocons/hail.svg?react'
 import Thermometer         from '@/assets/meteocons/thermometer.svg?react'
 import Humidity            from '@/assets/meteocons/humidity.svg?react'
 import Wind                from '@/assets/meteocons/wind.svg?react'
@@ -69,6 +70,7 @@ const ICON_MAP: Record<string, SvgComponent> = {
   'thunderstorms':                Thunderstorms,
   'thunderstorms-day':            ThunderstormsDay,
   'thunderstorms-night':          ThunderstormsNight,
+  'hail':                         Hail,
   'thermometer':                  Thermometer,
   'humidity':                     Humidity,
   'wind':                         Wind,
