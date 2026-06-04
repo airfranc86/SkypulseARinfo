@@ -92,7 +92,19 @@ def test_snow_heavy():
 def test_fog():
     desc, icon = describe_wmo(45, is_day=True)
     assert desc == "Niebla"
-    assert "fog" in icon
+    # Ícono neutro: la niebla no lleva sol/luna (las variantes -day/-night
+    # embeben un astro, incoherente — mismo criterio que 'overcast'/'thunderstorms').
+    assert icon == "fog"
+
+
+def test_fog_day_night_agnostic():
+    _, icon_day = describe_wmo(45, is_day=True)
+    _, icon_night = describe_wmo(45, is_day=False)
+    assert icon_day == icon_night == "fog"
+
+    # Código 48 (niebla con escarcha) comparte el mismo ícono neutro.
+    _, icon_48 = describe_wmo(48, is_day=True)
+    assert icon_48 == "fog"
 
 
 def test_drizzle_light():
@@ -226,9 +238,9 @@ def test_resolve_daily_icon_hail_storm():
         ("Lloviznas", True, "drizzle"),
         ("Tormenta", True, "thunderstorms"),
         ("Tormentas", False, "thunderstorms"),
-        ("Niebla", True, "fog-day"),
-        ("Neblina", True, "fog-day"),
-        ("Bruma", False, "fog-night"),
+        ("Niebla", True, "fog"),
+        ("Neblina", True, "fog"),
+        ("Bruma", False, "fog"),
         ("Nieve", True, "snow"),
         ("Nevadas", True, "snow"),
         ("Aguanieve", True, "sleet"),

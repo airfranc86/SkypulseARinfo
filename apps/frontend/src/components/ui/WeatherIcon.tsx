@@ -14,6 +14,7 @@ import PartlyCloudyNight   from '@/assets/meteocons/partly-cloudy-night.svg?reac
 import Overcast            from '@/assets/meteocons/overcast.svg?react'
 import OvercastDay         from '@/assets/meteocons/overcast-day.svg?react'
 import OvercastNight       from '@/assets/meteocons/overcast-night.svg?react'
+import Fog                 from '@/assets/meteocons/fog.svg?react'
 import FogDay              from '@/assets/meteocons/fog-day.svg?react'
 import FogNight            from '@/assets/meteocons/fog-night.svg?react'
 import Drizzle             from '@/assets/meteocons/drizzle.svg?react'
@@ -55,6 +56,7 @@ const ICON_MAP: Record<string, SvgComponent> = {
   'overcast':                     Overcast,
   'overcast-day':                 OvercastDay,
   'overcast-night':               OvercastNight,
+  'fog':                          Fog,
   'fog-day':                      FogDay,
   'fog-night':                    FogNight,
   'drizzle':                      Drizzle,

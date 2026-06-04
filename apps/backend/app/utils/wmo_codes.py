@@ -8,8 +8,8 @@ WMO_CODE_MAP: dict[int, dict[str, str]] = {
     1:  {"description": "Mayormente despejado",         "icon_day": "partly-cloudy-day",                "icon_night": "partly-cloudy-night"},
     2:  {"description": "Parcialmente nublado",         "icon_day": "partly-cloudy-day",                "icon_night": "partly-cloudy-night"},
     3:  {"description": "Cubierto",                     "icon_day": "overcast",                         "icon_night": "overcast"},
-    45: {"description": "Niebla",                       "icon_day": "fog-day",                          "icon_night": "fog-night"},
-    48: {"description": "Niebla con escarcha",          "icon_day": "fog-day",                          "icon_night": "fog-night"},
+    45: {"description": "Niebla",                       "icon_day": "fog",                              "icon_night": "fog"},
+    48: {"description": "Niebla con escarcha",          "icon_day": "fog",                              "icon_night": "fog"},
     51: {"description": "Llovizna leve",                "icon_day": "partly-cloudy-day-drizzle",        "icon_night": "partly-cloudy-night-drizzle"},
     53: {"description": "Llovizna moderada",            "icon_day": "drizzle",                          "icon_night": "drizzle"},
     55: {"description": "Llovizna intensa",             "icon_day": "drizzle",                          "icon_night": "drizzle"},
@@ -83,8 +83,9 @@ def icon_from_description_es(text: str | None, is_day: bool = True) -> str | Non
         return "snow"
     if any(k in t for k in ("lluvia", "chaparr", "chubasco", "precipit")):
         return "rain"
+    # 'fog' es neutro (nube + bruma, sin sol/luna) ⇒ no lleva sufijo day/night.
     if any(k in t for k in ("niebla", "neblina", "bruma")):
-        return f"fog-{suffix}"
+        return "fog"
 
     # Nubosidad ("algo/parcial/ligeramente nublado" antes que "nublado" pleno).
     # 'overcast' es neutro (nube gris, sin sol) ⇒ no lleva sufijo day/night.
