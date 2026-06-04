@@ -95,7 +95,14 @@ def test_drizzle_light():
 def test_overcast():
     desc, icon = describe_wmo(3, is_day=True)
     assert desc == "Cubierto"
-    assert "overcast" in icon
+    assert icon == "overcast"
+
+
+def test_overcast_day_night_agnostic():
+    # 'overcast' es neutro (nube gris, sin sol) ⇒ mismo ícono día y noche.
+    _, icon_day = describe_wmo(3, is_day=True)
+    _, icon_night = describe_wmo(3, is_day=False)
+    assert icon_day == icon_night == "overcast"
 
 
 # ---------------------------------------------------------------------------
@@ -110,9 +117,10 @@ def test_mandatory_codes_present():
 
 # ---------------------------------------------------------------------------
 # Íconos nocturnos son distintos a diurnos en ciertos casos
+# (código 3 'Cubierto' queda fuera: usa 'overcast' neutro, día == noche)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("code", [0, 1, 2, 3])
+@pytest.mark.parametrize("code", [0, 1, 2])
 def test_day_night_icons_differ_for_clear_codes(code: int):
     _, icon_day = describe_wmo(code, is_day=True)
     _, icon_night = describe_wmo(code, is_day=False)
@@ -139,10 +147,10 @@ def test_freezing_drizzle_uses_sleet():
 @pytest.mark.parametrize(
     "text, is_day, expected",
     [
-        ("Cubierto", True, "overcast-day"),
-        ("Cubierto", False, "overcast-night"),
-        ("Nublado", True, "overcast-day"),
-        ("Mayormente nublado", True, "overcast-day"),
+        ("Cubierto", True, "overcast"),
+        ("Cubierto", False, "overcast"),
+        ("Nublado", True, "overcast"),
+        ("Mayormente nublado", True, "overcast"),
         ("Algo nublado", True, "partly-cloudy-day"),
         ("Algo nublado", False, "partly-cloudy-night"),
         ("Parcialmente nublado", True, "partly-cloudy-day"),
@@ -206,11 +214,11 @@ def test_resolve_daily_icon_overcast_threshold_inclusive():
 
 
 def test_resolve_daily_icon_overcast_below_threshold_stays_overcast():
-    assert resolve_daily_icon(3, 59.0, is_day=True) == "overcast-day"
+    assert resolve_daily_icon(3, 59.0, is_day=True) == "overcast"
 
 
 def test_resolve_daily_icon_overcast_none_prob_stays_overcast():
-    assert resolve_daily_icon(3, None, is_day=True) == "overcast-day"
+    assert resolve_daily_icon(3, None, is_day=True) == "overcast"
 
 
 def test_resolve_daily_icon_partly_cloudy_high_prob_unchanged():

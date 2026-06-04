@@ -7,7 +7,7 @@ WMO_CODE_MAP: dict[int, dict[str, str]] = {
     0:  {"description": "Despejado",                    "icon_day": "clear-day",                        "icon_night": "clear-night"},
     1:  {"description": "Mayormente despejado",         "icon_day": "partly-cloudy-day",                "icon_night": "partly-cloudy-night"},
     2:  {"description": "Parcialmente nublado",         "icon_day": "partly-cloudy-day",                "icon_night": "partly-cloudy-night"},
-    3:  {"description": "Cubierto",                     "icon_day": "overcast-day",                     "icon_night": "overcast-night"},
+    3:  {"description": "Cubierto",                     "icon_day": "overcast",                         "icon_night": "overcast"},
     45: {"description": "Niebla",                       "icon_day": "fog-day",                          "icon_night": "fog-night"},
     48: {"description": "Niebla con escarcha",          "icon_day": "fog-day",                          "icon_night": "fog-night"},
     51: {"description": "Llovizna leve",                "icon_day": "partly-cloudy-day-drizzle",        "icon_night": "partly-cloudy-night-drizzle"},
@@ -86,12 +86,13 @@ def icon_from_description_es(text: str | None, is_day: bool = True) -> str | Non
         return f"fog-{suffix}"
 
     # Nubosidad ("algo/parcial/ligeramente nublado" antes que "nublado" pleno).
+    # 'overcast' es neutro (nube gris, sin sol) ⇒ no lleva sufijo day/night.
     if "cubierto" in t:
-        return f"overcast-{suffix}"
+        return "overcast"
     if any(k in t for k in ("algo nublado", "parcial", "ligeramente")):
         return f"partly-cloudy-{suffix}"
     if "nublado" in t:
-        return f"overcast-{suffix}"
+        return "overcast"
     if "despejado" in t or "claro" in t:
         return f"clear-{suffix}"
 

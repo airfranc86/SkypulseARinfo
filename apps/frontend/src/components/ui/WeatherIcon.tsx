@@ -11,6 +11,7 @@ import ClearDay            from '@/assets/meteocons/clear-day.svg?react'
 import ClearNight          from '@/assets/meteocons/clear-night.svg?react'
 import PartlyCloudyDay     from '@/assets/meteocons/partly-cloudy-day.svg?react'
 import PartlyCloudyNight   from '@/assets/meteocons/partly-cloudy-night.svg?react'
+import Overcast            from '@/assets/meteocons/overcast.svg?react'
 import OvercastDay         from '@/assets/meteocons/overcast-day.svg?react'
 import OvercastNight       from '@/assets/meteocons/overcast-night.svg?react'
 import FogDay              from '@/assets/meteocons/fog-day.svg?react'
@@ -50,6 +51,7 @@ const ICON_MAP: Record<string, SvgComponent> = {
   'clear-night':                  ClearNight,
   'partly-cloudy-day':            PartlyCloudyDay,
   'partly-cloudy-night':          PartlyCloudyNight,
+  'overcast':                     Overcast,
   'overcast-day':                 OvercastDay,
   'overcast-night':               OvercastNight,
   'fog-day':                      FogDay,
