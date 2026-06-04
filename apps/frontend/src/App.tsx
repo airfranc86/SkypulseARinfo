@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { Analytics } from '@vercel/analytics/react'
 import { useLocation as useLocationState } from '@/hooks/useLocation'
 import { useGTMPageView } from '@/hooks/useGTMPageView'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -303,6 +304,7 @@ export default function App() {
           <RootLayout />
         </BrowserRouter>
       </ModelStatusProvider>
+      <Analytics />
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   )
