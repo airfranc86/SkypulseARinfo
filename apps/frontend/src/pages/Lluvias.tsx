@@ -208,7 +208,7 @@ export function Lluvias() {
                   >
                     {row.duration}
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-foreground)' }}>
                     {row.when}
                   </td>
                 </tr>

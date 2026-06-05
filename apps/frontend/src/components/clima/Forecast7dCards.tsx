@@ -59,16 +59,22 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
         </span>
       )}
 
-      {/* Viento — solo si moderada o intensa */}
-      {(day.wind_intensity === 'moderada' || day.wind_intensity === 'intensa') && (
+      {/* Viento — siempre visible si hay dato */}
+      {day.wind_speed_max !== null && (
         <div className="flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1">
             {day.wind_icon && <WeatherIcon code={day.wind_icon} size={18} />}
             <span
               className="text-xs"
-              style={{ color: day.wind_intensity === 'intensa' ? '#e03535' : '#c8a84b' }}
+              style={{
+                color: day.wind_intensity === 'intensa'
+                  ? '#e03535'
+                  : day.wind_intensity === 'moderada'
+                    ? '#c8a84b'
+                    : 'var(--color-muted-foreground)',
+              }}
             >
-              {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
+              {Math.round(day.wind_speed_max)} km/h{day.wind_dir_cardinal ? ` ${day.wind_dir_cardinal}` : ''}
             </span>
           </div>
           {day.wind_shift && day.wind_dir_cardinal && (
@@ -76,7 +82,7 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
               className="text-[9px] px-1.5 py-0.5 rounded-full"
               style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
             >
-              Rota al {day.wind_dir_cardinal}
+              ↻ Rota al {day.wind_dir_cardinal}
             </span>
           )}
         </div>

@@ -68,7 +68,9 @@ export function Forecast7dTable({ days }: Props) {
                               : 'var(--color-muted-foreground)',
                         }}
                       >
-                        {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
+                        {day.wind_speed_max !== null
+                          ? `${Math.round(day.wind_speed_max)} km/h${day.wind_dir_cardinal ? ` ${day.wind_dir_cardinal}` : ''}`
+                          : '—'}
                       </span>
                     </div>
                     {day.wind_shift && day.wind_dir_cardinal && (
@@ -76,7 +78,7 @@ export function Forecast7dTable({ days }: Props) {
                         className="text-[10px] px-1.5 py-0.5 rounded-full w-fit"
                         style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
                       >
-                        Rota al {day.wind_dir_cardinal}
+                        ↻ Rota al {day.wind_dir_cardinal}
                       </span>
                     )}
                   </div>
