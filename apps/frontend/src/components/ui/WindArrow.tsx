@@ -1,7 +1,7 @@
 /**
  * WindArrow — flecha SVG que rota según la dirección meteorológica del viento.
- * Convención: deg=0 → viento del Norte (flecha apunta al Norte/arriba).
- * Rotación horaria: deg=90 → viento del Este, deg=270 → viento del Oeste.
+ * Datos en convención FROM (estándar meteorológico): deg=0 → viento DEL Norte.
+ * La flecha muestra la dirección TO (+180°): deg=0 → apunta al Sur (hacia donde va).
  */
 interface Props {
   deg: number
@@ -18,7 +18,7 @@ export function WindArrow({ deg, size = 16, color = 'currentColor' }: Props) {
       fill="none"
       aria-hidden="true"
       style={{
-        transform: `rotate(${deg}deg)`,
+        transform: `rotate(${deg + 180}deg)`,
         transition: 'transform 0.4s ease',
         display: 'inline-block',
         flexShrink: 0,

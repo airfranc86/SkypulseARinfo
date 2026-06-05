@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, type ReactNode, type CSSProperties } from 'react'
+import { useRef, useCallback, useEffect, type ReactNode, type CSSProperties, type PointerEvent } from 'react'
 import './BorderGlow.css'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -107,6 +107,8 @@ export function BorderGlow({
   fillOpacity = 0.5,
 }: BorderGlowProps) {
   const cardRef = useRef<HTMLDivElement>(null)
+  const rafRef = useRef<number | null>(null)
+  const pendingPos = useRef<[number, number] | null>(null)
 
   const getCenterOfElement = useCallback((el: HTMLDivElement) => {
     const { width, height } = el.getBoundingClientRect()
@@ -135,16 +137,22 @@ export function BorderGlow({
     return degrees
   }, [getCenterOfElement])
 
-  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
     const card = cardRef.current
     if (!card) return
     const rect = card.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const edge = getEdgeProximity(card, x, y)
-    const angle = getCursorAngle(card, x, y)
-    card.style.setProperty('--edge-proximity', `${(edge * 100).toFixed(3)}`)
-    card.style.setProperty('--cursor-angle', `${angle.toFixed(3)}deg`)
+    // Capture latest position immediately (before RAF fires)
+    pendingPos.current = [e.clientX - rect.left, e.clientY - rect.top]
+    if (rafRef.current !== null) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      if (!card || !pendingPos.current) return
+      const [x, y] = pendingPos.current
+      const edge = getEdgeProximity(card, x, y)
+      const angle = getCursorAngle(card, x, y)
+      card.style.setProperty('--edge-proximity', `${(edge * 100).toFixed(3)}`)
+      card.style.setProperty('--cursor-angle', `${angle.toFixed(3)}deg`)
+    })
   }, [getEdgeProximity, getCursorAngle])
 
   useEffect(() => {
