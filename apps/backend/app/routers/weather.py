@@ -51,7 +51,9 @@ from app.services.windy import (
     get_daily_forecast as windy_get_daily_forecast,
     get_hourly_forecast as windy_get_hourly_forecast,
 )
+from app.utils.geo import degrees_to_cardinal
 from app.utils.moon_phase import compute_moon_phase, compute_moon_position
+from app.utils.wind import detect_wind_shift, wind_icon_code, wind_intensity_tier
 from app.utils.wmo_codes import (
     describe_wmo,
     icon_from_description_es,
@@ -163,6 +165,7 @@ def _build_synthetic_daily_multi(
         precip_prob_max=[w.precip_prob for w in windy_daily],
         wind_speed_max=[w.wind_speed_max_kmh for w in windy_daily],
         wind_gusts_max=[w.wind_gust_max_kmh for w in windy_daily],
+        wind_dir_dominant=[None] * len(windy_daily),
         humidity_mean=[w.humidity_mean for w in windy_daily],
         uv_max=[None] * len(windy_daily),
         weather_codes=[_wmo_from_windy_daily(w) for w in windy_daily],
@@ -369,6 +372,8 @@ async def get_dashboard(
         is_day=is_day_now,
         source=current.meta.source,
         observed_at=current.meta.station.observed_at if current.meta.station else None,
+        wind_icon=wind_icon_code(current.wind_speed_kmh),
+        wind_intensity=wind_intensity_tier(current.wind_speed_kmh),
     )
 
     # =========================================================================
@@ -835,6 +840,10 @@ def _build_7d_forecast(
         most_common_code: int | None = max(set(codes), key=codes.count) if codes else None
         icon = resolve_daily_icon(most_common_code, merged["precip_prob"], is_day=True)
 
+        wsm = merged["wind_speed_max"]
+        wdd = ref.wind_dir_dominant[i] if i < len(ref.wind_dir_dominant) else None
+        w_card = degrees_to_cardinal(wdd) if wdd is not None else None
+
         entries.append(
             DailyEntrySchema(
                 date=date_str,
@@ -844,13 +853,22 @@ def _build_7d_forecast(
                 temp_min=merged["temp_min"],
                 precip_sum=merged["precip_sum"],
                 precip_prob=merged["precip_prob"],
-                wind_speed_max=merged["wind_speed_max"],
+                wind_speed_max=wsm,
                 snow_level_m=snow_level_m,
                 weather_code=most_common_code,
                 icon=icon,
                 confidence_pct=confidence_pct,
                 confidence_label=conf_label,  # type: ignore[arg-type]
+                wind_dir_dominant_deg=wdd,
+                wind_dir_cardinal=w_card,
+                wind_icon=wind_icon_code(wsm),
+                wind_intensity=wind_intensity_tier(wsm),
             )
         )
+
+    shifts = detect_wind_shift([e.wind_dir_dominant_deg for e in entries])
+    entries = [
+        e.model_copy(update={"wind_shift": shifts[i]}) for i, e in enumerate(entries)
+    ]
 
     return entries

@@ -155,6 +155,11 @@ class DailyEntrySchema(BaseModel):
     icon: str
     confidence_pct: float
     confidence_label: Literal["ALTA", "MEDIA", "BAJA"]
+    wind_dir_dominant_deg: float | None = None
+    wind_dir_cardinal: str | None = None
+    wind_icon: str | None = None
+    wind_intensity: str | None = None
+    wind_shift: bool = False
 
 
 class RainForecastSchema(BaseModel):
@@ -186,6 +191,8 @@ class CurrentDetailedSchema(BaseModel):
     is_day: bool
     source: str = "unknown"  # "smn" | "openmeteo" | "unknown"
     observed_at: datetime | None = None  # timestamp de la última observación SMN
+    wind_icon: str | None = None
+    wind_intensity: str | None = None
 
 
 class HourlyConsensusSchema(BaseModel):

@@ -34,6 +34,14 @@ import Hail                from '@/assets/meteocons/hail.svg?react'
 import Thermometer         from '@/assets/meteocons/thermometer.svg?react'
 import Humidity            from '@/assets/meteocons/humidity.svg?react'
 import Wind                from '@/assets/meteocons/wind.svg?react'
+import WindBeaufort5       from '@/assets/meteocons/wind-beaufort-5.svg?react'
+import WindBeaufort6       from '@/assets/meteocons/wind-beaufort-6.svg?react'
+import WindBeaufort7       from '@/assets/meteocons/wind-beaufort-7.svg?react'
+import WindBeaufort8       from '@/assets/meteocons/wind-beaufort-8.svg?react'
+import WindBeaufort9       from '@/assets/meteocons/wind-beaufort-9.svg?react'
+import WindBeaufort10      from '@/assets/meteocons/wind-beaufort-10.svg?react'
+import WindBeaufort11      from '@/assets/meteocons/wind-beaufort-11.svg?react'
+import WindBeaufort12      from '@/assets/meteocons/wind-beaufort-12.svg?react'
 import UvIndex             from '@/assets/meteocons/uv-index.svg?react'
 import Sunrise             from '@/assets/meteocons/sunrise.svg?react'
 import Sunset              from '@/assets/meteocons/sunset.svg?react'
@@ -76,6 +84,14 @@ const ICON_MAP: Record<string, SvgComponent> = {
   'thermometer':                  Thermometer,
   'humidity':                     Humidity,
   'wind':                         Wind,
+  'wind-beaufort-5':              WindBeaufort5,
+  'wind-beaufort-6':              WindBeaufort6,
+  'wind-beaufort-7':              WindBeaufort7,
+  'wind-beaufort-8':              WindBeaufort8,
+  'wind-beaufort-9':              WindBeaufort9,
+  'wind-beaufort-10':             WindBeaufort10,
+  'wind-beaufort-11':             WindBeaufort11,
+  'wind-beaufort-12':             WindBeaufort12,
   'uv-index':                     UvIndex,
   'sunrise':                      Sunrise,
   'sunset':                       Sunset,

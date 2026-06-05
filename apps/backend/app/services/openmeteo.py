@@ -291,6 +291,7 @@ class DailyForecastDataExt:
     sunrise: list[str]
     sunset: list[str]
     daylight_seconds: list[float | None]
+    wind_dir_dominant: list[float | None] = field(default_factory=list)
 
 
 async def get_daily_forecast_ext(
@@ -309,6 +310,7 @@ async def get_daily_forecast_ext(
         "daily": (
             "temperature_2m_max,temperature_2m_min,precipitation_sum,"
             "precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,"
+            "wind_direction_10m_dominant,"
             "relative_humidity_2m_mean,uv_index_max,weather_code,"
             "sunrise,sunset,daylight_duration"
         ),
@@ -361,6 +363,7 @@ async def get_daily_forecast_ext(
                 precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
                 wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
                 wind_gusts_max=[parse_float(v) for v in daily.get("wind_gusts_10m_max", [])],
+                wind_dir_dominant=[parse_float(v) for v in daily.get("wind_direction_10m_dominant", [])],
                 humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
                 uv_max=[parse_float(v) for v in daily.get("uv_index_max", [])],
                 weather_codes=weather_codes,

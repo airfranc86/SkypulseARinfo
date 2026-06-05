@@ -2,6 +2,11 @@ import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import type { CurrentDetailed } from '@/lib/api'
 
+const WIND_COLOR: Record<string, string> = {
+  moderada: '#c8a84b',
+  intensa:  '#e03535',
+}
+
 function minutesAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime()
   const mins = Math.round(diffMs / 60_000)
@@ -91,15 +96,7 @@ export function WeatherHero({ current, locationLabel }: Props) {
           label="Humedad"
           value={current.humidity !== null ? `${Math.round(current.humidity)}%` : '—'}
         />
-        <StatChip
-          icon="💨"
-          label="Viento"
-          value={
-            current.wind_speed_kmh !== null
-              ? `${Math.round(current.wind_speed_kmh)} km/h${current.wind_dir_cardinal ? ` ${current.wind_dir_cardinal}` : ''}`
-              : '—'
-          }
-        />
+        <WindChip current={current} />
         <StatChip
           icon="☀️"
           label="UV"
@@ -120,6 +117,27 @@ function StatChip({ icon, label, value }: { icon: string; label: string; value: 
       <span className="text-base">{icon}</span>
       <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>{label}</span>
       <span className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>{value}</span>
+    </div>
+  )
+}
+
+function WindChip({ current }: { current: CurrentDetailed }) {
+  const tier = current.wind_intensity
+  const color = tier ? (WIND_COLOR[tier] ?? 'var(--color-foreground)') : 'var(--color-foreground)'
+  const speedText = current.wind_speed_kmh !== null
+    ? `${Math.round(current.wind_speed_kmh)} km/h${current.wind_dir_cardinal ? ` ${current.wind_dir_cardinal}` : ''}`
+    : '—'
+
+  return (
+    <div
+      className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5"
+      style={{ background: 'rgba(200,168,75,0.06)', border: '1px solid rgba(200,168,75,0.12)' }}
+    >
+      {current.wind_icon
+        ? <WeatherIcon code={current.wind_icon} size={24} />
+        : <span className="text-base">💨</span>}
+      <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>Viento</span>
+      <span className="text-sm font-medium" style={{ color }}>{speedText}</span>
     </div>
   )
 }

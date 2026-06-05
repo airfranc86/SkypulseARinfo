@@ -214,6 +214,11 @@ export interface DailyEntry {
   icon: string
   confidence_pct: number
   confidence_label: 'ALTA' | 'MEDIA' | 'BAJA'
+  wind_dir_dominant_deg: number | null
+  wind_dir_cardinal: string | null
+  wind_icon: string | null
+  wind_intensity: string | null
+  wind_shift: boolean
 }
 
 export interface RainForecastInfo {
@@ -241,6 +246,8 @@ export interface CurrentDetailed {
   is_day: boolean
   source?: string  // "smn" | "openmeteo" | "unknown"
   observed_at?: string  // ISO datetime of the SMN observation
+  wind_icon: string | null
+  wind_intensity: string | null
 }
 
 export interface HourlyConsensus {

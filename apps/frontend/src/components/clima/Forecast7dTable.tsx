@@ -53,8 +53,33 @@ export function Forecast7dTable({ days }: Props) {
                 <td className="px-4 py-3" style={{ color: 'var(--color-info)' }}>
                   {day.precip_prob !== null ? `${Math.round(day.precip_prob)}%` : '—'}
                 </td>
-                <td className="px-4 py-3" style={{ color: 'var(--color-muted-foreground)' }}>
-                  {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      {day.wind_icon
+                        ? <WeatherIcon code={day.wind_icon} size={20} />
+                        : null}
+                      <span
+                        style={{
+                          color: day.wind_intensity === 'intensa'
+                            ? '#e03535'
+                            : day.wind_intensity === 'moderada'
+                              ? '#c8a84b'
+                              : 'var(--color-muted-foreground)',
+                        }}
+                      >
+                        {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
+                      </span>
+                    </div>
+                    {day.wind_shift && day.wind_dir_cardinal && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-full w-fit"
+                        style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
+                      >
+                        Rota al {day.wind_dir_cardinal}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3" style={{ color: 'var(--color-muted-foreground)' }}>
                   {day.snow_level_m !== null ? `${Math.round(day.snow_level_m).toLocaleString('es-AR')} m` : '—'}
