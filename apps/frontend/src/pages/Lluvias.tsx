@@ -172,13 +172,19 @@ export function Lluvias() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'var(--color-card)' }}>
-                {['Tipo de nube', '¿Llueve?', 'Intensidad', 'Duración típica', 'Cuándo aparece'].map(h => (
+                {[
+                  { label: 'Tipo de nube',    cls: '' },
+                  { label: '¿Llueve?',         cls: '' },
+                  { label: 'Intensidad',       cls: '' },
+                  { label: 'Duración típica',  cls: 'hidden sm:table-cell' },
+                  { label: 'Cuándo aparece',   cls: 'hidden md:table-cell' },
+                ].map(({ label, cls }) => (
                   <th
-                    key={h}
-                    className="px-4 py-3 text-left text-[.65rem] font-medium uppercase tracking-wide"
+                    key={label}
+                    className={`px-4 py-3 text-left text-[.65rem] font-medium uppercase tracking-wide ${cls}`}
                     style={{ color: 'var(--color-muted-foreground)' }}
                   >
-                    {h}
+                    {label}
                   </th>
                 ))}
               </tr>
@@ -208,7 +214,7 @@ export function Lluvias() {
                   >
                     {row.duration}
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-foreground)' }}>
+                  <td className="px-4 py-3 hidden md:table-cell text-xs" style={{ color: 'var(--color-foreground)' }}>
                     {row.when}
                   </td>
                 </tr>
