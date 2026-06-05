@@ -21,15 +21,15 @@ interface CloudRow {
 const CLOUDS: CloudRow[] = [
   { name: 'Cirros',         badge: 'no',    badgeLabel: 'No',             intensity: 0, duration: '—',                     when: 'Todo el año, especialmente antes de frentes' },
   { name: 'Cirrostratos',   badge: 'yes',   badgeLabel: 'En 12–24 h',     intensity: 1, duration: 'Prolongada',            when: 'Preceden frentes cálidos' },
-  { name: 'Cirrocúmulos',   badge: 'no',    badgeLabel: 'No directa',     intensity: 0, duration: '—',                     when: 'Efímeros, señal de inestabilidad' },
-  { name: 'Altocúmulos',    badge: 'maybe', badgeLabel: 'Posible',        intensity: 1, duration: 'Breve',                 when: 'Mañanas cálidas con Ac castellanus' },
+  { name: 'Cirrocúmulos',   badge: 'no',    badgeLabel: 'No directa',     intensity: 0, duration: '—',                     when: 'Otoño e invierno, en transiciones entre masas de aire frío' },
+  { name: 'Altocúmulos',    badge: 'maybe', badgeLabel: 'Posible',        intensity: 1, duration: 'Breve',                 when: 'Mañanas inestables; Ac castellanus anuncia tormenta vespertina' },
   { name: 'Altostratos',    badge: 'yes',   badgeLabel: 'Sí',             intensity: 2, duration: 'Prolongada',            when: 'Siguen a los cirrostratos en frentes' },
   { name: 'Estrato',        badge: 'yes',   badgeLabel: 'Sí',             intensity: 1, duration: 'Larga, persistente',    when: 'Días fríos y húmedos, zonas costeras' },
-  { name: 'Estratocúmulos', badge: 'maybe', badgeLabel: 'Llovizna posible', intensity: 1, duration: 'Breve',              when: 'Muy comunes, raramente llueven fuerte' },
+  { name: 'Estratocúmulos', badge: 'maybe', badgeLabel: 'Llovizna posible', intensity: 1, duration: 'Breve',              when: 'Todo el año; dominantes en otoño-invierno bajo anticiclones' },
   { name: 'Nimboestrato',   badge: 'heavy', badgeLabel: 'Sí — continua',  intensity: 3, duration: 'Muchas horas o días',  when: 'Frentes activos, invierno y otoño' },
   { name: 'Cúmulo',         badge: 'maybe', badgeLabel: 'Solo si crecen', intensity: 2, duration: 'Breve (chubasco)',      when: 'Tardes cálidas de verano' },
-  { name: 'Cumulonimbo',    badge: 'crit',  badgeLabel: 'Sí — severa',    intensity: 4, duration: 'Corta pero intensa',   when: 'Verano, tarde-noche, zonas tropicales' },
-  { name: 'Mammatus',       badge: 'crit',  badgeLabel: 'Tormenta activa', intensity: 4, duration: 'Variable, muy intensa', when: 'Bajo el yunque de un Cb severo' },
+  { name: 'Cumulonimbo',    badge: 'crit',  badgeLabel: 'Sí — severa',    intensity: 4, duration: 'Corta pero intensa',   when: 'Tardes inestables de primavera y verano, centro y norte del país' },
+  { name: 'Mammatus',       badge: 'crit',  badgeLabel: 'Tormenta activa', intensity: 4, duration: 'Variable, muy intensa', when: 'Al madurar el Cb, durante o tras el pico de tormenta' },
   { name: 'Niebla',         badge: 'yes',   badgeLabel: 'Llovizna fina',  intensity: 1, duration: 'Hasta que sube el sol', when: 'Madrugada y amanecer en valles' },
 ]
 
