@@ -223,6 +223,33 @@ export function Lluvias() {
           </table>
         </div>
 
+        {/* Cuándo aparece — solo mobile, formato separado */}
+        <div className="mt-5 sm:hidden space-y-2">
+          <p
+            className="text-[.6rem] font-medium uppercase tracking-widest px-1"
+            style={{ color: 'var(--color-muted-foreground)' }}
+          >
+            Cuándo aparece cada nube
+          </p>
+          {CLOUDS.map((row) => (
+            <div
+              key={row.name}
+              className="flex items-baseline gap-2 px-3 py-2.5 rounded-xl"
+              style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+            >
+              <span
+                className="shrink-0 text-xs font-semibold w-[108px]"
+                style={{ color: 'var(--color-foreground)' }}
+              >
+                {row.name}
+              </span>
+              <span className="text-xs leading-snug" style={{ color: 'var(--color-muted-foreground)' }}>
+                {row.when}
+              </span>
+            </div>
+          ))}
+        </div>
+
         {/* Educational cards */}
         <div className="mt-12">
           <h2
