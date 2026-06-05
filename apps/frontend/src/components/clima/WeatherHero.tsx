@@ -1,4 +1,5 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { WindArrow } from '@/components/ui/WindArrow'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import type { CurrentDetailed } from '@/lib/api'
 
@@ -125,7 +126,7 @@ function WindChip({ current }: { current: CurrentDetailed }) {
   const tier = current.wind_intensity
   const color = tier ? (WIND_COLOR[tier] ?? 'var(--color-foreground)') : 'var(--color-foreground)'
   const speedText = current.wind_speed_kmh !== null
-    ? `${Math.round(current.wind_speed_kmh)} km/h${current.wind_dir_cardinal ? ` ${current.wind_dir_cardinal}` : ''}`
+    ? `${Math.round(current.wind_speed_kmh)} km/h`
     : '—'
 
   return (
@@ -137,7 +138,17 @@ function WindChip({ current }: { current: CurrentDetailed }) {
         ? <WeatherIcon code={current.wind_icon} size={24} />
         : <span className="text-base">💨</span>}
       <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>Viento</span>
-      <span className="text-sm font-medium" style={{ color }}>{speedText}</span>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-sm font-medium" style={{ color }}>{speedText}</span>
+        {current.wind_dir_deg !== null && current.wind_dir_deg !== undefined && (
+          <WindArrow deg={current.wind_dir_deg} size={14} color={color} />
+        )}
+        {current.wind_dir_cardinal && (
+          <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+            {current.wind_dir_cardinal}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

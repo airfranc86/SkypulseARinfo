@@ -1,4 +1,5 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { WindArrow } from '@/components/ui/WindArrow'
 import type { DailyEntry } from '@/lib/api'
 import { confidenceColor } from '@/lib/confidence'
 
@@ -62,7 +63,7 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
       {/* Viento — siempre visible si hay dato */}
       {day.wind_speed_max !== null && (
         <div className="flex flex-col items-center gap-0.5">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap justify-center">
             {day.wind_icon && <WeatherIcon code={day.wind_icon} size={18} />}
             <span
               className="text-xs"
@@ -74,8 +75,24 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
                     : 'var(--color-muted-foreground)',
               }}
             >
-              {Math.round(day.wind_speed_max)} km/h{day.wind_dir_cardinal ? ` ${day.wind_dir_cardinal}` : ''}
+              {Math.round(day.wind_speed_max)} km/h
             </span>
+            {day.wind_dir_dominant_deg !== null && day.wind_dir_dominant_deg !== undefined && (
+              <WindArrow
+                deg={day.wind_dir_dominant_deg}
+                size={12}
+                color={
+                  day.wind_intensity === 'intensa' ? '#e03535'
+                  : day.wind_intensity === 'moderada' ? '#c8a84b'
+                  : 'var(--color-muted-foreground)'
+                }
+              />
+            )}
+            {day.wind_dir_cardinal && (
+              <span className="text-[9px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                {day.wind_dir_cardinal}
+              </span>
+            )}
           </div>
           {day.wind_shift && day.wind_dir_cardinal && (
             <span

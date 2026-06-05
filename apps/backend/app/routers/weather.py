@@ -365,6 +365,7 @@ async def get_dashboard(
         feels_like_c=current.feels_like_c,
         humidity=current.humidity,
         wind_speed_kmh=current.wind_speed_kmh,
+        wind_dir_deg=current.wind_dir_deg,
         wind_dir_cardinal=current.wind_dir_cardinal,
         uv_index=uv_index,
         description=desc,

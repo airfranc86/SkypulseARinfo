@@ -184,6 +184,7 @@ class CurrentDetailedSchema(BaseModel):
     feels_like_c: float | None
     humidity: float | None
     wind_speed_kmh: float | None
+    wind_dir_deg: float | None = None
     wind_dir_cardinal: str | None
     uv_index: float | None
     description: str

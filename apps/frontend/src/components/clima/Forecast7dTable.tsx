@@ -1,4 +1,5 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { WindArrow } from '@/components/ui/WindArrow'
 import type { DailyEntry } from '@/lib/api'
 import { confidenceColor } from '@/lib/confidence'
 
@@ -68,10 +69,24 @@ export function Forecast7dTable({ days }: Props) {
                               : 'var(--color-muted-foreground)',
                         }}
                       >
-                        {day.wind_speed_max !== null
-                          ? `${Math.round(day.wind_speed_max)} km/h${day.wind_dir_cardinal ? ` ${day.wind_dir_cardinal}` : ''}`
-                          : '—'}
+                        {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
                       </span>
+                      {day.wind_dir_dominant_deg !== null && day.wind_dir_dominant_deg !== undefined && (
+                        <WindArrow
+                          deg={day.wind_dir_dominant_deg}
+                          size={13}
+                          color={
+                            day.wind_intensity === 'intensa' ? '#e03535'
+                            : day.wind_intensity === 'moderada' ? '#c8a84b'
+                            : 'var(--color-muted-foreground)'
+                          }
+                        />
+                      )}
+                      {day.wind_dir_cardinal && (
+                        <span className="text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                          {day.wind_dir_cardinal}
+                        </span>
+                      )}
                     </div>
                     {day.wind_shift && day.wind_dir_cardinal && (
                       <span

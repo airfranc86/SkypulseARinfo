@@ -239,6 +239,7 @@ export interface CurrentDetailed {
   feels_like_c: number | null
   humidity: number | null
   wind_speed_kmh: number | null
+  wind_dir_deg: number | null
   wind_dir_cardinal: string | null
   uv_index: number | null
   description: string
