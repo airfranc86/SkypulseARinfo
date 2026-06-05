@@ -1,7 +1,8 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import type { DailyEntry } from '@/lib/api'
-import { confidenceColor } from '@/lib/confidence'
+
+const HIGHLIGHT_COLOR = '200,168,75' // primary gold (RGB para componer alpha)
 
 interface Props {
   days: DailyEntry[]
@@ -11,7 +12,7 @@ export function Forecast7dCards({ days }: Props) {
   return (
     <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin', scrollSnapType: 'x mandatory' }}>
       {days.map((day, idx) => {
-        const isHighlight = idx === 0 || day.confidence_label === 'ALTA'
+        const isHighlight = idx === 0
         return <DayCard key={day.date} day={day} highlighted={isHighlight} />
       })}
     </div>
@@ -19,7 +20,6 @@ export function Forecast7dCards({ days }: Props) {
 }
 
 function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: boolean }) {
-  const confColor = confidenceColor(day.confidence_label)
   const hasPrecip = (day.precip_prob ?? 0) > 15
 
   return (
@@ -30,9 +30,9 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
         scrollSnapAlign: 'start',
         background: 'var(--color-card)',
         border: highlighted
-          ? `1px solid ${confColor}55`
+          ? `1px solid rgba(${HIGHLIGHT_COLOR},0.33)`
           : '1px solid var(--color-border)',
-        boxShadow: highlighted ? `0 0 14px ${confColor}14` : 'none',
+        boxShadow: highlighted ? `0 0 14px rgba(${HIGHLIGHT_COLOR},0.08)` : 'none',
       }}
     >
       {/* Day label */}
@@ -104,14 +104,6 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
           )}
         </div>
       )}
-
-      {/* Confidence badge */}
-      <span
-        className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-        style={{ background: `${confColor}18`, color: confColor }}
-      >
-        {day.confidence_label}
-      </span>
     </div>
   )
 }

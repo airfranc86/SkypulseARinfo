@@ -10,22 +10,9 @@ import {
   ReferenceLine,
 } from 'recharts'
 import type { DailyEntry } from '@/lib/api'
-import { confidenceColor } from '@/lib/confidence'
 
 interface Props {
   days: DailyEntry[]
-}
-
-interface ChartDot {
-  cx?: number
-  cy?: number
-  payload?: DailyEntry
-}
-
-function ConfidenceDot({ cx = 0, cy = 0, payload }: ChartDot) {
-  if (!payload) return null
-  const color = confidenceColor(payload.confidence_label)
-  return <circle cx={cx} cy={cy} r={5} fill={color} stroke="var(--color-background)" strokeWidth={2} />
 }
 
 export function Forecast7dChart({ days }: Props) {
@@ -106,7 +93,7 @@ export function Forecast7dChart({ days }: Props) {
             name="Máx"
             stroke="#f0a030"
             strokeWidth={2.5}
-            dot={(props) => <ConfidenceDot {...props} />}
+            dot={{ r: 3, fill: '#f0a030' }}
             activeDot={{ r: 6, fill: '#f0a030' }}
           />
 

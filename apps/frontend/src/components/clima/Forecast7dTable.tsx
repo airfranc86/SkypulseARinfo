@@ -1,7 +1,6 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import type { DailyEntry } from '@/lib/api'
-import { confidenceColor } from '@/lib/confidence'
 
 interface Props {
   days: DailyEntry[]
@@ -13,7 +12,7 @@ export function Forecast7dTable({ days }: Props) {
       <table className="w-full text-sm border-collapse" style={{ minWidth: '560px' }}>
         <thead>
           <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'rgba(200,168,75,0.04)' }}>
-            {['Día', 'Tiempo', 'Máx', 'Mín', 'Lluvia%', 'Viento', 'Cota nieve', 'Fiabilidad'].map((h) => (
+            {['Día', 'Tiempo', 'Máx', 'Mín', 'Lluvia%', 'Viento'].map((h) => (
               <th
                 key={h}
                 className="text-left px-4 py-2.5 font-medium text-xs"
@@ -26,7 +25,6 @@ export function Forecast7dTable({ days }: Props) {
         </thead>
         <tbody>
           {days.map((day, i) => {
-            const confColor = confidenceColor(day.confidence_label)
             return (
               <tr
                 key={day.date}
@@ -97,17 +95,6 @@ export function Forecast7dTable({ days }: Props) {
                       </span>
                     )}
                   </div>
-                </td>
-                <td className="px-4 py-3" style={{ color: 'var(--color-muted-foreground)' }}>
-                  {day.snow_level_m !== null ? `${Math.round(day.snow_level_m).toLocaleString('es-AR')} m` : '—'}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
-                    style={{ background: `${confColor}18`, color: confColor }}
-                  >
-                    {day.confidence_label}
-                  </span>
                 </td>
               </tr>
             )
