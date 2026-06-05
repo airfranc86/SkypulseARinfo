@@ -6,7 +6,6 @@ import type { ModelKey } from '@/components/ui/ModelBadge'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
 import { DayArc } from '@/components/clima/DayArc'
-import { RainForecastCard } from '@/components/clima/RainForecastCard'
 import { HourlyStrip } from '@/components/clima/HourlyStrip'
 import { Forecast7d } from '@/components/clima/Forecast7d'
 import { SportBlock } from '@/components/clima/SportBlock'
@@ -76,9 +75,6 @@ export function PrevisionClima({ location }: Props) {
               selectedModel={forecastModel}
               onModelChange={setForecastModel}
             />
-
-            {/* Rain today — GFS, al final */}
-            <RainForecastCard rain={data.rain_today} />
           </div>
         </FadeContent>
       )}
