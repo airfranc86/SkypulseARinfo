@@ -4,9 +4,17 @@ import { cn } from '@/lib/utils'
 import { Forecast7dCards } from './Forecast7dCards'
 import { Forecast7dTable } from './Forecast7dTable'
 import { Forecast7dChart } from './Forecast7dChart'
+import { ModelBadge } from '@/components/ui/ModelBadge'
+import type { ModelKey } from '@/components/ui/ModelBadge'
 import type { DailyEntry } from '@/lib/api'
 
 type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
+
+const MODEL_BADGE_KEY: Record<ForecastModel, ModelKey> = {
+  consensus: 'consensus',
+  gfs:       'gfs',
+  ecmwf:     'windy_ecmwf',
+}
 
 interface Props {
   days: DailyEntry[]
@@ -42,13 +50,14 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange }: Props)
         className="px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
         style={{ borderBottom: '1px solid var(--color-border)' }}
       >
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <h2
             className="text-base font-semibold shrink-0"
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
           >
             Pronóstico 7 días
           </h2>
+          <ModelBadge model={MODEL_BADGE_KEY[selectedModel]} variant="header" />
           {badge}
         </div>
 

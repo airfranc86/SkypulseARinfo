@@ -8,7 +8,6 @@ import { WeatherHero } from '@/components/clima/WeatherHero'
 import { DayArc } from '@/components/clima/DayArc'
 import { HourlyStrip } from '@/components/clima/HourlyStrip'
 import { Forecast7d } from '@/components/clima/Forecast7d'
-import { SportBlock } from '@/components/clima/SportBlock'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
@@ -57,14 +56,6 @@ export function PrevisionClima({ location }: Props) {
                 snowLevelM={data.snow_level_m}
               />
             </div>
-
-            {/* Sport block */}
-            <SportBlock
-              lat={location?.lat ?? null}
-              lon={location?.lon ?? null}
-              current={data.current}
-              hourlyEntries={data.hourly.entries.slice(0, 12)}
-            />
 
             {/* Hourly 48h — GFS */}
             <HourlyStrip hourly={data.hourly} />

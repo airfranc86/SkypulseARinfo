@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Info } from 'lucide-react'
 
-export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'mixed' | 'segemar'
+export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'mixed' | 'segemar' | 'consensus'
 type Variant = 'pill' | 'inline' | 'header'
 
 interface ModelMeta {
@@ -77,6 +77,14 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     description: 'Esta página combina observación en tiempo real (SMN) y pronóstico numérico (GFS · NOAA).',
     reliability: 'Actual: alta (SMN) · Pronóstico: ~85% a 3d',
     updateFreq: 'SMN: 1h · GFS: 4x/día',
+  },
+  consensus: {
+    label: 'Consenso',
+    org: 'GFS + ECMWF',
+    color: '#c8a84b',
+    description: 'Promedia GFS (NOAA) y ECMWF (Europa). Mayor coincidencia entre modelos indica mayor confianza en el pronóstico.',
+    reliability: '~90% a 3 días · ~75% a 7 días',
+    updateFreq: 'GFS: 4x/día · ECMWF: 2x/día',
   },
 }
 

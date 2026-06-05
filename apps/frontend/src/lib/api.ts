@@ -65,6 +65,7 @@ export interface ToolResult {
   humidity: number | null
   wind_speed: number | null
   precip: number | null
+  source?: string
 }
 
 /** Respuesta de /sensacion-termica */

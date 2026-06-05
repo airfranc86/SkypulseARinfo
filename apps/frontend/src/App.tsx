@@ -35,7 +35,8 @@ const Nubes       = lazy(() => import('@/pages/Nubes').then(m => ({ default: m.N
 const Metar       = lazy(() => import('@/pages/Metar').then(m => ({ default: m.Metar })))
 const Volcanes    = lazy(() => import('@/pages/Volcanes').then(m => ({ default: m.Volcanes })))
 const Incendios   = lazy(() => import('@/pages/Incendios').then(m => ({ default: m.Incendios })))
-const Niebla      = lazy(() => import('@/pages/Niebla').then(m => ({ default: m.Niebla })))
+const Niebla        = lazy(() => import('@/pages/Niebla').then(m => ({ default: m.Niebla })))
+const HacerDeporte  = lazy(() => import('@/pages/HacerDeporte').then(m => ({ default: m.HacerDeporte })))
 
 import { useVolcanes } from '@/hooks/useWeather'
 
@@ -132,8 +133,9 @@ function useMotionPreferences() {
 
 /** Live-data tools — require location + backend (Row 1, scrolls ←) */
 const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
-  { to: '/prevision',     label: 'Previsión',     emoji: '⛅', color: '#c8a84b' },
-  { to: '/tender-ropa',   label: 'Tender ropa',   emoji: '🌤️', color: '#3ecf7a' },
+  { to: '/prevision',       label: 'Previsión',       emoji: '⛅', color: '#c8a84b' },
+  { to: '/hacer-deporte',  label: 'Hacer deporte',  emoji: '🏃', color: '#f0a030' },
+  { to: '/tender-ropa',    label: 'Tender ropa',    emoji: '🌤️', color: '#3ecf7a' },
   { to: '/lavar-auto',    label: 'Lavar el auto',  emoji: '🫧',  color: '#5aaad8' },
   { to: '/terremotos',    label: 'Terremotos',    emoji: '🌍', color: '#e05545' },
   { to: '/cota-de-nieve', label: 'Cota de nieve', emoji: '⛷️', color: '#90aabb' },
@@ -268,7 +270,7 @@ function RootLayout() {
             <Route path="/tender-ropa" element={<TenderRopa location={location} />} />
             <Route path="/sensacion-termica" element={<Navigate to="/prevision" replace />} />
             <Route path="/cota-de-nieve" element={<CotaDeNieve location={location} />} />
-            <Route path="/hacer-deporte" element={<Navigate to="/prevision" replace />} />
+            <Route path="/hacer-deporte" element={<HacerDeporte location={location} />} />
             <Route path="/terremotos" element={<Terremotos location={location} />} />
             <Route path="/volcanes"   element={<Volcanes />} />
             <Route path="/incendios"  element={<Incendios location={location} />} />
