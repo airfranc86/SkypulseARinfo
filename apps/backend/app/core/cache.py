@@ -37,8 +37,18 @@ class _InFlight(Generic[T]):
 class SingleFlightCache(Generic[T]):
     """Caché async con deduplicación de fetches concurrentes (single-flight)."""
 
-    def __init__(self, *, maxsize: int, ttl: float, name: str = "") -> None:
+    def __init__(
+        self,
+        *,
+        maxsize: int,
+        ttl: float,
+        name: str = "",
+        failure_ttl: float = 15.0,
+    ) -> None:
         self._cache: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
+        # Resultados None se cachean con TTL corto para evitar hammering durante
+        # una ventana de error, sin bloquear la recuperación por 600 s completos.
+        self._failure_cache: TTLCache = TTLCache(maxsize=maxsize, ttl=failure_ttl)
         self._lock = asyncio.Lock()
         self._inflight: dict[str, _InFlight[T]] = {}
         self._name = name or "single_flight"
@@ -46,6 +56,7 @@ class SingleFlightCache(Generic[T]):
     def clear(self) -> None:
         """Vacía la caché. Usado por los tests para garantizar aislamiento."""
         self._cache.clear()
+        self._failure_cache.clear()
 
     async def get_or_fetch(self, key: str, fetch: Callable[[], Awaitable[T]]) -> T:
         """Devuelve el valor cacheado o ejecuta ``fetch`` una sola vez por clave.
@@ -62,6 +73,10 @@ class SingleFlightCache(Generic[T]):
             if key in self._cache:
                 logger.debug("%s cache hit: %s", self._name, key)
                 return self._cache[key]
+
+            if key in self._failure_cache:
+                logger.debug("%s failure-cache hit (None): %s", self._name, key)
+                return None  # type: ignore[return-value]
 
             waiter = self._inflight.get(key)
             if waiter is None:
@@ -82,7 +97,10 @@ class SingleFlightCache(Generic[T]):
         try:
             result = await fetch()
             async with self._lock:
-                self._cache[key] = result
+                if result is not None:
+                    self._cache[key] = result
+                else:
+                    self._failure_cache[key] = True
             responsible_slot.data = result
             return result
         except Exception as exc:
