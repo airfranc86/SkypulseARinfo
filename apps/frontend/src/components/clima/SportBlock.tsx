@@ -235,7 +235,6 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
   if (data.color === 'green') {
     return (
       <BorderGlow
-        animated
         glowColor="142 64 58"
         backgroundColor="#0d1625"
         borderRadius={12}

@@ -134,7 +134,6 @@ export function RainForecastCard({ rain }: Props) {
       {!rain.has_rain_today
         ? (
           <BorderGlow
-            animated
             glowColor="142 64 58"
             backgroundColor="#0d1625"
             borderRadius={12}
