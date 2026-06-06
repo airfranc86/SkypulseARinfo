@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   CloudSun, Shirt, Car, Activity, Waves, MountainSnow,
-  Mountain, TreePine, Eye, Cloud, Radio, CloudRain, Radar,
+  Mountain, TreePine, Eye, Cloud, PlaneTakeoff, CloudRain, Radar,
   TriangleAlert, type LucideIcon,
 } from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
@@ -79,6 +79,13 @@ const TOOLS: Item[] = [
     desc: 'Visibilidad actual y pronóstico de niebla hora a hora.',
     color: '#90aabb',
   },
+  {
+    to: '/metar',
+    Icon: PlaneTakeoff,
+    title: 'METAR & TAF',
+    desc: 'Reporte meteorológico real de cualquier aeródromo del mundo.',
+    color: '#8b9fc4',
+  },
 ]
 
 const GUIDES: Item[] = [
@@ -88,13 +95,6 @@ const GUIDES: Item[] = [
     title: 'Catálogo del cielo',
     desc: '13 tipos de nubes y 5 fenómenos aeronáuticos con escalas de peligro.',
     color: '#c8a84b',
-  },
-  {
-    to: '/metar',
-    Icon: Radio,
-    title: 'METAR & TAF',
-    desc: 'Decodificá el reporte meteorológico real de cualquier aeródromo.',
-    color: '#5aaad8',
   },
   {
     to: '/lluvias',
