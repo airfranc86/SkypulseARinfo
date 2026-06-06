@@ -1,4 +1,4 @@
-import { Car } from '@phosphor-icons/react'
+import { Icon } from '@iconify/react'
 import { useLavarCoche } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { CarWashDay } from '@/lib/api'
@@ -206,7 +206,7 @@ export function LavarCoche({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Car size={32} weight="duotone" style={{ color: '#5aaad8' }} />}
+        icon={<Icon icon="solar:washing-machine-bold-duotone" width={32} height={32} style={{ color: '#5aaad8' }} />}
         title="¿Cuándo lavar el auto?"
         subtitle={location.label}
         accentColor="#5aaad8"

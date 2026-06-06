@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CloudSun } from '@phosphor-icons/react'
+import { Icon } from '@iconify/react'
 import { useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
@@ -32,7 +32,7 @@ export function PrevisionClima({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<CloudSun size={32} weight="duotone" style={{ color: 'var(--color-primary)' }} />}
+        icon={<Icon icon="solar:cloud-sun-bold-duotone" width={32} height={32} style={{ color: 'var(--color-primary)' }} />}
         title="Previsión del clima"
         subtitle={location?.label}
         modelBadge={data ? <ModelBadge model={badgeModel} variant="header" /> : undefined}

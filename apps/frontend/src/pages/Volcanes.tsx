@@ -1,4 +1,4 @@
-import { Fire } from '@phosphor-icons/react'
+import { Icon } from '@iconify/react'
 import { useVolcanes } from '@/hooks/useWeather'
 import type { AlertLevel, Volcan } from '@/lib/api'
 import { FadeContent } from '@/components/animated/FadeContent'
@@ -156,7 +156,7 @@ export function Volcanes() {
       {/* Header */}
       <PageHeader
         titleNode={<MeltText text="Volcanes (*Argentina)" fontSize="1.5rem" />}
-        icon={<Fire size={32} weight="duotone" style={{ color: '#e05545' }} />}
+        icon={<Icon icon="solar:fire-bold-duotone" width={32} height={32} style={{ color: '#e05545' }} />}
         title="Volcanes (*Argentina)"
         subtitle="10 volcanes · OAVV-SEGEMAR"
         accentColor="#e05545"

@@ -1,4 +1,4 @@
-import { PersonSimpleRun } from '@phosphor-icons/react'
+import { Icon } from '@iconify/react'
 import { useHacerDeporte, useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { SportBlock } from '@/components/clima/SportBlock'
@@ -27,7 +27,7 @@ export function HacerDeporte({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<PersonSimpleRun size={32} weight="duotone" style={{ color: '#f0a030' }} />}
+        icon={<Icon icon="solar:running-2-bold-duotone" width={32} height={32} style={{ color: '#f0a030' }} />}
         title="Hacer deporte"
         subtitle={location.label}
         accentColor="#f0a030"

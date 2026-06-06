@@ -1,4 +1,4 @@
-import { Campfire } from '@phosphor-icons/react'
+import { Icon } from '@iconify/react'
 import type { FireDangerSlot } from '@/lib/api'
 import { useFireDanger } from '@/hooks/useWeather'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
@@ -398,7 +398,7 @@ export function Incendios({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Campfire size={32} weight="duotone" style={{ color: '#f0a030' }} />}
+        icon={<Icon icon="solar:bonfire-bold-duotone" width={32} height={32} style={{ color: '#f0a030' }} />}
         title="Incendios"
         titleNode={<BurnText text="Incendios" fontSize="1.5rem" />}
         subtitle="Riesgo de incendio forestal por ubicación"

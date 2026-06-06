@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import { Waves } from '@phosphor-icons/react'
+import { Icon } from '@iconify/react'
 import { useEarthquakes } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { EarthquakeEvent } from '@/lib/api'
@@ -164,7 +164,7 @@ export function Terremotos({ location }: Props) {
             border: '1px solid rgba(224,85,69,0.2)',
           }}
         >
-          <Waves size={32} weight="duotone" style={{ color: '#e05545' }} />
+          <Icon icon="solar:danger-triangle-bold-duotone" width={32} height={32} style={{ color: '#e05545' }} />
         </div>
         <div className="flex-1 min-w-0">
           {/* h1 real para a11y/SEO — FallingText es decorativo al click */}

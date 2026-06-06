@@ -1,16 +1,11 @@
 import { Link } from 'react-router-dom'
-import {
-  CloudSun, PersonSimpleRun, TShirt, Car, Waves, Mountains,
-  Fire, Campfire, CloudFog, AirplaneTakeoff,
-  Cloud, CloudRain, Broadcast, Warning,
-  type Icon,
-} from '@phosphor-icons/react'
+import { Icon } from '@iconify/react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 
 interface Item {
   to: string
-  Icon: Icon
+  icon: string
   title: string
   desc: string
   color: string
@@ -19,70 +14,70 @@ interface Item {
 const TOOLS: Item[] = [
   {
     to: '/prevision',
-    Icon: CloudSun,
+    icon: 'solar:cloud-sun-bold-duotone',
     title: 'Previsión del clima',
     desc: 'Temperatura, viento y pronóstico 7 días. Modelos GFS y ECMWF.',
     color: '#c8a84b',
   },
   {
     to: '/hacer-deporte',
-    Icon: PersonSimpleRun,
+    icon: 'solar:running-2-bold-duotone',
     title: 'Hacer deporte',
     desc: '¿Las condiciones acompañan? UV, humedad, viento y sensación térmica.',
     color: '#f0a030',
   },
   {
     to: '/tender-ropa',
-    Icon: TShirt,
+    icon: 'solar:t-shirt-bold-duotone',
     title: 'Tender ropa',
     desc: 'Los días ordenados por probabilidad de lluvia y viento.',
     color: '#3ecf7a',
   },
   {
     to: '/lavar-auto',
-    Icon: Car,
+    icon: 'solar:washing-machine-bold-duotone',
     title: 'Lavar el auto',
     desc: 'El día ideal de la semana para lavar sin que la lluvia lo arruine.',
     color: '#5aaad8',
   },
   {
     to: '/terremotos',
-    Icon: Waves,
+    icon: 'solar:danger-triangle-bold-duotone',
     title: 'Terremotos',
     desc: 'Sismos recientes cerca tuyo, con magnitud y distancia en tiempo real.',
     color: '#e05545',
   },
   {
     to: '/cota-de-nieve',
-    Icon: Mountains,
+    icon: 'solar:snowflake-bold-duotone',
     title: 'Cota de nieve',
     desc: '¿Hasta qué altura llega la nieve en la cordillera hoy?',
     color: '#90aabb',
   },
   {
     to: '/volcanes',
-    Icon: Fire,
+    icon: 'solar:fire-bold-duotone',
     title: 'Volcanes',
     desc: 'Estado de alerta de los principales volcanes del país.',
     color: '#e05545',
   },
   {
     to: '/incendios',
-    Icon: Campfire,
+    icon: 'solar:bonfire-bold-duotone',
     title: 'Incendios',
     desc: 'Riesgo de incendio forestal según temperatura, viento y humedad.',
     color: '#f0a030',
   },
   {
     to: '/niebla',
-    Icon: CloudFog,
+    icon: 'solar:fog-bold-duotone',
     title: 'Niebla y visibilidad',
     desc: 'Visibilidad actual y pronóstico de niebla hora a hora.',
     color: '#90aabb',
   },
   {
     to: '/metar',
-    Icon: AirplaneTakeoff,
+    icon: 'solar:radar-2-bold-duotone',
     title: 'METAR & TAF',
     desc: 'Reporte meteorológico real de cualquier aeródromo del mundo.',
     color: '#8b9fc4',
@@ -92,28 +87,28 @@ const TOOLS: Item[] = [
 const GUIDES: Item[] = [
   {
     to: '/nubes',
-    Icon: Cloud,
+    icon: 'solar:cloud-bold-duotone',
     title: 'Catálogo del cielo',
     desc: '13 tipos de nubes y 5 fenómenos aeronáuticos con escalas de peligro.',
     color: '#c8a84b',
   },
   {
     to: '/lluvias',
-    Icon: CloudRain,
+    icon: 'solar:cloud-rain-bold-duotone',
     title: 'Lluvias según las nubes',
     desc: 'Qué lluvia esperar según el tipo de nube en el cielo.',
     color: '#5aaad8',
   },
   {
     to: '/radar',
-    Icon: Broadcast,
+    icon: 'solar:radar-bold-duotone',
     title: 'Radar y satélite',
     desc: 'Cómo interpretar colores de radar e imágenes satelitales IR.',
     color: '#7dd3fc',
   },
   {
     to: '/desastres',
-    Icon: Warning,
+    icon: 'solar:shield-warning-bold-duotone',
     title: 'Desastres naturales',
     desc: '7 fenómenos globales: datos históricos, fuentes y qué hacer.',
     color: '#e05545',
@@ -189,7 +184,7 @@ export function Landing() {
   )
 }
 
-function ItemCard({ to, Icon, title, desc, color }: Item) {
+function ItemCard({ to, icon, title, desc, color }: Item) {
   return (
     <Link
       to={to}
@@ -215,7 +210,7 @@ function ItemCard({ to, Icon, title, desc, color }: Item) {
         className="size-10 rounded-lg flex items-center justify-center shrink-0"
         style={{ background: `${color}1a`, color }}
       >
-        <Icon size={20} weight="duotone" aria-hidden="true" />
+        <Icon icon={icon} width={20} height={20} aria-hidden="true" />
       </div>
       <div>
         <h2 className="font-semibold mb-1" style={{ color: 'var(--color-foreground)' }}>

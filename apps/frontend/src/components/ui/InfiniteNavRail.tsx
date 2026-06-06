@@ -26,7 +26,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 export interface NavRailItem {
   to: string
   label: string
-  emoji: string
+  emoji: ReactNode
   color: string
   badge?: ReactNode
 }
