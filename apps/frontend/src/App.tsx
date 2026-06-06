@@ -141,7 +141,7 @@ const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
   { to: '/prevision',      label: 'Previsión',      emoji: S('cloud-sun', '#c8a84b'),          color: '#c8a84b' },
   { to: '/hacer-deporte', label: 'Hacer deporte',  emoji: S('running-2', '#f0a030'),           color: '#f0a030' },
   { to: '/tender-ropa',   label: 'Tender ropa',    emoji: S('t-shirt', '#3ecf7a'),             color: '#3ecf7a' },
-  { to: '/lavar-auto',    label: 'Lavar el auto',  emoji: S('washing-machine', '#5aaad8'),     color: '#5aaad8' },
+  { to: '/lavar-auto',    label: 'Lavar el auto',  emoji: S('garage', '#5aaad8'),              color: '#5aaad8' },
   { to: '/terremotos',    label: 'Terremotos',     emoji: S('danger-triangle', '#e05545'),     color: '#e05545' },
   { to: '/cota-de-nieve', label: 'Cota de nieve',  emoji: S('snowflake', '#90aabb'),           color: '#90aabb' },
   { to: '/volcanes',      label: 'Volcanes',       emoji: S('fire', '#e05545'),                color: '#e05545' },
@@ -151,7 +151,7 @@ const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
 /** Static catalog pages — no backend dependency (Row 2, scrolls →) */
 const NAV_CATALOG: NavRailItem[] = [
   { to: '/nubes',     label: 'Nubes',     emoji: S('cloud', '#7ea8c4'),              color: '#7ea8c4' },
-  { to: '/metar',     label: 'METAR',     emoji: S('radar-2', '#8b9fc4'),            color: '#8b9fc4' },
+  { to: '/metar',     label: 'METAR',     emoji: S('satellite', '#8b9fc4'),          color: '#8b9fc4' },
   { to: '/desastres', label: 'Desastres', emoji: S('shield-warning', '#c47e5a'),     color: '#c47e5a' },
   { to: '/lluvias',   label: 'Lluvias',   emoji: S('cloud-rain', '#7ab5c4'),         color: '#7ab5c4' },
   { to: '/radar',     label: 'Radar',     emoji: S('radar', '#9a9ac4'),              color: '#9a9ac4' },

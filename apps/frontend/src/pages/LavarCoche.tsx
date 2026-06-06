@@ -206,7 +206,7 @@ export function LavarCoche({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Icon icon="solar:washing-machine-bold-duotone" width={32} height={32} style={{ color: '#5aaad8' }} />}
+        icon={<Icon icon="solar:garage-bold-duotone" width={32} height={32} style={{ color: '#5aaad8' }} />}
         title="¿Cuándo lavar el auto?"
         subtitle={location.label}
         accentColor="#5aaad8"

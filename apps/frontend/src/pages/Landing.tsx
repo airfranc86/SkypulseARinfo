@@ -35,7 +35,7 @@ const TOOLS: Item[] = [
   },
   {
     to: '/lavar-auto',
-    icon: 'solar:washing-machine-bold-duotone',
+    icon: 'solar:garage-bold-duotone',
     title: 'Lavar el auto',
     desc: 'El día ideal de la semana para lavar sin que la lluvia lo arruine.',
     color: '#5aaad8',
@@ -77,7 +77,7 @@ const TOOLS: Item[] = [
   },
   {
     to: '/metar',
-    icon: 'solar:radar-2-bold-duotone',
+    icon: 'solar:satellite-bold-duotone',
     title: 'METAR & TAF',
     desc: 'Reporte meteorológico real de cualquier aeródromo del mundo.',
     color: '#8b9fc4',
