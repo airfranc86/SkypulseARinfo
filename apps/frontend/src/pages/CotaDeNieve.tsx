@@ -1,4 +1,4 @@
-import { Mountain } from 'lucide-react'
+import { Mountains } from '@phosphor-icons/react'
 import { useCotaDeNieve } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { StatCard } from '@/components/ui/StatCard'
@@ -116,7 +116,7 @@ export function CotaDeNieve({ location }: Props) {
     <div>
       <PageHeader
         titleNode={<FrostText text="Cota de nieve" fontSize="1.5rem" />}
-        icon={<Mountain className="size-8" style={{ color: 'var(--color-muted-foreground)' }} />}
+        icon={<Mountains size={32} weight="duotone" style={{ color: 'var(--color-muted-foreground)' }} />}
         title="Cota de nieve"
         subtitle={location.label}
         accentColor="#90aabb"

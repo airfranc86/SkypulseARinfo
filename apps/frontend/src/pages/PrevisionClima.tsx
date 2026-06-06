@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CloudSun } from 'lucide-react'
+import { CloudSun } from '@phosphor-icons/react'
 import { useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
@@ -32,7 +32,7 @@ export function PrevisionClima({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<CloudSun className="size-8" style={{ color: 'var(--color-primary)' }} />}
+        icon={<CloudSun size={32} weight="duotone" style={{ color: 'var(--color-primary)' }} />}
         title="Previsión del clima"
         subtitle={location?.label}
         modelBadge={data ? <ModelBadge model={badgeModel} variant="header" /> : undefined}

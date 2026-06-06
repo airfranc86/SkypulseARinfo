@@ -1,15 +1,16 @@
 import { Link } from 'react-router-dom'
 import {
-  CloudSun, Shirt, Car, Activity, Waves, MountainSnow,
-  Mountain, TreePine, Eye, Cloud, PlaneTakeoff, CloudRain, Radar,
-  TriangleAlert, type LucideIcon,
-} from 'lucide-react'
+  CloudSun, PersonSimpleRun, TShirt, Car, Waves, Mountains,
+  Fire, Campfire, CloudFog, AirplaneTakeoff,
+  Cloud, CloudRain, Broadcast, Warning,
+  type Icon,
+} from '@phosphor-icons/react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 
 interface Item {
   to: string
-  Icon: LucideIcon
+  Icon: Icon
   title: string
   desc: string
   color: string
@@ -25,14 +26,14 @@ const TOOLS: Item[] = [
   },
   {
     to: '/hacer-deporte',
-    Icon: Activity,
+    Icon: PersonSimpleRun,
     title: 'Hacer deporte',
     desc: '¿Las condiciones acompañan? UV, humedad, viento y sensación térmica.',
     color: '#f0a030',
   },
   {
     to: '/tender-ropa',
-    Icon: Shirt,
+    Icon: TShirt,
     title: 'Tender ropa',
     desc: 'Los días ordenados por probabilidad de lluvia y viento.',
     color: '#3ecf7a',
@@ -53,35 +54,35 @@ const TOOLS: Item[] = [
   },
   {
     to: '/cota-de-nieve',
-    Icon: MountainSnow,
+    Icon: Mountains,
     title: 'Cota de nieve',
     desc: '¿Hasta qué altura llega la nieve en la cordillera hoy?',
     color: '#90aabb',
   },
   {
     to: '/volcanes',
-    Icon: Mountain,
+    Icon: Fire,
     title: 'Volcanes',
     desc: 'Estado de alerta de los principales volcanes del país.',
     color: '#e05545',
   },
   {
     to: '/incendios',
-    Icon: TreePine,
+    Icon: Campfire,
     title: 'Incendios',
     desc: 'Riesgo de incendio forestal según temperatura, viento y humedad.',
     color: '#f0a030',
   },
   {
     to: '/niebla',
-    Icon: Eye,
+    Icon: CloudFog,
     title: 'Niebla y visibilidad',
     desc: 'Visibilidad actual y pronóstico de niebla hora a hora.',
     color: '#90aabb',
   },
   {
     to: '/metar',
-    Icon: PlaneTakeoff,
+    Icon: AirplaneTakeoff,
     title: 'METAR & TAF',
     desc: 'Reporte meteorológico real de cualquier aeródromo del mundo.',
     color: '#8b9fc4',
@@ -105,14 +106,14 @@ const GUIDES: Item[] = [
   },
   {
     to: '/radar',
-    Icon: Radar,
+    Icon: Broadcast,
     title: 'Radar y satélite',
     desc: 'Cómo interpretar colores de radar e imágenes satelitales IR.',
     color: '#7dd3fc',
   },
   {
     to: '/desastres',
-    Icon: TriangleAlert,
+    Icon: Warning,
     title: 'Desastres naturales',
     desc: '7 fenómenos globales: datos históricos, fuentes y qué hacer.',
     color: '#e05545',
@@ -151,7 +152,6 @@ export function Landing() {
             Sin tecnicismos, sin ambigüedad.
           </p>
 
-          {/* Fuentes de datos */}
           <div className="flex gap-2 justify-center flex-wrap">
             {SOURCE_PILLS.map(s => (
               <span
@@ -174,9 +174,7 @@ export function Landing() {
           Herramientas
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {TOOLS.map((item) => (
-            <ItemCard key={item.to} {...item} />
-          ))}
+          {TOOLS.map((item) => <ItemCard key={item.to} {...item} />)}
         </div>
 
         {/* Guías */}
@@ -184,9 +182,7 @@ export function Landing() {
           Guías meteorológicas
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {GUIDES.map((item) => (
-            <ItemCard key={item.to} {...item} />
-          ))}
+          {GUIDES.map((item) => <ItemCard key={item.to} {...item} />)}
         </div>
       </FadeContent>
     </div>
@@ -219,7 +215,7 @@ function ItemCard({ to, Icon, title, desc, color }: Item) {
         className="size-10 rounded-lg flex items-center justify-center shrink-0"
         style={{ background: `${color}1a`, color }}
       >
-        <Icon size={20} aria-hidden="true" />
+        <Icon size={20} weight="duotone" aria-hidden="true" />
       </div>
       <div>
         <h2 className="font-semibold mb-1" style={{ color: 'var(--color-foreground)' }}>

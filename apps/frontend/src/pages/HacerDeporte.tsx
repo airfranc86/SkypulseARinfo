@@ -1,4 +1,4 @@
-import { Activity } from 'lucide-react'
+import { PersonSimpleRun } from '@phosphor-icons/react'
 import { useHacerDeporte, useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { SportBlock } from '@/components/clima/SportBlock'
@@ -27,7 +27,7 @@ export function HacerDeporte({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Activity className="size-8" style={{ color: '#f0a030' }} />}
+        icon={<PersonSimpleRun size={32} weight="duotone" style={{ color: '#f0a030' }} />}
         title="Hacer deporte"
         subtitle={location.label}
         accentColor="#f0a030"

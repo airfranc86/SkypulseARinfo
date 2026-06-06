@@ -1,4 +1,4 @@
-import { Shirt } from 'lucide-react'
+import { TShirt } from '@phosphor-icons/react'
 import { useLaundryForecast } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { LaundryDayCard } from '@/components/ui/LaundryDayCard'
@@ -27,7 +27,7 @@ export function TenderRopa({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Shirt className="size-8" style={{ color: 'var(--color-safe)' }} />}
+        icon={<TShirt size={32} weight="duotone" style={{ color: 'var(--color-safe)' }} />}
         title="Tender ropa"
         subtitle={location.label}
         accentColor="#3ecf7a"

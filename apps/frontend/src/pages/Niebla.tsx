@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react'
+import { CloudFog } from '@phosphor-icons/react'
 import { Eye, Wind, Waves, Mountain, Snowflake, Droplets, Sun } from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { useNiebla } from '@/hooks/useWeather'
 import type { NieblaResponse } from '@/lib/api'
-import FogDayIcon from '@/assets/meteocons/fog-day.svg?react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { FogText } from '@/components/animated/FogText'
 
@@ -691,7 +691,7 @@ export function Niebla({ location }: Props) {
         {/* ── Header ────────────────────────────────────────────────────── */}
         <PageHeader
           titleNode={<FogText text="Niebla, Bruma y Neblina" fontSize="1.5rem" />}
-          icon={<FogDayIcon style={{ width: '40px', height: '40px' }} />}
+          icon={<CloudFog size={32} weight="duotone" style={{ color: '#90aabb' }} />}
           title="Niebla, Bruma y Neblina"
           subtitle="6 tipos de niebla en Argentina — visibilidad y qué esperar."
           accentColor="#90aabb"
