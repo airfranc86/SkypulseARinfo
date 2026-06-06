@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '@iconify/react'
 import { FadeContent } from '@/components/animated/FadeContent'
@@ -5,7 +6,7 @@ import { Dither } from '@/components/animated/Dither'
 
 interface Item {
   to: string
-  icon: string
+  icon: string | ReactNode
   title: string
   desc: string
   color: string
@@ -42,7 +43,7 @@ const TOOLS: Item[] = [
   },
   {
     to: '/terremotos',
-    icon: 'solar:danger-triangle-bold-duotone',
+    icon: <img src="/icons/icon-terremotos.png" width={20} height={20} style={{ objectFit: 'contain', filter: 'brightness(0) invert(1) opacity(0.85)' }} alt="" />,
     title: 'Terremotos',
     desc: 'Sismos recientes cerca tuyo, con magnitud y distancia en tiempo real.',
     color: '#e05545',
@@ -77,7 +78,7 @@ const TOOLS: Item[] = [
   },
   {
     to: '/metar',
-    icon: 'solar:satellite-bold-duotone',
+    icon: <img src="/icons/icon-metar.png" width={20} height={20} style={{ objectFit: 'contain' }} alt="" />,
     title: 'METAR & TAF',
     desc: 'Reporte meteorológico real de cualquier aeródromo del mundo.',
     color: '#8b9fc4',
@@ -210,7 +211,9 @@ function ItemCard({ to, icon, title, desc, color }: Item) {
         className="size-10 rounded-lg flex items-center justify-center shrink-0"
         style={{ background: `${color}1a`, color }}
       >
-        <Icon icon={icon} width={20} height={20} aria-hidden="true" />
+        {typeof icon === 'string'
+          ? <Icon icon={icon} width={20} height={20} aria-hidden="true" />
+          : icon}
       </div>
       <div>
         <h2 className="font-semibold mb-1" style={{ color: 'var(--color-foreground)' }}>

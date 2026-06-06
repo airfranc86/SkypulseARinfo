@@ -1,5 +1,4 @@
 import { useState, type CSSProperties } from 'react'
-import { Icon } from '@iconify/react'
 import { useEarthquakes } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { EarthquakeEvent } from '@/lib/api'
@@ -164,7 +163,7 @@ export function Terremotos({ location }: Props) {
             border: '1px solid rgba(224,85,69,0.2)',
           }}
         >
-          <Icon icon="solar:danger-triangle-bold-duotone" width={32} height={32} style={{ color: '#e05545' }} />
+          <img src="/icons/icon-terremotos.png" width={32} height={32} style={{ objectFit: 'contain', filter: 'brightness(0) invert(1)' }} alt="" />
         </div>
         <div className="flex-1 min-w-0">
           {/* h1 real para a11y/SEO — FallingText es decorativo al click */}

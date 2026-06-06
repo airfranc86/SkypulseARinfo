@@ -142,7 +142,7 @@ const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
   { to: '/hacer-deporte', label: 'Hacer deporte',  emoji: S('running-2', '#f0a030'),           color: '#f0a030' },
   { to: '/tender-ropa',   label: 'Tender ropa',    emoji: S('t-shirt', '#3ecf7a'),             color: '#3ecf7a' },
   { to: '/lavar-auto',    label: 'Lavar el auto',  emoji: S('garage', '#5aaad8'),              color: '#5aaad8' },
-  { to: '/terremotos',    label: 'Terremotos',     emoji: S('danger-triangle', '#e05545'),     color: '#e05545' },
+  { to: '/terremotos',    label: 'Terremotos',     emoji: <img src="/icons/icon-terremotos.png" width={15} height={15} style={{ objectFit: 'contain', filter: 'brightness(0) invert(1) opacity(0.75)' }} alt="" />, color: '#e05545' },
   { to: '/cota-de-nieve', label: 'Cota de nieve',  emoji: S('snowflake', '#90aabb'),           color: '#90aabb' },
   { to: '/volcanes',      label: 'Volcanes',       emoji: <Icon icon="mingcute:mountain-line" width={15} height={15} style={{ color: '#e05545' }} />, color: '#e05545' },
   { to: '/incendios',     label: 'Incendios',      emoji: S('bonfire', '#f0a030'),             color: '#f0a030' },
@@ -151,7 +151,7 @@ const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
 /** Static catalog pages — no backend dependency (Row 2, scrolls →) */
 const NAV_CATALOG: NavRailItem[] = [
   { to: '/nubes',     label: 'Nubes',     emoji: S('cloud', '#7ea8c4'),              color: '#7ea8c4' },
-  { to: '/metar',     label: 'METAR',     emoji: S('satellite', '#8b9fc4'),          color: '#8b9fc4' },
+  { to: '/metar',     label: 'METAR',     emoji: <img src="/icons/icon-metar.png" width={15} height={15} style={{ objectFit: 'contain' }} alt="" />, color: '#8b9fc4' },
   { to: '/desastres', label: 'Desastres', emoji: S('shield-warning', '#c47e5a'),     color: '#c47e5a' },
   { to: '/lluvias',   label: 'Lluvias',   emoji: S('cloud-rain', '#7ab5c4'),         color: '#7ab5c4' },
   { to: '/radar',     label: 'Radar',     emoji: S('radar', '#9a9ac4'),              color: '#9a9ac4' },
