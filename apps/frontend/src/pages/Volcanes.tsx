@@ -156,7 +156,7 @@ export function Volcanes() {
       {/* Header */}
       <PageHeader
         titleNode={<MeltText text="Volcanes (*Argentina)" fontSize="1.5rem" />}
-        icon={<Icon icon="solar:fire-bold-duotone" width={32} height={32} style={{ color: '#e05545' }} />}
+        icon={<Icon icon="mingcute:mountain-line" width={32} height={32} style={{ color: '#e05545' }} />}
         title="Volcanes (*Argentina)"
         subtitle="10 volcanes · OAVV-SEGEMAR"
         accentColor="#e05545"

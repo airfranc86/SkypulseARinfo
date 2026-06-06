@@ -56,7 +56,7 @@ const TOOLS: Item[] = [
   },
   {
     to: '/volcanes',
-    icon: 'solar:fire-bold-duotone',
+    icon: 'mingcute:mountain-line',
     title: 'Volcanes',
     desc: 'Estado de alerta de los principales volcanes del país.',
     color: '#e05545',

@@ -144,7 +144,7 @@ const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
   { to: '/lavar-auto',    label: 'Lavar el auto',  emoji: S('garage', '#5aaad8'),              color: '#5aaad8' },
   { to: '/terremotos',    label: 'Terremotos',     emoji: S('danger-triangle', '#e05545'),     color: '#e05545' },
   { to: '/cota-de-nieve', label: 'Cota de nieve',  emoji: S('snowflake', '#90aabb'),           color: '#90aabb' },
-  { to: '/volcanes',      label: 'Volcanes',       emoji: S('fire', '#e05545'),                color: '#e05545' },
+  { to: '/volcanes',      label: 'Volcanes',       emoji: <Icon icon="mingcute:mountain-line" width={15} height={15} style={{ color: '#e05545' }} />, color: '#e05545' },
   { to: '/incendios',     label: 'Incendios',      emoji: S('bonfire', '#f0a030'),             color: '#f0a030' },
 ]
 
