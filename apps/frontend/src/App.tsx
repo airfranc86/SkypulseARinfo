@@ -240,7 +240,7 @@ function RootLayout() {
             <img
               src="/Logo.png"
               alt="SkyPulse"
-              className="h-8 w-8 object-cover rounded-full"
+              className="h-11 w-11 object-cover rounded-full"
             />
             <span
               className="text-xs font-medium tracking-widest uppercase hidden sm:block"
