@@ -12,10 +12,14 @@ interface Item {
   color: string
 }
 
+const P = (name: string): ReactNode => (
+  <img src={`/icons/icon-${name}.png`} width={28} height={28} style={{ objectFit: 'contain' }} alt="" />
+)
+
 const TOOLS: Item[] = [
   {
     to: '/prevision',
-    icon: 'solar:cloud-sun-bold-duotone',
+    icon: P('prevision'),
     title: 'Previsión del clima',
     desc: 'Temperatura, viento y pronóstico 7 días. Modelos GFS y ECMWF.',
     color: '#c8a84b',
@@ -29,21 +33,21 @@ const TOOLS: Item[] = [
   },
   {
     to: '/tender-ropa',
-    icon: 'solar:t-shirt-bold-duotone',
-    title: 'Tender ropa',
-    desc: 'Los días ordenados por probabilidad de lluvia y viento.',
+    icon: P('tender'),
+    title: 'Secado de ropa',
+    desc: 'Los mejores días para tender según lluvia, viento y humedad.',
     color: '#3ecf7a',
   },
   {
     to: '/lavar-auto',
-    icon: 'solar:garage-bold-duotone',
+    icon: P('lavar'),
     title: 'Lavar el auto',
     desc: 'El día ideal de la semana para lavar sin que la lluvia lo arruine.',
     color: '#5aaad8',
   },
   {
     to: '/terremotos',
-    icon: <img src="/icons/icon-terremotos.png" width={20} height={20} style={{ objectFit: 'contain', filter: 'brightness(0) invert(1) opacity(0.85)' }} alt="" />,
+    icon: <img src="/icons/icon-terremotos.png" width={28} height={28} style={{ objectFit: 'contain', filter: 'brightness(0) invert(1) opacity(0.85)' }} alt="" />,
     title: 'Terremotos',
     desc: 'Sismos recientes cerca tuyo, con magnitud y distancia en tiempo real.',
     color: '#e05545',
@@ -64,7 +68,7 @@ const TOOLS: Item[] = [
   },
   {
     to: '/incendios',
-    icon: 'solar:bonfire-bold-duotone',
+    icon: P('incendios'),
     title: 'Incendios',
     desc: 'Riesgo de incendio forestal según temperatura, viento y humedad.',
     color: '#f0a030',
@@ -78,7 +82,7 @@ const TOOLS: Item[] = [
   },
   {
     to: '/metar',
-    icon: <img src="/icons/icon-metar.png" width={20} height={20} style={{ objectFit: 'contain' }} alt="" />,
+    icon: P('metar'),
     title: 'METAR & TAF',
     desc: 'Reporte meteorológico real de cualquier aeródromo del mundo.',
     color: '#8b9fc4',
@@ -109,7 +113,7 @@ const GUIDES: Item[] = [
   },
   {
     to: '/desastres',
-    icon: 'solar:shield-warning-bold-duotone',
+    icon: P('desastres'),
     title: 'Desastres naturales',
     desc: '7 fenómenos globales: datos históricos, fuentes y qué hacer.',
     color: '#e05545',

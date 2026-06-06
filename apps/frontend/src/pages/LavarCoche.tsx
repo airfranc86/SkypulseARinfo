@@ -1,4 +1,3 @@
-import { Icon } from '@iconify/react'
 import { useLavarCoche } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { CarWashDay } from '@/lib/api'
@@ -206,7 +205,7 @@ export function LavarCoche({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Icon icon="solar:garage-bold-duotone" width={32} height={32} style={{ color: '#5aaad8' }} />}
+        icon={<img src="/icons/icon-lavar.png" width={48} height={48} style={{ objectFit: 'contain' }} alt="" />}
         title="¿Cuándo lavar el auto?"
         subtitle={location.label}
         accentColor="#5aaad8"

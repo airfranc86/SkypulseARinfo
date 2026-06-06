@@ -1,4 +1,3 @@
-import { Icon } from '@iconify/react'
 import type { FireDangerSlot } from '@/lib/api'
 import { useFireDanger } from '@/hooks/useWeather'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
@@ -398,7 +397,7 @@ export function Incendios({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Icon icon="solar:bonfire-bold-duotone" width={32} height={32} style={{ color: '#f0a030' }} />}
+        icon={<img src="/icons/icon-incendios.png" width={48} height={48} style={{ objectFit: 'contain' }} alt="" />}
         title="Incendios"
         titleNode={<BurnText text="Incendios" fontSize="1.5rem" />}
         subtitle="Riesgo de incendio forestal por ubicación"

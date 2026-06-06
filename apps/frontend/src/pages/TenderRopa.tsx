@@ -1,4 +1,3 @@
-import { Icon } from '@iconify/react'
 import { useLaundryForecast } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { LaundryDayCard } from '@/components/ui/LaundryDayCard'
@@ -27,8 +26,8 @@ export function TenderRopa({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Icon icon="solar:t-shirt-bold-duotone" width={32} height={32} style={{ color: 'var(--color-safe)' }} />}
-        title="Tender ropa"
+        icon={<img src="/icons/icon-tender.png" width={48} height={48} style={{ objectFit: 'contain' }} alt="" />}
+        title="Secado de ropa"
         subtitle={location.label}
         accentColor="#3ecf7a"
         modelBadge={
