@@ -162,6 +162,15 @@ function visibilityFraction(m: number | null): number {
   return Math.min(m / 10_000, 1)
 }
 
+/** Marcas de la escala del gauge — mismos puntos (0/2/5/10 km) que antes,
+ *  ahora posicionados proporcionalmente sobre la escala lineal de 0–10 km. */
+const SCALE_MARKS = [
+  { km: 0,  label: '0 m' },
+  { km: 2,  label: '2 km' },
+  { km: 5,  label: '5 km' },
+  { km: 10, label: '10 km' },
+] as const
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -423,22 +432,39 @@ function VisibilityMeter({
         />
       </div>
 
-      {/* Scale labels */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: '10px',
-          color: 'var(--color-muted-foreground)',
-        }}
-      >
-        <span>0 m</span>
-        <span>2 km</span>
-        <span>5 km</span>
-        <span>10 km</span>
+      {/* Scale labels — posicionadas según su valor real en la escala lineal 0–10 km,
+          para que coincidan visualmente con el punto que marcan en la barra de arriba */}
+      <div style={{ position: 'relative', height: '12px', fontSize: '10px', color: 'var(--color-muted-foreground)' }}>
+        {SCALE_MARKS.map(({ km, label }, i) => {
+          const pct = (km / 10) * 100
+          const align = i === 0 ? 'left' : i === SCALE_MARKS.length - 1 ? 'right' : 'center'
+          const translateX = i === 0 ? '0%' : i === SCALE_MARKS.length - 1 ? '-100%' : '-50%'
+          return (
+            <span
+              key={label}
+              style={{
+                position: 'absolute',
+                left: `${pct}%`,
+                transform: `translateX(${translateX})`,
+                textAlign: align,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </span>
+          )
+        })}
       </div>
     </div>
   )
+}
+
+/** Abreviaturas para las etiquetas que no entran en el ancho angosto de cada
+ *  barra horaria — evita el corte a mitad de palabra ("Reducida" → "Reducı"). */
+const COMPACT_FOG_LABEL: Record<string, string> = {
+  Neblina:   'Nebl.',
+  Reducida:  'Reduc.',
+  Despejada: 'Despej.',
 }
 
 // Human-readable labels for hourly data sources
@@ -575,7 +601,7 @@ function VisibilityTimeline({
               letterSpacing: '-0.01em',
             }}
           >
-            {s.fog_label}
+            {COMPACT_FOG_LABEL[s.fog_label] ?? s.fog_label}
           </span>
         ))}
       </div>
