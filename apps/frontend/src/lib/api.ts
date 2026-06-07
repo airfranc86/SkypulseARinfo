@@ -4,6 +4,16 @@ if (import.meta.env.PROD && !BASE_URL) {
   throw new Error('[SkyPulse] VITE_API_BASE_URL is not set. Configure it in Vercel environment variables.')
 }
 
+/** Error de API con status HTTP — permite distinguir 503 (cold start de Render) de otros fallos. */
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function request<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin)
   if (params) {
@@ -12,7 +22,7 @@ async function request<T>(path: string, params?: Record<string, string | number>
   const res = await fetch(url.toString())
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+    throw new ApiError((body as { detail?: string }).detail ?? `HTTP ${res.status}`, res.status)
   }
   return res.json()
 }

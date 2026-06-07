@@ -1,9 +1,24 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 
 const STALE = 10 * 60 * 1000
 const STALE_EARTHQUAKES = 5 * 60 * 1000  // 5 minutos — matches backend TTL
 const STALE_VOLCANES    = 2 * 60 * 60 * 1000  // 2 horas
+
+/** El backend (Render free-tier) hiberna tras ~15min de inactividad — el primer
+ *  request tras hibernar puede tardar 20-30s en despertar y devuelve 503 mientras tanto. */
+export function isColdStart(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 503
+}
+
+/** Reintenta más veces y con esperas más largas ante un 503 (cold start),
+ *  dándole tiempo al backend a despertar antes de rendirse. */
+const COLD_START_RETRY = {
+  retry: (failureCount: number, error: Error) =>
+    isColdStart(error) ? failureCount < 4 : failureCount < 2,
+  retryDelay: (attempt: number, error: Error) =>
+    isColdStart(error) ? Math.min(5000 * (attempt + 1), 20000) : Math.min(1000 * 2 ** attempt, 30000),
+}
 
 export function useWeatherCurrent(lat: number | null, lon: number | null) {
   return useQuery({
@@ -81,6 +96,7 @@ export function useWeatherDashboard(
     },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
+    ...COLD_START_RETRY,
   })
 }
 
