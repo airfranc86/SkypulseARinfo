@@ -1,3 +1,4 @@
+import { TreePine } from 'lucide-react'
 import type { FireDangerSlot } from '@/lib/api'
 import { useFireDanger } from '@/hooks/useWeather'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
@@ -397,7 +398,7 @@ export function Incendios({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<img src="/icons/icon-incendios.png" width={48} height={48} style={{ objectFit: 'contain' }} alt="" />}
+        icon={<TreePine size={32} style={{ color: '#e05545' }} />}
         title="Incendios"
         titleNode={<BurnText text="Incendios" fontSize="1.5rem" />}
         subtitle="Riesgo de incendio forestal por ubicación"

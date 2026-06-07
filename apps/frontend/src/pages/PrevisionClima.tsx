@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CloudSun } from 'lucide-react'
 import { useWeatherDashboard, isColdStart } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
@@ -44,7 +45,7 @@ export function PrevisionClima({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<img src="/icons/icon-prevision.png" width={48} height={48} style={{ objectFit: 'contain' }} alt="" />}
+        icon={<CloudSun size={32} style={{ color: '#c8a84b' }} />}
         title="Previsión del clima"
         subtitle={location?.label}
         modelBadge={data ? <ModelBadge model={badgeModel} variant="header" /> : undefined}

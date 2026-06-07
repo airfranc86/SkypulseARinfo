@@ -1,5 +1,4 @@
 import type { ComponentType } from 'react'
-import { Icon } from '@iconify/react'
 import { Eye, Wind, Waves, Mountain, Snowflake, Droplets, Sun } from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { useNiebla } from '@/hooks/useWeather'
@@ -717,7 +716,7 @@ export function Niebla({ location }: Props) {
         {/* ── Header ────────────────────────────────────────────────────── */}
         <PageHeader
           titleNode={<FogText text="Niebla, Bruma y Neblina" fontSize="1.5rem" />}
-          icon={<Icon icon="solar:fog-bold-duotone" width={32} height={32} style={{ color: '#90aabb' }} />}
+          icon={<Eye size={32} style={{ color: '#90aabb' }} />}
           title="Niebla, Bruma y Neblina"
           subtitle="6 tipos de niebla en Argentina — visibilidad y qué esperar."
           accentColor="#90aabb"

@@ -1,4 +1,4 @@
-import { Icon } from '@iconify/react'
+import { MountainSnow } from 'lucide-react'
 import { useCotaDeNieve } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { StatCard } from '@/components/ui/StatCard'
@@ -116,7 +116,7 @@ export function CotaDeNieve({ location }: Props) {
     <div>
       <PageHeader
         titleNode={<FrostText text="Cota de nieve" fontSize="1.5rem" />}
-        icon={<Icon icon="solar:snowflake-bold-duotone" width={32} height={32} style={{ color: 'var(--color-muted-foreground)' }} />}
+        icon={<MountainSnow size={32} style={{ color: '#90aabb' }} />}
         title="Cota de nieve"
         subtitle={location.label}
         accentColor="#90aabb"

@@ -1,4 +1,4 @@
-import { Icon } from '@iconify/react'
+import { Mountain } from 'lucide-react'
 import { useVolcanes } from '@/hooks/useWeather'
 import type { AlertLevel, Volcan } from '@/lib/api'
 import { FadeContent } from '@/components/animated/FadeContent'
@@ -156,7 +156,7 @@ export function Volcanes() {
       {/* Header */}
       <PageHeader
         titleNode={<MeltText text="Volcanes (*Argentina)" fontSize="1.5rem" />}
-        icon={<Icon icon="mingcute:mountain-line" width={32} height={32} style={{ color: '#e05545' }} />}
+        icon={<Mountain size={32} style={{ color: '#e05545' }} />}
         title="Volcanes (*Argentina)"
         subtitle="10 volcanes · OAVV-SEGEMAR"
         accentColor="#e05545"

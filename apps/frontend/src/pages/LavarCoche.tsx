@@ -1,3 +1,4 @@
+import { Car } from 'lucide-react'
 import { useLavarCoche } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { CarWashDay } from '@/lib/api'
@@ -205,7 +206,7 @@ export function LavarCoche({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<img src="/icons/icon-lavar.png" width={48} height={48} style={{ objectFit: 'contain' }} alt="" />}
+        icon={<Car size={32} style={{ color: '#5aaad8' }} />}
         title="¿Cuándo lavar el auto?"
         subtitle={location.label}
         accentColor="#5aaad8"

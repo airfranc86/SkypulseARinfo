@@ -1,88 +1,86 @@
-import { type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Icon } from '@iconify/react'
+import {
+  CloudSun, Activity, Shirt, Car, Waves, MountainSnow, Mountain, TreePine, Eye, Radio,
+  Cloud, CloudRain, Radar, TriangleAlert, type LucideIcon,
+} from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 
 interface Item {
   to: string
-  icon: string | ReactNode
+  Icon: LucideIcon
   title: string
   desc: string
   color: string
 }
 
-const P = (name: string): ReactNode => (
-  <img src={`/icons/icon-${name}.png`} width={28} height={28} style={{ objectFit: 'contain' }} alt="" />
-)
-
 const TOOLS: Item[] = [
   {
     to: '/prevision',
-    icon: P('prevision'),
+    Icon: CloudSun,
     title: 'Previsión del clima',
     desc: 'Temperatura, viento y pronóstico 7 días. Modelos GFS y ECMWF.',
     color: '#c8a84b',
   },
   {
     to: '/hacer-deporte',
-    icon: 'solar:running-2-bold-duotone',
+    Icon: Activity,
     title: 'Hacer deporte',
     desc: '¿Las condiciones acompañan? UV, humedad, viento y sensación térmica.',
     color: '#f0a030',
   },
   {
     to: '/tender-ropa',
-    icon: P('tender'),
+    Icon: Shirt,
     title: 'Secado de ropa',
     desc: 'Los mejores días para tender según lluvia, viento y humedad.',
     color: '#3ecf7a',
   },
   {
     to: '/lavar-auto',
-    icon: P('lavar'),
+    Icon: Car,
     title: 'Lavar el auto',
     desc: 'El día ideal de la semana para lavar sin que la lluvia lo arruine.',
     color: '#5aaad8',
   },
   {
     to: '/terremotos',
-    icon: <img src="/icons/icon-terremotos.png" width={28} height={28} style={{ objectFit: 'contain', filter: 'brightness(0) invert(1) opacity(0.85)' }} alt="" />,
+    Icon: Waves,
     title: 'Terremotos',
     desc: 'Sismos recientes cerca tuyo, con magnitud y distancia en tiempo real.',
     color: '#e05545',
   },
   {
     to: '/cota-de-nieve',
-    icon: 'solar:snowflake-bold-duotone',
+    Icon: MountainSnow,
     title: 'Cota de nieve',
     desc: '¿Hasta qué altura llega la nieve en la cordillera hoy?',
     color: '#90aabb',
   },
   {
     to: '/volcanes',
-    icon: 'mingcute:mountain-line',
+    Icon: Mountain,
     title: 'Volcanes',
     desc: 'Estado de alerta de los principales volcanes del país.',
     color: '#e05545',
   },
   {
     to: '/incendios',
-    icon: P('incendios'),
+    Icon: TreePine,
     title: 'Incendios',
     desc: 'Riesgo de incendio forestal según temperatura, viento y humedad.',
     color: '#f0a030',
   },
   {
     to: '/niebla',
-    icon: 'solar:fog-bold-duotone',
+    Icon: Eye,
     title: 'Niebla y visibilidad',
     desc: 'Visibilidad actual y pronóstico de niebla hora a hora.',
     color: '#90aabb',
   },
   {
     to: '/metar',
-    icon: P('metar'),
+    Icon: Radio,
     title: 'METAR & TAF',
     desc: 'Reporte meteorológico real de cualquier aeródromo del mundo.',
     color: '#8b9fc4',
@@ -92,28 +90,28 @@ const TOOLS: Item[] = [
 const GUIDES: Item[] = [
   {
     to: '/nubes',
-    icon: 'solar:cloud-bold-duotone',
+    Icon: Cloud,
     title: 'Catálogo del cielo',
     desc: '13 tipos de nubes y 5 fenómenos aeronáuticos con escalas de peligro.',
     color: '#c8a84b',
   },
   {
     to: '/lluvias',
-    icon: 'solar:cloud-rain-bold-duotone',
+    Icon: CloudRain,
     title: 'Lluvias según las nubes',
     desc: 'Qué lluvia esperar según el tipo de nube en el cielo.',
     color: '#5aaad8',
   },
   {
     to: '/radar',
-    icon: 'solar:radar-bold-duotone',
+    Icon: Radar,
     title: 'Radar y satélite',
     desc: 'Cómo interpretar colores de radar e imágenes satelitales IR.',
     color: '#7dd3fc',
   },
   {
     to: '/desastres',
-    icon: P('desastres'),
+    Icon: TriangleAlert,
     title: 'Desastres naturales',
     desc: '7 fenómenos globales: datos históricos, fuentes y qué hacer.',
     color: '#e05545',
@@ -189,7 +187,7 @@ export function Landing() {
   )
 }
 
-function ItemCard({ to, icon, title, desc, color }: Item) {
+function ItemCard({ to, Icon, title, desc, color }: Item) {
   return (
     <Link
       to={to}
@@ -215,9 +213,7 @@ function ItemCard({ to, icon, title, desc, color }: Item) {
         className="size-10 rounded-lg flex items-center justify-center shrink-0"
         style={{ background: `${color}1a`, color }}
       >
-        {typeof icon === 'string'
-          ? <Icon icon={icon} width={20} height={20} aria-hidden="true" />
-          : icon}
+        <Icon size={20} aria-hidden="true" />
       </div>
       <div>
         <h2 className="font-semibold mb-1" style={{ color: 'var(--color-foreground)' }}>

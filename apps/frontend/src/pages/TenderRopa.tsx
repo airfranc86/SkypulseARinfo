@@ -1,3 +1,4 @@
+import { Shirt } from 'lucide-react'
 import { useLaundryForecast } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { LaundryDayCard } from '@/components/ui/LaundryDayCard'
@@ -26,7 +27,7 @@ export function TenderRopa({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<img src="/icons/icon-tender.png" width={48} height={48} style={{ objectFit: 'contain' }} alt="" />}
+        icon={<Shirt size={32} style={{ color: '#3ecf7a' }} />}
         title="Secado de ropa"
         subtitle={location.label}
         accentColor="#3ecf7a"
