@@ -234,8 +234,8 @@ def test_resolve_daily_icon_hail_storm():
         ("Lluvias", True, "rain"),
         ("Lluvias débiles", True, "rain"),
         ("Chaparrones", True, "rain"),
-        ("Llovizna", True, "drizzle"),
-        ("Lloviznas", True, "drizzle"),
+        ("Llovizna", True, "overcast-drizzle"),
+        ("Lloviznas", True, "overcast-drizzle"),
         ("Tormenta", True, "thunderstorms"),
         ("Tormentas", False, "thunderstorms"),
         ("Niebla", True, "fog"),
@@ -267,7 +267,7 @@ def test_icon_from_description_es_tormenta_takes_priority_over_lluvia():
 
 
 def test_icon_from_description_es_llovizna_not_confused_with_lluvia():
-    assert icon_from_description_es("Llovizna", True) == "drizzle"
+    assert icon_from_description_es("Llovizna", True) == "overcast-drizzle"
 
 
 # ---------------------------------------------------------------------------
