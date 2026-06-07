@@ -10,7 +10,7 @@ WMO_CODE_MAP: dict[int, dict[str, str]] = {
     3:  {"description": "Cubierto",                     "icon_day": "overcast",                         "icon_night": "overcast"},
     45: {"description": "Niebla",                       "icon_day": "fog",                              "icon_night": "fog"},
     48: {"description": "Niebla con escarcha",          "icon_day": "fog",                              "icon_night": "fog"},
-    51: {"description": "Llovizna leve",                "icon_day": "partly-cloudy-day-drizzle",        "icon_night": "partly-cloudy-night-drizzle"},
+    51: {"description": "Llovizna leve",                "icon_day": "drizzle",                          "icon_night": "drizzle"},
     53: {"description": "Llovizna moderada",            "icon_day": "drizzle",                          "icon_night": "drizzle"},
     55: {"description": "Llovizna intensa",             "icon_day": "overcast-drizzle",                 "icon_night": "overcast-drizzle"},
     56: {"description": "Llovizna helada leve",         "icon_day": "sleet",                            "icon_night": "sleet"},
