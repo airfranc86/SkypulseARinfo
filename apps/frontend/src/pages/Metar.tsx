@@ -976,7 +976,7 @@ export function Metar() {
               ¿Qué es un METAR?
             </h2>
             <p className="text-[.74rem] mb-8" style={{ color: 'var(--color-muted-foreground)' }}>
-              Meteorological Aerodrome Report — reporte rutinario de condiciones actuales
+              Meteorological Aerodrome Report <span style={{ opacity: 0.6 }}>— en castellano, Informe Meteorológico de Aeródromo</span> — reporte rutinario de condiciones actuales
             </p>
 
             <MetarRaw size="sm" tokens={[
@@ -1077,7 +1077,7 @@ export function Metar() {
               ¿Qué es un TAF?
             </h2>
             <p className="text-[.74rem] mb-8" style={{ color: 'var(--color-muted-foreground)' }}>
-              Terminal Aerodrome Forecast — pronóstico de hasta 30 horas para un aeródromo
+              Terminal Aerodrome Forecast <span style={{ opacity: 0.6 }}>— en castellano, Pronóstico Terminal de Aeródromo</span> — pronóstico de hasta 30 horas para un aeródromo
             </p>
 
             <MetarRaw size="sm" tokens={[

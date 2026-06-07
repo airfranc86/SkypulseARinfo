@@ -1,7 +1,8 @@
-import type { ComponentType } from 'react'
-import { Eye, Wind, Waves, Mountain, Snowflake, Droplets, Sun } from 'lucide-react'
+import { useState, type ComponentType } from 'react'
+import { Eye, Wind, Waves, Mountain, Snowflake, Droplets, Sun, ChevronDown } from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { useNiebla } from '@/hooks/useWeather'
+import { api } from '@/lib/api'
 import type { NieblaResponse } from '@/lib/api'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { FogText } from '@/components/animated/FogText'
@@ -681,6 +682,119 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
 }
 
 // ---------------------------------------------------------------------------
+// TAF expandible — código aeronáutico crudo, a demanda (ahorra cuota CheckWX)
+// ---------------------------------------------------------------------------
+
+/** Tarjeta colapsada por defecto: el TAF crudo solo se consulta al expandir,
+ *  para no quemar la cuota mensual de CheckWX (198 consultas/mes). */
+function TafExpandCard({ location }: { location: { lat: number; lon: number } }) {
+  const { data } = useNiebla(location.lat, location.lon)
+  const icao = data?.metar_station
+  const stationName = data?.metar_station_name
+
+  const [expanded, setExpanded] = useState(false)
+  const [taf, setTaf] = useState<string | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'ok'>('idle')
+
+  if (!icao) return null
+
+  const handleToggle = () => {
+    const next = !expanded
+    setExpanded(next)
+    if (next && status === 'idle') {
+      setStatus('loading')
+      api.tafRaw(icao)
+        .then(res => {
+          const rawText = res.data?.[0]?.raw_text
+          if (rawText) { setTaf(rawText); setStatus('ok') }
+          else setStatus('error')
+        })
+        .catch(() => setStatus('error'))
+    }
+  }
+
+  return (
+    <section
+      className="rounded-2xl"
+      style={{
+        background: 'var(--color-card)',
+        border: '1px solid var(--color-border)',
+        padding: '20px',
+      }}
+    >
+      <button
+        onClick={handleToggle}
+        aria-expanded={expanded}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <span>
+          <span
+            style={{
+              display: 'block',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: 'var(--color-muted-foreground)',
+              textTransform: 'uppercase',
+              letterSpacing: '.08em',
+            }}
+          >
+            TAF — código aeronáutico
+          </span>
+          <span style={{ display: 'block', marginTop: '4px', fontSize: '12px', color: 'var(--color-muted-foreground)' }}>
+            Pronóstico crudo de {stationName ?? icao} — se consulta solo al expandir
+          </span>
+        </span>
+        <ChevronDown
+          size={18}
+          strokeWidth={1.5}
+          style={{
+            color: 'var(--color-muted-foreground)',
+            flexShrink: 0,
+            transform: expanded ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.2s ease',
+          }}
+        />
+      </button>
+
+      {expanded && (
+        <div style={{ marginTop: '16px' }}>
+          {status === 'loading' && (
+            <div
+              className="rounded-[10px]"
+              style={{ height: '90px', background: 'rgba(255,255,255,.04)', animation: 'pulse 1.5s ease-in-out infinite' }}
+            />
+          )}
+          {status === 'error' && (
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted-foreground)' }}>
+              No se pudo obtener el TAF en este momento.
+            </p>
+          )}
+          {status === 'ok' && taf && (
+            <div
+              className="rounded-md px-5 py-4 overflow-x-auto text-[.82rem] leading-[1.8]"
+              style={{ fontFamily: 'monospace', color: '#c8e6ff', background: '#020810', border: '1px solid var(--color-border)' }}
+            >
+              {taf}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page skeleton
 // ---------------------------------------------------------------------------
 
@@ -819,6 +933,9 @@ export function Niebla({ location }: Props) {
             ))}
           </div>
         </section>
+
+        {/* ── TAF crudo a demanda ──────────────────────────────────────── */}
+        <TafExpandCard location={location} />
 
         {/* ── Visual divider ───────────────────────────────────────────── */}
         <div

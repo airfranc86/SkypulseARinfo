@@ -331,6 +331,12 @@ export interface NieblaResponse {
   hourly_source?: string        // "taf" | "openmeteo_inference" | "openmeteo"
 }
 
+// ── METAR/TAF crudo (código aeronáutico) ─────────────────────────────────────
+
+export interface MetarRawResponse {
+  data?: { raw_text?: string }[]
+}
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -369,4 +375,8 @@ export const api = {
 
   niebla: (lat: number, lon: number) =>
     request<NieblaResponse>('/api/niebla', { lat, lon }),
+
+  /** TAF en código aeronáutico crudo — a demanda, para no consumir la cuota mensual de CheckWX (198/mes). */
+  tafRaw: (icao: string) =>
+    request<MetarRawResponse>('/api/metar', { icao, type: 'taf' }),
 }
