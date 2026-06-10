@@ -168,7 +168,7 @@ export function Landing() {
         </div>
 
         {/* Herramientas */}
-        <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: 'rgba(200,168,75,0.5)' }}>
+        <p className="text-xs font-medium tracking-widest uppercase mb-3" style={{ color: 'rgba(200,168,75,0.85)' }}>
           Herramientas
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -176,7 +176,7 @@ export function Landing() {
         </div>
 
         {/* Guías */}
-        <p className="text-xs font-medium tracking-widest uppercase mt-8 mb-3" style={{ color: 'rgba(200,168,75,0.5)' }}>
+        <p className="text-xs font-medium tracking-widest uppercase mt-8 mb-3" style={{ color: 'rgba(200,168,75,0.85)' }}>
           Guías meteorológicas
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

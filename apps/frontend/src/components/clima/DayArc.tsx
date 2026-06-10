@@ -112,7 +112,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         <text
           x={cx - r + 2}
           y={cy + 12}
-          fontSize="7"
+          fontSize="9"
           fill="var(--color-muted-foreground)"
           textAnchor="start"
         >
@@ -123,7 +123,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         <text
           x={cx + r - 2}
           y={cy + 12}
-          fontSize="7"
+          fontSize="9"
           fill="var(--color-muted-foreground)"
           textAnchor="end"
         >
@@ -134,7 +134,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         <text
           x={cx}
           y={cy + 12}
-          fontSize="7"
+          fontSize="9"
           fill="var(--color-muted-foreground)"
           textAnchor="middle"
         >

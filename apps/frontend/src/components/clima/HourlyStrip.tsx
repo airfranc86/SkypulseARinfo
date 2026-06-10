@@ -73,9 +73,11 @@ export function HourlyStrip({ hourly, badge }: Props) {
         {dates.map((date, i) => (
           <button
             key={date}
+            type="button"
             onClick={() => setActiveDate(date)}
+            aria-pressed={date === activeDate}
             className={cn(
-              'shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+              'shrink-0 px-3.5 py-2 min-h-[40px] rounded-lg text-sm font-medium transition-colors',
               date === activeDate
                 ? 'text-[var(--color-primary)]'
                 : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'

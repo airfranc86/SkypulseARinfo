@@ -38,9 +38,9 @@ interface MarqueeStripProps {
 }
 
 const PILL_BASE: CSSProperties = {
-  padding: '8px 13px',
+  padding: '10px 14px',
   fontSize: '0.72rem',
-  minHeight: '38px',
+  minHeight: '44px',
   display: 'inline-flex',
   alignItems: 'center',
   gap: '5px',

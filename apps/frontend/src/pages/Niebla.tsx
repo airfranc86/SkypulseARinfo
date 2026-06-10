@@ -165,7 +165,7 @@ function visibilityFraction(m: number | null): number {
 /** Marcas de la escala del gauge — mismos puntos (0/2/5/10 km) que antes,
  *  ahora posicionados proporcionalmente sobre la escala lineal de 0–10 km. */
 const SCALE_MARKS = [
-  { km: 0,  label: '0 m' },
+  { km: 0,  label: '0' },
   { km: 2,  label: '2 km' },
   { km: 5,  label: '5 km' },
   { km: 10, label: '10 km' },
@@ -434,7 +434,7 @@ function VisibilityMeter({
 
       {/* Scale labels — posicionadas según su valor real en la escala lineal 0–10 km,
           para que coincidan visualmente con el punto que marcan en la barra de arriba */}
-      <div style={{ position: 'relative', height: '12px', fontSize: '10px', color: 'var(--color-muted-foreground)' }}>
+      <div style={{ position: 'relative', height: '14px', fontSize: 'clamp(9px, 2.8vw, 10px)', color: 'var(--color-muted-foreground)' }}>
         {SCALE_MARKS.map(({ km, label }, i) => {
           const pct = (km / 10) * 100
           const align = i === 0 ? 'left' : i === SCALE_MARKS.length - 1 ? 'right' : 'center'

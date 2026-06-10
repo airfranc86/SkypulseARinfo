@@ -70,9 +70,12 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange }: Props)
             {MODEL_OPTIONS.map(({ id, label }) => (
               <button
                 key={id}
+                type="button"
                 onClick={() => onModelChange(id)}
+                aria-pressed={selectedModel === id}
+                aria-label={`Modelo de pronóstico: ${label}`}
                 className={cn(
-                  'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  'px-3.5 py-2 min-h-[40px] rounded-md text-xs font-medium transition-colors',
                   selectedModel === id
                     ? 'text-[var(--color-primary)]'
                     : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
@@ -95,9 +98,12 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange }: Props)
             {VIEWS.map(({ id, label }) => (
               <button
                 key={id}
+                type="button"
                 onClick={() => setView(id)}
+                aria-pressed={view === id}
+                aria-label={`Vista: ${label}`}
                 className={cn(
-                  'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  'px-3.5 py-2 min-h-[40px] rounded-md text-xs font-medium transition-colors',
                   view === id
                     ? 'text-[var(--color-primary)]'
                     : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
