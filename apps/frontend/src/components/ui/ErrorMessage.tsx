@@ -9,12 +9,12 @@ export function ErrorMessage({ message }: ErrorMessageProps) {
       className="rounded-xl p-4 text-sm"
       role="alert"
       style={{
-        border: '1px solid rgba(224,85,69,0.3)',
-        background: 'rgba(224,85,69,0.05)',
-        color: 'var(--color-destructive)',
+        border: '1px solid rgba(224,85,69,0.35)',
+        background: 'rgba(224,85,69,0.08)',
+        color: 'var(--color-crit-soft)',
       }}
     >
-      Error: {message}
+      {message}
     </div>
   )
 }

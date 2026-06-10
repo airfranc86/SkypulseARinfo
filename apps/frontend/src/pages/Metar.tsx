@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
+import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -700,15 +701,8 @@ function MetarWidget() {
 
       {/* Results */}
       {error && (
-        <div
-          className="mt-6 rounded-xl p-5 text-[.85rem]"
-          style={{ background: 'rgba(26,10,10,.8)', border: '1px solid rgba(192,57,43,.4)', color: '#e05545' }}
-        >
-          <span className="font-medium">No se pudo obtener el METAR.</span>{' '}
-          <span style={{ opacity: 0.7 }}>{error}</span>
-          <p className="mt-2 text-[.75rem]" style={{ color: 'rgba(192,57,43,.7)' }}>
-            Verificá el código ICAO o revisá la conexión.
-          </p>
+        <div className="mt-6">
+          <ErrorMessage message={`No se pudo obtener el METAR. ${error} Verificá el código ICAO o revisá la conexión.`} />
         </div>
       )}
 

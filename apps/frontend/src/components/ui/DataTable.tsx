@@ -27,6 +27,12 @@ export function DataTable<T extends object = Record<string, unknown>>({
       className="overflow-hidden rounded-xl border"
       style={{ borderColor: 'var(--color-border)' }}
     >
+      <p
+        className="md:hidden text-[10px] text-center pt-2"
+        style={{ color: 'var(--color-muted-foreground)' }}
+      >
+        ← Deslizá para ver más →
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

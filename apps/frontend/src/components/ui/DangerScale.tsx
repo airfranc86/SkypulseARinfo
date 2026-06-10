@@ -2,7 +2,7 @@ export type DangerLevel = 1 | 2 | 3 | 4 | 5
 
 export const DANGER_COLORS: Record<DangerLevel, string> = {
   1: '#3ecf7a',
-  2: '#f0a030',
+  2: '#a8c820',
   3: '#f0a030',
   4: '#e05545',
   5: '#ff3333',

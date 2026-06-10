@@ -8,99 +8,107 @@ interface Props {
 
 export function Forecast7dTable({ days }: Props) {
   return (
-    <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--color-border)' }}>
-      <table className="w-full text-sm border-collapse" style={{ minWidth: '560px' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'rgba(200,168,75,0.04)' }}>
-            {['Día', 'Tiempo', 'Máx', 'Mín', 'Lluvia%', 'Viento'].map((h) => (
-              <th
-                key={h}
-                className="text-left px-4 py-2.5 font-medium text-xs"
-                style={{ color: 'var(--color-muted-foreground)' }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {days.map((day, i) => {
-            return (
-              <tr
-                key={day.date}
-                style={{
-                  borderBottom: i < days.length - 1 ? '1px solid var(--color-border)' : 'none',
-                }}
-              >
-                <td className="px-4 py-3">
-                  <p className="font-medium capitalize" style={{ color: 'var(--color-foreground)' }}>
-                    {day.day_label}
-                  </p>
-                  <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-                    {day.day_label_long}
-                  </p>
-                </td>
-                <td className="px-4 py-3">
-                  <WeatherIcon code={day.icon} size={28} />
-                </td>
-                <td className="px-4 py-3 font-semibold" style={{ color: 'var(--color-foreground)' }}>
-                  {day.temp_max !== null ? `${Math.round(day.temp_max)}°C` : '—'}
-                </td>
-                <td className="px-4 py-3" style={{ color: 'var(--color-muted-foreground)' }}>
-                  {day.temp_min !== null ? `${Math.round(day.temp_min)}°C` : '—'}
-                </td>
-                <td className="px-4 py-3" style={{ color: 'var(--color-info)' }}>
-                  {day.precip_prob !== null ? `${Math.round(day.precip_prob)}%` : '—'}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      {day.wind_icon
-                        ? <WeatherIcon code={day.wind_icon} size={20} />
-                        : null}
-                      <span
-                        style={{
-                          color: day.wind_intensity === 'intensa'
-                            ? '#e03535'
-                            : day.wind_intensity === 'moderada'
-                              ? '#c8a84b'
-                              : 'var(--color-muted-foreground)',
-                        }}
-                      >
-                        {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
-                      </span>
-                      {day.wind_dir_dominant_deg !== null && day.wind_dir_dominant_deg !== undefined && (
-                        <WindArrow
-                          deg={day.wind_dir_dominant_deg}
-                          size={13}
-                          color={
-                            day.wind_intensity === 'intensa' ? '#e03535'
-                            : day.wind_intensity === 'moderada' ? '#c8a84b'
-                            : 'var(--color-muted-foreground)'
-                          }
-                        />
-                      )}
-                      {day.wind_dir_cardinal && (
-                        <span className="text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
-                          {day.wind_dir_cardinal}
+    <div>
+      <p
+        className="md:hidden text-[10px] text-center pb-1.5"
+        style={{ color: 'var(--color-muted-foreground)' }}
+      >
+        ← Deslizá para ver más →
+      </p>
+      <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--color-border)' }}>
+        <table className="w-full text-sm border-collapse" style={{ minWidth: '560px' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'rgba(200,168,75,0.04)' }}>
+              {['Día', 'Tiempo', 'Máx', 'Mín', 'Lluvia%', 'Viento'].map((h) => (
+                <th
+                  key={h}
+                  className="text-left px-4 py-2.5 font-medium text-xs"
+                  style={{ color: 'var(--color-muted-foreground)' }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((day, i) => {
+              return (
+                <tr
+                  key={day.date}
+                  style={{
+                    borderBottom: i < days.length - 1 ? '1px solid var(--color-border)' : 'none',
+                  }}
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-medium capitalize" style={{ color: 'var(--color-foreground)' }}>
+                      {day.day_label}
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                      {day.day_label_long}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <WeatherIcon code={day.icon} size={28} />
+                  </td>
+                  <td className="px-4 py-3 font-semibold" style={{ color: 'var(--color-foreground)' }}>
+                    {day.temp_max !== null ? `${Math.round(day.temp_max)}°C` : '—'}
+                  </td>
+                  <td className="px-4 py-3" style={{ color: 'var(--color-muted-foreground)' }}>
+                    {day.temp_min !== null ? `${Math.round(day.temp_min)}°C` : '—'}
+                  </td>
+                  <td className="px-4 py-3" style={{ color: 'var(--color-info)' }}>
+                    {day.precip_prob !== null ? `${Math.round(day.precip_prob)}%` : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5">
+                        {day.wind_icon
+                          ? <WeatherIcon code={day.wind_icon} size={20} />
+                          : null}
+                        <span
+                          style={{
+                            color: day.wind_intensity === 'intensa'
+                              ? '#e03535'
+                              : day.wind_intensity === 'moderada'
+                                ? '#c8a84b'
+                                : 'var(--color-muted-foreground)',
+                          }}
+                        >
+                          {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
+                        </span>
+                        {day.wind_dir_dominant_deg !== null && day.wind_dir_dominant_deg !== undefined && (
+                          <WindArrow
+                            deg={day.wind_dir_dominant_deg}
+                            size={13}
+                            color={
+                              day.wind_intensity === 'intensa' ? '#e03535'
+                              : day.wind_intensity === 'moderada' ? '#c8a84b'
+                              : 'var(--color-muted-foreground)'
+                            }
+                          />
+                        )}
+                        {day.wind_dir_cardinal && (
+                          <span className="text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                            {day.wind_dir_cardinal}
+                          </span>
+                        )}
+                      </div>
+                      {day.wind_shift && day.wind_dir_cardinal && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-full w-fit"
+                          style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
+                        >
+                          ↻ Rota al {day.wind_dir_cardinal}
                         </span>
                       )}
                     </div>
-                    {day.wind_shift && day.wind_dir_cardinal && (
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded-full w-fit"
-                        style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
-                      >
-                        ↻ Rota al {day.wind_dir_cardinal}
-                      </span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { useNiebla } from '@/hooks/useWeather'
 import { api } from '@/lib/api'
 import type { NieblaResponse } from '@/lib/api'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { FogText } from '@/components/animated/FogText'
 
 // ---------------------------------------------------------------------------
@@ -659,9 +660,7 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
       )}
 
       {error && (
-        <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted-foreground)' }}>
-          No se pudo obtener la visibilidad en este momento.
-        </p>
+        <ErrorMessage message="No se pudo obtener la visibilidad en este momento." />
       )}
 
       {data && !isLoading && (
@@ -776,9 +775,7 @@ function TafExpandCard({ location }: { location: { lat: number; lon: number } })
             />
           )}
           {status === 'error' && (
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted-foreground)' }}>
-              No se pudo obtener el TAF en este momento.
-            </p>
+            <ErrorMessage message="No se pudo obtener el TAF en este momento." />
           )}
           {status === 'ok' && taf && (
             <div
