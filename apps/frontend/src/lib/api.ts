@@ -334,7 +334,7 @@ export interface NieblaResponse {
 // ── METAR/TAF crudo (código aeronáutico) ─────────────────────────────────────
 
 export interface MetarRawResponse {
-  data?: { raw_text?: string }[]
+  data?: (string | { raw_text?: string })[]
 }
 
 // ── API client ────────────────────────────────────────────────────────────────

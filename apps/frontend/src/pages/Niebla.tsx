@@ -705,7 +705,8 @@ function TafExpandCard({ location }: { location: { lat: number; lon: number } })
       setStatus('loading')
       api.tafRaw(icao)
         .then(res => {
-          const rawText = res.data?.[0]?.raw_text
+          const entry = res.data?.[0]
+          const rawText = typeof entry === 'string' ? entry : entry?.raw_text
           if (rawText) { setTaf(rawText); setStatus('ok') }
           else setStatus('error')
         })

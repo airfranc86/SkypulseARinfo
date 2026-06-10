@@ -599,7 +599,9 @@ function MetarWidget() {
       const res = await fetch(`/api/metar?icao=${encodeURIComponent(code)}&type=taf`)
       if (!res.ok) return
       const data = await res.json()
-      if (data.data?.[0]?.raw_text) setTaf(data.data[0].raw_text)
+      const entry = data.data?.[0]
+      const rawText = typeof entry === 'string' ? entry : entry?.raw_text
+      if (rawText) setTaf(rawText)
     } catch { /* TAF is optional */ }
   }, [])
 
