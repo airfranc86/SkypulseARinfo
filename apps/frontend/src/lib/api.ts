@@ -376,7 +376,7 @@ export const api = {
   niebla: (lat: number, lon: number) =>
     request<NieblaResponse>('/api/niebla', { lat, lon }),
 
-  /** TAF en código aeronáutico crudo — a demanda, para no consumir la cuota mensual de CheckWX (198/mes). */
+  /** TAF en código aeronáutico crudo — a demanda, para no consumir la cuota diaria de CheckWX (198/200 por día). */
   tafRaw: (icao: string) =>
     request<MetarRawResponse>('/api/metar', { icao, type: 'taf' }),
 }

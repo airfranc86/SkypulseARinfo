@@ -1,18 +1,18 @@
-"""Counter de cuota mensual para CheckWX API.
+"""Counter de cuota diaria para CheckWX API.
 
 Implementaciones:
 - RedisCounter: usa Upstash Redis REST (persistente entre reinicios)
 - MemoryCounter: in-memory con asyncio.Lock (tests y modo degradado)
 
 Helpers de ciclo exportados para evitar imports circulares:
-- current_cycle() → "YYYY-MM" en UTC
-- seconds_until_next_cycle() → segundos hasta el 1 del próximo mes UTC
+- current_cycle() → "YYYY-MM-DD" en UTC
+- seconds_until_next_cycle() → segundos hasta la medianoche UTC
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -26,19 +26,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def current_cycle() -> str:
-    """Retorna 'YYYY-MM' en UTC."""
-    return datetime.now(timezone.utc).strftime("%Y-%m")
+    """Retorna 'YYYY-MM-DD' en UTC."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def seconds_until_next_cycle() -> int:
-    """Segundos hasta el día 1 del próximo mes UTC a las 00:00."""
+    """Segundos hasta la medianoche UTC del día siguiente."""
     now = datetime.now(timezone.utc)
-    if now.month == 12:
-        nxt = now.replace(year=now.year + 1, month=1, day=1,
-                          hour=0, minute=0, second=0, microsecond=0)
-    else:
-        nxt = now.replace(month=now.month + 1, day=1,
-                          hour=0, minute=0, second=0, microsecond=0)
+    nxt = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return max(int((nxt - now).total_seconds()), 1)
 
 

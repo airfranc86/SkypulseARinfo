@@ -52,9 +52,9 @@ async def get_metar(
             status_code=429,
             detail={
                 "error": "metar_quota_exceeded",
-                "message": "Cuota mensual de METAR agotada",
+                "message": "Cuota diaria de METAR agotada",
                 "cycle": exc.cycle,
-                "limit": settings.checkwx_monthly_limit,
+                "limit": settings.checkwx_daily_limit,
                 "retry_after": retry_after,
             },
             headers={"Retry-After": str(retry_after)},

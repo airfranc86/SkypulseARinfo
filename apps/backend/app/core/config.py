@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     cache_ttl_metar_seconds: int = 1800  # 30 minutos — METAR
     cache_ttl_taf_seconds: int = 3600    # 1 hora — TAF
     metar_timeout_seconds: float = 10.0
-    checkwx_monthly_limit: int = 198     # Free tier limit (configurable if plan changes)
+    checkwx_daily_limit: int = 198     # Free tier: 200/día — 198 deja margen para el aviso Sentry
 
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""

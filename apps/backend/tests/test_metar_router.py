@@ -32,7 +32,7 @@ def setup_checkwx(monkeypatch):
     """API key configurada y counter limpio para cada test."""
     import app.core.config as cfg
     monkeypatch.setattr(cfg.settings, "checkwx_api_key", "test-key", raising=False)
-    monkeypatch.setattr(cfg.settings, "checkwx_monthly_limit", 198, raising=False)
+    monkeypatch.setattr(cfg.settings, "checkwx_daily_limit", 198, raising=False)
 
     counter = MemoryCounter()
     checkwx_svc.set_counter(counter)

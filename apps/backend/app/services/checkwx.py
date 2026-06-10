@@ -3,7 +3,7 @@
 ⚠ NUNCA llamar CheckWX fuera de este módulo — bypasea el gate de cuota.
 
 Proveedor: CheckWX (https://www.checkwxapi.com)
-Cuota: 198 requests/mes en plan Free (ver settings.checkwx_monthly_limit)
+Cuota: 200 requests/día en plan Free — gate interno en 198 (ver settings.checkwx_daily_limit)
 Distinto de: services/metar.py (usa AWC/NOAA — sin cuota)
 """
 from __future__ import annotations
@@ -97,12 +97,12 @@ async def fetch_metar(icao: str, kind: Literal["metar", "taf"]) -> dict[str, Any
     cycle = current_cycle()
     current_count = await _counter.get(cycle)
 
-    if current_count >= settings.checkwx_monthly_limit:
+    if current_count >= settings.checkwx_daily_limit:
         logger.warning(
             "checkwx_quota_exhausted cycle=%s count=%d limit=%d",
-            cycle, current_count, settings.checkwx_monthly_limit,
+            cycle, current_count, settings.checkwx_daily_limit,
         )
-        await maybe_notify(cycle, current_count, _counter, settings.checkwx_monthly_limit)
+        await maybe_notify(cycle, current_count, _counter, settings.checkwx_daily_limit)
         raise CheckWXQuotaExceededError(cycle=cycle, count=current_count)
 
     response = await _do_http_fetch(icao, kind)
@@ -112,10 +112,10 @@ async def fetch_metar(icao: str, kind: Literal["metar", "taf"]) -> dict[str, Any
 
     logger.info(
         "checkwx_fetch_ok cycle=%s count=%d/%d icao=%s kind=%s",
-        cycle, new_count, settings.checkwx_monthly_limit, icao, kind,
+        cycle, new_count, settings.checkwx_daily_limit, icao, kind,
     )
 
-    await maybe_notify(cycle, new_count, _counter, settings.checkwx_monthly_limit)
+    await maybe_notify(cycle, new_count, _counter, settings.checkwx_daily_limit)
     return response
 
 

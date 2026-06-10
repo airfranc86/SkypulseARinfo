@@ -685,7 +685,7 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
 // ---------------------------------------------------------------------------
 
 /** Tarjeta colapsada por defecto: el TAF crudo solo se consulta al expandir,
- *  para no quemar la cuota mensual de CheckWX (198 consultas/mes). */
+ *  para no quemar la cuota diaria de CheckWX (198 de 200 consultas/día). */
 function TafExpandCard({ location }: { location: { lat: number; lon: number } }) {
   const { data } = useNiebla(location.lat, location.lon)
   const icao = data?.metar_station

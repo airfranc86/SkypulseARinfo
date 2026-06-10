@@ -54,9 +54,9 @@ function pillStyle(color: string, isActive: boolean): CSSProperties {
   return {
     ...PILL_BASE,
     fontWeight: isActive ? 600 : 400,
-    border: `1px solid ${isActive ? color : `${color}55`}`,
-    background: isActive ? `${color}18` : 'transparent',
-    color: isActive ? color : 'var(--color-muted-foreground)',
+    border: `1px solid ${isActive ? color : `${color}2a`}`,
+    background: isActive ? `${color}18` : `${color}0d`,
+    color: isActive ? color : `${color}b3`,
   }
 }
 
