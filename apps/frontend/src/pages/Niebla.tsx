@@ -4,6 +4,7 @@ import { FadeContent } from '@/components/animated/FadeContent'
 import { useNiebla } from '@/hooks/useWeather'
 import { api } from '@/lib/api'
 import type { NieblaResponse } from '@/lib/api'
+import type { LocationState } from '@/hooks/useLocation'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { FogText } from '@/components/animated/FogText'
@@ -13,7 +14,7 @@ import { FogText } from '@/components/animated/FogText'
 // ---------------------------------------------------------------------------
 
 interface Props {
-  location: { lat: number; lon: number } | null
+  location: LocationState | null
 }
 
 type FogCategory = 'radiation' | 'advection' | 'sea' | 'valley' | 'freezing' | 'steam'
@@ -829,7 +830,7 @@ export function Niebla({ location }: Props) {
           titleNode={<FogText text="Niebla, Bruma y Neblina" fontSize="1.5rem" />}
           icon={<Eye size={32} style={{ color: '#90aabb' }} />}
           title="Niebla, Bruma y Neblina"
-          subtitle="6 tipos de niebla en Argentina — visibilidad y qué esperar."
+          subtitle={location.label}
           accentColor="#90aabb"
         />
 
