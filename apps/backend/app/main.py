@@ -4,6 +4,7 @@ import logging
 import logging.config
 import math
 import os
+import time
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -117,6 +118,22 @@ async def security_headers(request: Request, call_next) -> Response:
     response.headers["Cross-Origin-Resource-Policy"] = "same-site"
     response.headers["Content-Security-Policy"] = "default-src 'none'"
     response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
+@app.middleware("http")
+async def request_logging(request: Request, call_next) -> Response:
+    """Loguea método, path, status code y duración de cada request."""
+    start = time.perf_counter()
+    response: Response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s -> %d (%.1fms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
     return response
 
 
