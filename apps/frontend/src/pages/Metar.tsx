@@ -285,7 +285,7 @@ function cloudNote(clouds: MetarData['clouds']): string {
 // METAR result display
 // ---------------------------------------------------------------------------
 
-function MetarResult({ metar, taf }: { metar: MetarData; taf: string | null }) {
+function MetarResult({ metar, taf, tafError }: { metar: MetarData; taf: string | null; tafError: boolean }) {
   const windData = metar.wind
   const windVal = windData
     ? `${windData.degrees ?? windData.direction ?? 'VRB'}° / ${windData.speed_kts ?? windData.speed ?? '?'} kt${windData.gust_kts ? ` G${windData.gust_kts}` : ''}`
@@ -412,6 +412,11 @@ function MetarResult({ metar, taf }: { metar: MetarData; taf: string | null }) {
             {taf}
           </div>
         </div>
+      )}
+      {!taf && tafError && (
+        <p className="text-[.72rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.6 }}>
+          No se pudo obtener el TAF para este aeródromo.
+        </p>
       )}
 
       {metar.observed && (
@@ -592,18 +597,21 @@ function MetarWidget() {
   const [loading, setLoading] = useState(false)
   const [metar, setMetar]     = useState<MetarData | null>(null)
   const [taf, setTaf]         = useState<string | null>(null)
+  const [tafError, setTafError] = useState(false)
   const [error, setError]     = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
 
   const fetchTAF = useCallback(async (code: string) => {
+    setTafError(false)
     try {
       const res = await fetch(`${BASE_URL}/api/metar?icao=${encodeURIComponent(code)}&type=taf`)
-      if (!res.ok) return
+      if (!res.ok) { setTafError(true); return }
       const data = await res.json()
       const entry = data.data?.[0]
       const rawText = typeof entry === 'string' ? entry : entry?.raw_text
       if (rawText) setTaf(rawText)
-    } catch { /* TAF is optional */ }
+      // Sin rawText pero res.ok: el aeródromo no tiene TAF vigente — no es un error.
+    } catch { setTafError(true) }
   }, [])
 
   const doFetch = useCallback(async (code: string) => {
@@ -612,6 +620,7 @@ function MetarWidget() {
     setLoading(true)
     setMetar(null)
     setTaf(null)
+    setTafError(false)
     setError(null)
     try {
       const res = await fetch(`${BASE_URL}/api/metar?icao=${encodeURIComponent(clean)}`)
@@ -711,7 +720,7 @@ function MetarWidget() {
 
       {metar && (
         <div className="mt-6 animate-[fadeUp_.35s_ease_both]">
-          <MetarResult metar={metar} taf={taf} />
+          <MetarResult metar={metar} taf={taf} tafError={tafError} />
         </div>
       )}
 
