@@ -14,6 +14,27 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Extrae un mensaje legible del body de error del backend. El backend usa 3 formas
+ * distintas según el caso (ver docs/plans/auditoria-2026-08-28.md, Fase 3):
+ * - `{message: string}` en el top level (handler de outside_argentina/invalid_coordinates)
+ * - `{detail: string}` (HTTPException simple, ej. "current_unavailable")
+ * - `{detail: {message: string}}` (HTTPException con detail estructurado, ej. cuota METAR)
+ * - `{error: string}` (default de slowapi para 429)
+ * Sin esto, un `detail` objeto (no string) termina stringificado como "[object Object]".
+ */
+function extractErrorMessage(body: unknown, status: number): string {
+  const b = body as Record<string, unknown> | null
+  if (typeof b?.message === 'string') return b.message
+  if (typeof b?.detail === 'string') return b.detail
+  if (b?.detail && typeof b.detail === 'object') {
+    const nested = (b.detail as Record<string, unknown>).message
+    if (typeof nested === 'string') return nested
+  }
+  if (typeof b?.error === 'string') return b.error
+  return `HTTP ${status}`
+}
+
 async function request<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin)
   if (params) {
@@ -22,7 +43,7 @@ async function request<T>(path: string, params?: Record<string, string | number>
   const res = await fetch(url.toString())
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError((body as { detail?: string }).detail ?? `HTTP ${res.status}`, res.status)
+    throw new ApiError(extractErrorMessage(body, res.status), res.status)
   }
   return res.json()
 }
