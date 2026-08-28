@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { BASE_URL } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -596,7 +597,7 @@ function MetarWidget() {
 
   const fetchTAF = useCallback(async (code: string) => {
     try {
-      const res = await fetch(`/api/metar?icao=${encodeURIComponent(code)}&type=taf`)
+      const res = await fetch(`${BASE_URL}/api/metar?icao=${encodeURIComponent(code)}&type=taf`)
       if (!res.ok) return
       const data = await res.json()
       const entry = data.data?.[0]
@@ -613,7 +614,7 @@ function MetarWidget() {
     setTaf(null)
     setError(null)
     try {
-      const res = await fetch(`/api/metar?icao=${encodeURIComponent(clean)}`)
+      const res = await fetch(`${BASE_URL}/api/metar?icao=${encodeURIComponent(clean)}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (!data.data || data.data.length === 0) throw new Error(`ICAO ${clean} no encontrado`)
