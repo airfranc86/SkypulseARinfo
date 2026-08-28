@@ -5,11 +5,13 @@ C2 — MemoryCounter: get() sobre ciclo inexistente → 0
 C3 — MemoryCounter: dos ciclos independientes no se contaminan
 C4 — MemoryCounter: flag de alerta — False antes de marcar, True después (idempotente)
 C5 — RedisCounter: lecturas/escrituras van al endpoint REST correcto (respx mock)
+C6 — RedisCounter: Upstash caído (DNS/timeout) degrada en vez de propagar la excepción
 """
 from __future__ import annotations
 
 import asyncio
 
+import httpx
 import pytest
 import respx
 from httpx import Response
@@ -193,3 +195,50 @@ async def test_c5_mark_alert_sent_uses_setnx_ex(redis_counter: RedisCounter):
         await redis_counter.mark_alert_sent(_CYCLE, 80, ttl_seconds=_TTL)
 
     assert set_route.called
+
+
+# ---------------------------------------------------------------------------
+# C6 — Upstash caído: degradar en vez de propagar (Sentry SKYPULSE-BACKEND-4)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_c6_get_degrades_to_zero_on_upstash_down(redis_counter: RedisCounter):
+    """DNS/timeout en GET → 0 en vez de propagar ConnectError (fail-open del gate)."""
+    with respx.mock:
+        respx.post(f"{_FAKE_URL}/GET/{_COUNTER_KEY}").mock(
+            side_effect=httpx.ConnectError("Name or service not known")
+        )
+        result = await redis_counter.get(_CYCLE)
+    assert result == 0
+
+
+@pytest.mark.asyncio
+async def test_c6_incr_degrades_to_zero_on_upstash_down(redis_counter: RedisCounter):
+    """DNS/timeout en INCR → 0, no crashea la request que ya gastó cuota real."""
+    with respx.mock:
+        respx.post(f"{_FAKE_URL}/INCR/{_COUNTER_KEY}").mock(
+            side_effect=httpx.ConnectError("Name or service not known")
+        )
+        result = await redis_counter.incr(_CYCLE)
+    assert result == 0
+
+
+@pytest.mark.asyncio
+async def test_c6_alert_already_sent_fails_safe_on_upstash_down(redis_counter: RedisCounter):
+    """Sin poder verificar el dedup, asume 'ya enviada' para no floodear alertas."""
+    with respx.mock:
+        respx.post(f"{_FAKE_URL}/GET/{_ALERT_KEY_80}").mock(
+            side_effect=httpx.ConnectError("Name or service not known")
+        )
+        result = await redis_counter.alert_already_sent(_CYCLE, 80)
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_c6_mark_alert_sent_swallows_upstash_down(redis_counter: RedisCounter):
+    """mark_alert_sent() no debe propagar la excepción si Upstash está caído."""
+    with respx.mock:
+        respx.post(f"{_FAKE_URL}/SET/{_ALERT_KEY_80}/1/NX/EX/86400").mock(
+            side_effect=httpx.ConnectError("Name or service not known")
+        )
+        await redis_counter.mark_alert_sent(_CYCLE, 80, ttl_seconds=86400)  # no debe lanzar

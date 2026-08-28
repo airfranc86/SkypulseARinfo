@@ -8,11 +8,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import httpx
+
 from app.core.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 5.0
+
+
+class UpstashUnavailableError(Exception):
+    """Upstash REST no respondió (DNS, timeout, red) — no es un error de datos."""
 
 
 class UpstashRedis:
@@ -23,12 +29,16 @@ class UpstashRedis:
     async def _call(self, *command: str) -> Any:
         path = "/" + "/".join(command)
         client = get_client()
-        resp = await client.post(
-            f"{self._url}{path}",
-            headers=self._headers,
-            timeout=_TIMEOUT,
-        )
-        resp.raise_for_status()
+        try:
+            resp = await client.post(
+                f"{self._url}{path}",
+                headers=self._headers,
+                timeout=_TIMEOUT,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.warning("upstash_call_failed command=%s exc=%s", command[0], exc)
+            raise UpstashUnavailableError(str(exc)) from exc
         return resp.json().get("result")
 
     async def get(self, key: str) -> str | None:

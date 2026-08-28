@@ -15,6 +15,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
+from app.core.upstash import UpstashUnavailableError
+
 if TYPE_CHECKING:
     from app.core.upstash import UpstashRedis
 
@@ -80,19 +82,37 @@ class RedisCounter:
         return f"skypulse:checkwx:alert:{cycle}:{threshold}"
 
     async def get(self, cycle: str) -> int:
-        v = await self._r.get(self._counter_key(cycle))
+        try:
+            v = await self._r.get(self._counter_key(cycle))
+        except UpstashUnavailableError:
+            logger.warning("checkwx_counter_degraded op=get cycle=%s — fail-open", cycle)
+            return 0
         return int(v) if v is not None else 0
 
     async def incr(self, cycle: str) -> int:
         key = self._counter_key(cycle)
-        new_val = await self._r.incr(key)
+        try:
+            new_val = await self._r.incr(key)
+        except UpstashUnavailableError:
+            logger.warning("checkwx_counter_degraded op=incr cycle=%s — no contado", cycle)
+            return 0
         if new_val == 1:
-            await self._r.expire(key, seconds_until_next_cycle())
+            try:
+                await self._r.expire(key, seconds_until_next_cycle())
+            except UpstashUnavailableError:
+                logger.warning("checkwx_counter_degraded op=expire cycle=%s", cycle)
         return new_val
 
     async def alert_already_sent(self, cycle: str, threshold: int) -> bool:
-        v = await self._r.get(self._alert_key(cycle, threshold))
+        try:
+            v = await self._r.get(self._alert_key(cycle, threshold))
+        except UpstashUnavailableError:
+            # No podemos verificar el dedup — asumimos "ya enviada" para no floodear alertas.
+            return True
         return v is not None
 
     async def mark_alert_sent(self, cycle: str, threshold: int, ttl_seconds: int) -> None:
-        await self._r.setnx_ex(self._alert_key(cycle, threshold), ttl_seconds)
+        try:
+            await self._r.setnx_ex(self._alert_key(cycle, threshold), ttl_seconds)
+        except UpstashUnavailableError:
+            logger.warning("checkwx_counter_degraded op=mark_alert cycle=%s threshold=%d", cycle, threshold)
