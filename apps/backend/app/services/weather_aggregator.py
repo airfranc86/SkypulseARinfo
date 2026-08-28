@@ -19,6 +19,11 @@ from app.utils.geo import degrees_to_cardinal
 
 logger = logging.getLogger(__name__)
 
+# Umbral de UX para marcar un dato de Open-Meteo como "viejo" en la respuesta.
+# Desacoplado del TTL interno del caché (implementación) — es una decisión de
+# cuánto puede envejecer el clima "actual" antes de que valga la pena avisar.
+_OPENMETEO_STALE_AFTER = timedelta(minutes=15)
+
 
 async def aggregate_current(lat: float, lon: float) -> WeatherCurrentResponse:
     """
@@ -105,12 +110,20 @@ async def aggregate_current(lat: float, lon: float) -> WeatherCurrentResponse:
         logger.error("Ambas fuentes no disponibles para (%s, %s)", lat, lon)
         raise HTTPException(status_code=503, detail="all_sources_unavailable")
 
+    stale = (now - om.fetched_at) > _OPENMETEO_STALE_AFTER
+    if stale:
+        logger.warning(
+            "Open-Meteo stale fallback servido para (%s, %s) — dato de %s",
+            lat, lon, om.fetched_at,
+        )
+
     meta = SourceMeta(
         source="openmeteo",
         reason=reason,
         station=None,
-        fetched_at=now,
+        fetched_at=om.fetched_at,
         cache_hit=False,
+        stale=stale,
     )
     wind_cardinal = (
         degrees_to_cardinal(om.wind_dir_deg)

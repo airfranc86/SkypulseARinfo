@@ -34,6 +34,7 @@ class SourceMeta(BaseModel):
     station: StationMeta | None = None
     fetched_at: datetime
     cache_hit: bool = False
+    stale: bool = False
 
 
 class WeatherCurrentResponse(BaseModel):

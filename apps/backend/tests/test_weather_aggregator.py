@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from dataclasses import replace
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi import HTTPException
@@ -148,6 +149,43 @@ async def test_smn_unavailable_uses_openmeteo():
 
     assert result.meta.source == "openmeteo"
     assert result.meta.reason == "smn_unavailable"
+
+
+# ---------------------------------------------------------------------------
+# meta.stale — refleja la edad real del dato de Open-Meteo (Sentry
+# SKYPULSE-BACKEND-1/2/3: fallback stale-while-error de SingleFlightCache)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_openmeteo_fresh_data_is_not_stale():
+    om = _make_openmeteo()  # fetched_at = ahora
+
+    with (
+        patch("app.services.weather_aggregator.smn.get_nearest_observation", new_callable=AsyncMock, return_value=None),
+        patch("app.services.weather_aggregator.openmeteo.get_current", new_callable=AsyncMock, return_value=om),
+    ):
+        result = await aggregate_current(-31.4, -64.2)
+
+    assert result.meta.stale is False
+    assert result.meta.fetched_at == om.fetched_at
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_openmeteo_old_data_is_marked_stale():
+    """Dato servido por el fallback stale-while-error (>15 min) se marca stale=True."""
+    om = _make_openmeteo()
+    old_om = replace(om, fetched_at=datetime.now(timezone.utc) - timedelta(minutes=20))
+
+    with (
+        patch("app.services.weather_aggregator.smn.get_nearest_observation", new_callable=AsyncMock, return_value=None),
+        patch("app.services.weather_aggregator.openmeteo.get_current", new_callable=AsyncMock, return_value=old_om),
+    ):
+        result = await aggregate_current(-31.4, -64.2)
+
+    assert result.meta.stale is True
+    assert result.meta.fetched_at == old_om.fetched_at
 
 
 # ---------------------------------------------------------------------------

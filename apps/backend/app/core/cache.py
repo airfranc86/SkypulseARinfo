@@ -6,6 +6,12 @@ una ejecuta el fetch; el resto espera y recibe el mismo resultado —o la misma
 excepción—. Evita el race TOCTOU de doble-fetch y nunca devuelve un ``KeyError``
 espurio ante fallo del fetcher (el responsable propaga el error real a quienes
 esperaban).
+
+Stale-while-error: además del valor "fresco" (TTL corto), se guarda una copia
+de larga duración (``stale_ttl``) del último resultado exitoso por clave. Si
+un fetch falla (excepción o ``None``) y esa copia todavía es válida, se sirve
+en vez de ``None`` — evita un 503 cuando el proveedor upstream tiene un blip
+transitorio (rate limit, timeout) pero ya teníamos un dato bueno reciente.
 """
 from __future__ import annotations
 
@@ -44,11 +50,14 @@ class SingleFlightCache(Generic[T]):
         ttl: float,
         name: str = "",
         failure_ttl: float = 15.0,
+        stale_ttl: float | None = None,
     ) -> None:
         self._cache: TTLCache = TTLCache(maxsize=maxsize, ttl=ttl)
         # Resultados None se cachean con TTL corto para evitar hammering durante
         # una ventana de error, sin bloquear la recuperación por 600 s completos.
         self._failure_cache: TTLCache = TTLCache(maxsize=maxsize, ttl=failure_ttl)
+        # Copia de larga duración del último resultado exitoso — fallback ante fetch fallido.
+        self._stale_cache: TTLCache = TTLCache(maxsize=maxsize, ttl=stale_ttl or ttl * 6)
         self._lock = asyncio.Lock()
         self._inflight: dict[str, _InFlight[T]] = {}
         self._name = name or "single_flight"
@@ -57,6 +66,7 @@ class SingleFlightCache(Generic[T]):
         """Vacía la caché. Usado por los tests para garantizar aislamiento."""
         self._cache.clear()
         self._failure_cache.clear()
+        self._stale_cache.clear()
 
     async def get_or_fetch(self, key: str, fetch: Callable[[], Awaitable[T]]) -> T:
         """Devuelve el valor cacheado o ejecuta ``fetch`` una sola vez por clave.
@@ -75,6 +85,10 @@ class SingleFlightCache(Generic[T]):
                 return self._cache[key]
 
             if key in self._failure_cache:
+                stale = self._stale_cache.get(key)
+                if stale is not None:
+                    logger.debug("%s failure-cache hit — sirviendo stale: %s", self._name, key)
+                    return stale
                 logger.debug("%s failure-cache hit (None): %s", self._name, key)
                 return None  # type: ignore[return-value]
 
@@ -99,11 +113,23 @@ class SingleFlightCache(Generic[T]):
             async with self._lock:
                 if result is not None:
                     self._cache[key] = result
+                    self._stale_cache[key] = result
                 else:
                     self._failure_cache[key] = True
+                    stale = self._stale_cache.get(key)
+                    if stale is not None:
+                        logger.warning("%s fetch devolvió None — sirviendo stale: %s", self._name, key)
+                        result = stale
             responsible_slot.data = result
             return result
         except Exception as exc:
+            async with self._lock:
+                self._failure_cache[key] = True
+                stale = self._stale_cache.get(key)
+            if stale is not None:
+                logger.warning("%s fetch lanzó excepción — sirviendo stale: %s (%s)", self._name, key, exc)
+                responsible_slot.data = stale
+                return stale
             # El error se registra para que las coroutines que esperan lo
             # reciban en vez de un KeyError por cache vacía.
             responsible_slot.error = exc

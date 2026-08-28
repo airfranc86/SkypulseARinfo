@@ -229,7 +229,7 @@ async def test_get_current_concurrent_dedup():
 
 @pytest.mark.asyncio
 async def test_get_current_concurrent_failure_propagates():
-    """Si el fetch falla, todas las coroutines que esperaban reciben None (no KeyError)."""
+    """Sin fetch previo exitoso, un fallo devuelve None (no hay stale que servir)."""
     with respx.mock(assert_all_called=False) as mock:
         async def slow_fail(request):
             await asyncio.sleep(0.05)
@@ -239,7 +239,42 @@ async def test_get_current_concurrent_failure_propagates():
 
         results = await asyncio.gather(*[get_current(-31.4, -64.2) for _ in range(4)])
 
-    assert all(r is None for r in results), "Fallo en fetch → todas deben recibir None"
+    assert all(r is None for r in results), "Fallo en fetch sin stale previo → todas reciben None"
+
+
+# ---------------------------------------------------------------------------
+# Stale-while-error — fallback al último dato bueno ante fetch fallido
+# (cierra Sentry SKYPULSE-BACKEND-1/2/3: cascada 503 cuando Open-Meteo
+# rate-limitea justo cuando toca refrescar el caché)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_get_current_serves_stale_when_fetch_fails_after_ttl_expiry():
+    """TTL fresco vencido + fetch nuevo falla → sirve el último valor bueno, no None."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(OM_URL).mock(return_value=httpx.Response(200, json=_CURRENT_PAYLOAD))
+        first = await get_current(-31.4, -64.2)
+    assert first is not None
+
+    # Simula vencimiento del TTL fresco (600s) sin esperar — el stale-cache
+    # (TTL largo) sigue teniendo la entrada.
+    om_module._CACHE_CURRENT._cache.clear()
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(OM_URL).mock(side_effect=httpx.ConnectError("rate limited"))
+        second = await get_current(-31.4, -64.2)
+
+    assert second is first, "Debe servir exactamente el objeto stale cacheado, no None"
+
+
+@pytest.mark.asyncio
+async def test_get_current_no_stale_fallback_available_returns_none():
+    """Sin ningún fetch exitoso previo, un fetch fallido sigue devolviendo None."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(OM_URL).mock(side_effect=httpx.ConnectError("dns fail"))
+        result = await get_current(-31.4, -64.2)
+
+    assert result is None
 
 
 # ---------------------------------------------------------------------------

@@ -51,6 +51,7 @@ export interface WeatherCurrentResponse {
     } | null
     fetched_at: string
     cache_hit: boolean
+    stale: boolean
   }
 }
 
