@@ -7,6 +7,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from app.core import usage_counter
 from app.core.cache import SingleFlightCache
 from app.core.config import settings
 from app.core.http_client import fetch_with_retry, get_client
@@ -85,6 +86,7 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
     async def _fetch() -> OpenMeteoCurrent | None:
         try:
             client = get_client()
+            usage_counter.record("open_meteo")
             response = await fetch_with_retry(
                 client, "GET", settings.openmeteo_base_url,
                 params=params,
@@ -159,6 +161,7 @@ async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | No
     async def _fetch() -> HourlyForecastData | None:
         try:
             client = get_client()
+            usage_counter.record("open_meteo")
             response = await fetch_with_retry(
                 client, "GET", settings.openmeteo_base_url,
                 params=params,
@@ -235,6 +238,7 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
     async def _fetch() -> DailyForecastData | None:
         try:
             client = get_client()
+            usage_counter.record("open_meteo")
             response = await fetch_with_retry(
                 client, "GET", settings.openmeteo_base_url,
                 params=params,
@@ -325,6 +329,7 @@ async def get_daily_forecast_ext(
     async def _fetch() -> DailyForecastDataExt | None:
         try:
             client = get_client()
+            usage_counter.record("open_meteo")
             response = await fetch_with_retry(
                 client, "GET", settings.openmeteo_base_url,
                 params=params,
@@ -496,6 +501,7 @@ async def get_hourly_forecast_ext(
     async def _fetch() -> HourlyForecastExt | None:
         try:
             client = get_client()
+            usage_counter.record("open_meteo")
             response = await fetch_with_retry(
                 client, "GET", settings.openmeteo_base_url,
                 params=params,
@@ -626,6 +632,7 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
     async def _fetch() -> VisibilityData | None:
         try:
             client = get_client()
+            usage_counter.record("open_meteo")
             response = await fetch_with_retry(
                 client, "GET", settings.openmeteo_base_url,
                 params=params,
@@ -717,6 +724,7 @@ async def get_fog_inference_forecast(
     async def _fetch() -> list[FogInferenceSlot] | None:
         try:
             client = get_client()
+            usage_counter.record("open_meteo")
             response = await fetch_with_retry(
                 client, "GET", settings.openmeteo_base_url,
                 params=params,

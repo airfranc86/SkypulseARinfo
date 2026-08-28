@@ -70,16 +70,24 @@ class MemoryCounter:
 
 
 class RedisCounter:
-    """Counter respaldado por Upstash Redis REST — sobrevive cold starts."""
+    """Counter respaldado por Upstash Redis REST — sobrevive cold starts.
 
-    def __init__(self, redis: UpstashRedis) -> None:
+    ``namespace`` permite reutilizar esta implementación para contadores de
+    diagnóstico de otros proveedores (ver app.core.usage_counter) sin colisionar
+    claves en Upstash. El default ("checkwx") preserva el comportamiento y las
+    claves exactas del gate de cuota original — no tocar sin verificar los tests
+    de test_checkwx_counter.py.
+    """
+
+    def __init__(self, redis: UpstashRedis, namespace: str = "checkwx") -> None:
         self._r = redis
+        self._namespace = namespace
 
     def _counter_key(self, cycle: str) -> str:
-        return f"skypulse:checkwx:counter:{cycle}"
+        return f"skypulse:{self._namespace}:counter:{cycle}"
 
     def _alert_key(self, cycle: str, threshold: int) -> str:
-        return f"skypulse:checkwx:alert:{cycle}:{threshold}"
+        return f"skypulse:{self._namespace}:alert:{cycle}:{threshold}"
 
     async def get(self, cycle: str) -> int:
         try:

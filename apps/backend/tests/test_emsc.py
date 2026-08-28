@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 import pytest
 import respx
@@ -280,3 +281,18 @@ class TestGetRecentEarthquakes:
             result = await get_recent_earthquakes(-34.6, -58.4, radius_km=2000)
 
         assert result.total == 1  # solo el evento real, no la cabecera
+
+    @pytest.mark.asyncio
+    async def test_fetch_records_emsc_usage(self, monkeypatch):
+        """Cada fetch real a EMSC debe registrar uso vía usage_counter.record('emsc')."""
+        mock_record = MagicMock()
+        monkeypatch.setattr(emsc_module.usage_counter, "record", mock_record)
+
+        row = _row("ev1")
+        with respx.mock:
+            respx.get(url__startswith="https://www.seismicportal.eu").mock(
+                return_value=Response(200, text=_emsc_text(row))
+            )
+            await get_recent_earthquakes(-34.6, -58.4)
+
+        mock_record.assert_called_once_with("emsc")

@@ -11,6 +11,7 @@ from typing import Final
 import httpx
 from cachetools import TTLCache
 
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
 from app.utils.parsing import parse_float
@@ -83,6 +84,7 @@ def _parse_observed_at(date_str: str) -> datetime:
 async def _fetch_stations(url: str) -> list[dict]:
     """Hace el HTTP GET a SMN y devuelve el array JSON."""
     client = get_client()
+    usage_counter.record("smn")
     response = await client.get(url, headers=_HEADERS, timeout=settings.http_timeout_seconds)
     response.raise_for_status()
     return response.json()

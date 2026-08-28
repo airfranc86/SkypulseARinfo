@@ -286,3 +286,32 @@ class TestGetLaundryForecast:
         assert "wind" in payload["parameters"]   # "wind" retorna wind_u + wind_v
         assert "precip" in payload["parameters"] # "precip" → past3hprecip-surface en respuesta
         assert payload["key"] == "test-key-456"
+
+
+# ---------------------------------------------------------------------------
+# Instrumentación de uso (Plan A Fase 2, Parte A4)
+# ---------------------------------------------------------------------------
+
+class TestUsageCounterInstrumentation:
+
+    @pytest.mark.asyncio
+    async def test_fetch_raw_records_windy_usage(self):
+        windy_data = _make_windy_response(n_slots=4)
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = windy_data
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with patch("app.services.windy.settings") as mock_settings, \
+             patch("app.services.windy.get_client", return_value=mock_client), \
+             patch("app.services.windy.usage_counter.record") as mock_record:
+            mock_settings.windy_api_key = "test-key-789"
+            mock_settings.windy_base_url = "https://api.windy.com/api/point-forecast/v2"
+            mock_settings.windy_model = "gfs"
+
+            await get_laundry_forecast(-34.6, -58.4)
+
+        mock_record.assert_called_once_with("windy")

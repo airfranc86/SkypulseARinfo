@@ -465,3 +465,55 @@ async def test_get_fog_inference_forecast_caches():
         await get_fog_inference_forecast(-31.4, -64.2)
 
     assert call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# stats() — hit-rate diagnóstico (Plan A Fase 2, Parte B)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_stats_tracks_hits_and_fetches():
+    """Hit fresco + miss/fetch + dedup-wait concurrente → stats() correctos."""
+    from app.core.cache import SingleFlightCache
+
+    cache: SingleFlightCache = SingleFlightCache(maxsize=8, ttl=60, name="stats_test")
+
+    async def fetch_once() -> str:
+        return "value"
+
+    # Miss/fetch inicial — 1 fetch, 0 hits
+    r1 = await cache.get_or_fetch("k1", fetch_once)
+    assert r1 == "value"
+
+    # Hit fresco — no debe llamar fetch de nuevo
+    r2 = await cache.get_or_fetch("k1", fetch_once)
+    assert r2 == "value"
+
+    # Dedup concurrente sobre una clave nueva: 1 fetch responsable + 3 waiters (hits)
+    call_count = 0
+
+    async def slow_fetch() -> str:
+        nonlocal call_count
+        call_count += 1
+        await asyncio.sleep(0.05)
+        return "concurrent"
+
+    results = await asyncio.gather(*[cache.get_or_fetch("k2", slow_fetch) for _ in range(4)])
+    assert call_count == 1
+    assert all(r == "concurrent" for r in results)
+
+    stats = cache.stats()
+    # fetches: 1 (k1 miss) + 1 (k2 responsable) = 2
+    # hits: 1 (k1 hit fresco) + 3 (k2 waiters) = 4
+    assert stats["fetches"] == 2
+    assert stats["hits"] == 4
+    assert stats["hit_rate"] == pytest.approx(4 / 6)
+
+
+@pytest.mark.asyncio
+async def test_stats_empty_cache_hit_rate_is_zero():
+    from app.core.cache import SingleFlightCache
+
+    cache: SingleFlightCache = SingleFlightCache(maxsize=8, ttl=60, name="stats_empty")
+    stats = cache.stats()
+    assert stats == {"hits": 0, "fetches": 0, "hit_rate": 0.0}

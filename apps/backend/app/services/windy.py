@@ -21,6 +21,7 @@ from datetime import datetime, timezone, timedelta
 
 from cachetools import TTLCache
 
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
 
@@ -222,6 +223,7 @@ async def _fetch_raw(lat: float, lon: float) -> dict:
         }
 
         client = get_client()
+        usage_counter.record("windy")
         response = await client.post(
             settings.windy_base_url,
             json=payload,

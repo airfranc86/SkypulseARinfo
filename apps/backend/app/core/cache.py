@@ -61,12 +61,24 @@ class SingleFlightCache(Generic[T]):
         self._lock = asyncio.Lock()
         self._inflight: dict[str, _InFlight[T]] = {}
         self._name = name or "single_flight"
+        # Instrumentación de diagnóstico (Plan A Fase 2, Parte B) — hit-rate.
+        self._hits: int = 0
+        self._fetches: int = 0
 
     def clear(self) -> None:
         """Vacía la caché. Usado por los tests para garantizar aislamiento."""
         self._cache.clear()
         self._failure_cache.clear()
         self._stale_cache.clear()
+
+    def stats(self) -> dict[str, int | float]:
+        """Contadores de diagnóstico: hits, fetches reales, y hit-rate resultante."""
+        total = self._hits + self._fetches
+        return {
+            "hits": self._hits,
+            "fetches": self._fetches,
+            "hit_rate": self._hits / total if total > 0 else 0.0,
+        }
 
     async def get_or_fetch(self, key: str, fetch: Callable[[], Awaitable[T]]) -> T:
         """Devuelve el valor cacheado o ejecuta ``fetch`` una sola vez por clave.
@@ -81,10 +93,12 @@ class SingleFlightCache(Generic[T]):
         """
         async with self._lock:
             if key in self._cache:
+                self._hits += 1
                 logger.debug("%s cache hit: %s", self._name, key)
                 return self._cache[key]
 
             if key in self._failure_cache:
+                self._hits += 1
                 stale = self._stale_cache.get(key)
                 if stale is not None:
                     logger.debug("%s failure-cache hit — sirviendo stale: %s", self._name, key)
@@ -98,7 +112,9 @@ class SingleFlightCache(Generic[T]):
                 self._inflight[key] = _InFlight()
                 responsible_slot = self._inflight[key]
             else:
-                responsible_slot = None  # otra coroutine ya hace el fetch
+                # Otra coroutine ya hace el fetch — esperar evita OTRO fetch, cuenta como ahorro.
+                responsible_slot = None
+                self._hits += 1
 
         # --- Camino de la coroutine que espera ---
         if responsible_slot is None:
@@ -111,6 +127,7 @@ class SingleFlightCache(Generic[T]):
         try:
             result = await fetch()
             async with self._lock:
+                self._fetches += 1
                 if result is not None:
                     self._cache[key] = result
                     self._stale_cache[key] = result
@@ -124,6 +141,7 @@ class SingleFlightCache(Generic[T]):
             return result
         except Exception as exc:
             async with self._lock:
+                self._fetches += 1
                 self._failure_cache[key] = True
                 stale = self._stale_cache.get(key)
             if stale is not None:

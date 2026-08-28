@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 import pytest
 import respx
@@ -280,3 +281,18 @@ class TestGetRecentEarthquakes:
         # El más reciente (menor magnitud) aparece primero
         assert result.events[0].id == "small_new"
         assert result.events[1].id == "big_old"
+
+    @pytest.mark.asyncio
+    async def test_fetch_records_usgs_usage(self, monkeypatch):
+        """Cada fetch real a USGS debe registrar uso vía usage_counter.record('usgs')."""
+        mock_record = MagicMock()
+        monkeypatch.setattr(usgs_module.usage_counter, "record", mock_record)
+
+        features = [_feature("ev1")]
+        with respx.mock:
+            respx.get(url__startswith="https://earthquake.usgs.gov").mock(
+                return_value=Response(200, json=_usgs_geojson(features))
+            )
+            await get_recent_earthquakes(-34.6, -58.4)
+
+        mock_record.assert_called_once_with("usgs")

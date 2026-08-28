@@ -32,6 +32,7 @@ from .core.counter import MemoryCounter, RedisCounter
 from .core.http_client import create_client, close_client
 from .core.rate_limit import limiter
 from .core.upstash import UpstashRedis
+from .core import usage_counter
 from .routers import earthquakes, incendios, metar, niebla, tools, volcanes, weather
 from .services import checkwx as checkwx_svc
 
@@ -73,9 +74,11 @@ async def lifespan(app: FastAPI):
     if settings.upstash_redis_rest_url and settings.upstash_redis_rest_token:
         redis = UpstashRedis(settings.upstash_redis_rest_url, settings.upstash_redis_rest_token)
         checkwx_svc.set_counter(RedisCounter(redis))
+        usage_counter.configure_redis(redis)
         logger.info("checkwx_counter=redis")
     else:
         checkwx_svc.set_counter(MemoryCounter())
+        usage_counter.configure_memory()
         logger.warning("checkwx_counter=memory — quota not persisted across restarts")
     logger.info("SkyPulse backend starting...")
     yield

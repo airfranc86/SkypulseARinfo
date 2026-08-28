@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from app.services.smn import get_nearest_observation, haversine
 from tests.conftest import SMN_SAMPLE_PAYLOAD
 
+import app.services.smn as smn_module
+
 
 # ---------------------------------------------------------------------------
 # haversine
@@ -208,3 +210,25 @@ async def test_smn_uses_pres_when_pressure_missing():
 
     assert obs is not None
     assert obs.pressure_hpa == pytest.approx(1015.0)
+
+
+# ---------------------------------------------------------------------------
+# Instrumentación de uso (Plan A Fase 2, Parte A4)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_fetch_stations_records_smn_usage(monkeypatch):
+    """Cada fetch real a SMN debe registrar uso vía usage_counter.record('smn')."""
+    from unittest.mock import MagicMock
+
+    mock_record = MagicMock()
+    monkeypatch.setattr(smn_module.usage_counter, "record", mock_record)
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://ws.smn.gob.ar/map_items/weather").mock(
+            return_value=httpx.Response(200, json=SMN_SAMPLE_PAYLOAD)
+        )
+        await get_nearest_observation(-31.4, -64.2)
+
+    mock_record.assert_called_once_with("smn")

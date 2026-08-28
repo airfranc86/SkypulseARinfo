@@ -14,6 +14,7 @@ from typing import Final
 from cachetools import TTLCache
 from httpx import HTTPStatusError, TimeoutException as HttpxTimeout
 
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
 from app.schemas.earthquakes import EarthquakeEvent, EarthquakesResponse
@@ -53,6 +54,7 @@ async def _fetch_emsc() -> list[list[str]]:
         "starttime": starttime,
     }
     client = get_client()
+    usage_counter.record("emsc")
     resp = await client.get(
         _EMSC_URL,
         params=params,

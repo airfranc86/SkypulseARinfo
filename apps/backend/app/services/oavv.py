@@ -17,6 +17,7 @@ import httpx
 from cachetools import TTLCache
 from PIL import Image
 
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
 from app.schemas.volcanes import ALERT_HEX, AlertLevel, Volcan, VolcanesResponse
@@ -104,6 +105,7 @@ def _detect_alert_level(image_bytes: bytes) -> AlertLevel:
 
 async def _fetch_alert_image(client: httpx.AsyncClient, volcan_id: int) -> bytes:
     """Descarga la imagen PNG del nivel de alerta para un volcán dado."""
+    usage_counter.record("oavv")
     resp = await client.get(
         _BASE_ALERT_URL,
         params={"id": volcan_id, "h": 0},

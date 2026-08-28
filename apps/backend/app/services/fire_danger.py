@@ -20,6 +20,7 @@ from cachetools import TTLCache
 
 from httpx import HTTPStatusError, TimeoutException as HttpxTimeout
 
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
 from app.services.windy import (
@@ -165,6 +166,7 @@ async def _fetch_raw_fire(lat: float, lon: float) -> dict | None:
 
     try:
         client = get_client()
+        usage_counter.record("windy")
         response = await client.post(
             settings.windy_base_url,
             json=payload,

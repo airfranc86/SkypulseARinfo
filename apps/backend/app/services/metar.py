@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 from cachetools import TTLCache
 
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
 
@@ -161,6 +162,7 @@ async def get_metar_visibility(icao: str) -> float | None:
 
     try:
         client = get_client()
+        usage_counter.record("metar_awc")
         response = await client.get(
             AWC_METAR_BASE,
             params={"ids": icao, "format": "json", "hours": "2"},
@@ -250,6 +252,7 @@ async def get_taf_for_icao(icao: str) -> list[dict] | None:
 
     try:
         client = get_client()
+        usage_counter.record("metar_awc")
         response = await client.get(
             AWC_TAF_BASE,
             params={"ids": icao, "format": "json", "hours": "24"},

@@ -483,6 +483,30 @@ class TestFetchRawFire:
         assert result == payload
 
     @pytest.mark.asyncio
+    async def test_records_windy_usage_on_fetch(self):
+        """Cada fetch real al modelo fireDanger de Windy registra uso vía usage_counter."""
+        payload = _make_fwi_payload(n=2)
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = payload
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        import app.services.fire_danger as fd_module
+        fd_module._fire_raw_cache.clear()
+
+        with patch("app.services.fire_danger.settings") as mock_settings, \
+             patch("app.services.fire_danger.get_client", return_value=mock_client), \
+             patch("app.services.fire_danger.usage_counter.record") as mock_record:
+            mock_settings.windy_api_key = "test-key"
+            mock_settings.windy_base_url = "https://api.windy.com/api/point-forecast/v2"
+            await _fetch_raw_fire(-34.6, -58.4)
+
+        mock_record.assert_called_once_with("windy")
+
+    @pytest.mark.asyncio
     async def test_returns_none_on_generic_exception(self):
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(side_effect=ConnectionError("network down"))

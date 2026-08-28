@@ -9,6 +9,7 @@ from typing import Final
 from cachetools import TTLCache
 from httpx import HTTPStatusError, TimeoutException as HttpxTimeout
 
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
 from app.schemas.earthquakes import EarthquakeEvent, EarthquakesResponse
@@ -45,6 +46,7 @@ async def _fetch_usgs() -> list[dict]:
         "starttime": starttime,
     }
     client = get_client()
+    usage_counter.record("usgs")
     resp = await client.get(
         settings.usgs_base_url,
         params=params,

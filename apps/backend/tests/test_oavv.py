@@ -136,6 +136,25 @@ class TestFetchAlertImage:
         with pytest.raises(HTTPStatusError):
             await _fetch_alert_image(mock_client, volcan_id=99)
 
+    @pytest.mark.asyncio
+    async def test_records_oavv_usage(self, monkeypatch):
+        """Cada fetch real de imagen OAVV debe registrar uso vía usage_counter.record('oavv')."""
+        import app.services.oavv as oavv_module
+
+        mock_record = MagicMock()
+        monkeypatch.setattr(oavv_module.usage_counter, "record", mock_record)
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.content = _GREEN_PNG
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        await _fetch_alert_image(mock_client, volcan_id=2)
+
+        mock_record.assert_called_once_with("oavv")
+
 
 # ---------------------------------------------------------------------------
 # _fetch_all_volcanes — fetcha en paralelo y maneja errores individuales
