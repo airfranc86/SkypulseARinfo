@@ -1,0 +1,57 @@
+strict_tdd: true
+context: |
+  frontend is a Node.js/TypeScript ESM, React, Python project.
+  Detected markers: apps\frontend/package.json, apps\frontend/tsconfig.json, apps\frontend/pnpm package manager.
+  Package managers: pnpm.
+  Additional evidence: Test-like files detected (6); examples: apps\backend\.venv\Lib\site-packages\colorama\tests\ansi_test.py, apps\backend\.venv\Lib\site-packages\colorama\tests\ansitowin32_test.py, apps\backend\.venv\Lib\site-packages\colorama\tests\initialise_test.py, apps\backend\.venv\Lib\site-packages\colorama\tests\isatty_test.py, apps\backend\.venv\Lib\site-packages\colorama\tests\winterm_test.py.
+  Primary test command: pytest.
+  Unit tests: pytest (pytest).
+  Integration tests: none.
+  E2E tests: none.
+rules:
+  proposal:
+    require_problem_statement: true
+  spec:
+    require_acceptance_criteria: true
+  design:
+    require_tradeoffs: true
+  tasks:
+    protect_review_workload: true
+  apply:
+    test_command: "pytest"
+  verify:
+    test_command: "pytest"
+testing:
+  detected: "2026-06-01"
+  runner:
+    command: "pytest"
+    framework: "pytest"
+  layers:
+    unit: "pytest"
+    integration: ""
+    e2e: ""
+  commands:
+    unit:
+      - scope: "."
+        command: "pytest"
+        framework: "pytest"
+    integration:
+      []
+    e2e:
+      []
+  coverage:
+    command: ""
+    commands:
+      []
+quality:
+  lint: "cd apps\\frontend && pnpm run lint"
+  lint_commands:
+    - scope: "apps\\frontend"
+      command: "cd apps\\frontend && pnpm run lint"
+      framework: "linter"
+  typecheck: ""
+  typecheck_commands:
+    []
+  format: ""
+  format_commands:
+    []
