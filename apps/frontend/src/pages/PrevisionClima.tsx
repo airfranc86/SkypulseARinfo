@@ -32,7 +32,7 @@ function dashboardErrorMessage(error: Error): string {
 
 export function PrevisionClima({ location }: Props) {
   const [forecastModel, setForecastModel] = useState<ForecastModel>('consensus')
-  const { data, isLoading, error, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
+  const { data, isLoading, isFetching, error, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
 
   // Render dinámico: 'mixed' cuando SMN está activo, 'gfs' cuando cae a Open-Meteo
   const badgeModel = pageModel(data?.current?.source)
@@ -40,7 +40,10 @@ export function PrevisionClima({ location }: Props) {
   // El backend (Render free-tier) hiberna tras inactividad — el primer request del día
   // puede tardar 20-30s en despertar y devolver 503 mientras tanto. Mostramos un aviso
   // amigable mientras react-query reintenta, en vez del skeleton genérico o un error crudo.
-  const isWakingUp = !data && failureCount > 0 && isColdStart(failureReason)
+  // isFetching es clave acá: failureCount/failureReason NO se resetean cuando los
+  // reintentos se agotan (solo al tener éxito), así que sin este chequeo el aviso queda
+  // pegado para siempre tras el último 503, ocultando el ErrorMessage de abajo.
+  const isWakingUp = !data && isFetching && failureCount > 0 && isColdStart(failureReason)
 
   return (
     <div>
