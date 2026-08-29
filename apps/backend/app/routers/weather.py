@@ -375,6 +375,7 @@ async def get_dashboard(
         observed_at=current.meta.station.observed_at if current.meta.station else None,
         wind_icon=wind_icon_code(current.wind_speed_kmh),
         wind_intensity=wind_intensity_tier(current.wind_speed_kmh),
+        stale=current.meta.stale,
     )
 
     # =========================================================================

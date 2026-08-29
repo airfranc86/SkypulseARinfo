@@ -221,3 +221,30 @@ async def test_dashboard_no_zero_precip_prob_for_full_week_when_rain_expected(as
     assert any(p > 0 for p in rainy_day_probs), (
         f"All precip_prob values are zero even though OM reports rain: {all_probs}"
     )
+
+
+# ---------------------------------------------------------------------------
+# current.stale propagation — Plan A Fase 3 fix (before: SourceMeta.stale se
+# calculaba pero se descartaba al remapear a CurrentDetailedSchema)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_current_stale_flag_propagates(async_client: AsyncClient):
+    """meta.stale=True en aggregate_current() debe llegar a current.stale en el
+    dashboard — antes se perdía al construir CurrentDetailedSchema."""
+    stale_current = _current().model_copy(
+        update={"meta": _current().meta.model_copy(update={"stale": True})}
+    )
+    daily = _daily_ext()
+
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=stale_current),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_multi_model(daily)),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_hourly()),
+        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_windy_hourly_dry()),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    assert response.status_code == 200
+    assert response.json()["current"]["stale"] is True

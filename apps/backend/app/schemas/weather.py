@@ -195,6 +195,7 @@ class CurrentDetailedSchema(BaseModel):
     observed_at: datetime | None = None  # timestamp de la última observación SMN
     wind_icon: str | None = None
     wind_intensity: str | None = None
+    stale: bool = False
 
 
 class HourlyConsensusSchema(BaseModel):
