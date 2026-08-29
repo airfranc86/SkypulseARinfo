@@ -1,5 +1,5 @@
-import { useState, type CSSProperties } from 'react'
-import { Waves } from 'lucide-react'
+import { useState, useEffect, type CSSProperties } from 'react'
+import { Waves, RefreshCw, MapPin, Clock } from 'lucide-react'
 import { useEarthquakes } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { EarthquakeEvent } from '@/lib/api'
@@ -55,6 +55,28 @@ function relativeTime(dateStr: string): string {
   return `hace ${Math.round(diff / 60 / 24)}d`
 }
 
+function mapsUrl(lat: number, lon: number): string {
+  return `https://www.google.com/maps?q=${lat},${lon}`
+}
+
+function depthLabel(depthKm: number): string {
+  return `Profundidad: ${depthKm.toFixed(0)} km (desde la superficie)`
+}
+
+/** Texto "Sincronizado hace Xs" — re-renderiza cada segundo para que cuente en vivo. */
+function useSyncedLabel(dataUpdatedAt: number): string {
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => forceTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+  if (!dataUpdatedAt) return 'Sincronizando…'
+  const secs = Math.round((Date.now() - dataUpdatedAt) / 1000)
+  if (secs < 5) return 'Sincronizado recién'
+  if (secs < 60) return `Sincronizado hace ${secs}s`
+  return `Sincronizado hace ${Math.round(secs / 60)}min`
+}
+
 const columns: Column<EarthquakeEvent>[] = [
   {
     key: 'magnitude',
@@ -84,11 +106,20 @@ const columns: Column<EarthquakeEvent>[] = [
   {
     key: 'place',
     header: 'Lugar',
-    render: (v: unknown) => (
-      <span
-        style={{ display: 'block', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.35' }}
-      >
-        {translatePlace(String(v ?? '—'))}
+    render: (v: unknown, row: EarthquakeEvent) => (
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.35' }}>
+          {translatePlace(String(v ?? '—'))}
+        </span>
+        <a
+          href={mapsUrl(row.lat, row.lon)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Ver ${translatePlace(String(v ?? ''))} en Google Maps`}
+          style={{ color: 'var(--color-muted-foreground)', display: 'inline-flex', flexShrink: 0 }}
+        >
+          <MapPin size={13} />
+        </a>
       </span>
     ),
   },
@@ -113,21 +144,21 @@ const columns: Column<EarthquakeEvent>[] = [
   },
   {
     key: 'depth_km',
-    header: 'Prof.',
-    className: 'hidden sm:table-cell',
+    header: 'Profundidad',
     render: (v: unknown) => `${Number(v).toFixed(0)} km`,
   },
   {
     key: 'distance_km',
     header: 'Distancia',
-    className: 'hidden sm:table-cell',
     render: (v: unknown) => `${Number(v).toFixed(0)} km`,
   },
 ]
 
 export function Terremotos({ location }: Props) {
-  const { data, isLoading, error } = useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
+  const { data, isLoading, isFetching, error, dataUpdatedAt, refetch } =
+    useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
   const [showAll, setShowAll] = useState(false)
+  const syncLabel = useSyncedLabel(dataUpdatedAt)
 
   if (location === null) return <PageSkeleton />
 
@@ -190,6 +221,27 @@ export function Terremotos({ location }: Props) {
               model={data?.events?.[0]?.source === 'emsc' ? 'emsc' : 'usgs'}
               variant="header"
             />
+          </div>
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <span
+              role="status"
+              className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1"
+              style={{ background: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
+            >
+              <Clock size={12} aria-hidden="true" />
+              {syncLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              aria-label="Actualizar sismos ahora"
+              className="inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-3 min-h-[32px] transition-opacity hover:opacity-80 disabled:opacity-50"
+              style={{ background: 'rgba(224,85,69,0.1)', color: '#e05545', border: '1px solid rgba(224,85,69,0.3)' }}
+            >
+              <RefreshCw size={12} aria-hidden="true" className={isFetching ? 'animate-spin' : ''} />
+              {isFetching ? 'Actualizando…' : 'Actualizar'}
+            </button>
           </div>
         </div>
       </header>
@@ -261,21 +313,93 @@ export function Terremotos({ location }: Props) {
                     <p style={{ fontSize: '0.7rem', color: 'var(--color-muted-foreground)', marginTop: 2 }}>
                       {relativeTime(recentSignificant.occurred_at)}
                       {' · '}
-                      {recentSignificant.depth_km.toFixed(0)} km prof.
+                      {depthLabel(recentSignificant.depth_km)}
                       {' · '}
                       {recentSignificant.distance_km.toFixed(0)} km de distancia
                     </p>
+                    <a
+                      href={mapsUrl(recentSignificant.lat, recentSignificant.lon)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium hover:opacity-80"
+                      style={{ color: textColor }}
+                    >
+                      <MapPin size={12} aria-hidden="true" />
+                      Ver en el mapa
+                    </a>
                   </div>
                 </div>
               )
             })()}
 
-            <DataTable<EarthquakeEvent>
-              columns={columns}
-              data={visibleEvents}
-              emptyMessage="Sin sismos registrados en el área."
-              rowStyle={rowStyle}
-            />
+            {/* Desktop/tablet: tabla completa */}
+            <div className="hidden sm:block">
+              <DataTable<EarthquakeEvent>
+                columns={columns}
+                data={visibleEvents}
+                emptyMessage="Sin sismos registrados en el área."
+                rowStyle={rowStyle}
+              />
+            </div>
+
+            {/* Mobile: tarjetas flex-col — magnitud, lugar, profundidad, distancia y
+                mapa siempre visibles y táctiles, sin columnas ocultas ni truncado. */}
+            <div className="sm:hidden space-y-3">
+              {visibleEvents.length === 0 ? (
+                <p className="text-center py-8 text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+                  Sin sismos registrados en el área.
+                </p>
+              ) : (
+                visibleEvents.map((ev, i) => {
+                  const { textColor, dotColor, fontWeight, glow } = magnitudeInfo(ev.magnitude)
+                  const { rowBg } = magnitudeInfo(ev.magnitude)
+                  return (
+                    <div
+                      key={`${ev.id}-${i}`}
+                      className="rounded-xl p-4 flex flex-col gap-2"
+                      style={{
+                        background: rowBg !== 'transparent' ? rowBg : 'var(--color-card)',
+                        border: '1px solid var(--color-border)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="rounded-full shrink-0"
+                          style={{ width: 9, height: 9, background: dotColor, boxShadow: glow ? `0 0 8px 2px ${dotColor}99` : undefined }}
+                        />
+                        <span style={{ color: textColor, fontWeight, fontSize: '1.15rem', fontVariantNumeric: 'tabular-nums' }}>
+                          {ev.magnitude.toFixed(1)}
+                          <span style={{ fontSize: '0.65em', marginLeft: 2, opacity: 0.65, fontWeight: 400 }}>Mw</span>
+                        </span>
+                      </div>
+                      <p style={{ color: 'var(--color-foreground)', fontSize: '0.9rem', lineHeight: 1.35 }}>
+                        {translatePlace(ev.place)}
+                      </p>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--color-muted-foreground)' }}>
+                        {relativeTime(ev.occurred_at)} · {new Date(ev.occurred_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                      </p>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--color-foreground)' }}>
+                        {depthLabel(ev.depth_km)}
+                      </p>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--color-foreground)' }}>
+                        Distancia: {ev.distance_km.toFixed(0)} km
+                      </p>
+                      <a
+                        href={mapsUrl(ev.lat, ev.lon)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Ver ${translatePlace(ev.place)} en Google Maps`}
+                        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium min-h-[44px] transition-opacity hover:opacity-80"
+                        style={{ background: 'rgba(224,85,69,0.1)', color: '#e05545', border: '1px solid rgba(224,85,69,0.3)' }}
+                      >
+                        <MapPin size={14} aria-hidden="true" />
+                        Ver en Google Maps
+                      </a>
+                    </div>
+                  )
+                })
+              )}
+            </div>
 
             {hasMore && (
               <button

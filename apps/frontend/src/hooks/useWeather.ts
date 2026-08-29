@@ -80,6 +80,9 @@ export function useEarthquakes(lat: number | null, lon: number | null, radius_km
     queryKey: ['earthquakes', lat, lon, radius_km],
     queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.earthquakes(lat, lon, radius_km) },
     staleTime: STALE_EARTHQUAKES,
+    // 60s: más reactivo que el staleTime (5min), pero sin machacar Render con
+    // requests que van a pegar el mismo dato cacheado en el backend (TTL 300s).
+    refetchInterval: 60_000,
     enabled: lat !== null && lon !== null,
   })
 }
