@@ -11,11 +11,21 @@ export function isColdStart(error: unknown): boolean {
   return error instanceof ApiError && error.status === 503
 }
 
+/** Errores 4xx (validación, rate limit, ICAO inválido, etc.) son permanentes para
+ *  el mismo request — reintentar no cambia el resultado (las coordenadas no cambian
+ *  entre reintentos), solo agrega latencia antes de mostrar el error real. */
+export function isClientError(error: unknown): boolean {
+  return error instanceof ApiError && error.status >= 400 && error.status < 500
+}
+
 /** Reintenta más veces y con esperas más largas ante un 503 (cold start),
- *  dándole tiempo al backend a despertar antes de rendirse. */
+ *  dándole tiempo al backend a despertar antes de rendirse. Nunca reintenta 4xx. */
 const COLD_START_RETRY = {
-  retry: (failureCount: number, error: Error) =>
-    isColdStart(error) ? failureCount < 4 : failureCount < 2,
+  retry: (failureCount: number, error: Error) => {
+    if (isColdStart(error)) return failureCount < 4
+    if (isClientError(error)) return false
+    return failureCount < 2
+  },
   retryDelay: (attempt: number, error: Error) =>
     isColdStart(error) ? Math.min(5000 * (attempt + 1), 20000) : Math.min(1000 * 2 ** attempt, 30000),
 }

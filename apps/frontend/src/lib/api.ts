@@ -7,10 +7,13 @@ if (import.meta.env.PROD && !BASE_URL) {
 /** Error de API con status HTTP — permite distinguir 503 (cold start de Render) de otros fallos. */
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** Segundos hasta poder reintentar, del header Retry-After (slowapi en 429). Null si no vino. */
+  retryAfter: number | null
+  constructor(message: string, status: number, retryAfter: number | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.retryAfter = retryAfter
   }
 }
 
@@ -43,7 +46,11 @@ async function request<T>(path: string, params?: Record<string, string | number>
   const res = await fetch(url.toString())
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new ApiError(extractErrorMessage(body, res.status), res.status)
+    const retryAfterHeader = res.headers.get('Retry-After')
+    const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : null
+    let message = extractErrorMessage(body, res.status)
+    if (res.status === 429 && retryAfter) message += ` Reintentá en ${retryAfter}s.`
+    throw new ApiError(message, res.status, Number.isFinite(retryAfter) ? retryAfter : null)
   }
   return res.json()
 }
@@ -119,6 +126,7 @@ export interface SnowLevelResponse {
   temp_c: number
   station_altitude_m: number
   description: string
+  source?: string  // "windy_gfs" | "openmeteo_fallback" | "unavailable"
 }
 
 export interface CarWashDay {
@@ -138,6 +146,7 @@ export interface CarWashDay {
 
 export interface CarWashForecastResponse {
   days: CarWashDay[]
+  source?: string
 }
 
 export interface LaundryDay {
@@ -282,6 +291,7 @@ export interface CurrentDetailed {
   observed_at?: string  // ISO datetime of the SMN observation
   wind_icon: string | null
   wind_intensity: string | null
+  stale?: boolean
 }
 
 export interface HourlyConsensus {
@@ -300,6 +310,7 @@ export interface WeatherDashboardResponse {
   hourly: HourlyConsensus
   forecast_7d: DailyEntry[]
   fetched_at: string
+  forecast_source?: 'mixed' | 'openmeteo'  // "mixed" = Windy+Open-Meteo, "openmeteo" = fallback puro
 }
 
 // ── Fire Danger schemas ───────────────────────────────────────────────────────

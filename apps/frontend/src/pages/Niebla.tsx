@@ -661,7 +661,7 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
       )}
 
       {error && (
-        <ErrorMessage message="No se pudo obtener la visibilidad en este momento." />
+        <ErrorMessage message={error instanceof Error ? error.message : 'No se pudo obtener la visibilidad en este momento.'} />
       )}
 
       {data && !isLoading && (

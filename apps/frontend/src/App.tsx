@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-qu
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Analytics } from '@vercel/analytics/react'
 import { useLocation as useLocationState } from '@/hooks/useLocation'
+import { isClientError } from '@/hooks/useWeather'
 import { useGTMPageView } from '@/hooks/useGTMPageView'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { LocationPicker } from '@/components/LocationPicker'
@@ -107,7 +108,9 @@ const queryClient = new QueryClient({
   }),
   defaultOptions: {
     queries: {
-      retry: 2,
+      // 4xx (validación, ICAO inválido, rate limit) es permanente para el mismo
+      // request — reintentar no cambia el resultado, solo agrega latencia.
+      retry: (failureCount: number, error: Error) => (isClientError(error) ? false : failureCount < 2),
       refetchOnWindowFocus: false,
     },
   },
