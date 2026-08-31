@@ -78,6 +78,14 @@ function useSyncedLabel(dataUpdatedAt: number): string {
 }
 
 /**
+ * Aísla el tick de 1s en su propio componente para que el re-render que provoca
+ * no se propague a la página entera (tabla de sismos incluida) en cada tick.
+ */
+function SyncedLabel({ dataUpdatedAt }: { dataUpdatedAt: number }) {
+  return <>{useSyncedLabel(dataUpdatedAt)}</>
+}
+
+/**
  * Anuncio para lectores de pantalla — solo cambia cuando `dataUpdatedAt` cambia
  * de verdad (refetch real), nunca con el tick visual de cada segundo.
  */
@@ -172,7 +180,6 @@ export function Terremotos({ location }: Props) {
   const { data, isLoading, isFetching, error, dataUpdatedAt, refetch } =
     useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
   const [showAll, setShowAll] = useState(false)
-  const syncLabel = useSyncedLabel(dataUpdatedAt)
   const syncAnnouncement = useSyncAnnouncement(dataUpdatedAt)
 
   if (location === null) return <PageSkeleton />
@@ -243,7 +250,7 @@ export function Terremotos({ location }: Props) {
               style={{ background: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
             >
               <Clock size={12} aria-hidden="true" />
-              {syncLabel}
+              <SyncedLabel dataUpdatedAt={dataUpdatedAt} />
             </span>
             <span role="status" aria-live="polite" className="sr-only">{syncAnnouncement}</span>
             <button

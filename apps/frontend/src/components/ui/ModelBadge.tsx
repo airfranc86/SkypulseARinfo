@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { Info } from 'lucide-react'
 
 export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'mixed' | 'segemar' | 'consensus'
@@ -102,6 +102,7 @@ interface Props {
 export function ModelBadge({ model, variant = 'inline' }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const meta = MODELS[model]
   if (!meta) return null
 
@@ -113,11 +114,16 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
     const onEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false)
     }
+    // Con el popover en position:fixed (para poder salir del recorte de tarjetas
+    // con overflow-x:auto), el scroll lo dejaría "flotando" desconectado del botón.
+    const onScroll = () => setOpen(false)
     document.addEventListener('mousedown', onClickOutside)
     document.addEventListener('keydown', onEscape)
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
     return () => {
       document.removeEventListener('mousedown', onClickOutside)
       document.removeEventListener('keydown', onEscape)
+      window.removeEventListener('scroll', onScroll, true)
     }
   }, [open])
 
@@ -125,6 +131,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
     return (
       <div ref={ref} style={{ position: 'absolute', top: 10, right: 10, zIndex: 2 }}>
         <button
+          ref={buttonRef}
           type="button"
           onClick={() => setOpen(v => !v)}
           aria-label={`Modelo de datos: ${meta.label} · ${meta.org}. Tap para más info.`}
@@ -140,7 +147,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           <span aria-hidden="true" style={{ fontSize: '0.5rem' }}>●</span>
           {meta.label}
         </button>
-        {open && <ModelPopover meta={meta} />}
+        {open && <ModelPopover meta={meta} triggerRef={buttonRef} />}
       </div>
     )
   }
@@ -149,6 +156,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
     return (
       <div ref={ref} className="relative inline-block">
         <button
+          ref={buttonRef}
           type="button"
           onClick={() => setOpen(v => !v)}
           aria-label={`Modelo: ${meta.label} · ${meta.org}. Tap para más info.`}
@@ -166,7 +174,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           <span style={{ color: meta.color, opacity: 0.65 }}>· {meta.org}</span>
           <Info size={10} aria-hidden="true" style={{ opacity: 0.5 }} />
         </button>
-        {open && <ModelPopover meta={meta} align="left" />}
+        {open && <ModelPopover meta={meta} triggerRef={buttonRef} />}
       </div>
     )
   }
@@ -174,17 +182,41 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
   return null
 }
 
-function ModelPopover({ meta, align = 'right' }: { meta: ModelMeta; align?: 'left' | 'right' }) {
+/**
+ * Posición calculada contra el trigger real y clampeada a los bordes del
+ * viewport (position:fixed) — con `left`/`right` fijos por variant, el popover
+ * de 256px se salía de pantalla en mobile cuando el botón caía cerca de un borde.
+ */
+function ModelPopover({ meta, triggerRef }: { meta: ModelMeta; triggerRef: React.RefObject<HTMLButtonElement | null> }) {
+  const popRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const trigger = triggerRef.current
+    const pop = popRef.current
+    if (!trigger || !pop) return
+    const margin = 16
+    const gap = 8
+    const triggerRect = trigger.getBoundingClientRect()
+    const popWidth = pop.offsetWidth
+    const maxLeft = Math.max(margin, window.innerWidth - popWidth - margin)
+    const left = Math.min(Math.max(triggerRect.left, margin), maxLeft)
+    setPos({ top: triggerRect.bottom + gap, left })
+  }, [triggerRef])
+
   return (
     <div
+      ref={popRef}
       role="dialog"
       aria-label={`Información sobre ${meta.label}`}
-      className="absolute mt-2 w-64 rounded-xl p-3 text-xs shadow-xl z-50"
+      className="fixed w-64 max-w-[calc(100vw-2rem)] rounded-xl p-3 text-xs shadow-xl z-50"
       style={{
         background: 'var(--color-card)',
         border: `1px solid ${meta.color}55`,
         color: 'var(--color-foreground)',
-        ...(align === 'right' ? { right: 0 } : { left: 0 }),
+        top: pos?.top ?? 0,
+        left: pos?.left ?? 0,
+        visibility: pos ? 'visible' : 'hidden',
       }}
     >
       {/* Header */}
