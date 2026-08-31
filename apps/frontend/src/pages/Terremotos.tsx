@@ -1,4 +1,4 @@
-import { useState, useEffect, type CSSProperties } from 'react'
+import { useState, useEffect, useMemo, type CSSProperties } from 'react'
 import { Waves, RefreshCw, MapPin, Clock } from 'lucide-react'
 import { useEarthquakes } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
@@ -75,6 +75,20 @@ function useSyncedLabel(dataUpdatedAt: number): string {
   if (secs < 5) return 'Sincronizado recién'
   if (secs < 60) return `Sincronizado hace ${secs}s`
   return `Sincronizado hace ${Math.round(secs / 60)}min`
+}
+
+/**
+ * Anuncio para lectores de pantalla — solo cambia cuando `dataUpdatedAt` cambia
+ * de verdad (refetch real), nunca con el tick visual de cada segundo.
+ */
+function useSyncAnnouncement(dataUpdatedAt: number): string {
+  return useMemo(() => {
+    if (!dataUpdatedAt) return ''
+    const time = new Date(dataUpdatedAt).toLocaleTimeString('es-AR', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+    return `Datos actualizados a las ${time}`
+  }, [dataUpdatedAt])
 }
 
 const columns: Column<EarthquakeEvent>[] = [
@@ -159,6 +173,7 @@ export function Terremotos({ location }: Props) {
     useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
   const [showAll, setShowAll] = useState(false)
   const syncLabel = useSyncedLabel(dataUpdatedAt)
+  const syncAnnouncement = useSyncAnnouncement(dataUpdatedAt)
 
   if (location === null) return <PageSkeleton />
 
@@ -224,13 +239,13 @@ export function Terremotos({ location }: Props) {
           </div>
           <div className="mt-2 flex items-center gap-2 flex-wrap">
             <span
-              role="status"
               className="inline-flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1"
               style={{ background: 'var(--color-muted)', color: 'var(--color-muted-foreground)' }}
             >
               <Clock size={12} aria-hidden="true" />
               {syncLabel}
             </span>
+            <span role="status" aria-live="polite" className="sr-only">{syncAnnouncement}</span>
             <button
               type="button"
               onClick={() => refetch()}

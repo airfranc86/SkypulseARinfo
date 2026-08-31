@@ -21,7 +21,9 @@ const LABEL_COLOR: Record<string, string> = {
   Excelente: '#3ecf7a',
   Bueno:     '#f0a030',
   Regular:   '#e05545',
-  'No apto': '#b91c1c',  // rojo sangre — visible a 25% opacidad, claramente distinto de Regular
+  'No apto': '#ff6b6b',  // = --color-crit-soft, ~7:1 sobre navy — el rating más grave debe ser el más legible.
+                         // Hex crudo (no var()) a propósito: barColor se concatena como `${barColor}20`/`${barColor}40`
+                         // más abajo (alpha-suffix hex de 8 dígitos), var() rompería esa interpolación.
 }
 
 const QUALITY_SCALE = [

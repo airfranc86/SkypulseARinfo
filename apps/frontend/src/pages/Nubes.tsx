@@ -460,12 +460,12 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
         {/* Body */}
         <div className="flex flex-col gap-3 justify-center sm:pl-8 pt-5 sm:pt-0">
           <div>
-            <div
+            <h3
               className="text-[1.85rem] font-normal leading-tight"
               style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
             >
               {cloud.name}
-            </div>
+            </h3>
             <div className="text-[.63rem] font-medium tracking-widest uppercase mt-1" style={{ color: 'var(--color-primary)' }}>
               {cloud.latin}
             </div>
@@ -526,7 +526,7 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
                 className="pl-3 text-[.77rem] italic leading-[1.65]"
                 style={{
                   color: 'var(--color-muted-foreground)',
-                  opacity: 0.7,
+                  opacity: 0.75,
                   borderLeft: '2px solid #5a4515',
                 }}
               >
@@ -553,7 +553,7 @@ function AeroCardItem({ item }: { item: AeroItem }) {
           style={{ background: '#0f2240', border: '1px solid var(--color-border)' }}
         >
           <span className="text-5xl opacity-20">{item.emoji}</span>
-          <p className="text-[.63rem] text-center mt-3 px-6 leading-5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.6 }}>
+          <p className="text-[.63rem] text-center mt-3 px-6 leading-5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
             Fenómeno invisible — solo detectable por instrumentos y sus efectos
           </p>
         </div>
@@ -561,12 +561,12 @@ function AeroCardItem({ item }: { item: AeroItem }) {
         {/* Body */}
         <div className="flex flex-col gap-3 justify-center sm:pl-8 pt-5 sm:pt-0">
           <div>
-            <div
+            <h3
               className="text-[1.85rem] font-normal leading-tight"
               style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
             >
               {item.name}
-            </div>
+            </h3>
             <div className="text-[.63rem] font-medium tracking-widest uppercase mt-1" style={{ color: 'var(--color-primary)' }}>
               {item.latin}
             </div>
@@ -607,7 +607,7 @@ function AeroCardItem({ item }: { item: AeroItem }) {
             className="pl-3 text-[.77rem] italic leading-[1.65]"
             style={{
               color: 'var(--color-muted-foreground)',
-              opacity: 0.7,
+              opacity: 0.75,
               borderLeft: '2px solid #5a4515',
             }}
           >
@@ -891,7 +891,7 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
       >
         {title}
       </h2>
-      <p className="text-[.74rem] hidden sm:block" style={{ color: 'var(--color-muted-foreground)', opacity: 0.5 }}>
+      <p className="text-[.74rem] hidden sm:block" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
         {subtitle}
       </p>
     </div>
@@ -1009,7 +1009,7 @@ export function Nubes() {
         {/* Footer note */}
         <div
           className="mt-16 pb-6 text-center text-[.67rem] leading-[2]"
-          style={{ color: 'var(--color-muted-foreground)', opacity: 0.5 }}
+          style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}
         >
           Clasificación basada en el{' '}
           <a

@@ -158,7 +158,7 @@ export function Landing() {
                 style={{
                   background: 'rgba(200,168,75,0.07)',
                   border: '1px solid rgba(200,168,75,0.18)',
-                  color: 'rgba(200,168,75,0.65)',
+                  color: 'rgba(200,168,75,0.85)',
                 }}
               >
                 {s}

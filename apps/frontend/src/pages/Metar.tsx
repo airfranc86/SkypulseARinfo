@@ -353,7 +353,7 @@ function MetarResult({ metar, taf, tafError }: { metar: MetarData; taf: string |
 
       {/* Raw */}
       <div>
-        <p className="text-[.67rem] font-medium tracking-widest uppercase mb-1.5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.5 }}>
+        <p className="text-[.67rem] font-medium tracking-widest uppercase mb-1.5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
           Reporte raw
         </p>
         <div
@@ -366,7 +366,7 @@ function MetarResult({ metar, taf, tafError }: { metar: MetarData; taf: string |
 
       {/* Fields */}
       <div>
-        <p className="text-[.67rem] font-medium tracking-widest uppercase mb-2" style={{ color: 'var(--color-muted-foreground)', opacity: 0.5 }}>
+        <p className="text-[.67rem] font-medium tracking-widest uppercase mb-2" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
           Desglose
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -402,7 +402,7 @@ function MetarResult({ metar, taf, tafError }: { metar: MetarData; taf: string |
       {/* TAF */}
       {taf && (
         <div>
-          <p className="text-[.67rem] font-medium tracking-widest uppercase mb-1.5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.5 }}>
+          <p className="text-[.67rem] font-medium tracking-widest uppercase mb-1.5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
             TAF — Pronóstico
           </p>
           <div
@@ -414,13 +414,13 @@ function MetarResult({ metar, taf, tafError }: { metar: MetarData; taf: string |
         </div>
       )}
       {!taf && tafError && (
-        <p className="text-[.72rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.6 }}>
+        <p className="text-[.72rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
           No se pudo obtener el TAF para este aeródromo.
         </p>
       )}
 
       {metar.observed && (
-        <p className="text-right text-[.67rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.4 }}>
+        <p className="text-right text-[.67rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
           Reporte emitido: {new Date(metar.observed).toUTCString()}
         </p>
       )}
@@ -444,6 +444,7 @@ function IcaoModal({
   const [region, setRegion] = useState('all')
   const [search, setSearch] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (open) {
@@ -453,7 +454,23 @@ function IcaoModal({
   }, [open])
 
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab' || !panelRef.current) return
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
@@ -483,13 +500,17 @@ function IcaoModal({
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="metar-icao-modal-title"
         className="w-full max-w-xl flex flex-col rounded-xl overflow-hidden"
         style={{ maxHeight: '85vh', background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <div>
-            <div className="font-normal text-lg" style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}>
+            <div id="metar-icao-modal-title" className="font-normal text-lg" style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}>
               Códigos ICAO
             </div>
             <div className="text-[.68rem] mt-0.5" style={{ color: 'var(--color-muted-foreground)' }}>
@@ -498,6 +519,7 @@ function IcaoModal({
           </div>
           <button
             onClick={onClose}
+            aria-label="Cerrar selector de aeródromos"
             className="text-xl px-2 transition-colors cursor-pointer"
             style={{ color: 'var(--color-muted-foreground)' }}
           >
@@ -568,8 +590,9 @@ function IcaoModal({
 
 function IcaoRow({ item, onSelect }: { item: IcaoEntry; onSelect: (code: string) => void }) {
   return (
-    <div
-      className="flex items-center justify-between px-2 py-2.5 rounded cursor-pointer transition-colors"
+    <button
+      type="button"
+      className="flex items-center justify-between w-full px-2 py-2.5 rounded cursor-pointer transition-colors text-left"
       onClick={() => onSelect(item.code)}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(200,168,75,.08)' }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
@@ -583,8 +606,8 @@ function IcaoRow({ item, onSelect }: { item: IcaoEntry; onSelect: (code: string)
           <div className="text-[.68rem]" style={{ color: 'var(--color-muted-foreground)' }}>{item.full}</div>
         </div>
       </div>
-      <span className="text-[.68rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.5 }}>{item.country}</span>
-    </div>
+      <span className="text-[.68rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>{item.country}</span>
+    </button>
   )
 }
 
@@ -600,6 +623,12 @@ function MetarWidget() {
   const [tafError, setTafError] = useState(false)
   const [error, setError]     = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const openModalBtnRef = useRef<HTMLButtonElement>(null)
+
+  const closeModal = useCallback(() => {
+    setModalOpen(false)
+    openModalBtnRef.current?.focus()
+  }, [])
 
   const fetchTAF = useCallback(async (code: string) => {
     setTafError(false)
@@ -638,7 +667,7 @@ function MetarWidget() {
 
   function handleSelect(code: string) {
     setIcao(code)
-    setModalOpen(false)
+    closeModal()
     doFetch(code)
   }
 
@@ -677,6 +706,7 @@ function MetarWidget() {
             onBlur={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.boxShadow = 'none' }}
           />
           <button
+            ref={openModalBtnRef}
             onClick={() => setModalOpen(true)}
             className="px-4 py-2.5 rounded text-[.78rem] transition-colors cursor-pointer"
             style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted-foreground)', background: 'transparent' }}
@@ -703,7 +733,7 @@ function MetarWidget() {
           </button>
         </div>
 
-        <p className="mt-3 text-[.67rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.4 }}>
+        <p className="mt-3 text-[.67rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
           Datos provistos por{' '}
           <a href="https://www.checkwx.com" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-100 transition-opacity">
             CheckWX
@@ -724,7 +754,7 @@ function MetarWidget() {
         </div>
       )}
 
-      <IcaoModal key={String(modalOpen)} open={modalOpen} onClose={() => setModalOpen(false)} onSelect={handleSelect} />
+      <IcaoModal key={String(modalOpen)} open={modalOpen} onClose={closeModal} onSelect={handleSelect} />
     </>
   )
 }
@@ -1125,7 +1155,7 @@ export function Metar() {
         {/* Footer note */}
         <div
           className="mt-16 pb-6 text-center text-[.67rem] leading-[2]"
-          style={{ color: 'var(--color-muted-foreground)', opacity: 0.4 }}
+          style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}
         >
           Información con fines educativos — consultar NOTAMs y documentación oficial OACI/ANAC para operaciones reales.
         </div>

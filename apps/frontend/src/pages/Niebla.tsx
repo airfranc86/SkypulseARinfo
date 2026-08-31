@@ -7,6 +7,7 @@ import type { NieblaResponse } from '@/lib/api'
 import type { LocationState } from '@/hooks/useLocation'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { HourlyAccessibleList } from '@/components/ui/HourlyAccessibleList'
 import { FogText } from '@/components/animated/FogText'
 
 // ---------------------------------------------------------------------------
@@ -531,6 +532,11 @@ function VisibilityTimeline({
           </span>
         )}
       </div>
+
+      <HourlyAccessibleList
+        label="Visibilidad por hora, próximas 12 horas"
+        items={slots.map(s => ({ hourLabel: s.hour_label, description: `${visibilityKm(s.visibility_m)}, ${s.fog_label}` }))}
+      />
 
       {/* ── Chart area: bars + reference line ── */}
       <div

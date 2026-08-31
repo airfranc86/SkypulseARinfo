@@ -2,6 +2,7 @@ import { TreePine } from 'lucide-react'
 import type { FireDangerSlot } from '@/lib/api'
 import { useFireDanger } from '@/hooks/useWeather'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { HourlyAccessibleList } from '@/components/ui/HourlyAccessibleList'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ModelBadge } from '@/components/ui/ModelBadge'
@@ -264,6 +265,10 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
       <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
         Próximas 24 h
       </p>
+      <HourlyAccessibleList
+        label="Riesgo de incendio por franja horaria, próximas 24 horas"
+        items={groups.map(g => ({ hourLabel: g.hourLabel, description: `${g.label}, puntaje ${g.maxScore}` }))}
+      />
       <div className="flex items-end gap-1.5 h-14">
         {groups.map((g) => {
           const heightPct = (g.maxScore / globalMax) * 100
