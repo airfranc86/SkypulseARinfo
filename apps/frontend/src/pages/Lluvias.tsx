@@ -176,7 +176,7 @@ export function Lluvias() {
                   { label: 'Tipo de nube',    cls: '' },
                   { label: '¿Llueve?',         cls: '' },
                   { label: 'Intensidad',       cls: '' },
-                  { label: 'Duración típica',  cls: 'hidden sm:table-cell' },
+                  { label: 'Duración típica',  cls: 'hidden md:table-cell' },
                   { label: 'Cuándo aparece',   cls: 'hidden md:table-cell' },
                 ].map(({ label, cls }) => (
                   <th
@@ -209,7 +209,7 @@ export function Lluvias() {
                     <IntensityDots level={row.intensity} />
                   </td>
                   <td
-                    className="px-4 py-3 hidden sm:table-cell text-xs"
+                    className="px-4 py-3 hidden md:table-cell text-xs"
                     style={{ color: row.duration === '—' ? 'var(--color-muted-foreground)' : 'var(--color-foreground)' }}
                   >
                     {row.duration}
@@ -223,29 +223,34 @@ export function Lluvias() {
           </table>
         </div>
 
-        {/* Cuándo aparece — solo mobile, formato separado */}
-        <div className="mt-5 sm:hidden space-y-2">
+        {/* Duración y cuándo aparece — solo mobile/tablet chico, formato separado */}
+        <div className="mt-5 md:hidden space-y-2">
           <p
             className="text-[.6rem] font-medium uppercase tracking-widest px-1"
             style={{ color: 'var(--color-muted-foreground)' }}
           >
-            Cuándo aparece cada nube
+            Duración y cuándo aparece cada nube
           </p>
           {CLOUDS.map((row) => (
             <div
               key={row.name}
-              className="flex items-baseline gap-2 px-3 py-2.5 rounded-xl"
+              className="px-3 py-2.5 rounded-xl"
               style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
             >
-              <span
-                className="shrink-0 text-xs font-semibold w-[108px]"
+              <div
+                className="text-xs font-semibold mb-1"
                 style={{ color: 'var(--color-foreground)' }}
               >
                 {row.name}
-              </span>
-              <span className="text-xs leading-snug" style={{ color: 'var(--color-muted-foreground)' }}>
-                {row.when}
-              </span>
+              </div>
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs leading-snug">
+                <span style={{ color: 'var(--color-muted-foreground)' }}>
+                  Duración: <span style={{ color: row.duration === '—' ? 'var(--color-muted-foreground)' : 'var(--color-foreground)' }}>{row.duration}</span>
+                </span>
+                <span style={{ color: 'var(--color-muted-foreground)' }}>
+                  Cuándo: <span style={{ color: 'var(--color-foreground)' }}>{row.when}</span>
+                </span>
+              </div>
             </div>
           ))}
         </div>

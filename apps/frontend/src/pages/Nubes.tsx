@@ -799,7 +799,7 @@ function FilterBar({
       color: isActive ? '#c8a84b' : 'var(--color-muted-foreground)',
       cursor: 'pointer',
       transition: 'all 0.2s ease',
-      minHeight: '34px',
+      minHeight: '44px',
       display: 'inline-flex',
       alignItems: 'center',
     }

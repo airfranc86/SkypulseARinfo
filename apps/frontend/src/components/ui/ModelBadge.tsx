@@ -129,7 +129,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           onClick={() => setOpen(v => !v)}
           aria-label={`Modelo de datos: ${meta.label} · ${meta.org}. Tap para más info.`}
           aria-expanded={open}
-          className="text-[10px] font-medium px-2 py-1 rounded-full flex items-center gap-1 min-h-[28px] transition-opacity hover:opacity-100"
+          className="text-[10px] font-medium px-2 py-1 rounded-full flex items-center gap-1 min-h-[44px] transition-opacity hover:opacity-100"
           style={{
             background: `${meta.color}1f`,
             color: meta.color,
@@ -153,7 +153,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           onClick={() => setOpen(v => !v)}
           aria-label={`Modelo: ${meta.label} · ${meta.org}. Tap para más info.`}
           aria-expanded={open}
-          className="text-[11px] font-medium px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 min-h-[28px] transition-opacity hover:opacity-100"
+          className="text-[11px] font-medium px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 min-h-[44px] transition-opacity hover:opacity-100"
           style={{
             background: `${meta.color}14`,
             color: meta.color,

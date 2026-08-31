@@ -551,7 +551,7 @@ function IcaoModal({
             <button
               key={r.id}
               onClick={() => { setRegion(r.id); setSearch('') }}
-              className="text-[.68rem] font-medium px-3 py-1 rounded-full border cursor-pointer transition-all whitespace-nowrap"
+              className="min-h-[44px] inline-flex items-center justify-center text-[.68rem] font-medium px-3 py-1 rounded-full border cursor-pointer transition-all whitespace-nowrap"
               style={{
                 background: region === r.id ? '#c8a84b' : 'transparent',
                 color: region === r.id ? '#060d1a' : 'var(--color-muted-foreground)',
@@ -848,7 +848,7 @@ function ExamplesSection() {
           <button
             key={e.id}
             onClick={() => setActive(e.id)}
-            className="px-4 py-1.5 rounded-full text-[.72rem] transition-all cursor-pointer border"
+            className="min-h-[44px] inline-flex items-center justify-center px-4 py-1.5 rounded-full text-[.72rem] transition-all cursor-pointer border"
             style={{
               background: active === e.id ? '#c8a84b' : 'transparent',
               color: active === e.id ? '#060d1a' : 'var(--color-muted-foreground)',

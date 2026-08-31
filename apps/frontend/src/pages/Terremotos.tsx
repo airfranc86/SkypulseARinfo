@@ -130,7 +130,7 @@ const columns: Column<EarthquakeEvent>[] = [
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`Ver ${translatePlace(String(v ?? ''))} en Google Maps`}
-          style={{ color: 'var(--color-muted-foreground)', display: 'inline-flex', flexShrink: 0 }}
+          style={{ color: 'var(--color-muted-foreground)', display: 'inline-flex', flexShrink: 0, padding: 6, margin: -6 }}
         >
           <MapPin size={13} />
         </a>
