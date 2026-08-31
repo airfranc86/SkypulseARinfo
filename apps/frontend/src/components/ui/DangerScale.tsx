@@ -19,7 +19,7 @@ export function DangerScale({ level }: { level: DangerLevel }) {
       {([1, 2, 3, 4, 5] as const).map(i => (
         <span
           key={i}
-          className="flex-1 h-1.5 rounded-sm"
+          className="flex-1 h-1.5 rounded-sm motion-safe:[transition:all_0.6s_ease]"
           style={{
             background: i <= level ? activeColor : 'var(--color-border)',
             ...(hasGlow && i <= level ? { boxShadow: `0 0 4px 1px ${activeColor}88` } : {}),

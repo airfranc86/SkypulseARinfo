@@ -89,23 +89,32 @@ export function MagnitudeScaleBar({ activeMagnitude }: MagnitudeScaleBarProps) {
           }}
         />
 
-        {/* Active magnitude dot on the bar */}
+        {/* Active magnitude dot on the bar — slides to its new position instead of jumping, so a refetch reads as "the situation moved" */}
         {activeIdx >= 0 && (
           <div
-            aria-label={`Magnitud activa: ${LEVELS[activeIdx].label}`}
-            className="rounded-full"
+            aria-hidden="true"
+            className="motion-safe:[transition:transform_0.6s_cubic-bezier(0.16,1,0.3,1)]"
             style={{
               position: 'absolute',
-              left: `${(activeIdx / (n - 1)) * 100}%`,
+              left: 0,
               top: '-5px',
-              transform: 'translateX(-50%)',
-              width: '12px',
-              height: '12px',
-              background: LEVELS[activeIdx].color,
-              boxShadow: `0 0 8px 2px ${LEVELS[activeIdx].color}88`,
-              border: '2px solid var(--color-background)',
+              width: '100%',
+              transform: `translateX(${(activeIdx / (n - 1)) * 100}%)`,
             }}
-          />
+          >
+            <div
+              aria-label={`Magnitud activa: ${LEVELS[activeIdx].label}`}
+              className="rounded-full motion-safe:[transition:all_0.6s_ease]"
+              style={{
+                transform: 'translateX(-50%)',
+                width: '12px',
+                height: '12px',
+                background: LEVELS[activeIdx].color,
+                boxShadow: `0 0 8px 2px ${LEVELS[activeIdx].color}88`,
+                border: '2px solid var(--color-background)',
+              }}
+            />
+          </div>
         )}
 
         {/* Tick marks + labels debajo */}
