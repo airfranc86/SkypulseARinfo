@@ -881,6 +881,8 @@ function GlosarioSection() {
       <button
         onClick={() => setOpen(v => !v)}
         className="flex items-center justify-between w-full cursor-pointer group text-left"
+        aria-expanded={open}
+        aria-controls="metar-glosario-content"
       >
         <div>
           <h2
@@ -896,7 +898,7 @@ function GlosarioSection() {
       </button>
 
       {open && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-6">
+        <div id="metar-glosario-content" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-6">
           {GLOSARIO.map(g => (
             <div
               key={g.code}

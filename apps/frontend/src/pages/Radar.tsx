@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useId } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { ScanText } from '@/components/animated/ScanText'
@@ -56,6 +56,7 @@ const REC_CARDS = [
 
 function ExerciseCard({ tag, tagColor, question, answerTag, answerColor, answer }: typeof EXERCISES[number]) {
   const [open, setOpen] = useState(false)
+  const contentId = useId()
   return (
     <div
       className="rounded-xl overflow-hidden"
@@ -65,6 +66,8 @@ function ExerciseCard({ tag, tagColor, question, answerTag, answerColor, answer 
         type="button"
         className="w-full text-left flex items-start justify-between gap-4 px-5 py-4"
         onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        aria-controls={contentId}
       >
         <div>
           <p className="text-[.63rem] font-medium tracking-widest uppercase mb-1" style={{ color: tagColor }}>{tag}</p>
@@ -79,7 +82,7 @@ function ExerciseCard({ tag, tagColor, question, answerTag, answerColor, answer 
         >＋</span>
       </button>
       {open && (
-        <div className="px-5 pb-5 border-t" style={{ borderColor: 'var(--color-border)', background: 'rgba(0,0,0,.15)' }}>
+        <div id={contentId} className="px-5 pb-5 border-t" style={{ borderColor: 'var(--color-border)', background: 'rgba(0,0,0,.15)' }}>
           <p className="text-[.63rem] font-medium tracking-widest uppercase mt-4 mb-2" style={{ color: answerColor }}>{answerTag}</p>
           <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>{answer}</p>
         </div>

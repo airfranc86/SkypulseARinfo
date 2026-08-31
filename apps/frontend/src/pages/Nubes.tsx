@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { DriftText } from '@/components/animated/DriftText'
@@ -423,6 +423,7 @@ function StatusBadge({ variant, label }: { variant: BadgeVariant; label: string 
 
 function CloudCardItem({ cloud }: { cloud: CloudItem }) {
   const [aeroOpen, setAeroOpen] = useState(false)
+  const aeroContentId = useId()
 
   return (
     <article
@@ -506,12 +507,15 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
               background: aeroOpen ? 'rgba(43,143,212,.08)' : 'transparent',
             }}
             onClick={() => setAeroOpen(v => !v)}
+            aria-expanded={aeroOpen}
+            aria-controls={aeroContentId}
           >
             ✈️ Ver significado aeronáutico {aeroOpen ? '▴' : '▾'}
           </button>
 
           {aeroOpen && (
             <div
+              id={aeroContentId}
               className="rounded p-4 flex flex-col gap-2"
               style={{ background: '#0f2240', border: '1px solid var(--color-border)' }}
             >
@@ -628,12 +632,15 @@ function QuickIdGuide() {
         onClick={() => setOpen(v => !v)}
         className="text-[.72rem] font-medium border rounded-sm px-4 py-1.5 transition-colors cursor-pointer"
         style={{ color: '#c8a84b', borderColor: 'rgba(200,168,75,.35)', background: 'transparent' }}
+        aria-expanded={open}
+        aria-controls="nubes-quick-id-guide"
       >
         🔍 ¿Qué nube estoy viendo? — Guía rápida de identificación {open ? '▴' : '▾'}
       </button>
 
       {open && (
         <div
+          id="nubes-quick-id-guide"
           className="max-w-2xl mx-auto mt-4 rounded p-6 text-left"
           style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
         >
@@ -817,11 +824,14 @@ function FilterBar({
           className="rounded-full"
           style={pillStyle(isNubesActive)}
           onClick={() => setDdOpen(v => !v)}
+          aria-expanded={ddOpen}
+          aria-controls="nubes-family-dropdown"
         >
           {nubesLabel}
         </button>
         {ddOpen && (
           <div
+            id="nubes-family-dropdown"
             className="absolute top-full left-0 mt-1.5 z-50 min-w-[148px] rounded-xl overflow-hidden shadow-2xl"
             style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
           >
