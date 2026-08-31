@@ -30,11 +30,23 @@
   z-index: -1;
 }
 
-.border-glow-card:not(:hover):not(.sweep-active)::before,
-.border-glow-card:not(:hover):not(.sweep-active)::after,
-.border-glow-card:not(:hover):not(.sweep-active) > .edge-light {
+.border-glow-card:not(:hover):not(.sweep-active):not(.static-glow)::before,
+.border-glow-card:not(:hover):not(.sweep-active):not(.static-glow)::after,
+.border-glow-card:not(:hover):not(.sweep-active):not(.static-glow) > .edge-light {
   opacity: 0;
   transition: opacity 0.75s ease-in-out;
+}
+
+/* prefers-reduced-motion: no cursor tracking, no sweep — static glow in the same semantic color */
+.border-glow-card.static-glow::before,
+.border-glow-card.static-glow::after {
+  display: none;
+}
+
+.border-glow-card.static-glow > .edge-light {
+  opacity: 1;
+  mask-image: none;
+  transition: none;
 }
 
 .border-glow-card::before {

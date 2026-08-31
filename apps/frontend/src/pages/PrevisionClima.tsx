@@ -99,7 +99,7 @@ function WakingUpNotice() {
       style={{ border: '1px solid rgba(240,160,48,0.3)', background: 'rgba(240,160,48,0.06)', color: 'var(--color-muted-foreground)' }}
     >
       <span className="relative flex-shrink-0 w-2.5 h-2.5">
-        <span className="absolute inset-0 rounded-full animate-ping opacity-50" style={{ background: '#f0a030' }} />
+        <span className="absolute inset-0 rounded-full motion-safe:animate-ping opacity-50" style={{ background: '#f0a030' }} />
         <span className="relative block w-2.5 h-2.5 rounded-full" style={{ background: '#f0a030' }} />
       </span>
       El servicio está despertando — la primera carga del día puede tardar unos segundos.

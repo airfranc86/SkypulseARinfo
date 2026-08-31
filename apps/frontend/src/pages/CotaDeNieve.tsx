@@ -144,7 +144,7 @@ export function CotaDeNieve({ location }: Props) {
                   {isLowCota ? (
                     <div className="relative flex-shrink-0 mt-1">
                       <span
-                        className="absolute inset-0 rounded-full animate-ping opacity-50"
+                        className="absolute inset-0 rounded-full motion-safe:animate-ping opacity-50"
                         style={{ background: status.color }}
                       />
                       <span

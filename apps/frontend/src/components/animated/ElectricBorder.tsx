@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, type ReactNode, type CSSProperties, type ReactElement } from 'react'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 
 interface ElectricBorderProps {
   children: ReactNode
@@ -26,6 +27,7 @@ export function ElectricBorder({
   const animationRef = useRef<number>(0)
   const timeRef = useRef(0)
   const lastFrameTimeRef = useRef(0)
+  const reducedMotion = useReducedMotion()
 
   const random = useCallback((x: number) => {
     return (Math.sin(x * 12.9898) * 43758.5453) % 1
@@ -123,6 +125,7 @@ export function ElectricBorder({
   )
 
   useEffect(() => {
+    if (reducedMotion) return
     const canvas = canvasRef.current
     const container = containerRef.current
     if (!canvas || !container) return
@@ -213,7 +216,7 @@ export function ElectricBorder({
       cancelAnimationFrame(animationRef.current)
       ro.disconnect()
     }
-  }, [color, speed, chaos, borderRadius, displacement, octavedNoise, getRoundedRectPoint])
+  }, [color, speed, chaos, borderRadius, displacement, octavedNoise, getRoundedRectPoint, reducedMotion])
 
   return (
     <div
@@ -221,14 +224,16 @@ export function ElectricBorder({
       className={className}
       style={{ position: 'relative', overflow: 'visible', isolation: 'isolate', borderRadius, ...style }}
     >
-      {/* Perlin-noise canvas */}
-      <div style={{
-        position: 'absolute', top: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        pointerEvents: 'none', zIndex: 2,
-      }}>
-        <canvas ref={canvasRef} style={{ display: 'block' }} />
-      </div>
+      {/* Perlin-noise canvas — skipped when prefers-reduced-motion: reduce (static glow layers below carry the color) */}
+      {!reducedMotion && (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          pointerEvents: 'none', zIndex: 2,
+        }}>
+          <canvas ref={canvasRef} style={{ display: 'block' }} />
+        </div>
+      )}
 
       {/* Glow layers */}
       <div style={{ position: 'absolute', inset: 0, borderRadius, pointerEvents: 'none', zIndex: 0 }}>

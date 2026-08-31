@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-qu
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Analytics } from '@vercel/analytics/react'
 import { useLocation as useLocationState } from '@/hooks/useLocation'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { isClientError } from '@/hooks/useWeather'
 import { useGTMPageView } from '@/hooks/useGTMPageView'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -119,21 +120,19 @@ const queryClient = new QueryClient({
 // ── Motion & capability preferences ──────────────────────────────────────────
 
 /**
- * Detects device capabilities once per session (stable values — no re-render needed).
- * - enableHeavyEffects: SplashCursor WebGL fluid sim — only on pointer:fine + ≥4 CPU cores
- * - enableAnimations:   Threads shader — off when prefers-reduced-motion: reduce
+ * Detects device capabilities and motion preference.
+ * - enableHeavyEffects: SplashCursor WebGL fluid sim — only on pointer:fine + ≥4 CPU cores (stable, no re-render needed)
+ * - enableAnimations:   Threads shader — off when prefers-reduced-motion: reduce (reactive to live preference changes)
  */
 function useMotionPreferences() {
-  return useMemo(() => {
-    if (typeof window === 'undefined') return { enableHeavyEffects: false, enableAnimations: true }
-    const pointerFine  = window.matchMedia('(pointer: fine)').matches
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const reducedMotion = useReducedMotion()
+  const enableHeavyEffects = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    const pointerFine = window.matchMedia('(pointer: fine)').matches
     const cpuCores = navigator.hardwareConcurrency ?? 4
-    return {
-      enableHeavyEffects: pointerFine && cpuCores >= 4,
-      enableAnimations:   !reducedMotion,
-    }
+    return pointerFine && cpuCores >= 4
   }, [])
+  return { enableHeavyEffects, enableAnimations: !reducedMotion }
 }
 
 // ── Nav items ─────────────────────────────────────────────────────────────────

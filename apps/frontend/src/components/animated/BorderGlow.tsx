@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect, type ReactNode, type CSSProperties, type PointerEvent } from 'react'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 import './BorderGlow.css'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -109,6 +110,7 @@ export function BorderGlow({
   const cardRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number | null>(null)
   const pendingPos = useRef<[number, number] | null>(null)
+  const reducedMotion = useReducedMotion()
 
   const getCenterOfElement = useCallback((el: HTMLDivElement) => {
     const { width, height } = el.getBoundingClientRect()
@@ -156,7 +158,7 @@ export function BorderGlow({
   }, [getEdgeProximity, getCursorAngle])
 
   useEffect(() => {
-    if (!animated || !cardRef.current) return
+    if (!animated || reducedMotion || !cardRef.current) return
     const card = cardRef.current
     const angleStart = 110
     const angleEnd = 465
@@ -177,15 +179,15 @@ export function BorderGlow({
       onUpdate: v => card.style.setProperty('--edge-proximity', String(v)),
       onEnd: () => card.classList.remove('sweep-active'),
     })
-  }, [animated])
+  }, [animated, reducedMotion])
 
   const glowVars = buildGlowVars(glowColor, glowIntensity)
 
   return (
     <div
       ref={cardRef}
-      onPointerMove={handlePointerMove}
-      className={`border-glow-card ${className}`}
+      onPointerMove={reducedMotion ? undefined : handlePointerMove}
+      className={`border-glow-card ${reducedMotion ? 'static-glow' : ''} ${className}`}
       style={{
         '--card-bg': backgroundColor,
         '--edge-sensitivity': edgeSensitivity,
