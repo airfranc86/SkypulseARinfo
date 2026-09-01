@@ -155,7 +155,19 @@ export function ElectricBorder({
     let { width, height } = updateSize()
     let lastDpr = Math.min(window.devicePixelRatio || 1, 2)
 
+    // El shader de ruido es caro (10 octavas x ~270 puntos x 2), y este loop
+    // corría sin parar incluso fuera de pantalla o durante scroll activo,
+    // compitiendo por el hilo principal con los frames de scroll del navegador.
+    let isVisible = true
+    let isScrolling = false
+    let scrollTimeoutId = 0
+    const shouldPause = () => !isVisible || isScrolling
+
     const draw = (currentTime: number) => {
+      if (shouldPause()) {
+        animationRef.current = 0
+        return
+      }
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       if (dpr !== lastDpr) {
         lastDpr = dpr
@@ -211,10 +223,49 @@ export function ElectricBorder({
     })
     ro.observe(container)
 
+    const resume = () => {
+      if (shouldPause() || animationRef.current) return
+      // Evita que el deltaTime del primer frame post-pausa sea enorme y haga
+      // "saltar" el ruido — se recalcula como si viniéramos del frame anterior.
+      lastFrameTimeRef.current = performance.now()
+      animationRef.current = requestAnimationFrame(draw)
+    }
+
+    const onScroll = () => {
+      isScrolling = true
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+        animationRef.current = 0
+      }
+      window.clearTimeout(scrollTimeoutId)
+      scrollTimeoutId = window.setTimeout(() => {
+        isScrolling = false
+        resume()
+      }, 150)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        isVisible = entry.isIntersecting
+        if (!isVisible && animationRef.current) {
+          cancelAnimationFrame(animationRef.current)
+          animationRef.current = 0
+        } else {
+          resume()
+        }
+      },
+      { rootMargin: '100px' }
+    )
+    io.observe(container)
+
     animationRef.current = requestAnimationFrame(draw)
     return () => {
       cancelAnimationFrame(animationRef.current)
+      window.clearTimeout(scrollTimeoutId)
+      window.removeEventListener('scroll', onScroll)
       ro.disconnect()
+      io.disconnect()
     }
   }, [color, speed, chaos, borderRadius, displacement, octavedNoise, getRoundedRectPoint, reducedMotion])
 
