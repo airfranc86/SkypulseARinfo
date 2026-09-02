@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import time
+
 from app.services.fire_danger import (
     FireDangerEntry,
     _compute_fire_risk,
@@ -24,6 +26,7 @@ from app.services.fire_danger import (
     _fwi_to_score,
     _parse_fire_entries_from_fwi,
     _parse_fire_entries_from_gfs,
+    closest_to_now,
     get_fire_danger,
 )
 from app.services.windy import WindyNotConfiguredError
@@ -593,3 +596,60 @@ class TestGetFireDanger:
         assert e.hour_label
         assert 0.0 <= e.fire_risk_score <= 100.0
         assert e.fire_risk_label in {"Muy bajo", "Bajo", "Moderado", "Alto", "Muy alto", "Extremo"}
+
+
+# ---------------------------------------------------------------------------
+# closest_to_now
+# ---------------------------------------------------------------------------
+
+def _entry_at(offset_s: int, temp_c: float) -> FireDangerEntry:
+    """Entry sintético a `offset_s` segundos de "ahora" (negativo = pasado)."""
+    return FireDangerEntry(
+        date="2026-09-02",
+        hour_label="00:00",
+        fwi=None,
+        fire_risk_score=30.0,
+        fire_risk_label="Bajo",
+        temp_c=temp_c,
+        humidity=50.0,
+        wind_kmh=10.0,
+        precip_mm=0.0,
+        is_estimated=True,
+        timestamp_s=int(time.time()) + offset_s,
+    )
+
+
+class TestClosestToNow:
+    """
+    El array que Windy devuelve no está garantizado a empezar en "ahora" — su
+    primer elemento suele ser el inicio del ciclo de ejecución del modelo,
+    que puede quedar horas atrás del momento real de la consulta. Este es el
+    escenario reportado en vivo: el índice 0 tenía la temperatura de la
+    madrugada mientras la app decía estar mostrando "ahora".
+    """
+
+    def test_picks_index_zero_when_already_closest(self):
+        entries = [_entry_at(0, temp_c=22.0), _entry_at(3600, temp_c=24.0)]
+        assert closest_to_now(entries) is entries[0]
+
+    def test_picks_a_later_index_when_array_starts_in_the_past(self):
+        # índice 0 = hace 6h (madrugada, 10°C) — exactamente el bug reportado:
+        # la app mostraba 10°C con la real actual en 22°C.
+        entries = [
+            _entry_at(-6 * 3600, temp_c=10.0),
+            _entry_at(-3 * 3600, temp_c=15.0),
+            _entry_at(0, temp_c=22.0),
+            _entry_at(3 * 3600, temp_c=25.0),
+        ]
+        closest = closest_to_now(entries)
+        assert closest.temp_c == 22.0
+        assert closest is entries[2]
+
+    def test_picks_nearest_future_slot_when_nothing_matches_exactly(self):
+        # Sin timestamp exacto a "ahora" — el más cercano es +1h, no -2h.
+        entries = [_entry_at(-2 * 3600, temp_c=12.0), _entry_at(3600, temp_c=20.0)]
+        assert closest_to_now(entries).temp_c == 20.0
+
+    def test_single_entry_returns_it(self):
+        entries = [_entry_at(-5 * 3600, temp_c=8.0)]
+        assert closest_to_now(entries) is entries[0]

@@ -1,6 +1,7 @@
 """Tests de integración para GET /api/incendios."""
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -20,6 +21,7 @@ def _make_entry(
     is_estimated: bool = True,
     date: str = "2026-05-26",
     hour_label: str = "12:00",
+    timestamp_s: int | None = None,
 ) -> FireDangerEntry:
     return FireDangerEntry(
         date=date,
@@ -32,19 +34,28 @@ def _make_entry(
         wind_kmh=20.0,
         precip_mm=0.0,
         is_estimated=is_estimated,
+        timestamp_s=timestamp_s if timestamp_s is not None else int(time.time()),
     )
 
 
 def _make_entries(n: int = 3, is_estimated: bool = True) -> list[FireDangerEntry]:
+    """
+    Slots horarios sintéticos empezando en "ahora" — entries[0] es el más
+    cercano al momento actual por construcción, igual que un array de Windy
+    bien alineado. Para el caso desalineado (bug real), ver
+    TestClosestToNowSelection más abajo.
+    """
     hours = ["09:00", "12:00", "15:00", "18:00", "21:00", "00:00"]
     scores = [25.0, 45.0, 60.0, 50.0, 30.0, 20.0]
     labels = ["Bajo", "Moderado", "Moderado", "Moderado", "Bajo", "Muy bajo"]
+    now = int(time.time())
     return [
         _make_entry(
             score=scores[i % len(scores)],
             label=labels[i % len(labels)],
             is_estimated=is_estimated,
             hour_label=hours[i % len(hours)],
+            timestamp_s=now + i * 3600,
         )
         for i in range(n)
     ]
@@ -184,6 +195,39 @@ class TestIncendiosRouter:
         assert "wind_kmh" in slot
         assert "precip_mm" in slot
         assert "is_estimated" in slot
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_current_reflects_closest_slot_not_raw_index_zero(self, async_client: AsyncClient):
+        """
+        Cableado end-to-end del bug reportado en vivo: el array de Windy
+        empezaba varias horas antes de "ahora" (10°C, madrugada) mientras la
+        temperatura real en ese momento era 22°C. La respuesta debe reflejar
+        el slot correcto, y el array `slots` debe arrancar ahí también — el
+        frontend toma slots[0] directamente como "condiciones actuales".
+        """
+        now = int(time.time())
+        entries = [
+            _make_entry(score=15.0, label="Muy bajo", hour_label="04:00", timestamp_s=now - 6 * 3600),
+            _make_entry(score=20.0, label="Muy bajo", hour_label="07:00", timestamp_s=now - 3 * 3600),
+            _make_entry(score=45.0, label="Moderado", hour_label="10:00", timestamp_s=now),
+            _make_entry(score=55.0, label="Moderado", hour_label="13:00", timestamp_s=now + 3 * 3600),
+        ]
+        # temp_c=28.0 fijo en el helper — distinguimos por score/label en su lugar.
+        with patch(
+            "app.routers.incendios.get_fire_danger",
+            new_callable=AsyncMock,
+            return_value=entries,
+        ):
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        data = response.json()
+        assert data["current_score"] == 45.0
+        assert data["current_label"] == "Moderado"
+        # El array recortado no debe incluir las 2 horas ya pasadas.
+        assert len(data["slots"]) == 2
+        assert data["slots"][0]["fire_risk_score"] == 45.0
+        assert data["slots"][1]["fire_risk_score"] == 55.0
 
     @pytest.mark.asyncio
     @pytest.mark.integration

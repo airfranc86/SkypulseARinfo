@@ -65,6 +65,7 @@ class FireDangerEntry:
     wind_kmh: float | None
     precip_mm: float | None
     is_estimated: bool          # True si fue calculado, False si viene del modelo fireDanger
+    timestamp_s: int            # epoch — Windy no garantiza que el primer slot del array sea "ahora"
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +245,7 @@ def _parse_fire_entries_from_fwi(data: dict) -> list[FireDangerEntry]:
                 wind_kmh=wind_kmh,
                 precip_mm=_safe_get(precip, i) if precip else None,
                 is_estimated=False,
+                timestamp_s=int(ts_ms // 1000),
             )
         )
 
@@ -289,10 +291,25 @@ def _parse_fire_entries_from_gfs(lat: float, lon: float, data: dict) -> list[Fir
                 wind_kmh=wind_kmh,
                 precip_mm=round(precip_mm, 2) if precip_mm is not None else None,
                 is_estimated=True,
+                timestamp_s=int(ts_ms // 1000),
             )
         )
 
     return entries
+
+
+def closest_to_now(entries: list[FireDangerEntry]) -> FireDangerEntry:
+    """
+    Entry cuyo timestamp está más cerca del momento actual.
+
+    El array que devuelve Windy no está garantizado a empezar en "ahora" — su
+    primer elemento suele ser el inicio del ciclo de ejecución del modelo, que
+    puede quedar varias horas atrás del momento real de la consulta. Tomar
+    `entries[0]` a ciegas como "condiciones actuales" podía mostrar la
+    temperatura de la madrugada al mediodía.
+    """
+    now_s = datetime.now(tz=_AR_TZ).timestamp()
+    return min(entries, key=lambda e: abs(e.timestamp_s - now_s))
 
 
 # ---------------------------------------------------------------------------

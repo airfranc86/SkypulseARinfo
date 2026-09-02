@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.core.rate_limit import limiter
 from app.schemas.incendios import FireDangerResponse, FireDangerSlot, RISK_COLOR_MAP
-from app.services.fire_danger import get_fire_danger, FireDangerEntry
+from app.services.fire_danger import get_fire_danger, closest_to_now, FireDangerEntry
 from app.services.windy import WindyNotConfiguredError
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,13 @@ def _build_response(entries: list[FireDangerEntry]) -> FireDangerResponse:
     if not entries:
         raise HTTPException(status_code=503, detail="fire_danger_unavailable")
 
+    # El array de Windy no está garantizado a empezar en "ahora" — recortamos
+    # desde el slot más cercano al momento actual en vez de asumir índice 0.
+    # El frontend toma slots[0] como condiciones actuales, y el timeline debe
+    # mostrar lo que viene, no horas que ya pasaron.
+    closest = closest_to_now(entries)
+    entries_from_now = entries[entries.index(closest):]
+
     slots = [
         FireDangerSlot(
             date=e.date,
@@ -60,13 +67,13 @@ def _build_response(entries: list[FireDangerEntry]) -> FireDangerResponse:
             precip_mm=e.precip_mm,
             is_estimated=e.is_estimated,
         )
-        for e in entries
+        for e in entries_from_now
     ]
 
     current = slots[0]
     peak = max(slots, key=lambda s: s.fire_risk_score)
 
-    is_estimated = entries[0].is_estimated
+    is_estimated = current.is_estimated
     source = _SOURCE_ESTIMATED if is_estimated else _SOURCE_FIREDANGER
 
     return FireDangerResponse(
