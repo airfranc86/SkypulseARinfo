@@ -62,102 +62,96 @@ const CONDITION_ICONS: Record<string, string> = {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-/** SVG semicircular gauge showing score 0–100. */
-function ScoreGauge({ score, color }: { score: number; color: string }) {
-  const radius = 54
-  const cx = 70
-  const cy = 70
-  // Semicircle: from 180° to 0° (left to right, top half)
-  const circumference = Math.PI * radius  // half-circle arc length
-  const progress = (score / 100) * circumference
-
-  // Arc path: start at left (180°), end at right (0°)
-  const startX = cx - radius
-  const startY = cy
-  const endX   = cx + radius
-  const endY   = cy
-
-  // Needle angle: map 0–100 score to 180°–0° (left to right)
-  const needleAngleDeg = 180 - (score / 100) * 180
-  const needleAngleRad = (needleAngleDeg * Math.PI) / 180
-  const needleLen = 40
-  const needleX = cx + needleLen * Math.cos(needleAngleRad)
-  const needleY = cy - needleLen * Math.sin(needleAngleRad)
+/**
+ * Score + escala de riesgo unificados en un solo instrumento — antes eran dos
+ * piezas separadas (un gauge circular con aguja + una barra de 6 celdas
+ * discretas debajo) diciendo básicamente lo mismo con dos lenguajes visuales
+ * distintos. Mismo patrón que `MagnitudeScaleBar` (Terremotos): barra en
+ * gradiente + marcador de posición exacta, coherente entre páginas.
+ */
+function RiskScaleBar({ score, currentLabel, currentColor }: { score: number; currentLabel: string; currentColor: string }) {
+  const pct = Math.min(Math.max(score, 0), 100)
+  const isHighRisk = HIGH_RISK_LABELS.has(currentLabel)
 
   return (
-    <svg
-      viewBox="0 0 140 90"
-      aria-label={`Score de riesgo: ${score} de 100`}
-      className="w-full max-w-xs mx-auto"
+    <div
+      className="rounded-2xl p-6 flex flex-col items-center gap-4"
+      style={{
+        background: 'var(--color-card)',
+        border: `1px solid ${isHighRisk ? `${currentColor}40` : 'var(--color-border)'}`,
+        boxShadow: isHighRisk ? `0 0 48px ${currentColor}15` : undefined,
+      }}
     >
-      {/* Track */}
-      <path
-        d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
-        fill="none"
-        stroke="var(--color-border)"
-        strokeWidth="10"
-        strokeLinecap="round"
-      />
-      {/* Progress */}
-      <path
-        d={`M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`}
-        fill="none"
-        stroke={color}
-        strokeWidth="10"
-        strokeLinecap="round"
-        strokeDasharray={`${progress} ${circumference}`}
-        className="motion-safe:[transition:stroke-dasharray_0.6s_ease]"
-      />
-      {/* Needle with white stroke for visibility */}
-      <line
-        x1={cx}
-        y1={cy}
-        x2={needleX}
-        y2={needleY}
-        stroke="white"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        opacity="0.5"
-      />
-      <line
-        x1={cx}
-        y1={cy}
-        x2={needleX}
-        y2={needleY}
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        className="motion-safe:[transition:all_0.6s_ease]"
-      />
-      {/* Needle pivot */}
-      <circle cx={cx} cy={cy} r="4" fill={color} />
-      <circle cx={cx} cy={cy} r="2.5" fill="white" opacity="0.8" />
+      {/* Score number */}
+      <div className="flex flex-col items-center gap-1">
+        <span
+          aria-label={`Score de riesgo: ${score} de 100`}
+          className="text-5xl font-bold motion-safe:[transition:color_0.6s_ease]"
+          style={{ color: currentColor, fontFamily: 'var(--font-serif)' }}
+        >
+          {score.toFixed(1)}
+        </span>
+        <span className="text-[.6rem] uppercase tracking-widest" style={{ color: 'var(--color-muted-foreground)' }}>
+          Escala de riesgo (0–100)
+        </span>
+      </div>
 
-      {/* Score text — background rect for legibility */}
-      <rect
-        x={cx - 22}
-        y={cy - 26}
-        width="44"
-        height="22"
-        rx="5"
-        fill="var(--color-card)"
-        opacity="0.75"
-      />
-      <text
-        x={cx}
-        y={cy - 10}
-        textAnchor="middle"
-        fontSize="18"
-        fontWeight="700"
-        fill="var(--color-foreground)"
-        fontFamily="var(--font-serif)"
-      >
-        {score}
-      </text>
-      {/* Min/Max labels */}
-      <text x={startX + 2} y={cy + 18} fontSize="8" fill="var(--color-muted-foreground)">0</text>
-      <text x={endX - 10} y={cy + 18} fontSize="8" fill="var(--color-muted-foreground)">100</text>
-    </svg>
+      {/* Gradient bar + position marker */}
+      <div className="relative w-full pb-5">
+        <div
+          className="h-2.5 rounded-full w-full"
+          style={{ background: 'linear-gradient(to right, #3ecf7a, #7ec855, #f0a030, #e05545, #e03535, #ff3333)' }}
+        />
+        <div
+          aria-hidden="true"
+          className="motion-safe:[transition:transform_0.6s_cubic-bezier(0.16,1,0.3,1)]"
+          style={{ position: 'absolute', left: 0, top: '-3.5px', width: '100%', transform: `translateX(${pct}%)` }}
+        >
+          <div
+            className="rounded-full motion-safe:[transition:background-color_0.6s_ease]"
+            style={{
+              transform: 'translateX(-50%)',
+              width: '17px',
+              height: '17px',
+              background: currentColor,
+              border: '3px solid var(--color-background)',
+              boxShadow: `0 0 8px 2px ${currentColor}88`,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Level chips — mismos 6 niveles que antes, ahora comparten instrumento con el score */}
+      <div className="flex gap-[3px] h-[10px] w-full">
+        {RISK_SCALE.map((r) => (
+          <div
+            key={r.label}
+            className="flex-1 rounded-full transition-opacity"
+            style={{
+              background: r.color,
+              opacity: r.label === currentLabel ? 1 : 0.25,
+              outline: r.label === currentLabel ? `2px solid ${r.color}` : undefined,
+              outlineOffset: r.label === currentLabel ? '2px' : undefined,
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex w-full -mt-2.5">
+        {RISK_SCALE.map((r) => (
+          <div key={r.label} className="flex-1 text-center">
+            <span
+              className="text-[.48rem] leading-tight block"
+              style={{
+                color: r.label === currentLabel ? r.color : 'var(--color-muted-foreground)',
+                fontWeight: r.label === currentLabel ? 700 : undefined,
+              }}
+            >
+              {r.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -313,49 +307,6 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
   )
 }
 
-/** Barra segmentada que muestra los 6 niveles de riesgo con el nivel actual resaltado. */
-function RiskScaleBar({ currentLabel }: { currentLabel: string }) {
-  return (
-    <div
-      className="rounded-xl p-4"
-      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
-    >
-      <p className="text-[.55rem] uppercase tracking-widest mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
-        Escala de riesgo
-      </p>
-      <div className="flex gap-[3px] h-[10px]">
-        {RISK_SCALE.map((r) => (
-          <div
-            key={r.label}
-            className="flex-1 rounded-full transition-opacity"
-            style={{
-              background: r.color,
-              opacity: r.label === currentLabel ? 1 : 0.25,
-              outline: r.label === currentLabel ? `2px solid ${r.color}` : undefined,
-              outlineOffset: r.label === currentLabel ? '2px' : undefined,
-            }}
-          />
-        ))}
-      </div>
-      <div className="flex mt-2.5">
-        {RISK_SCALE.map((r) => (
-          <div key={r.label} className="flex-1 text-center">
-            <span
-              className="text-[.48rem] leading-tight block"
-              style={{
-                color: r.label === currentLabel ? r.color : 'var(--color-muted-foreground)',
-                fontWeight: r.label === currentLabel ? 700 : undefined,
-              }}
-            >
-              {r.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 /** Skeleton de carga. */
 function PageSkeleton() {
   return (
@@ -447,48 +398,25 @@ export function Incendios({ location }: Props) {
               </div>
             )}
 
-            {/* Escala de referencia */}
-            <RiskScaleBar currentLabel={data.current_label} />
+            {/* Score + escala de riesgo unificados */}
+            <RiskScaleBar
+              score={data.current_score}
+              currentLabel={data.current_label}
+              currentColor={data.current_color}
+            />
 
-            {/* Score gauge + label central */}
-            <div
-              className="rounded-2xl p-6 flex flex-col items-center gap-3"
-              style={{
-                background: 'var(--color-card)',
-                border: `1px solid ${isHighRisk ? `${data.current_color}40` : 'var(--color-border)'}`,
-                boxShadow: isHighRisk ? `0 0 48px ${data.current_color}15` : undefined,
-              }}
-            >
-              {/* Responsive gauge: fills on mobile, capped on desktop */}
-              <div className="w-full max-w-xs mx-auto">
-                <ScoreGauge score={data.current_score} color={data.current_color} />
-              </div>
-
-              {/* Risk label with background for legibility */}
-              <div className="flex flex-col items-center gap-2">
-                <span
-                  className="text-xl font-bold tracking-tight px-3 py-0.5 rounded-lg"
-                  style={{
-                    color: data.current_color,
-                    fontFamily: 'var(--font-serif)',
-                    background: `${data.current_color}18`,
-                  }}
-                >
-                  {data.current_label}
-                </span>
-
-                {/* Source badge */}
-                <span
-                  className="text-[.6rem] font-semibold uppercase tracking-wide px-2.5 py-1 rounded"
-                  style={{
-                    color: data.is_estimated ? 'var(--color-watch)' : 'var(--color-safe)',
-                    background: data.is_estimated ? 'rgba(240,160,48,.08)' : 'rgba(62,207,122,.08)',
-                    border: `1px solid ${data.is_estimated ? 'rgba(240,160,48,.25)' : 'rgba(62,207,122,.25)'}`,
-                  }}
-                >
-                  {data.is_estimated ? 'Estimado' : 'Modelo Windy FWI'}
-                </span>
-              </div>
+            {/* Source badge */}
+            <div className="flex justify-center -mt-2">
+              <span
+                className="text-[.6rem] font-semibold uppercase tracking-wide px-2.5 py-1 rounded"
+                style={{
+                  color: data.is_estimated ? 'var(--color-watch)' : 'var(--color-safe)',
+                  background: data.is_estimated ? 'rgba(240,160,48,.08)' : 'rgba(62,207,122,.08)',
+                  border: `1px solid ${data.is_estimated ? 'rgba(240,160,48,.25)' : 'rgba(62,207,122,.25)'}`,
+                }}
+              >
+                {data.is_estimated ? 'Estimado' : 'Modelo Windy FWI'}
+              </span>
             </div>
 
             {/* Chips de condiciones */}

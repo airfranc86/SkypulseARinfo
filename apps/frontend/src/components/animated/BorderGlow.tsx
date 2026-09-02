@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, type ReactNode, type CSSProperties, type PointerEvent } from 'react'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { useCoarsePointer } from '@/hooks/useCoarsePointer'
 import './BorderGlow.css'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -111,6 +112,13 @@ export function BorderGlow({
   const rafRef = useRef<number | null>(null)
   const pendingPos = useRef<[number, number] | null>(null)
   const reducedMotion = useReducedMotion()
+  // En touch, cada gesto de scroll/swipe sobre la card dispara pointermove real
+  // (no hay cursor persistente) — el tracking del glow se recalculaba en cada
+  // frame de scroll, compitiendo por el hilo principal igual que el bug de
+  // ElectricBorder. El cursor-tracking tampoco tiene sentido conceptual acá:
+  // mismo tratamiento que reducedMotion, glow estático en el mismo color.
+  const coarsePointer = useCoarsePointer()
+  const skipTracking = reducedMotion || coarsePointer
 
   const getCenterOfElement = useCallback((el: HTMLDivElement) => {
     const { width, height } = el.getBoundingClientRect()
@@ -158,7 +166,7 @@ export function BorderGlow({
   }, [getEdgeProximity, getCursorAngle])
 
   useEffect(() => {
-    if (!animated || reducedMotion || !cardRef.current) return
+    if (!animated || skipTracking || !cardRef.current) return
     const card = cardRef.current
     const angleStart = 110
     const angleEnd = 465
@@ -179,15 +187,15 @@ export function BorderGlow({
       onUpdate: v => card.style.setProperty('--edge-proximity', String(v)),
       onEnd: () => card.classList.remove('sweep-active'),
     })
-  }, [animated, reducedMotion])
+  }, [animated, skipTracking])
 
   const glowVars = buildGlowVars(glowColor, glowIntensity)
 
   return (
     <div
       ref={cardRef}
-      onPointerMove={reducedMotion ? undefined : handlePointerMove}
-      className={`border-glow-card ${reducedMotion ? 'static-glow' : ''} ${className}`}
+      onPointerMove={skipTracking ? undefined : handlePointerMove}
+      className={`border-glow-card ${skipTracking ? 'static-glow' : ''} ${className}`}
       style={{
         '--card-bg': backgroundColor,
         '--edge-sensitivity': edgeSensitivity,
