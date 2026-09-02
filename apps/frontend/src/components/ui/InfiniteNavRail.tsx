@@ -69,6 +69,17 @@ const EDGE_BLUR_WIDTH = 72
 /**
  * Build the CSS for a single edge overlay div.
  * Direction controls which side fades to transparent.
+ *
+ * FIX: `backdropFilter` + `maskImage` used to be layered on top of the solid
+ * `background` gradient to scope the blur to the fade area. Since `mask-image`
+ * applies to the WHOLE element (not just the backdrop-filter), it multiplied
+ * against the background gradient's own opacity — the overlay ended up far
+ * more transparent near the true edge than the gradient stops implied, so
+ * pill text/emoji peeked through instead of being hidden ("Secado de ropa"
+ * clipped to "orte", "METAR" clipped to "ME"). The file's own top comment
+ * already says the gradient approach was chosen specifically to avoid
+ * maskImage (Safari bugs) — dropping it here just matches that documented
+ * intent and restores real full-opacity coverage at the edge.
  */
 function edgeOverlayStyle(side: 'left' | 'right'): CSSProperties {
   const gradientDir = side === 'left' ? 'to right' : 'to left'
@@ -79,12 +90,6 @@ function edgeOverlayStyle(side: 'left' | 'right'): CSSProperties {
     width: EDGE_BLUR_WIDTH,
     height: '100%',
     background: `linear-gradient(${gradientDir}, var(--color-background, #000) 0%, transparent 100%)`,
-    // Slight blur on the fading content — enhances the frosted-glass feel
-    backdropFilter: 'blur(2px)',
-    WebkitBackdropFilter: 'blur(2px)',
-    // The gradient mask scopes the blur to the fade area
-    maskImage: `linear-gradient(${gradientDir}, black 0%, transparent 100%)`,
-    WebkitMaskImage: `linear-gradient(${gradientDir}, black 0%, transparent 100%)`,
     pointerEvents: 'none',
     zIndex: 10,
   }

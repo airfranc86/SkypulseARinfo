@@ -2,6 +2,33 @@
 
 ---
 
+## 2026-09-02 — Nav de pills mobile: doble-fade rompía el borde + E2E de Incendios + auditoría mobile de las 14 páginas
+
+**Contexto:** usuario reportó (vía captura + selección de elemento) un "círculo tropical" en el nav que le parecía el logo de SkyPulse sin buildear del todo, "ensanchando" la UI mobile y corrido a la derecha. Investigado a fondo antes de tocar nada (pedido explícito del usuario, "no asumas y consulta"): el logo real es un `<img src="/Logo.png">` plano (`App.tsx:248`) — confirmado cargando bien en producción (`complete:true`, `200×200`), estructuralmente no puede producir el `<svg><circle r="316.5">` con 10 `<mask>` que el usuario seleccionó. Ese elemento específico no aparece en ningún archivo de `apps/frontend/src` (grep de su gradient ID, su radio y sus clases hasheadas → cero resultados) — ajeno a esta app, no se persiguió más. Usuario confirmó que el bug real es el nav de pills ("Es el nav, es el círculo del nav").
+
+**Done — causa raíz real y fix:**
+- `InfiniteNavRail.tsx` (nav de pills tipo marquee, auto-scroll infinito con items duplicados): las pills se veían cortadas a mitad de palabra en ambos bordes ("Secado de ropa" → "orte", "METAR" → "ME"), de forma nítida y totalmente legible — parecía overflow roto aunque `document.body.scrollWidth` nunca excedía el viewport (el contenedor tiene `overflow-hidden`, well contenido).
+- Causa: `edgeOverlayStyle()` aplicaba un `background: linear-gradient(...)` (opaco→transparente, la técnica correcta) **y además** un `maskImage` con el mismo gradiente para acotar el `backdropFilter: blur`. Como `mask-image` en CSS afecta a TODO el elemento (no solo al blur), las dos fades se multiplicaban — la cobertura opaca cerca del borde real quedaba mucho más débil de lo que el gradiente por sí solo daría, dejando texto asomando. El propio comentario del archivo (línea 13) ya documentaba que habían elegido el gradient "por ser más compatible que maskImage (Safari tiene bugs)" — el código no respetaba su propia decisión documentada.
+- Fix: eliminados `backdropFilter`/`WebkitBackdropFilter`/`maskImage`/`WebkitMaskImage` de `edgeOverlayStyle()`, dejando solo el `background` gradient sólido — que ahora sí cubre 100% opaco en el borde real, tal como estaba pensado.
+- Verificado en dev server local (viewport 375px, `resize_window mobile`): capturas en 2 posiciones de scroll distintas muestran las pills fundiéndose en gradiente translúcido en vez de texto nítido cortado. `tsc -b --noEmit` y `vite build` limpios. Consola sin errores.
+
+**Done — auditoría mobile de las 14 páginas (skill `mobile-responsiveness-auditor`):**
+- Barrido con script propio (`getBoundingClientRect` sobre todos los elementos, viewport 375px) en las 14 rutas reales (`/`, `/prevision`, `/tender-ropa`, `/cota-de-nieve`, `/hacer-deporte`, `/terremotos`, `/volcanes`, `/incendios`, `/lavar-auto`, `/lluvias`, `/radar`, `/desastres`, `/nubes`, `/metar`, `/niebla`) contra producción. **Ninguna tiene overflow horizontal real** (`document.body.scrollWidth === innerWidth` en todas) más allá del nav (ya explicado, contenido a propósito). En Terremotos aparecieron 4 `<canvas>` (fondo decorativo de `ElectricBorder`) con `width` levemente mayor a su contenedor — no generan scroll de página, contenidos por su padre `overflow-hidden`, no es un bug.
+
+**Files changed:**
+- `apps/frontend/src/components/ui/InfiniteNavRail.tsx`
+
+**Tests:**
+- `npx tsc -b --noEmit` → 0 errores.
+- `npx vite build` → OK, 4.39s.
+- Verificado en navegador (dev server local, mobile viewport) — ver Done arriba. Consola limpia.
+
+**Next:**
+1. **Sin commitear todavía** — pendiente de decisión del usuario (a diferencia del batch de P2 de esta misma sesión, este fix no fue pedido con "commit+push" explícito para él).
+2. Agente `e2e-runner` corrido en background para Incendios (pedido del usuario) — confirmó el flujo end-to-end funcionando: producción usa `source=windy_gfs_estimated` (`is_estimated=true`) porque el plan free de Windy no tiene el modelo `fireDanger` activo, y la UI lo comunica bien (badge "ESTIMADO"). Encontró un freshness-gap no relacionado al bug documentado de `closest_to_now` (Córdoba/Mendoza a las 03:43 AR eligieron el slot de las 15:00 como "actual" — el payload GFS free de Windy simplemente no publica puntos más cercanos a esa hora; `closest_to_now` elige bien el mínimo disponible, es limitación de datos, no bug de código). Screenshots en el scratchpad de la sesión.
+
+---
+
 ## 2026-09-02 — 3 de los 4 P2 restantes de la auditoría de backend (LatParam/LonParam, imports privados, asimetría tender-ropa)
 
 **Done — P2 #2: `LatParam`/`LonParam` unificados:**
