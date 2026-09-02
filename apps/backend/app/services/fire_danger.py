@@ -72,7 +72,7 @@ class FireDangerEntry:
 # Lógica de cálculo de score (fallback)
 # ---------------------------------------------------------------------------
 
-def _compute_fire_risk(
+def compute_fire_risk(
     temp_c: float | None,
     humidity: float | None,
     wind_kmh: float | None,
@@ -277,7 +277,7 @@ def _parse_fire_entries_from_gfs(lat: float, lon: float, data: dict) -> list[Fir
         if u is not None and v is not None:
             wind_kmh = round(math.sqrt(u * u + v * v) * 3.6, 2)
 
-        score, label = _compute_fire_risk(temp_c, humidity, wind_kmh, precip_mm)
+        score, label = compute_fire_risk(temp_c, humidity, wind_kmh, precip_mm)
 
         entries.append(
             FireDangerEntry(

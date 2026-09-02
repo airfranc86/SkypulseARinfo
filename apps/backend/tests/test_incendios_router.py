@@ -2,13 +2,61 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
 
+from app.schemas.weather import SourceMeta, WeatherCurrentResponse
 from app.services.fire_danger import FireDangerEntry
 from app.services.windy import WindyNotConfiguredError
+
+
+def _make_current_weather(
+    temp_c: float = 26.0,
+    humidity: float = 40.0,
+    wind_speed_kmh: float = 10.0,
+    precip_1h_mm: float = 0.0,
+) -> WeatherCurrentResponse:
+    """Observación real (SMN/Open-Meteo) usada para reemplazar el slot 'actual'."""
+    return WeatherCurrentResponse(
+        lat=-34.6,
+        lon=-58.4,
+        temp_c=temp_c,
+        feels_like_c=None,
+        humidity=humidity,
+        wind_speed_kmh=wind_speed_kmh,
+        wind_dir_deg=180.0,
+        wind_dir_cardinal="S",
+        pressure_hpa=1013.0,
+        precip_1h_mm=precip_1h_mm,
+        cloud_cover=None,
+        description="Despejado",
+        meta=SourceMeta(
+            source="smn",
+            reason="smn_nearby_fresh",
+            station=None,
+            fetched_at=datetime.now(timezone.utc),
+            cache_hit=False,
+        ),
+    )
+
+
+@pytest.fixture(autouse=True)
+def mock_aggregate_current_unavailable():
+    """
+    Por defecto, aggregate_current no está disponible en los tests — mantiene
+    el comportamiento de "solo Windy" sin tener que tocar cada test existente
+    uno por uno. Los tests que prueban el path con observación real lo
+    parchean explícitamente adentro (el patch interno gana mientras dura).
+    """
+    with patch(
+        "app.routers.incendios.aggregate_current",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("aggregate_current no disponible en tests"),
+    ):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -242,3 +290,91 @@ class TestIncendiosRouter:
 
         assert response.status_code == 503
         assert response.json()["detail"] == "fire_danger_unavailable"
+
+
+# ---------------------------------------------------------------------------
+# Reemplazo de temp/humedad/viento "actuales" por observación real
+# (bug reportado en vivo: Windy GFS mostraba 10-13°C con ~26°C reales)
+# ---------------------------------------------------------------------------
+
+class TestIncendiosCurrentWeatherOverride:
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_current_uses_real_observation_when_estimated(self, async_client: AsyncClient):
+        """
+        Score estimado (sin FWI real) + aggregate_current disponible → el slot
+        actual usa temp/humedad/viento reales, y el score se recalcula con
+        esos valores (no queda un score de Windy junto a una temp real).
+        """
+        entries = _make_entries(n=3, is_estimated=True)  # temp_c=28.0 en Windy
+        real_weather = _make_current_weather(temp_c=26.0, humidity=40.0, wind_speed_kmh=10.0)
+        with patch(
+            "app.routers.incendios.get_fire_danger",
+            new_callable=AsyncMock,
+            return_value=entries,
+        ), patch(
+            "app.routers.incendios.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=real_weather,
+        ):
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 200
+        data = response.json()
+        current_slot = data["slots"][0]
+        assert current_slot["temp_c"] == pytest.approx(26.0)
+        assert current_slot["humidity"] == pytest.approx(40.0)
+        assert current_slot["wind_kmh"] == pytest.approx(10.0)
+        # El score ya no es el 25.0 sintético de Windy — fue recalculado.
+        assert data["current_score"] != entries[0].fire_risk_score
+        assert data["current_score"] == current_slot["fire_risk_score"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_current_display_overridden_but_score_kept_when_fwi_real(
+        self, async_client: AsyncClient
+    ):
+        """
+        Con FWI real (is_estimated=False), la temp mostrada se actualiza pero
+        el score/label quedan intactos — vienen del modelo fireDanger real,
+        no de una fórmula que podamos recalcular con temp/humedad/viento.
+        """
+        entries = _make_entries(n=3, is_estimated=False)
+        real_weather = _make_current_weather(temp_c=26.0, humidity=40.0, wind_speed_kmh=10.0)
+        with patch(
+            "app.routers.incendios.get_fire_danger",
+            new_callable=AsyncMock,
+            return_value=entries,
+        ), patch(
+            "app.routers.incendios.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=real_weather,
+        ):
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        data = response.json()
+        current_slot = data["slots"][0]
+        assert current_slot["temp_c"] == pytest.approx(26.0)
+        assert data["current_score"] == entries[0].fire_risk_score
+        assert data["current_label"] == entries[0].fire_risk_label
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_falls_back_to_windy_when_aggregate_current_fails(
+        self, async_client: AsyncClient
+    ):
+        """aggregate_current falla → sigue respondiendo 200 con los datos de Windy tal cual."""
+        entries = _make_entries(n=3, is_estimated=True)
+        with patch(
+            "app.routers.incendios.get_fire_danger",
+            new_callable=AsyncMock,
+            return_value=entries,
+        ):
+            # mock_aggregate_current_unavailable (autouse) ya simula el fallo.
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["slots"][0]["temp_c"] == pytest.approx(entries[0].temp_c)
+        assert data["current_score"] == entries[0].fire_risk_score

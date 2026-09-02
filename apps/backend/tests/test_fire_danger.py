@@ -1,7 +1,7 @@
 """Tests unitarios para app.services.fire_danger.
 
 Cubre:
-- _compute_fire_risk: todos los umbrales y casos límite
+- compute_fire_risk: todos los umbrales y casos límite
 - _fwi_to_label: escala CFFDRS completa
 - _fwi_to_score: normalización y capping
 - _parse_fire_entries_from_fwi: parsing de payload fireDanger
@@ -20,7 +20,7 @@ import time
 
 from app.services.fire_danger import (
     FireDangerEntry,
-    _compute_fire_risk,
+    compute_fire_risk,
     _fetch_raw_fire,
     _fwi_to_label,
     _fwi_to_score,
@@ -66,43 +66,43 @@ def _make_gfs_payload(n: int = 4) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# _compute_fire_risk
+# compute_fire_risk
 # ---------------------------------------------------------------------------
 
 class TestComputeFireRisk:
 
     def test_all_none_returns_zero_muy_bajo(self):
-        score, label = _compute_fire_risk(None, None, None, None)
+        score, label = compute_fire_risk(None, None, None, None)
         assert score == 0.0
         assert label == "Muy bajo"
 
     def test_muy_bajo_label_below_20(self):
-        score, label = _compute_fire_risk(temp_c=10.0, humidity=60.0, wind_kmh=0.0, precip_mm=0.0)
+        score, label = compute_fire_risk(temp_c=10.0, humidity=60.0, wind_kmh=0.0, precip_mm=0.0)
         assert score < 20
         assert label == "Muy bajo"
 
     def test_bajo_label_between_20_and_40(self):
         # temp=25 → (25-10)/30*30=15, hum=40 → (60-40)/60*30=10, wind=0 → total=25
-        score, label = _compute_fire_risk(temp_c=25.0, humidity=40.0, wind_kmh=0.0, precip_mm=0.0)
+        score, label = compute_fire_risk(temp_c=25.0, humidity=40.0, wind_kmh=0.0, precip_mm=0.0)
         assert 20 <= score < 40
         assert label == "Bajo"
 
     def test_moderado_label_between_40_and_60(self):
         # temp=30 → 20pts, hum=30 → 15pts, wind=15 → 7.5pts = 42.5
-        score, label = _compute_fire_risk(temp_c=30.0, humidity=30.0, wind_kmh=15.0, precip_mm=0.0)
+        score, label = compute_fire_risk(temp_c=30.0, humidity=30.0, wind_kmh=15.0, precip_mm=0.0)
         assert 40 <= score < 60
         assert label == "Moderado"
 
     def test_alto_label_between_60_and_75(self):
         # temp=35 → 25pts, hum=20 → 20pts, wind=20 → 10pts = 55... need more
         # temp=40→30pts, hum=15→22.5pts, wind=20→10pts = 62.5
-        score, label = _compute_fire_risk(temp_c=40.0, humidity=15.0, wind_kmh=20.0, precip_mm=0.0)
+        score, label = compute_fire_risk(temp_c=40.0, humidity=15.0, wind_kmh=20.0, precip_mm=0.0)
         assert 60 <= score < 75
         assert label == "Alto"
 
     def test_muy_alto_label_between_75_and_90(self):
         # temp=40→30pts, hum=0→30pts, wind=30→15pts = 75
-        score, label = _compute_fire_risk(temp_c=40.0, humidity=0.0, wind_kmh=30.0, precip_mm=0.0)
+        score, label = compute_fire_risk(temp_c=40.0, humidity=0.0, wind_kmh=30.0, precip_mm=0.0)
         assert 75 <= score < 90
         assert label == "Muy alto"
 
@@ -118,37 +118,37 @@ class TestComputeFireRisk:
         # Actually score=85 < 90 → "Muy alto".
         # So "Extremo" cannot be reached with the current formula (max is 85).
         # Let's test that score is capped at 100 (it won't exceed 85 with current formula)
-        score, label = _compute_fire_risk(temp_c=100.0, humidity=0.0, wind_kmh=100.0, precip_mm=0.0)
+        score, label = compute_fire_risk(temp_c=100.0, humidity=0.0, wind_kmh=100.0, precip_mm=0.0)
         assert score <= 100.0
         # Max theoretical score = 30+30+25 = 85 → "Muy alto"
         assert label == "Muy alto"
 
     def test_precipitation_reduces_score(self):
-        score_dry, _ = _compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=0.0)
-        score_wet, _ = _compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=5.0)
+        score_dry, _ = compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=0.0)
+        score_wet, _ = compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=5.0)
         assert score_wet < score_dry
 
     def test_precipitation_below_2mm_no_reduction(self):
-        score_dry, _ = _compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=0.0)
-        score_trace, _ = _compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=1.5)
+        score_dry, _ = compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=0.0)
+        score_trace, _ = compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=1.5)
         assert score_dry == score_trace
 
     def test_score_cannot_be_negative(self):
-        score, _ = _compute_fire_risk(temp_c=0.0, humidity=100.0, wind_kmh=0.0, precip_mm=100.0)
+        score, _ = compute_fire_risk(temp_c=0.0, humidity=100.0, wind_kmh=0.0, precip_mm=100.0)
         assert score >= 0.0
 
     def test_score_capped_at_100(self):
-        score, _ = _compute_fire_risk(temp_c=1000.0, humidity=0.0, wind_kmh=1000.0, precip_mm=0.0)
+        score, _ = compute_fire_risk(temp_c=1000.0, humidity=0.0, wind_kmh=1000.0, precip_mm=0.0)
         assert score <= 100.0
 
     def test_returns_tuple_of_float_and_str(self):
-        result = _compute_fire_risk(temp_c=25.0, humidity=50.0, wind_kmh=15.0, precip_mm=0.0)
+        result = compute_fire_risk(temp_c=25.0, humidity=50.0, wind_kmh=15.0, precip_mm=0.0)
         assert isinstance(result, tuple)
         assert isinstance(result[0], float)
         assert isinstance(result[1], str)
 
     def test_score_rounded_to_one_decimal(self):
-        score, _ = _compute_fire_risk(temp_c=25.0, humidity=45.0, wind_kmh=15.0, precip_mm=0.0)
+        score, _ = compute_fire_risk(temp_c=25.0, humidity=45.0, wind_kmh=15.0, precip_mm=0.0)
         # Check that there's at most 1 decimal
         assert score == round(score, 1)
 

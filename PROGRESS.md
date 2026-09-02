@@ -2,6 +2,34 @@
 
 ---
 
+## 2026-09-02 — Bug urgente: temperatura de Incendios muy alejada de la real (10-13°C vs 26°C reportados)
+
+**Contexto:** usuario reportó ver 10°C en Incendios (Córdoba) con 26°C reales en el momento. Se descartó primero que fuera el bug de `closest_to_now` ya corregido antes en la sesión — verificado en vivo contra producción (Buenos Aires, hora real 16:15 AR) que el slot elegido como "actual" (15:00) es efectivamente el más cercano al momento real, sin salto de horas. El problema era el **valor de temperatura en sí**, no el slot.
+
+**Diagnóstico (evidencia real, 3 fuentes comparadas para las mismas coordenadas):**
+- `/api/weather/current` (SMN→Open-Meteo, la fuente que usa el resto de la app para "ahora"): 22.5°C — cerca de lo real.
+- `/api/incendios` (fallback GFS estimado, porque el plan free de Windy no tiene `fireDanger`): 13.1°C.
+- `/api/tools/hacer-deporte` (también Windy GFS crudo como primario): 14.4°C — mismo orden de magnitud raro.
+
+Que dos endpoints independientes que comparten el mismo `fetch_raw` de Windy coincidan en un valor muy frío confirma que **no es un bug de parseo específico de Incendios** — es que el pronóstico crudo de Windy GFS (plan free) puede divergir bastante de la observación real, y Incendios tomaba su "condición actual" directo de ese pronóstico en vez de la observación real que ya usa el resto de la app.
+
+**Done — fix (aprobado por el usuario tras confirmar el enfoque):**
+- `fire_danger.py`: `_compute_fire_risk` → `compute_fire_risk` (pública — la necesita `incendios.py` ahora, mismo criterio que el fix de `windy.py` de antes en esta sesión: no repetir el import de símbolo privado cruzando módulo).
+- `incendios.py`: `aggregate_current(lat, lon)` (SMN/Open-Meteo) ahora se pide en paralelo a `get_fire_danger` (`asyncio.gather(..., return_exceptions=True)`). Si tiene éxito, el slot "actual" reemplaza `temp_c`/`humidity`/`wind_kmh`/`precip_mm` por la observación real. Si además el score es estimado (sin FWI real), se recalcula con `compute_fire_risk` usando esos valores más precisos — mostrar una temperatura real junto a un score calculado con datos de pronóstico distintos habría sido más confuso, no menos. Con FWI real (`is_estimated=False`), solo se actualiza la temperatura mostrada; el score no se toca porque viene del modelo real, no de una fórmula que podamos recalcular. Si `aggregate_current` falla, sigue respondiendo con los datos de Windy tal cual (fail-open, mismo criterio que el resto del proyecto — confirmado que esto pasa hoy mismo: `/api/weather/current` para las coordenadas de Córdoba usadas en la investigación devolvió `all_sources_unavailable` en un momento de la sesión).
+
+**Files changed:**
+- `apps/backend/app/services/fire_danger.py`
+- `apps/backend/app/routers/incendios.py`
+- `apps/backend/tests/test_fire_danger.py` — rename de import
+- `apps/backend/tests/test_incendios_router.py` — fixture autouse que simula `aggregate_current` no disponible por default (si no, los tests existentes intentarían red real) + 3 tests nuevos (`TestIncendiosCurrentWeatherOverride`)
+
+**Tests:**
+- `.venv/Scripts/python.exe -m pytest -q` → **765 passed**, 0 failed (762 + 3 nuevos), 25.76s — sin llamadas de red reales colgando gracias al fixture autouse.
+- No verificable end-to-end contra Windy real desde acá (sin `WINDY_API_KEY` local) — la lógica está cubierta por los 3 tests nuevos (score recalculado en path estimado, score intacto con FWI real, fallback a Windy si `aggregate_current` falla). El usuario dijo que lo va a probar contra producción una vez deployado.
+
+**Next:**
+1. Pendiente de decisión del usuario: commitear y pushear (para que pueda probarlo en producción).
+
 ## 2026-09-02 — Nav de pills mobile: doble-fade rompía el borde + E2E de Incendios + auditoría mobile de las 14 páginas
 
 **Contexto:** usuario reportó (vía captura + selección de elemento) un "círculo tropical" en el nav que le parecía el logo de SkyPulse sin buildear del todo, "ensanchando" la UI mobile y corrido a la derecha. Investigado a fondo antes de tocar nada (pedido explícito del usuario, "no asumas y consulta"): el logo real es un `<img src="/Logo.png">` plano (`App.tsx:248`) — confirmado cargando bien en producción (`complete:true`, `200×200`), estructuralmente no puede producir el `<svg><circle r="316.5">` con 10 `<mask>` que el usuario seleccionó. Ese elemento específico no aparece en ningún archivo de `apps/frontend/src` (grep de su gradient ID, su radio y sus clases hasheadas → cero resultados) — ajeno a esta app, no se persiguió más. Usuario confirmó que el bug real es el nav de pills ("Es el nav, es el círculo del nav").
