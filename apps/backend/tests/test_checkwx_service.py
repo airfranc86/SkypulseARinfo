@@ -5,6 +5,8 @@ S4 — Cuota agotada sin stale: levanta CheckWXQuotaExceededError
 """
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 import respx
 from httpx import Response
@@ -121,3 +123,46 @@ async def test_s4_quota_exhausted_counter_not_incremented(setup_counter: MemoryC
             await checkwx_svc.fetch_metar("SAEZ", kind="metar")
 
     assert await setup_counter.get(cycle) == 198  # no se incrementó
+
+
+# ---------------------------------------------------------------------------
+# Concurrencia — TOCTOU entre el chequeo y la reserva de cupo
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_concurrent_requests_never_overshoot_the_limit(setup_counter: MemoryCounter, monkeypatch):
+    """
+    10 ICAOs distintos (sin cache hit posible) disparados en simultáneo con
+    un límite de 5 — sin el lock, todas podían leer current_count < 5 antes
+    de que ninguna incrementara, superando el límite por el tamaño del burst.
+
+    El delay artificial en el mock HTTP es necesario para que las corutinas
+    realmente se entrelacen — sin él, un mock que resuelve instantáneamente
+    no le da tiempo real al event loop de intercalar el chequeo de una
+    request con el de otra, y el bug no se manifiesta aunque el lock falte.
+    """
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "checkwx_daily_limit", 5, raising=False)
+
+    cycle = current_cycle()
+    icaos = [f"AA{i:02d}" for i in range(10)]
+
+    async def _slow_ok(request):
+        await asyncio.sleep(0.01)
+        return Response(200, json=_METAR_PAYLOAD)
+
+    with respx.mock:
+        for icao in icaos:
+            respx.get(f"{_CHECKWX_BASE}/metar/{icao}/decoded").mock(side_effect=_slow_ok)
+        results = await asyncio.gather(
+            *(checkwx_svc.fetch_metar(icao, kind="metar") for icao in icaos),
+            return_exceptions=True,
+        )
+
+    final_count = await setup_counter.get(cycle)
+    assert final_count == 5  # nunca por encima del límite, pase lo que pase el orden de scheduling
+
+    successes = [r for r in results if not isinstance(r, Exception)]
+    failures = [r for r in results if isinstance(r, checkwx_svc.CheckWXQuotaExceededError)]
+    assert len(successes) == 5
+    assert len(failures) == 5

@@ -8,6 +8,7 @@ Distinto de: services/metar.py (usa AWC/NOAA — sin cuota)
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Literal
 
@@ -66,6 +67,10 @@ def _get_cache(kind: str) -> TTLCache:
 # ---------------------------------------------------------------------------
 
 _counter: _Counter | None = None
+# Serializa solo el chequeo+reserva de cupo (sin I/O) — mismo patrón que
+# SingleFlightCache/windy.py/oavv.py. El fetch HTTP real queda fuera del
+# lock para no serializar requests de ICAOs distintos entre sí.
+_quota_lock = asyncio.Lock()
 
 
 def set_counter(counter: _Counter) -> None:
@@ -95,19 +100,25 @@ async def fetch_metar(icao: str, kind: Literal["metar", "taf"]) -> dict[str, Any
         return cached
 
     cycle = current_cycle()
-    current_count = await _counter.get(cycle)
 
-    if current_count >= settings.checkwx_daily_limit:
-        logger.warning(
-            "checkwx_quota_exhausted cycle=%s count=%d limit=%d",
-            cycle, current_count, settings.checkwx_daily_limit,
-        )
-        await maybe_notify(cycle, current_count, _counter, settings.checkwx_daily_limit)
-        raise CheckWXQuotaExceededError(cycle=cycle, count=current_count)
+    # Chequeo + reserva del cupo en una sola sección crítica — sin esto, dos
+    # requests concurrentes con ICAOs no cacheados podían pasar el chequeo
+    # antes de que ninguna incrementara, superando el límite por el tamaño
+    # del burst. El fetch HTTP real queda fuera del lock a propósito: es la
+    # parte lenta, y no hay razón para serializar ICAOs distintos entre sí.
+    async with _quota_lock:
+        current_count = await _counter.get(cycle)
+        if current_count >= settings.checkwx_daily_limit:
+            logger.warning(
+                "checkwx_quota_exhausted cycle=%s count=%d limit=%d",
+                cycle, current_count, settings.checkwx_daily_limit,
+            )
+            await maybe_notify(cycle, current_count, _counter, settings.checkwx_daily_limit)
+            raise CheckWXQuotaExceededError(cycle=cycle, count=current_count)
+
+        new_count = await _counter.incr(cycle)
 
     response = await _do_http_fetch(icao, kind)
-
-    new_count = await _counter.incr(cycle)
     cache[cache_key] = response
 
     logger.info(
