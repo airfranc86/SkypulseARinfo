@@ -98,11 +98,25 @@ function WakingUpNotice() {
       role="status"
       style={{ border: '1px solid rgba(240,160,48,0.3)', background: 'rgba(240,160,48,0.06)', color: 'var(--color-muted-foreground)' }}
     >
-      <span className="relative flex-shrink-0 w-2.5 h-2.5">
-        <span className="absolute inset-0 rounded-full motion-safe:animate-ping opacity-50" style={{ background: '#f0a030' }} />
-        <span className="relative block w-2.5 h-2.5 rounded-full" style={{ background: '#f0a030' }} />
-      </span>
-      El servicio está despertando — la primera carga del día puede tardar unos segundos.
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#f0a030"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="flex-shrink-0"
+        style={{ width: '1.25rem', height: '1.25rem' }}
+        aria-hidden="true"
+      >
+        <path d="M12 3.2a8.8 8.8 0 0 1 8.8 8.8" strokeWidth="2">
+          <animateTransform attributeName="transform" type="rotate" values="0 12 12;360 12 12" dur="1.4s" repeatCount="indefinite" />
+        </path>
+        <path d="M12 19a7 7 0 0 1-7-7" strokeWidth="2" strokeOpacity=".55">
+          <animateTransform attributeName="transform" type="rotate" values="360 12 12;0 12 12" dur="1.05s" repeatCount="indefinite" />
+        </path>
+      </svg>
+      Despertando el servidor — puede tardar unos segundos, es solo la primera vez del día.
     </div>
   )
 }
