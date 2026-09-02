@@ -16,10 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 
+from app.core.params import LatParam, LonParam
 from app.core.rate_limit import limiter
 from app.schemas.niebla import NieblaResponse, VisibilityHourlySlot
 from app.services.openmeteo import (
@@ -32,15 +32,6 @@ from app.services.metar import get_nearest_metar_visibility, get_nearest_taf_hou
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-LatParam = Annotated[
-    float,
-    Query(ge=-55, le=-21, description="Latitud (Argentina: -55 a -21)"),
-]
-LonParam = Annotated[
-    float,
-    Query(ge=-76, le=-53, description="Longitud (Argentina: -76 a -53)"),
-]
 
 
 @router.get(

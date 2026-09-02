@@ -1,4 +1,4 @@
-"""Unit tests for drizzle risk detection in _build_rain_forecast.
+"""Unit tests for drizzle risk detection in build_rain_forecast.
 
 D1 — current humidity>=80 AND cloud_cover>=70 with no precip → "Llovizna posible" / "media"
 D2 — low humidity + low cloud → "Sin lluvia esperada" / "alta"
@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.routers.weather import _build_rain_forecast
+from app.services.dashboard_builder import build_rain_forecast
 from app.schemas.weather import SourceMeta, StationMeta, WeatherCurrentResponse
 from app.services.windy import WindyHourlyEntry
 
@@ -99,7 +99,7 @@ def _dry_slots(n: int = 8, humidity: float = 60.0, cloud_cover_pct: float = 30.0
 # ---------------------------------------------------------------------------
 
 def test_drizzle_detected_when_current_saturated():
-    result = _build_rain_forecast(
+    result = build_rain_forecast(
         windy_hourly=_dry_slots(),
         om_hourly=None,
         current=_current(humidity=85.0, cloud_cover=75.0),
@@ -114,7 +114,7 @@ def test_drizzle_detected_when_current_saturated():
 # ---------------------------------------------------------------------------
 
 def test_no_drizzle_when_conditions_clear():
-    result = _build_rain_forecast(
+    result = build_rain_forecast(
         windy_hourly=_dry_slots(),
         om_hourly=None,
         current=_current(humidity=55.0, cloud_cover=30.0),
@@ -133,7 +133,7 @@ def test_rain_detected_confidence_alta():
         _windy_slot(precip_3h_mm=1.5, humidity=85.0, cloud_cover_pct=90.0, i=i)
         for i in range(8)
     ]
-    result = _build_rain_forecast(
+    result = build_rain_forecast(
         windy_hourly=rainy_slots,
         om_hourly=None,
         current=_current(humidity=85.0, cloud_cover=90.0),
@@ -148,7 +148,7 @@ def test_rain_detected_confidence_alta():
 # ---------------------------------------------------------------------------
 
 def test_drizzle_not_detected_when_only_humidity_high():
-    result = _build_rain_forecast(
+    result = build_rain_forecast(
         windy_hourly=_dry_slots(),
         om_hourly=None,
         current=_current(humidity=85.0, cloud_cover=50.0),
@@ -162,7 +162,7 @@ def test_drizzle_not_detected_when_only_humidity_high():
 # ---------------------------------------------------------------------------
 
 def test_drizzle_not_detected_when_only_cloud_cover_high():
-    result = _build_rain_forecast(
+    result = build_rain_forecast(
         windy_hourly=_dry_slots(),
         om_hourly=None,
         current=_current(humidity=60.0, cloud_cover=80.0),
@@ -178,7 +178,7 @@ def test_drizzle_not_detected_when_only_cloud_cover_high():
 def test_drizzle_detected_from_windy_slot_averages():
     # Current conditions clear, but upcoming 4 slots have high humidity+cloud
     saturated_slots = _dry_slots(n=8, humidity=80.0, cloud_cover_pct=85.0)
-    result = _build_rain_forecast(
+    result = build_rain_forecast(
         windy_hourly=saturated_slots,
         om_hourly=None,
         current=_current(humidity=60.0, cloud_cover=50.0),

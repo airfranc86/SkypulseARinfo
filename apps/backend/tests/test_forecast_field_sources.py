@@ -1,4 +1,4 @@
-"""Tests for field-source priority in _build_7d_forecast.
+"""Tests for field-source priority in build_7d_forecast.
 
 PR1 (precip_prob):
   T1 — OM primary when Windy available
@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 from datetime import date
 
-from app.routers.weather import _build_7d_forecast
+from app.services.dashboard_builder import build_7d_forecast
 from app.services.openmeteo import DailyForecastDataExt, MultiModelDailyData
 from app.services.windy import WindyDailyEntry
 
@@ -98,8 +98,8 @@ def _make_windy(
 
 
 def _first(daily_multi: MultiModelDailyData, windy: list[WindyDailyEntry] | None = None) -> object:
-    """Run _build_7d_forecast and return the first day entry."""
-    entries = _build_7d_forecast(daily_multi, windy, snow_level_m=None)
+    """Run build_7d_forecast and return the first day entry."""
+    entries = build_7d_forecast(daily_multi, windy, snow_level_m=None)
     return entries[0]
 
 
@@ -231,7 +231,7 @@ def test_consensus_mode_averages_multiple_om_models():
         rain_consensus_per_day=["all_agree_dry"] * _N,
     )
 
-    entries = _build_7d_forecast(multi, windy_daily=None, snow_level_m=None, selected_model="consensus")
+    entries = build_7d_forecast(multi, windy_daily=None, snow_level_m=None, selected_model="consensus")
     assert entries[0].temp_max == pytest.approx(22.0), (
         "Consensus mode: mean([20, 22, 24]) == 22.0"
     )
@@ -250,7 +250,7 @@ def test_selected_model_filters_om_list():
         rain_consensus_per_day=["all_agree_dry"] * _N,
     )
 
-    entries = _build_7d_forecast(multi, windy_daily=None, snow_level_m=None, selected_model="ecmwf")
+    entries = build_7d_forecast(multi, windy_daily=None, snow_level_m=None, selected_model="ecmwf")
     assert entries[0].temp_max == pytest.approx(22.0), (
         "Mode=ecmwf: only ecmwf_ifs025 contributes; gfs_seamless (18.0) must be ignored"
     )

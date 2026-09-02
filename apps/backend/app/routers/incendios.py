@@ -8,10 +8,10 @@ Fallback: estimación a partir de GFS (temperatura, humedad, viento, precipitaci
 from __future__ import annotations
 
 import logging
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Request
 
+from app.core.params import LatParam, LonParam
 from app.core.rate_limit import limiter
 from app.schemas.incendios import FireDangerResponse, FireDangerSlot, RISK_COLOR_MAP
 from app.services.fire_danger import get_fire_danger, closest_to_now, FireDangerEntry
@@ -20,19 +20,6 @@ from app.services.windy import WindyNotConfiguredError
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ---------------------------------------------------------------------------
-# Parámetros de coordenadas (bbox Argentina)
-# ---------------------------------------------------------------------------
-
-LatParam = Annotated[
-    float,
-    Query(ge=-55, le=-21, description="Latitud (Argentina: -55 a -21)"),
-]
-LonParam = Annotated[
-    float,
-    Query(ge=-74, le=-53, description="Longitud (Argentina: -74 a -53)"),
-]
 
 # ---------------------------------------------------------------------------
 # Helpers

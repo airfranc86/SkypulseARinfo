@@ -237,8 +237,64 @@ async def get_tender_ropa(
     lat: LatParam,
     lon: LonParam,
 ) -> ToolResult:
+    """
+    Aptitud para tender ropa al aire libre.
+
+    Datos requeridos:
+        - pronóstico horario: Windy GFS (primario), Open-Meteo (fallback).
+    """
     logger.info("GET /tender-ropa lat=%.2f lon=%.2f", lat, lon)
 
+    # 1. Intentar Windy primero (mismo patrón que hacer-deporte/lavar-coche)
+    windy_hourly = await _windy_hourly_or_none(lat, lon)
+
+    if windy_hourly is not None and windy_hourly:
+        source = SOURCE_WINDY
+
+        first = windy_hourly[0]
+        temp_c = first.temp_c
+        humidity = first.humidity
+        wind_speed_kmh = first.wind_speed_kmh
+
+        # Precipitación esperada próximas ~6h (2 slots de 3h en GFS)
+        next_2 = windy_hourly[:2]
+        precip_vals = [s.precip_3h_mm for s in next_2 if s.precip_3h_mm is not None]
+        precip_next_6h = sum(precip_vals) if precip_vals else None
+        cape_j_kg = _max_cape([s.cape_j_kg for s in next_2])
+
+        current_result = calculators.score_tender_ropa(
+            temp_c=temp_c,
+            humidity=humidity,
+            wind_speed_kmh=wind_speed_kmh,
+            precip_next_6h=precip_next_6h,
+            cape_j_kg=cape_j_kg,
+        )
+
+        # score_tender_ropa ya matchea el orden posicional de este helper
+        # (temp_c, humidity, wind_speed_kmh, precip) — sin closure de reorden.
+        hourly = _build_hourly_scores_from_windy(windy_hourly, calculators.score_tender_ropa, hours=24)
+        hourly = _mark_best(hourly)
+        future_hourly_tr = _filter_future(hourly)
+        best_window = _best_window_consecutive(future_hourly_tr, min_score=70)
+
+        return ToolResult(
+            tool="tender-ropa",
+            score=current_result.score,
+            label=current_result.label,
+            color=current_result.color,
+            headline=current_result.headline,
+            reason=current_result.reason,
+            best_window=best_window,
+            hourly=hourly,
+            temp=temp_c,
+            humidity=humidity,
+            wind_speed=wind_speed_kmh,
+            precip=precip_next_6h,
+            source=source,
+        )
+
+    # 2. Fallback Open-Meteo
+    source = SOURCE_OPENMETEO
     forecast = await get_hourly_forecast(lat, lon)
     if forecast is None:
         raise HTTPException(status_code=503, detail="forecast_unavailable")
@@ -280,6 +336,7 @@ async def get_tender_ropa(
         humidity=humidity,
         wind_speed=wind_speed_kmh,
         precip=precip_next_6h,
+        source=source,
     )
 
 

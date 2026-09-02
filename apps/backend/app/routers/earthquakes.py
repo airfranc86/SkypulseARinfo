@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
 
+from app.core.params import LatParam, LonParam
 from app.core.rate_limit import limiter
 from app.schemas.earthquakes import EarthquakesResponse
 from app.services.earthquakes import get_recent_earthquakes  # aggregator EMSC→USGS
@@ -13,9 +14,6 @@ from app.services.earthquakes import get_recent_earthquakes  # aggregator EMSC�
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_LAT = Annotated[float, Query(ge=-55, le=-21, description="Latitud (Argentina: -55 a -21)")]
-_LON = Annotated[float, Query(ge=-74, le=-53, description="Longitud (Argentina: -74 a -53)")]
 
 
 @router.get(
@@ -31,8 +29,8 @@ _LON = Annotated[float, Query(ge=-74, le=-53, description="Longitud (Argentina: 
 @limiter.limit("30/minute")
 async def get_recent(
     request: Request,
-    lat: _LAT,
-    lon: _LON,
+    lat: LatParam,
+    lon: LonParam,
     radius_km: Annotated[
         float,
         Query(ge=50, le=2000, description="Radio de búsqueda en km (50–2000)"),

@@ -122,7 +122,7 @@ _fetch_events: dict[tuple[float, float], _WindySlot] = {}
 _forecast_cache: TTLCache = _raw_cache
 
 # Zona horaria Argentina = UTC-3
-_AR_TZ = timezone(timedelta(hours=-3))
+AR_TZ = timezone(timedelta(hours=-3))
 
 # Parámetros que se piden a Windy. Se solicitan ambos niveles (surface + 850h)
 # en una sola request para evitar duplicar llamadas a la API.
@@ -153,11 +153,11 @@ def _ms_to_kmh(ms: float | None) -> float | None:
     return ms * 3.6 if ms is not None else None
 
 
-def _k_to_c(k: float | None) -> float | None:
+def k_to_c(k: float | None) -> float | None:
     return k - 273.15 if k is not None else None
 
 
-def _safe_get(lst: list, idx: int) -> float | None:
+def safe_get(lst: list, idx: int) -> float | None:
     if 0 <= idx < len(lst):
         v = lst[idx]
         return v if v is not None else None
@@ -175,7 +175,7 @@ def _avg(values: list[float]) -> float | None:
 # Fetch crudo (compartido por todas las funciones públicas)
 # ---------------------------------------------------------------------------
 
-async def _fetch_raw(lat: float, lon: float) -> dict:
+async def fetch_raw(lat: float, lon: float) -> dict:
     """
     Devuelve el payload crudo de Windy para (lat, lon).
     Cachea por (lat, lon) redondeado a 4 decimales durante 1 h.
@@ -274,12 +274,12 @@ def _parse_hourly(data: dict) -> list[WindyHourlyEntry]:
 
     entries: list[WindyHourlyEntry] = []
     for i, ts_ms in enumerate(ts_ms_list):
-        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=_AR_TZ)
+        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=AR_TZ)
         date_str = dt_ar.strftime("%Y-%m-%d")
         hour_label = dt_ar.strftime("%H:%M")
 
-        u = _safe_get(wind_u, i)
-        v = _safe_get(wind_v, i)
+        u = safe_get(wind_u, i)
+        v = safe_get(wind_v, i)
         wind_speed_kmh: float | None = None
         wind_dir_deg: float | None = None
         wind_dir_cardinal: str | None = None
@@ -291,9 +291,9 @@ def _parse_hourly(data: dict) -> list[WindyHourlyEntry]:
             wind_dir_cardinal = _degrees_to_cardinal(wind_dir_deg)
 
         clouds = [c for c in (
-            _safe_get(lclouds, i),
-            _safe_get(mclouds, i),
-            _safe_get(hclouds, i),
+            safe_get(lclouds, i),
+            safe_get(mclouds, i),
+            safe_get(hclouds, i),
         ) if c is not None]
         cloud_cover_pct = (sum(clouds) / len(clouds)) if clouds else None
 
@@ -303,17 +303,17 @@ def _parse_hourly(data: dict) -> list[WindyHourlyEntry]:
                 timestamp_s=int(ts_ms // 1000),
                 date=date_str,
                 hour_label=hour_label,
-                temp_c=_k_to_c(_safe_get(temp_k, i)),
-                humidity=_safe_get(rh, i),
+                temp_c=k_to_c(safe_get(temp_k, i)),
+                humidity=safe_get(rh, i),
                 wind_speed_kmh=wind_speed_kmh,
-                wind_gust_kmh=_ms_to_kmh(_safe_get(gust_ms, i)),
+                wind_gust_kmh=_ms_to_kmh(safe_get(gust_ms, i)),
                 wind_dir_deg=wind_dir_deg,
                 wind_dir_cardinal=wind_dir_cardinal,
-                precip_3h_mm=_safe_get(precip, i),
+                precip_3h_mm=safe_get(precip, i),
                 cloud_cover_pct=cloud_cover_pct,
-                dewpoint_c=_k_to_c(_safe_get(dew_k, i)),
-                temp_850_c=_k_to_c(_safe_get(temp_850_k, i)),
-                cape_j_kg=_safe_get(cape, i),
+                dewpoint_c=k_to_c(safe_get(dew_k, i)),
+                temp_850_c=k_to_c(safe_get(temp_850_k, i)),
+                cape_j_kg=safe_get(cape, i),
             )
         )
 
@@ -333,7 +333,7 @@ async def get_hourly_forecast(lat: float, lon: float) -> list[WindyHourlyEntry]:
         WindyNotConfiguredError: si windy_api_key está vacío.
         Exception: ante cualquier error de red o HTTP.
     """
-    data = await _fetch_raw(lat, lon)
+    data = await fetch_raw(lat, lon)
     return _parse_hourly(data)
 
 
@@ -491,7 +491,7 @@ def _aggregate_to_daily(data: dict) -> list[LaundryDayRaw]:
     })
 
     for i, ts_ms in enumerate(ts_ms_list):
-        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=_AR_TZ)
+        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=AR_TZ)
         date_str = dt_ar.strftime("%Y-%m-%d")
         bucket = daily[date_str]
 
@@ -565,5 +565,5 @@ def _aggregate_to_daily(data: dict) -> list[LaundryDayRaw]:
 
 async def _fetch_and_aggregate(lat: float, lon: float) -> list[LaundryDayRaw]:
     """Legacy: realiza el POST a Windy y agrega los datos horarios a diarios."""
-    data = await _fetch_raw(lat, lon)
+    data = await fetch_raw(lat, lon)
     return _aggregate_to_daily(data)

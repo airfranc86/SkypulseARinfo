@@ -558,7 +558,7 @@ class TestGetFireDanger:
 
         with patch("app.services.fire_danger.settings") as mock_settings, \
              patch("app.services.fire_danger._fetch_raw_fire", new_callable=AsyncMock, return_value=None), \
-             patch("app.services.fire_danger._fetch_raw", new_callable=AsyncMock, return_value=gfs_payload):
+             patch("app.services.fire_danger.fetch_raw", new_callable=AsyncMock, return_value=gfs_payload):
             mock_settings.windy_api_key = "test-key"
             result = await get_fire_danger(-34.6, -58.4)
 
@@ -576,7 +576,7 @@ class TestGetFireDanger:
 
         with patch("app.services.fire_danger.settings") as mock_settings, \
              patch("app.services.fire_danger._fetch_raw_fire", new_callable=AsyncMock, return_value=fwi_payload_no_data), \
-             patch("app.services.fire_danger._fetch_raw", new_callable=AsyncMock, return_value=gfs_payload):
+             patch("app.services.fire_danger.fetch_raw", new_callable=AsyncMock, return_value=gfs_payload):
             mock_settings.windy_api_key = "test-key"
             result = await get_fire_danger(-34.6, -58.4)
 

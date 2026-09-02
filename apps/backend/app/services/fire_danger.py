@@ -25,10 +25,10 @@ from app.core.config import settings
 from app.core.http_client import get_client
 from app.services.windy import (
     WindyNotConfiguredError,
-    _fetch_raw,
-    _safe_get,
-    _k_to_c,
-    _AR_TZ,
+    fetch_raw,
+    safe_get,
+    k_to_c,
+    AR_TZ,
 )
 
 logger = logging.getLogger(__name__)
@@ -215,11 +215,11 @@ def _parse_fire_entries_from_fwi(data: dict) -> list[FireDangerEntry]:
 
     entries: list[FireDangerEntry] = []
     for i, ts_ms in enumerate(ts_ms_list):
-        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=_AR_TZ)
+        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=AR_TZ)
         date_str = dt_ar.strftime("%Y-%m-%d")
         hour_label = dt_ar.strftime("%H:%M")
 
-        fwi_val = _safe_get(fwi_list, i)
+        fwi_val = safe_get(fwi_list, i)
         if fwi_val is None:
             continue
 
@@ -228,8 +228,8 @@ def _parse_fire_entries_from_fwi(data: dict) -> list[FireDangerEntry]:
 
         # Wind speed opcional desde componentes u/v
         wind_kmh: float | None = None
-        u = _safe_get(wind_u, i) if wind_u else None
-        v = _safe_get(wind_v, i) if wind_v else None
+        u = safe_get(wind_u, i) if wind_u else None
+        v = safe_get(wind_v, i) if wind_v else None
         if u is not None and v is not None:
             wind_kmh = round(math.sqrt(u * u + v * v) * 3.6, 2)
 
@@ -240,10 +240,10 @@ def _parse_fire_entries_from_fwi(data: dict) -> list[FireDangerEntry]:
                 fwi=round(fwi_val, 2),
                 fire_risk_score=score,
                 fire_risk_label=label,
-                temp_c=_k_to_c(_safe_get(temp_k, i)) if temp_k else None,
-                humidity=_safe_get(rh, i) if rh else None,
+                temp_c=k_to_c(safe_get(temp_k, i)) if temp_k else None,
+                humidity=safe_get(rh, i) if rh else None,
                 wind_kmh=wind_kmh,
-                precip_mm=_safe_get(precip, i) if precip else None,
+                precip_mm=safe_get(precip, i) if precip else None,
                 is_estimated=False,
                 timestamp_s=int(ts_ms // 1000),
             )
@@ -263,17 +263,17 @@ def _parse_fire_entries_from_gfs(lat: float, lon: float, data: dict) -> list[Fir
 
     entries: list[FireDangerEntry] = []
     for i, ts_ms in enumerate(ts_ms_list):
-        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=_AR_TZ)
+        dt_ar = datetime.fromtimestamp(ts_ms / 1000.0, tz=AR_TZ)
         date_str = dt_ar.strftime("%Y-%m-%d")
         hour_label = dt_ar.strftime("%H:%M")
 
-        temp_c = _k_to_c(_safe_get(temp_k, i))
-        humidity = _safe_get(rh, i)
-        precip_mm = _safe_get(precip, i)
+        temp_c = k_to_c(safe_get(temp_k, i))
+        humidity = safe_get(rh, i)
+        precip_mm = safe_get(precip, i)
 
         wind_kmh: float | None = None
-        u = _safe_get(wind_u, i)
-        v = _safe_get(wind_v, i)
+        u = safe_get(wind_u, i)
+        v = safe_get(wind_v, i)
         if u is not None and v is not None:
             wind_kmh = round(math.sqrt(u * u + v * v) * 3.6, 2)
 
@@ -308,7 +308,7 @@ def closest_to_now(entries: list[FireDangerEntry]) -> FireDangerEntry:
     `entries[0]` a ciegas como "condiciones actuales" podía mostrar la
     temperatura de la madrugada al mediodía.
     """
-    now_s = datetime.now(tz=_AR_TZ).timestamp()
+    now_s = datetime.now(tz=AR_TZ).timestamp()
     return min(entries, key=lambda e: abs(e.timestamp_s - now_s))
 
 
@@ -337,5 +337,5 @@ async def get_fire_danger(lat: float, lon: float) -> list[FireDangerEntry]:
 
     # 2. Fallback: GFS estándar + estimación
     logger.info("fire_danger: falling back to GFS estimation for (%.4f, %.4f)", lat, lon)
-    gfs_data = await _fetch_raw(lat, lon)
+    gfs_data = await fetch_raw(lat, lon)
     return _parse_fire_entries_from_gfs(lat, lon, gfs_data)

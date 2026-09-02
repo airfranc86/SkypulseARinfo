@@ -201,6 +201,82 @@ class TestTenderRopa:
         assert data["best_window"] is None
 
 
+class TestTenderRopaWindyPath:
+    """Cuando Windy GFS está disponible, tender-ropa debe preferirlo (antes solo usaba Open-Meteo).
+
+    Vive antes de TestRateLimiting a propósito: ese test agota el cupo de
+    /tender-ropa para el resto de la sesión (el limiter no se resetea entre tests).
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_uses_windy_when_available(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        windy_hourly = _make_windy_hourly(24)
+        with patch(
+            "app.routers.tools.windy_get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=windy_hourly,
+        ):
+            response = await async_client.get(
+                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "windy_gfs"
+        assert data["tool"] == "tender-ropa"
+        assert len(data["hourly"]) <= 24
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_falls_back_to_openmeteo_when_windy_errors(
+        self, async_client: AsyncClient, monkeypatch
+    ):
+        import app.core.config as cfg
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+        forecast = _make_hourly_forecast(temp_c=25.0, humidity=50.0, precip=0.0)
+        with patch(
+            "app.routers.tools.windy_get_hourly_forecast",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("windy down"),
+        ), patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        assert response.json()["source"] == "openmeteo_fallback"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_uses_openmeteo_when_windy_not_configured(
+        self, async_client: AsyncClient
+    ):
+        # disable_windy_by_default ya garantiza windy_api_key vacío
+        forecast = _make_hourly_forecast(temp_c=25.0, humidity=50.0, precip=0.0)
+        with patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
+            )
+
+        assert response.status_code == 200
+        assert response.json()["source"] == "openmeteo_fallback"
+
+
 # ---------------------------------------------------------------------------
 # /api/tools/sensacion-termica
 # ---------------------------------------------------------------------------
@@ -610,6 +686,8 @@ def _make_windy_daily(n: int = 5) -> list[WindyDailyEntry]:
 
 # ---------------------------------------------------------------------------
 # Tests: Windy primary path para hacer-deporte, lavar-coche, cota-de-nieve
+# (tender-ropa vive junto a TestTenderRopa, arriba — antes de TestRateLimiting,
+#  que agota el cupo de /tender-ropa para el resto de la sesión de tests)
 # ---------------------------------------------------------------------------
 
 class TestHacerDeporteWindyPath:

@@ -1,4 +1,4 @@
-"""Tests de concurrencia para _fetch_raw de Windy (Fix 3).
+"""Tests de concurrencia para fetch_raw de Windy (Fix 3).
 
 Cubre el bug KeyError: cuando el fetcher falla mientras waiters esperan,
 todas las coroutines deben recibir la excepción real, nunca un KeyError.
@@ -14,7 +14,7 @@ import respx
 
 from app.services.windy import (
     WindyNotConfiguredError,
-    _fetch_raw,
+    fetch_raw,
     get_hourly_forecast,
     get_temp_850hpa_first,
 )
@@ -67,7 +67,7 @@ async def test_concurrent_fetch_failure_no_keyerror():
         mock.post(WINDY_URL).mock(side_effect=slow_fail)
 
         results = await asyncio.gather(
-            *[_fetch_raw(-34.6, -58.4) for _ in range(4)],
+            *[fetch_raw(-34.6, -58.4) for _ in range(4)],
             return_exceptions=True,
         )
 
@@ -91,7 +91,7 @@ async def test_concurrent_fetch_timeout_no_keyerror():
         mock.post(WINDY_URL).mock(side_effect=slow_timeout)
 
         results = await asyncio.gather(
-            *[_fetch_raw(-34.6, -58.4) for _ in range(3)],
+            *[fetch_raw(-34.6, -58.4) for _ in range(3)],
             return_exceptions=True,
         )
 
@@ -115,7 +115,7 @@ async def test_concurrent_fetch_success_dedup():
         mock.post(WINDY_URL).mock(side_effect=slow_ok)
 
         results = await asyncio.gather(
-            *[_fetch_raw(-34.6, -58.4) for _ in range(5)],
+            *[fetch_raw(-34.6, -58.4) for _ in range(5)],
         )
 
     assert call_count == 1, f"Dedup fallido: se hicieron {call_count} fetches"
@@ -133,7 +133,7 @@ async def test_concurrent_failure_same_exception_type():
         mock.post(WINDY_URL).mock(side_effect=slow_fail)
 
         results = await asyncio.gather(
-            *[_fetch_raw(-34.6, -58.4) for _ in range(3)],
+            *[fetch_raw(-34.6, -58.4) for _ in range(3)],
             return_exceptions=True,
         )
 
@@ -153,7 +153,7 @@ async def test_windy_not_configured_raises_immediately(monkeypatch):
     monkeypatch.setattr(cfg.settings, "windy_api_key", "", raising=False)
 
     with pytest.raises(WindyNotConfiguredError):
-        await _fetch_raw(-34.6, -58.4)
+        await fetch_raw(-34.6, -58.4)
 
     # No debe quedar ningún slot en vuelo
     assert len(windy_module._fetch_events) == 0
@@ -165,7 +165,7 @@ async def test_windy_not_configured_raises_immediately(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_temp_850hpa_first_concurrent_failure_no_keyerror():
-    """get_temp_850hpa_first es un llamador directo de _fetch_raw sin try/except.
+    """get_temp_850hpa_first es un llamador directo de fetch_raw sin try/except.
 
     Verifica que el fallo concurrente no produce KeyError sino la excepción real.
     """
@@ -217,7 +217,7 @@ async def test_fetch_events_cleaned_up_after_failure():
         mock.post(WINDY_URL).mock(return_value=httpx.Response(500))
 
         await asyncio.gather(
-            *[_fetch_raw(-34.6, -58.4) for _ in range(2)],
+            *[fetch_raw(-34.6, -58.4) for _ in range(2)],
             return_exceptions=True,
         )
 
@@ -230,6 +230,6 @@ async def test_fetch_events_cleaned_up_after_success():
     with respx.mock(assert_all_called=False) as mock:
         mock.post(WINDY_URL).mock(return_value=httpx.Response(200, json=_WINDY_MINIMAL))
 
-        await asyncio.gather(*[_fetch_raw(-34.6, -58.4) for _ in range(2)])
+        await asyncio.gather(*[fetch_raw(-34.6, -58.4) for _ in range(2)])
 
     assert len(windy_module._fetch_events) == 0
