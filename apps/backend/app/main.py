@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
 
 from .core.config import settings
 from .core.counter import MemoryCounter, RedisCounter
@@ -131,11 +132,12 @@ async def request_logging(request: Request, call_next) -> Response:
     response: Response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
     logger.info(
-        "%s %s -> %d (%.1fms)",
+        "%s %s -> %d (%.1fms) client=%s",
         request.method,
         request.url.path,
         response.status_code,
         duration_ms,
+        get_remote_address(request),
     )
     return response
 
