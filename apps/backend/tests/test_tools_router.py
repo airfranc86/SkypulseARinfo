@@ -57,6 +57,7 @@ def _make_hourly_forecast(
     wind_speed: float = 15.0,
     temp_850: float | None = 8.0,
     elevation_m: float = 25.0,
+    weather_code: int | None = None,
 ) -> HourlyForecastData:
     """Construye un HourlyForecastData sintético con n horas."""
     base_ts = int(time.time()) + 3600  # 1h en el futuro — _filter_future conserva todos los slots
@@ -72,6 +73,7 @@ def _make_hourly_forecast(
         wind_speeds_kmh=[wind_speed] * n,
         temps_850hpa=[temp_850] * n,
         elevation_m=elevation_m,
+        weather_codes=[weather_code] * n,
     )
 
 
@@ -499,6 +501,30 @@ class TestHacerDeporte:
         data = response.json()
         best_hours = [h for h in data["hourly"] if h["is_best"]]
         assert len(best_hours) == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_storm_forecast_overrides_perfect_conditions(self, async_client: AsyncClient):
+        """
+        Cableado end-to-end del veto de tormenta: weather_code=95 en el
+        forecast real que llega al router debe forzar "No apto" pese a que
+        temperatura/humedad/viento sean ideales — el bug reportado en vivo.
+        """
+        forecast = _make_hourly_forecast(
+            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed=10.0, weather_code=95,
+        )
+        with patch(
+            "app.routers.tools.get_hourly_forecast",
+            new_callable=AsyncMock,
+            return_value=forecast,
+        ):
+            response = await async_client.get(
+                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
+            )
+
+        data = response.json()
+        assert data["label"] == "No apto"
+        assert "tormenta" in data["headline"].lower()
 
 
 # ---------------------------------------------------------------------------

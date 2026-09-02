@@ -137,6 +137,7 @@ class HourlyForecastData:
     wind_speeds_kmh: list[float | None]
     temps_850hpa: list[float | None]
     elevation_m: float | None
+    weather_codes: list[int | None] = field(default_factory=list)
 
 
 async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | None:
@@ -149,7 +150,7 @@ async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | No
         "longitude": lon,
         "hourly": (
             "temperature_2m,relative_humidity_2m,precipitation,"
-            "wind_speed_10m,temperature_850hPa"
+            "wind_speed_10m,temperature_850hPa,weather_code"
         ),
         "timezone": "America/Argentina/Buenos_Aires",
         "models": "ecmwf_ifs04",
@@ -183,6 +184,11 @@ async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | No
                 timestamps.append(int(dt.timestamp()))
                 hour_labels.append(t[11:16])  # "14:00"
 
+            weather_codes: list[int | None] = []
+            for v in hourly.get("weather_code", []):
+                pf = parse_float(v)
+                weather_codes.append(int(pf) if pf is not None else None)
+
             return HourlyForecastData(
                 timestamps=timestamps,
                 hour_labels=hour_labels,
@@ -192,6 +198,7 @@ async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | No
                 wind_speeds_kmh=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
                 temps_850hpa=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
                 elevation_m=parse_float(data.get("elevation")),
+                weather_codes=weather_codes,
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo hourly parse error: %s", exc)
@@ -214,6 +221,7 @@ class DailyForecastData:
     wind_speed_max: list[float | None]      # km/h
     humidity_mean: list[float | None]       # %
     precip_prob_max: list[float | None] = field(default_factory=list)  # % probabilidad diaria
+    weather_code: list[int | None] = field(default_factory=list)       # peor código WMO del día
 
 
 async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyForecastData | None:
@@ -226,7 +234,8 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
         "longitude": lon,
         "daily": (
             "temperature_2m_max,temperature_2m_min,precipitation_sum,"
-            "precipitation_probability_max,wind_speed_10m_max,relative_humidity_2m_mean"
+            "precipitation_probability_max,wind_speed_10m_max,relative_humidity_2m_mean,"
+            "weather_code"
         ),
         "forecast_days": days,
         "timezone": "America/Argentina/Buenos_Aires",
@@ -258,6 +267,11 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
                 dt = datetime.fromisoformat(t)
                 day_labels.append(_DAY_LABELS_ES[dt.weekday()])
 
+            weather_code: list[int | None] = []
+            for v in daily.get("weather_code", []):
+                pf = parse_float(v)
+                weather_code.append(int(pf) if pf is not None else None)
+
             return DailyForecastData(
                 dates=list(time_list),
                 day_labels=day_labels,
@@ -267,6 +281,7 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyFore
                 wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
                 humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
                 precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
+                weather_code=weather_code,
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo daily parse error: %s", exc)

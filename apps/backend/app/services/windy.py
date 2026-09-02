@@ -63,6 +63,8 @@ class LaundryDayRaw:
     precip_sum_mm: float
     precip_prob: float
     wind_dir_cardinal: str | None = None
+    weather_code: int | None = None
+    cape_j_kg: float | None = None
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,7 @@ class WindyHourlyEntry:
     cloud_cover_pct: float | None  # promedio de lclouds/mclouds/hclouds
     dewpoint_c: float | None
     temp_850_c: float | None       # solo si se solicitó level 850h
+    cape_j_kg: float | None = None  # potencial convectivo — riesgo de tormenta/granizo
 
 
 @dataclass(frozen=True)
@@ -98,6 +101,7 @@ class WindyDailyEntry:
     precip_sum_mm: float | None
     precip_prob: float | None       # %, basado en proporción de slots con lluvia
     cloud_cover_mean: float | None
+    cape_max_j_kg: float | None = None  # pico de potencial convectivo del día
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +128,7 @@ _AR_TZ = timezone(timedelta(hours=-3))
 # en una sola request para evitar duplicar llamadas a la API.
 _WINDY_PARAMETERS = [
     "temp", "rh", "wind", "windGust", "precip",
-    "lclouds", "mclouds", "hclouds", "dewpoint",
+    "lclouds", "mclouds", "hclouds", "dewpoint", "cape",
 ]
 _WINDY_LEVELS = ["surface", "850h"]
 
@@ -266,6 +270,7 @@ def _parse_hourly(data: dict) -> list[WindyHourlyEntry]:
     hclouds: list[float | None] = data.get("hclouds-surface", [])
     dew_k: list[float | None] = data.get("dewpoint-surface", [])
     temp_850_k: list[float | None] = data.get("temp-850h", [])
+    cape: list[float | None] = data.get("cape-surface", [])
 
     entries: list[WindyHourlyEntry] = []
     for i, ts_ms in enumerate(ts_ms_list):
@@ -308,6 +313,7 @@ def _parse_hourly(data: dict) -> list[WindyHourlyEntry]:
                 cloud_cover_pct=cloud_cover_pct,
                 dewpoint_c=_k_to_c(_safe_get(dew_k, i)),
                 temp_850_c=_k_to_c(_safe_get(temp_850_k, i)),
+                cape_j_kg=_safe_get(cape, i),
             )
         )
 
@@ -363,6 +369,7 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 7) -> list[Wind
         gusts = [s.wind_gust_kmh for s in slots if s.wind_gust_kmh is not None]
         precips = [s.precip_3h_mm for s in slots if s.precip_3h_mm is not None]
         clouds = [s.cloud_cover_pct for s in slots if s.cloud_cover_pct is not None]
+        capes = [s.cape_j_kg for s in slots if s.cape_j_kg is not None]
 
         # Dirección media del viento — vector mean sobre cos/sin
         wind_dir_cardinal: str | None = None
@@ -392,6 +399,7 @@ async def get_daily_forecast(lat: float, lon: float, days: int = 7) -> list[Wind
                 precip_sum_mm=round(sum(precips), 2) if precips else None,
                 precip_prob=round(precip_prob, 2) if precip_prob is not None else None,
                 cloud_cover_mean=round(sum(clouds) / len(clouds), 2) if clouds else None,
+                cape_max_j_kg=round(max(capes), 1) if capes else None,
             )
         )
 
@@ -446,6 +454,7 @@ async def get_laundry_forecast(lat: float, lon: float) -> list[LaundryDayRaw]:
                 precip_sum_mm=d.precip_sum_mm if d.precip_sum_mm is not None else 0.0,
                 precip_prob=d.precip_prob if d.precip_prob is not None else 0.0,
                 wind_dir_cardinal=d.wind_dir_cardinal,
+                cape_j_kg=d.cape_max_j_kg,
             )
         )
 

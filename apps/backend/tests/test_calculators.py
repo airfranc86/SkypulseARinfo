@@ -522,3 +522,96 @@ class TestLavarCoche:
     def test_score_clamped_0_to_100(self):
         r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=0.0, humidity=10.0)
         assert 0 <= r.score <= 100
+
+
+class TestStormVeto:
+    """
+    Ninguna de las 3 herramientas miraba el tipo de fenómeno — solo mm de
+    lluvia. Un pronóstico de tormenta con granizo (weather_code 95/96/99, o
+    CAPE alto en la ruta Windy) podía dar "Excelente" si temperatura/humedad/
+    viento eran buenos. Estos tests reproducen exactamente ese escenario:
+    condiciones perfectas en todo excepto el tipo de fenómeno.
+    """
+
+    # ------------------------------------------------------------------ #
+    # hacer-deporte — el más frágil de los 3 (sin ningún veto antes)       #
+    # ------------------------------------------------------------------ #
+
+    def test_hacer_deporte_condiciones_perfectas_pero_tormenta(self):
+        r = score_hacer_deporte(
+            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0,
+            weather_code=95,
+        )
+        assert r.label == "No apto"
+        assert r.score < 30
+
+    def test_hacer_deporte_granizo_veta_igual(self):
+        r = score_hacer_deporte(
+            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0,
+            weather_code=96,
+        )
+        assert r.label == "No apto"
+
+    def test_hacer_deporte_cape_alto_veta_sin_weather_code(self):
+        """Windy no entrega weather_code — el veto debe activarse solo con CAPE."""
+        r = score_hacer_deporte(
+            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0,
+            cape_j_kg=1500.0,
+        )
+        assert r.label == "No apto"
+
+    def test_hacer_deporte_cape_bajo_no_veta(self):
+        r = score_hacer_deporte(
+            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0,
+            cape_j_kg=200.0,
+        )
+        assert r.label != "No apto"
+
+    def test_hacer_deporte_lluvia_leve_no_es_tormenta(self):
+        """weather_code=61 (lluvia leve) no debe activar el veto de tormenta."""
+        r = score_hacer_deporte(
+            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0,
+            weather_code=61,
+        )
+        assert r.label != "No apto"
+
+    def test_hacer_deporte_sin_datos_de_tormenta_no_rompe(self):
+        """weather_code/cape_j_kg son opcionales — comportamiento previo intacto."""
+        r = score_hacer_deporte(temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0)
+        assert r.label == "Excelente"
+
+    # ------------------------------------------------------------------ #
+    # tender-ropa                                                          #
+    # ------------------------------------------------------------------ #
+
+    def test_tender_ropa_condiciones_perfectas_pero_tormenta(self):
+        r = score_tender_ropa(
+            temp_c=25.0, humidity=30.0, wind_speed_kmh=10.0, precip_mm=0.0,
+            weather_code=99,
+        )
+        assert r.label == "No apto"
+
+    def test_tender_ropa_cape_alto_veta(self):
+        r = score_tender_ropa(
+            temp_c=25.0, humidity=30.0, wind_speed_kmh=10.0, precip_mm=0.0,
+            cape_j_kg=2000.0,
+        )
+        assert r.label == "No apto"
+
+    # ------------------------------------------------------------------ #
+    # lavar-coche                                                         #
+    # ------------------------------------------------------------------ #
+
+    def test_lavar_coche_condiciones_perfectas_pero_tormenta(self):
+        r = score_lavar_coche(
+            temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=40.0,
+            weather_code=96,
+        )
+        assert r.label == "No apto"
+
+    def test_lavar_coche_cape_alto_veta(self):
+        r = score_lavar_coche(
+            temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=40.0,
+            cape_j_kg=1800.0,
+        )
+        assert r.label == "No apto"

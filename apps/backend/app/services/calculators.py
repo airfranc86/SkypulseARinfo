@@ -25,6 +25,35 @@ def _label_and_color(score: int) -> tuple[ScoreLabel, ScoreColor]:
     return "No apto", "red"
 
 
+# Códigos WMO de tormenta/granizo (Open-Meteo): 95=tormenta, 96/99=tormenta con
+# granizo. Ver app/utils/wmo_codes.py — el resto del sitio ya usa esta misma
+# clasificación para mostrar el ícono de tormenta.
+_STORM_WMO_CODES = {95, 96, 99}
+
+# CAPE (J/kg) — único indicador de riesgo convectivo que la Windy Point
+# Forecast API expone (no entrega weather_code). A partir de ~1000 J/kg el
+# potencial de tormenta moderada-severa (incl. granizo) ya es real; por
+# encima de 2500 J/kg se considera extremo. Fuente: umbrales NOAA SPC.
+_CAPE_STORM_THRESHOLD_J_KG = 1000.0
+
+
+def is_storm_wmo_code(code: int | None) -> bool:
+    return code is not None and code in _STORM_WMO_CODES
+
+
+def _has_storm_risk(weather_code: int | None, cape_j_kg: float | None) -> bool:
+    """
+    Ninguna de las 3 herramientas de esta página miraba el tipo de fenómeno —
+    solo milímetros de lluvia. Eso permitía que un pronóstico de tormenta con
+    granizo pasara como "Excelente" si temperatura/humedad/viento eran buenos.
+    """
+    if weather_code is not None and weather_code in _STORM_WMO_CODES:
+        return True
+    if cape_j_kg is not None and cape_j_kg >= _CAPE_STORM_THRESHOLD_J_KG:
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Sensación térmica
 # ---------------------------------------------------------------------------
@@ -170,6 +199,8 @@ def score_tender_ropa(
     dew_point_c: float | None = None,
     # Legacy alias: used when precip_mm is not provided
     precip_next_6h: float | None = None,
+    weather_code: int | None = None,
+    cape_j_kg: float | None = None,
 ) -> ToolResult:
     """
     Calcula la aptitud para tender ropa al aire libre.
@@ -181,10 +212,27 @@ def score_tender_ropa(
       Viento       25 pts (× multiplicador por dirección)
       Precipitación 20 pts
       Rocío bonus    5 pts
+
+    Veto duro: tormenta o riesgo de granizo → "No apto" directo (además del
+    veto ya existente por lluvia significativa + alta probabilidad).
     """
     # Normalise legacy param
     if precip_mm is None:
         precip_mm = precip_next_6h
+
+    if _has_storm_risk(weather_code, cape_j_kg):
+        return ToolResult(
+            tool="tender-ropa",
+            score=5,
+            label="No apto",
+            color="red",
+            headline="Tormenta eléctrica — no tiendas ropa afuera",
+            reason="Riesgo de tormenta severa o granizo en el pronóstico.",
+            temp=temp_c,
+            humidity=humidity,
+            wind_speed=wind_speed_kmh,
+            precip=precip_mm,
+        )
 
     # ------------------------------------------------------------------
     # A) Humedad (35 pts) — curva continua; >65 % penaliza con veto duro
@@ -349,11 +397,29 @@ def score_hacer_deporte(
     humidity: float | None,
     precip: float | None,
     wind_speed_kmh: float | None,
+    weather_code: int | None = None,
+    cape_j_kg: float | None = None,
 ) -> ToolResult:
     """
     Calcula la aptitud para hacer deporte al aire libre.
     Temperatura ideal: 10-25 °C. Sin lluvia. Humedad baja. Viento moderado.
+    Veto duro: tormenta o riesgo de granizo detectado → "No apto" directo,
+    sin importar qué tan buenos sean el resto de los factores.
     """
+    if _has_storm_risk(weather_code, cape_j_kg):
+        return ToolResult(
+            tool="hacer-deporte",
+            score=5,
+            label="No apto",
+            color="red",
+            headline="Tormenta eléctrica — no hagas deporte al aire libre",
+            reason="Riesgo de tormenta severa o granizo en el pronóstico.",
+            temp=temp_c,
+            humidity=humidity,
+            wind_speed=wind_speed_kmh,
+            precip=precip,
+        )
+
     score = 0
     factors: list[str] = []
 
@@ -409,11 +475,29 @@ def score_lavar_coche(
     precip_mm: float | None,
     wind_speed_kmh: float | None,
     humidity: float | None,
+    weather_code: int | None = None,
+    cape_j_kg: float | None = None,
 ) -> ToolResult:
     """
     Calcula la aptitud para lavar el coche al aire libre (pronóstico diario).
     La precipitación es el factor más determinante.
+    Veto duro: tormenta o riesgo de granizo → "No apto" directo (el granizo
+    puede dañar la pintura, no es solo "se va a mojar de nuevo").
     """
+    if _has_storm_risk(weather_code, cape_j_kg):
+        return ToolResult(
+            tool="lavar-coche",
+            score=5,
+            label="No apto",
+            color="red",
+            headline="Riesgo de granizo — no laves el auto hoy",
+            reason="Tormenta severa o granizo en el pronóstico.",
+            temp=temp_max_c,
+            humidity=humidity,
+            wind_speed=wind_speed_kmh,
+            precip=precip_mm,
+        )
+
     score = 100
 
     # Precipitación — factor más importante

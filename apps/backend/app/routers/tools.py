@@ -58,7 +58,7 @@ router = APIRouter()
 
 def _build_hourly_scores(
     forecast: HourlyForecastData,
-    score_fn: Callable[[float | None, float | None, float | None, float | None], ToolResult],
+    score_fn: Callable[..., ToolResult],
     hours: int,
 ) -> list[HourlyScore]:
     """Construye la lista de HourlyScore para las primeras `hours` horas del forecast."""
@@ -68,7 +68,8 @@ def _build_hourly_scores(
         humidity = forecast.humidities[i] if i < len(forecast.humidities) else None
         precip = forecast.precipitations[i] if i < len(forecast.precipitations) else None
         wind = forecast.wind_speeds_kmh[i] if i < len(forecast.wind_speeds_kmh) else None
-        calc_result = score_fn(temp, humidity, wind, precip)
+        weather_code = forecast.weather_codes[i] if i < len(forecast.weather_codes) else None
+        calc_result = score_fn(temp, humidity, wind, precip, weather_code=weather_code)
         results.append(
             HourlyScore(
                 timestamp=forecast.timestamps[i],
@@ -82,13 +83,13 @@ def _build_hourly_scores(
 
 def _build_hourly_scores_from_windy(
     hourly: list[WindyHourlyEntry],
-    score_fn: Callable[[float | None, float | None, float | None, float | None], ToolResult],
+    score_fn: Callable[..., ToolResult],
     hours: int,
 ) -> list[HourlyScore]:
     """Versión que toma WindyHourlyEntry. Cada slot puede ser de 3 h en GFS."""
     results: list[HourlyScore] = []
     for h in hourly[:hours]:
-        calc_result = score_fn(h.temp_c, h.humidity, h.wind_speed_kmh, h.precip_3h_mm)
+        calc_result = score_fn(h.temp_c, h.humidity, h.wind_speed_kmh, h.precip_3h_mm, cape_j_kg=h.cape_j_kg)
         results.append(
             HourlyScore(
                 timestamp=h.timestamp_s,
@@ -164,6 +165,24 @@ def _best_hour_label(hourly: list[HourlyScore], min_score: int = 40) -> str | No
     return f"A las {best.hour_label}"
 
 
+def _first_storm_code(codes: list[int | None]) -> int | None:
+    """
+    Devuelve el primer código WMO de tormenta/granizo (95/96/99) encontrado en
+    la ventana — usado para el score "actual", que debe reflejar una tormenta
+    pronosticada para dentro de unas horas, no solo el instante exacto de la
+    consulta (que puede caer justo antes de que empiece a llover).
+    """
+    for c in codes:
+        if calculators.is_storm_wmo_code(c):
+            return c
+    return None
+
+
+def _max_cape(values: list[float | None]) -> float | None:
+    real = [v for v in values if v is not None]
+    return max(real) if real else None
+
+
 def _filter_future(hourly: list[HourlyScore], grace_s: int = 1800) -> list[HourlyScore]:
     """
     Filtra entradas claramente pasadas.
@@ -227,6 +246,7 @@ async def get_tender_ropa(
     # Acumular precipitación esperada en las próximas 6 horas
     precip_list = forecast.precipitations[:6]
     precip_next_6h = sum(v for v in precip_list if v is not None) if precip_list else None
+    storm_code = _first_storm_code(forecast.weather_codes[:6])
 
     # Condiciones actuales = primera hora del forecast
     temp_c = forecast.temps_c[0] if forecast.temps_c else None
@@ -238,6 +258,7 @@ async def get_tender_ropa(
         humidity=humidity,
         wind_speed_kmh=wind_speed_kmh,
         precip_next_6h=precip_next_6h,
+        weather_code=storm_code,
     )
 
     # Construir hourly 24h
@@ -430,16 +451,18 @@ async def get_hacer_deporte(
         next_4 = windy_hourly[:4]
         precip_vals = [s.precip_3h_mm for s in next_4 if s.precip_3h_mm is not None]
         precip = sum(precip_vals) if precip_vals else None
+        cape_j_kg = _max_cape([s.cape_j_kg for s in next_4])
 
         current_result = calculators.score_hacer_deporte(
             temp_c=temp_c,
             humidity=humidity,
             precip=precip,
             wind_speed_kmh=wind_speed_kmh,
+            cape_j_kg=cape_j_kg,
         )
 
-        def _score_fn(t, h, w, p):
-            return calculators.score_hacer_deporte(t, h, p, w)
+        def _score_fn(t, h, w, p, cape_j_kg=None):
+            return calculators.score_hacer_deporte(t, h, p, w, cape_j_kg=cape_j_kg)
 
         # 12 entradas (~36h en GFS, suficiente para tomar la mejor "hora" del día)
         hourly_scores = _build_hourly_scores_from_windy(windy_hourly, _score_fn, hours=12)
@@ -477,16 +500,18 @@ async def get_hacer_deporte(
     # Precipitación acumulada próximas 12h
     precip_list = forecast.precipitations[:12]
     precip = sum(v for v in precip_list if v is not None) if precip_list else None
+    storm_code = _first_storm_code(forecast.weather_codes[:12])
 
     current_result = calculators.score_hacer_deporte(
         temp_c=temp_c,
         humidity=humidity,
         precip=precip,
         wind_speed_kmh=wind_speed_kmh,
+        weather_code=storm_code,
     )
 
-    def _score_fn(t, h, w, p):
-        return calculators.score_hacer_deporte(t, h, p, w)
+    def _score_fn(t, h, w, p, weather_code=None):
+        return calculators.score_hacer_deporte(t, h, p, w, weather_code=weather_code)
 
     hourly = _build_hourly_scores(forecast, _score_fn, hours=12)
     hourly = _mark_best(hourly)
@@ -541,6 +566,7 @@ async def get_lavar_coche(
                 precip_mm=d.precip_sum_mm,
                 wind_speed_kmh=d.wind_speed_max_kmh,
                 humidity=d.humidity_mean,
+                cape_j_kg=d.cape_max_j_kg,
             )
             days_result.append(
                 CarWashDay(
@@ -580,6 +606,7 @@ async def get_lavar_coche(
             precip_mm=daily.precip_sum[i] if i < len(daily.precip_sum) else None,
             wind_speed_kmh=daily.wind_speed_max[i] if i < len(daily.wind_speed_max) else None,
             humidity=daily.humidity_mean[i] if i < len(daily.humidity_mean) else None,
+            weather_code=daily.weather_code[i] if i < len(daily.weather_code) else None,
         )
         days_result.append(
             CarWashDay(
@@ -687,6 +714,7 @@ async def get_laundry_forecast_endpoint(
                     wind_speed_kmh=daily.wind_speed_max[i] or 0.0,
                     precip_sum_mm=daily.precip_sum[i] or 0.0,
                     precip_prob=prob if prob is not None else 0.0,
+                    weather_code=daily.weather_code[i] if i < len(daily.weather_code) else None,
                 )
             )
 
@@ -700,6 +728,8 @@ async def get_laundry_forecast_endpoint(
             precip_mm=raw.precip_sum_mm,
             wind_dir_cardinal=raw.wind_dir_cardinal,
             precip_prob_pct=raw.precip_prob,
+            weather_code=raw.weather_code,
+            cape_j_kg=raw.cape_j_kg,
         )
         confidence_pct = _CONFIDENCE[idx] if idx < len(_CONFIDENCE) else 75
         days_result.append(
