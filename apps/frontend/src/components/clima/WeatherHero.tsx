@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+import { Thermometer, Droplets, Sun, Wind } from 'lucide-react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import { BorderGlow } from '@/components/animated/BorderGlow'
@@ -35,28 +37,28 @@ export function WeatherHero({ current, locationLabel }: Props) {
       backgroundColor="#0d1625"
     >
     <div
-      className="rounded-2xl p-6"
+      className="rounded-2xl p-7 sm:p-10"
       style={{ position: 'relative', background: 'var(--color-card)' }}
     >
-      {/* Top row: icon + temp + description */}
-      <div className="flex items-start gap-5">
-        <WeatherIcon code={current.icon} size={72} isDay={current.is_day} />
+      {/* Top row: icon + temp + description — el primer viewport es esto */}
+      <div className="flex items-start gap-6">
+        <WeatherIcon code={current.icon} size={96} isDay={current.is_day} />
 
         <div className="flex-1 min-w-0">
           <p
-            className="text-6xl sm:text-7xl font-bold leading-none tracking-tight"
+            className="text-7xl sm:text-8xl md:text-9xl font-bold leading-none tracking-tight"
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
           >
             {current.temp_c !== null ? `${Math.round(current.temp_c)}°` : '—'}
           </p>
           <p
-            className="mt-2 text-base"
+            className="mt-3 text-lg sm:text-xl"
             style={{ color: 'var(--color-muted-foreground)' }}
           >
             {current.description}
           </p>
           <p
-            className="text-xs mt-1"
+            className="text-sm mt-1.5"
             style={{ color: 'var(--color-primary)' }}
           >
             {locationLabel}
@@ -73,13 +75,13 @@ export function WeatherHero({ current, locationLabel }: Props) {
       </div>
 
       {/* Stats grid */}
-      <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="mt-7 grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Sensación — expanded chip with factor explanation */}
         <div
           className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5 col-span-2 sm:col-span-1"
           style={{ background: 'rgba(200,168,75,0.06)', border: '1px solid rgba(200,168,75,0.12)' }}
         >
-          <span className="text-base">🌡️</span>
+          <Thermometer size={18} strokeWidth={1.75} style={{ color: 'var(--color-primary)' }} />
           <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>Sensación</span>
           <span className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
             {current.feels_like_c !== null ? `${Math.round(current.feels_like_c)}°C` : '—'}
@@ -93,13 +95,13 @@ export function WeatherHero({ current, locationLabel }: Props) {
         </div>
 
         <StatChip
-          icon="💧"
+          icon={<Droplets size={18} strokeWidth={1.75} style={{ color: 'var(--color-primary)' }} />}
           label="Humedad"
           value={current.humidity !== null ? `${Math.round(current.humidity)}%` : '—'}
         />
         <WindChip current={current} />
         <StatChip
-          icon="☀️"
+          icon={<Sun size={18} strokeWidth={1.75} style={{ color: 'var(--color-primary)' }} />}
           label="UV"
           value={current.uv_index !== null ? String(Math.round(current.uv_index)) : '—'}
         />
@@ -109,13 +111,13 @@ export function WeatherHero({ current, locationLabel }: Props) {
   )
 }
 
-function StatChip({ icon, label, value }: { icon: string; label: string; value: string }) {
+function StatChip({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div
       className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5"
       style={{ background: 'rgba(200,168,75,0.06)', border: '1px solid rgba(200,168,75,0.12)' }}
     >
-      <span className="text-base">{icon}</span>
+      {icon}
       <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>{label}</span>
       <span className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>{value}</span>
     </div>
@@ -136,7 +138,7 @@ function WindChip({ current }: { current: CurrentDetailed }) {
     >
       {current.wind_icon
         ? <WeatherIcon code={current.wind_icon} size={24} />
-        : <span className="text-base">💨</span>}
+        : <Wind size={18} strokeWidth={1.75} style={{ color: 'var(--color-primary)' }} />}
       <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>Viento</span>
       <div className="flex items-center gap-1.5 flex-wrap">
         <span className="text-sm font-medium" style={{ color }}>{speedText}</span>
