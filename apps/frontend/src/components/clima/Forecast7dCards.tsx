@@ -10,11 +10,13 @@ interface Props {
 
 export function Forecast7dCards({ days }: Props) {
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin', scrollSnapType: 'x mandatory' }}>
+    <div className="flex gap-3 overflow-x-auto pb-1 pr-20" style={{ scrollbarWidth: 'thin', scrollSnapType: 'x mandatory' }}>
       {days.map((day, idx) => {
         const isHighlight = idx === 0
         return <DayCard key={day.date} day={day} highlighted={isHighlight} />
       })}
+      {/* Espacio al final del scroll para que la última card no quede tapada
+          por ScrollToTopBubble (fixed, bottom-right, ocupa los últimos 68px). */}
     </div>
   )
 }
