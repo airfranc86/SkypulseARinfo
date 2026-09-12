@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type CSSProperties } from 'react'
-import { Waves, RefreshCw, MapPin, Clock } from 'lucide-react'
+import { Waves, RefreshCw, MapPin, Clock, ExternalLink } from 'lucide-react'
 import { useEarthquakes } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { EarthquakeEvent } from '@/lib/api'
@@ -8,6 +8,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MagnitudeScaleBar } from '@/components/ui/MagnitudeScaleBar'
 import { EarthquakeMap } from '@/components/ui/EarthquakeMap'
 import { EarthquakeFilters } from '@/components/ui/EarthquakeFilters'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import {
   applyEarthquakeFilters,
   defaultEarthquakeFilters,
@@ -136,6 +137,15 @@ const columns: Column<EarthquakeEvent>[] = [
           style={{ color: 'var(--color-muted-foreground)', display: 'inline-flex', flexShrink: 0, padding: 6, margin: -6 }}
         >
           <MapPin size={13} />
+        </a>
+        <a
+          href={row.usgs_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Ver registro oficial en ${row.source === 'emsc' ? 'EMSC' : 'USGS'}`}
+          style={{ color: 'var(--color-muted-foreground)', display: 'inline-flex', flexShrink: 0, padding: 6, margin: -6 }}
+        >
+          <ExternalLink size={13} />
         </a>
       </span>
     ),
@@ -285,22 +295,29 @@ export function Terremotos({ location }: Props) {
       </header>
 
       {isLoading && <PageSkeleton />}
-      {error && <ErrorMessage message={(error as Error).message} />}
+      {error && <ErrorMessage message={(error as Error).message} onRetry={() => refetch()} />}
       {data && (
         <FadeContent>
           <div className="space-y-5">
             {/* Escala de referencia al tope */}
             <MagnitudeScaleBar activeMagnitude={maxMagNum} />
+            <p className="text-xs -mt-2" style={{ color: 'var(--color-muted-foreground)' }}>
+              La magnitud mide la energía liberada; cuánto se siente también depende de la
+              profundidad y la distancia — un sismo profundo o lejano se percibe menos aunque
+              tenga la misma magnitud.
+            </p>
 
             <EarthquakeFilters filters={filters} onChange={setFilters} />
 
             {events.length > 0 && (
-              <EarthquakeMap
-                events={events}
-                selectedId={selectedId}
-                onSelect={handleSelect}
-                center={{ lat: location.lat, lon: location.lon }}
-              />
+              <ErrorBoundary fallbackMessage="No se pudo cargar el mapa. Los datos siguen disponibles en la lista de abajo.">
+                <EarthquakeMap
+                  events={events}
+                  selectedId={selectedId}
+                  onSelect={handleSelect}
+                  center={{ lat: location.lat, lon: location.lon }}
+                />
+              </ErrorBoundary>
             )}
 
             {/* Mobile: "Sismos" full-width arriba, los otros 2 debajo — sm+: 3 cols iguales */}
@@ -461,17 +478,30 @@ export function Terremotos({ location }: Props) {
                       <p style={{ fontSize: '0.8rem', color: 'var(--color-foreground)' }}>
                         Distancia: {ev.distance_km.toFixed(0)} km
                       </p>
-                      <a
-                        href={mapsUrl(ev.lat, ev.lon)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`Ver ${translatePlace(ev.place)} en Google Maps`}
-                        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium min-h-[44px] transition-opacity hover:opacity-80"
-                        style={{ background: 'rgba(224,85,69,0.1)', color: '#e05545', border: '1px solid rgba(224,85,69,0.3)' }}
-                      >
-                        <MapPin size={14} aria-hidden="true" />
-                        Ver en Google Maps
-                      </a>
+                      <div className="mt-1 flex items-center gap-2">
+                        <a
+                          href={mapsUrl(ev.lat, ev.lon)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Ver ${translatePlace(ev.place)} en Google Maps`}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium min-h-[44px] transition-opacity hover:opacity-80"
+                          style={{ background: 'rgba(224,85,69,0.1)', color: '#e05545', border: '1px solid rgba(224,85,69,0.3)' }}
+                        >
+                          <MapPin size={14} aria-hidden="true" />
+                          Google Maps
+                        </a>
+                        <a
+                          href={ev.usgs_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Ver registro oficial en ${ev.source === 'emsc' ? 'EMSC' : 'USGS'}`}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium min-h-[44px] transition-opacity hover:opacity-80"
+                          style={{ background: 'var(--color-muted)', color: 'var(--color-muted-foreground)', border: '1px solid var(--color-border)' }}
+                        >
+                          <ExternalLink size={14} aria-hidden="true" />
+                          {ev.source === 'emsc' ? 'EMSC' : 'USGS'}
+                        </a>
+                      </div>
                     </div>
                   )
                 })
