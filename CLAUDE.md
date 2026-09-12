@@ -104,6 +104,16 @@ Al migrar un servicio de `async with httpx.AsyncClient(...) as client:` a `get_c
 
 ---
 
+## Reglas Git — este proyecto
+
+> Estas reglas son adicionales a las globales en `~/.claude/CLAUDE.md`.
+
+- **Nunca incluir archivos de `docs/` en un commit o push**, salvo que el usuario lo pida explícitamente.
+- Los archivos de `docs/` son documentación interna (planes, auditorías, GTM, etc.) que no va al repositorio remoto.
+- Si al hacer `git add` o `git commit` hay archivos de `docs/` staged → detener y avisar antes de continuar.
+
+---
+
 ## Cuaderno NotebookLM — Fuente de verdad del proyecto
 
 El proyecto tiene un cuaderno NotebookLM permanente con información técnica verificada:
