@@ -63,6 +63,10 @@ function depthLabel(depthKm: number): string {
   return `Profundidad: ${depthKm.toFixed(0)} km (desde la superficie)`
 }
 
+function localTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+}
+
 /** Texto "Sincronizado hace Xs" — re-renderiza cada segundo para que cuente en vivo. */
 function useSyncedLabel(dataUpdatedAt: number): string {
   const [, forceTick] = useState(0)
@@ -194,6 +198,11 @@ export function Terremotos({ location }: Props) {
     const ageMs = Date.now() - new Date(e.occurred_at).getTime()
     return ageMs < 2 * 60 * 60 * 1_000 && e.magnitude >= 4.5
   }) ?? null
+  // FRA-103: siempre destacar algo (el más reciente) cuando no hay un evento
+  // "significativo" — pero solo el significativo usa el tratamiento urgente/pulsante,
+  // para no romper el principio de diseño "urgencia sin alarma" con sismos menores.
+  const heroEvent = recentSignificant ?? events[0] ?? null
+  const heroIsUrgent = heroEvent !== null && heroEvent === recentSignificant
 
   const rowStyle = (row: EarthquakeEvent): CSSProperties => {
     const { rowBg } = magnitudeInfo(row.magnitude)
@@ -299,56 +308,76 @@ export function Terremotos({ location }: Props) {
               </ElectricBorder>
             </div>
 
-            {/* Hero: evento significativo reciente (< 2h, M ≥ 4.5) */}
-            {recentSignificant && (() => {
-              const { textColor, dotColor, fontSize, glow } = magnitudeInfo(recentSignificant.magnitude)
+            {/* Hero: evento destacado — el significativo (< 2h, M ≥ 4.5) si hay uno,
+                si no, el más reciente igual, pero con tratamiento visual sobrio
+                (ver nota FRA-103 más arriba). */}
+            {heroEvent && (() => {
+              const { textColor, dotColor, fontSize, glow } = magnitudeInfo(heroEvent.magnitude)
+              const source: 'usgs' | 'emsc' = heroEvent.source === 'emsc' ? 'emsc' : 'usgs'
               return (
                 <div
-                  className="rounded-xl px-4 py-3.5 flex items-center gap-4"
+                  className="relative rounded-xl px-4 py-3.5 flex items-center gap-4"
                   style={{
-                    background: 'rgba(224,85,69,0.08)',
-                    border: '1px solid rgba(224,85,69,0.28)',
+                    background: heroIsUrgent ? 'rgba(224,85,69,0.08)' : 'var(--color-card)',
+                    border: heroIsUrgent ? '1px solid rgba(224,85,69,0.28)' : '1px solid var(--color-border)',
                   }}
                 >
-                  {/* Dot pulsante */}
+                  <ModelBadge model={source} variant="inline" />
+                  {/* Dot — pulsante solo para el evento urgente */}
                   <div className="relative shrink-0" style={{ width: 12, height: 12 }}>
-                    <span
-                      className="animate-ping absolute inline-flex h-full w-full rounded-full"
-                      style={{ background: dotColor, opacity: 0.55 }}
-                    />
+                    {heroIsUrgent && (
+                      <span
+                        className="animate-ping absolute inline-flex h-full w-full rounded-full"
+                        style={{ background: dotColor, opacity: 0.55 }}
+                      />
+                    )}
                     <span
                       className="relative inline-flex rounded-full"
                       style={{
                         width: 12, height: 12,
                         background: dotColor,
-                        boxShadow: glow ? `0 0 8px 3px ${dotColor}88` : undefined,
+                        boxShadow: heroIsUrgent && glow ? `0 0 8px 3px ${dotColor}88` : undefined,
                       }}
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--color-warn)', marginBottom: 2 }}>
-                      Evento reciente
+                  <div className="flex-1 min-w-0 pr-16">
+                    <p style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: heroIsUrgent ? 'var(--color-warn)' : 'var(--color-muted-foreground)', marginBottom: 2 }}>
+                      {heroIsUrgent ? 'Evento reciente' : 'Último sismo registrado'}
                     </p>
                     <p style={{ color: textColor, fontSize, fontWeight: 700, lineHeight: 1.2 }}>
-                      M {recentSignificant.magnitude.toFixed(1)} · {translatePlace(recentSignificant.place)}
+                      M {heroEvent.magnitude.toFixed(1)} · {translatePlace(heroEvent.place)}
                     </p>
                     <p style={{ fontSize: '0.7rem', color: 'var(--color-muted-foreground)', marginTop: 2 }}>
-                      {relativeTime(recentSignificant.occurred_at)}
+                      {relativeTime(heroEvent.occurred_at)}
+                      {' ('}{localTime(heroEvent.occurred_at)}{')'}
                       {' · '}
-                      {depthLabel(recentSignificant.depth_km)}
+                      {depthLabel(heroEvent.depth_km)}
                       {' · '}
-                      {recentSignificant.distance_km.toFixed(0)} km de distancia
+                      {heroEvent.distance_km.toFixed(0)} km de distancia
                     </p>
-                    <a
-                      href={mapsUrl(recentSignificant.lat, recentSignificant.lon)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium hover:opacity-80"
-                      style={{ color: textColor }}
-                    >
-                      <MapPin size={12} aria-hidden="true" />
-                      Ver en el mapa
-                    </a>
+                    <div className="mt-1.5 flex items-center gap-3 flex-wrap">
+                      <a
+                        href={mapsUrl(heroEvent.lat, heroEvent.lon)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Ver ${translatePlace(heroEvent.place)} en Google Maps`}
+                        className="inline-flex items-center gap-1 text-xs font-medium hover:opacity-80"
+                        style={{ color: textColor }}
+                      >
+                        <MapPin size={12} aria-hidden="true" />
+                        Ver en el mapa
+                      </a>
+                      <a
+                        href={heroEvent.usgs_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Ver detalle oficial del evento en ${source === 'emsc' ? 'EMSC' : 'USGS'}`}
+                        className="inline-flex items-center gap-1 text-xs font-medium hover:opacity-80"
+                        style={{ color: 'var(--color-muted-foreground)' }}
+                      >
+                        Ver detalle ({source === 'emsc' ? 'EMSC' : 'USGS'})
+                      </a>
+                    </div>
                   </div>
                 </div>
               )
