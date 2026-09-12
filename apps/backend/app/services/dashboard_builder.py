@@ -17,6 +17,7 @@ from app.schemas.weather import (
     RainForecastSchema,
     WeatherCurrentResponse,
 )
+from app.services.calculators import compute_convective_risk
 from app.services.forecast_merge import merge_daily_fields
 from app.services.openmeteo import (
     DailyForecastDataExt,
@@ -316,6 +317,13 @@ def build_hourly_schema(
                     om_hourly.is_day[i] if i < len(om_hourly.is_day) else True,
                 )[1],
                 is_day=om_hourly.is_day[i] if i < len(om_hourly.is_day) else True,
+                # Sin Windy no hay CAPE disponible — convective_risk queda None.
+                convective_risk=None,
+                freezing_level_height_m=(
+                    om_hourly.freezing_level_heights_m[i]
+                    if i < len(om_hourly.freezing_level_heights_m)
+                    else None
+                ),
             )
             for i in range(len(om_hourly.timestamps))
         ]
@@ -331,33 +339,38 @@ def build_hourly_schema(
             rain_probability_pct=round(max_prob, 1),
         )
 
-    # Camino Windy: enriquecer con weather_code/is_day desde Open-Meteo por timestamp
-    om_index: dict[int, tuple[int | None, bool]] = {}
+    # Camino Windy: enriquecer con weather_code/is_day/freezing_level desde Open-Meteo por timestamp
+    om_index: dict[int, tuple[int | None, bool, float | None]] = {}
     if om_hourly is not None:
         for i, ts in enumerate(om_hourly.timestamps):
             wc = om_hourly.weather_codes[i] if i < len(om_hourly.weather_codes) else None
             idy = om_hourly.is_day[i] if i < len(om_hourly.is_day) else True
-            om_index[ts] = (wc, idy)
+            fzl = (
+                om_hourly.freezing_level_heights_m[i]
+                if i < len(om_hourly.freezing_level_heights_m)
+                else None
+            )
+            om_index[ts] = (wc, idy, fzl)
 
-    def _closest_om(ts: int) -> tuple[int | None, bool]:
-        """Encuentra el weather_code/is_day OM más cercano a `ts` (±90 min)."""
+    def _closest_om(ts: int) -> tuple[int | None, bool, float | None]:
+        """Encuentra el weather_code/is_day/freezing_level OM más cercano a `ts` (±90 min)."""
         if not om_index:
-            return None, is_day_default
+            return None, is_day_default, None
         # Búsqueda lineal (max 48 entradas) — el bucket es pequeño
         best_diff = 10**9
-        best_val = (None, is_day_default)
+        best_val: tuple[int | None, bool, float | None] = (None, is_day_default, None)
         for ts_om, val in om_index.items():
             diff = abs(ts_om - ts)
             if diff < best_diff:
                 best_diff = diff
                 best_val = val
         # Permitir hasta 90 min de tolerancia
-        return best_val if best_diff <= 5400 else (None, is_day_default)
+        return best_val if best_diff <= 5400 else (None, is_day_default, None)
 
     entries = []
     precip_probs: list[float] = []
     for h in windy_hourly:
-        wc, idy = _closest_om(h.timestamp_s)
+        wc, idy, freezing_level_m = _closest_om(h.timestamp_s)
         _, icon = describe_wmo(wc, idy)
         # Aproximar precip_prob por slot: 100 si llueve, 0 si no
         slot_prob = 100.0 if (h.precip_3h_mm or 0.0) > 0.1 else 0.0
@@ -373,6 +386,9 @@ def build_hourly_schema(
                 weather_code=wc,
                 icon=icon,
                 is_day=idy,
+                convective_risk=compute_convective_risk(h.cape_j_kg),
+                freezing_level_height_m=freezing_level_m,
+                wind_gusts_kmh=h.wind_gust_kmh,
             )
         )
 
@@ -465,6 +481,14 @@ def build_7d_forecast(
         wdd = ref.wind_dir_dominant[i] if i < len(ref.wind_dir_dominant) else None
         w_card = degrees_to_cardinal(wdd) if wdd is not None else None
 
+        windy_day = windy_by_date.get(date_str)
+        # Sin Windy para este día no hay CAPE — dejar convective_risk en None en
+        # vez de compute_convective_risk(None) (que devolvería "low" y fingiría
+        # un dato que no existe).
+        day_convective_risk = (
+            compute_convective_risk(windy_day.cape_max_j_kg) if windy_day is not None else None
+        )
+
         entries.append(
             DailyEntrySchema(
                 date=date_str,
@@ -484,6 +508,7 @@ def build_7d_forecast(
                 wind_dir_cardinal=w_card,
                 wind_icon=wind_icon_code(wsm),
                 wind_intensity=wind_intensity_tier(wsm),
+                convective_risk=day_convective_risk,
             )
         )
 

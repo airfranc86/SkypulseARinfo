@@ -11,7 +11,11 @@ interface SportBlockProps {
   hourlyEntries?: HourlyEntry[]
 }
 
-const STORM_CODES = [95, 96, 99]
+// Códigos WMO de tormenta/granizo — mismo set que app/services/calculators.py
+// (_STORM_WMO_CODES). El riesgo por CAPE lo manda el backend en
+// `convective_risk` (calculado en dashboard_builder.py); acá solo se combina
+// con este chequeo WMO, no se reimplementa el umbral de CAPE.
+const STORM_WMO_CODES = [95, 96, 99]
 
 interface Indicator {
   emoji: string
@@ -26,7 +30,10 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
 
   const hasStormRisk =
     hourlyEntries?.some(
-      h => h.weather_code !== null && STORM_CODES.includes(h.weather_code)
+      h =>
+        (h.weather_code !== null && STORM_WMO_CODES.includes(h.weather_code)) ||
+        h.convective_risk === 'high' ||
+        h.convective_risk === 'severe'
     ) ?? false
 
   const feelsLike = current?.feels_like_c ?? data.temp

@@ -230,6 +230,8 @@ export interface DayArcInfo {
   is_day: boolean
 }
 
+export type ConvectiveRisk = 'low' | 'moderate' | 'high' | 'severe'
+
 export interface HourlyEntry {
   timestamp: number
   hour_label: string
@@ -240,6 +242,9 @@ export interface HourlyEntry {
   weather_code: number | null
   icon: string
   is_day: boolean
+  convective_risk?: ConvectiveRisk | null
+  freezing_level_height_m?: number | null
+  wind_gusts_kmh?: number | null
 }
 
 export interface DailyEntry {
@@ -261,6 +266,7 @@ export interface DailyEntry {
   wind_icon: string | null
   wind_intensity: string | null
   wind_shift: boolean
+  convective_risk?: ConvectiveRisk | null
 }
 
 export interface RainForecastInfo {

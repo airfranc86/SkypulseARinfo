@@ -6,6 +6,7 @@ from app.services.calculators import (
     score_tender_ropa,
     compute_sensacion_termica,
     compute_cota_de_nieve,
+    compute_convective_risk,
     score_hacer_deporte,
     score_lavar_coche,
     FeelsLikeResult,
@@ -522,6 +523,47 @@ class TestLavarCoche:
     def test_score_clamped_0_to_100(self):
         r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=0.0, humidity=10.0)
         assert 0 <= r.score <= 100
+
+
+class TestConvectiveRisk:
+    """
+    compute_convective_risk (FRA-122 fase A) — 4 escalones solo con CAPE
+    (sin CIN, ver docstring de la función). Umbrales: <1000 low,
+    1000-3000 moderate, 3000-4500 high, >=4500 severe.
+    """
+
+    def test_none_es_low(self):
+        assert compute_convective_risk(None) == "low"
+
+    def test_cero_es_low(self):
+        assert compute_convective_risk(0.0) == "low"
+
+    def test_justo_debajo_de_1000_es_low(self):
+        assert compute_convective_risk(999.9) == "low"
+
+    def test_1000_es_moderate(self):
+        assert compute_convective_risk(1000.0) == "moderate"
+
+    def test_moderate_intermedio(self):
+        assert compute_convective_risk(2000.0) == "moderate"
+
+    def test_justo_debajo_de_3000_es_moderate(self):
+        assert compute_convective_risk(2999.9) == "moderate"
+
+    def test_3000_es_high(self):
+        assert compute_convective_risk(3000.0) == "high"
+
+    def test_high_intermedio(self):
+        assert compute_convective_risk(4000.0) == "high"
+
+    def test_justo_debajo_de_4500_es_high(self):
+        assert compute_convective_risk(4499.9) == "high"
+
+    def test_4500_es_severe(self):
+        assert compute_convective_risk(4500.0) == "severe"
+
+    def test_valor_extremo_es_severe(self):
+        assert compute_convective_risk(6000.0) == "severe"
 
 
 class TestStormVeto:

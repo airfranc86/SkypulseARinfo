@@ -36,9 +36,36 @@ _STORM_WMO_CODES = {95, 96, 99}
 # encima de 2500 J/kg se considera extremo. Fuente: umbrales NOAA SPC.
 _CAPE_STORM_THRESHOLD_J_KG = 1000.0
 
+ConvectiveRisk = Literal["low", "moderate", "high", "severe"]
+
 
 def is_storm_wmo_code(code: int | None) -> bool:
     return code is not None and code in _STORM_WMO_CODES
+
+
+def compute_convective_risk(cape_j_kg: float | None) -> ConvectiveRisk:
+    """
+    Clasifica el riesgo convectivo usando SOLO CAPE (J/kg) — sin CIN.
+
+    CIN no está disponible hoy en ninguna fuente consistente con CAPE: Windy
+    Point Forecast (la fuente de CAPE) no la expone, y pedirla a Open-Meteo
+    mezclaría dos modelos con horas de corrida distintas para un mismo par
+    CAPE/CIN — metodológicamente inválido. Queda pendiente para cuando se
+    migre a WRF-SMN (FRA-122 fase D), de donde saldrían ambas del mismo modelo.
+
+    Umbral "high" ajustado a 3000 J/kg (en vez de los ~2500 J/kg de umbrales
+    globales tipo NOAA SPC) porque la convección local con orografía de las
+    Sierras de Córdoba necesita CAPE más alto para disparar súper-células.
+    Hipótesis de arranque — recalibrar con eventos observados en la
+    temporada 2026-27.
+    """
+    if cape_j_kg is None or cape_j_kg < 1000:
+        return "low"
+    if cape_j_kg < 3000:
+        return "moderate"
+    if cape_j_kg < 4500:
+        return "high"
+    return "severe"
 
 
 def _has_storm_risk(weather_code: int | None, cape_j_kg: float | None) -> bool:
@@ -46,10 +73,15 @@ def _has_storm_risk(weather_code: int | None, cape_j_kg: float | None) -> bool:
     Ninguna de las 3 herramientas de esta página miraba el tipo de fenómeno —
     solo milímetros de lluvia. Eso permitía que un pronóstico de tormenta con
     granizo pasara como "Excelente" si temperatura/humedad/viento eran buenos.
+
+    Veto por CAPE: usa compute_convective_risk != "low" en vez de comparar
+    contra _CAPE_STORM_THRESHOLD_J_KG directamente — el corte "low" de esa
+    función es exactamente el mismo umbral (1000 J/kg), así que el veto no
+    cambia de comportamiento.
     """
     if weather_code is not None and weather_code in _STORM_WMO_CODES:
         return True
-    if cape_j_kg is not None and cape_j_kg >= _CAPE_STORM_THRESHOLD_J_KG:
+    if compute_convective_risk(cape_j_kg) != "low":
         return True
     return False
 
