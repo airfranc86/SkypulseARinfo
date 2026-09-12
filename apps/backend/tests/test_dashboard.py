@@ -545,6 +545,102 @@ async def test_dashboard_falls_back_to_openmeteo_when_windy_fails(
     assert data["forecast_7d"][0]["temp_max"] == pytest.approx(22.0)
 
 
+# ---------------------------------------------------------------------------
+# sources / degraded — FRA-122 fase B
+# ---------------------------------------------------------------------------
+
+def _make_current_response_stale() -> WeatherCurrentResponse:
+    """Igual a _make_current_response pero con meta.stale=True."""
+    base = _make_current_response()
+    return base.model_copy(update={"meta": base.meta.model_copy(update={"stale": True})})
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_sources_windy_available_not_degraded(
+    async_client: AsyncClient, monkeypatch
+):
+    """Windy + Open-Meteo ambos disponibles, current fresco → sin degradar."""
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_make_multi_model()),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_make_hourly()),
+        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_make_windy_hourly_ext()),
+        patch("app.routers.weather.windy_get_daily_forecast", new_callable=AsyncMock, return_value=_make_windy_daily_ext()),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    data = response.json()
+    assert data["degraded"] is False
+    assert data["sources"]["windy_gfs"] == {"available": True, "used": True}
+    assert data["sources"]["open_meteo"] == {"available": True, "used": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_sources_windy_unavailable_is_degraded(async_client: AsyncClient):
+    """Sin Windy configurado (disable_windy_by_default) → degraded=True."""
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_make_multi_model()),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_make_hourly()),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    data = response.json()
+    assert data["degraded"] is True
+    assert data["sources"]["windy_gfs"] == {"available": False, "used": False}
+    assert data["sources"]["open_meteo"] == {"available": True, "used": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_sources_synthetic_fallback_is_degraded(
+    async_client: AsyncClient, monkeypatch
+):
+    """Open-Meteo daily falla → fallback sintético desde Windy → degraded=True."""
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=None),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=None),
+        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_make_windy_hourly_ext()),
+        patch("app.routers.weather.windy_get_daily_forecast", new_callable=AsyncMock, return_value=_make_windy_daily_ext()),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    data = response.json()
+    assert data["degraded"] is True
+    assert data["sources"]["windy_gfs"] == {"available": True, "used": True}
+    assert data["sources"]["open_meteo"] == {"available": False, "used": False}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_dashboard_degraded_when_current_stale(async_client: AsyncClient, monkeypatch):
+    """current.meta.stale=True degrada el dashboard aunque Windy+OM estén ok."""
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+
+    with (
+        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response_stale()),
+        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_make_multi_model()),
+        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_make_hourly()),
+        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_make_windy_hourly_ext()),
+        patch("app.routers.weather.windy_get_daily_forecast", new_callable=AsyncMock, return_value=_make_windy_daily_ext()),
+    ):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    data = response.json()
+    assert data["degraded"] is True
+    assert data["current"]["stale"] is True
+
+
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_dashboard_default_source_is_openmeteo_when_windy_not_configured(

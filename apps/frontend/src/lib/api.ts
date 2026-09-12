@@ -306,6 +306,16 @@ export interface HourlyConsensus {
   rain_probability_pct: number
 }
 
+export interface SourceStatus {
+  available: boolean
+  used: boolean
+}
+
+export interface ForecastSources {
+  windy_gfs: SourceStatus
+  open_meteo: SourceStatus
+}
+
 export interface WeatherDashboardResponse {
   location: { lat: number; lon: number; city: string | null }
   current: CurrentDetailed
@@ -317,6 +327,8 @@ export interface WeatherDashboardResponse {
   forecast_7d: DailyEntry[]
   fetched_at: string
   forecast_source?: 'mixed' | 'openmeteo'  // "mixed" = Windy+Open-Meteo, "openmeteo" = fallback puro
+  sources?: ForecastSources | null
+  degraded?: boolean
 }
 
 // ── Fire Danger schemas ───────────────────────────────────────────────────────
