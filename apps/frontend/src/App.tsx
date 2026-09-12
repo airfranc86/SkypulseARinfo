@@ -9,7 +9,6 @@ import { isClientError } from '@/hooks/useWeather'
 import { useGTMPageView } from '@/hooks/useGTMPageView'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { LocationPicker } from '@/components/LocationPicker'
-import { SplashCursor } from '@/components/animated/SplashCursor'
 import { Threads } from '@/components/animated/Threads'
 import {
   ModelStatusProvider,
@@ -120,19 +119,12 @@ const queryClient = new QueryClient({
 // ── Motion & capability preferences ──────────────────────────────────────────
 
 /**
- * Detects device capabilities and motion preference.
- * - enableHeavyEffects: SplashCursor WebGL fluid sim — only on pointer:fine + ≥4 CPU cores (stable, no re-render needed)
- * - enableAnimations:   Threads shader — off when prefers-reduced-motion: reduce (reactive to live preference changes)
+ * Detects motion preference.
+ * - enableAnimations: Threads shader — off when prefers-reduced-motion: reduce (reactive to live preference changes)
  */
 function useMotionPreferences() {
   const reducedMotion = useReducedMotion()
-  const enableHeavyEffects = useMemo(() => {
-    if (typeof window === 'undefined') return false
-    const pointerFine = window.matchMedia('(pointer: fine)').matches
-    const cpuCores = navigator.hardwareConcurrency ?? 4
-    return pointerFine && cpuCores >= 4
-  }, [])
-  return { enableHeavyEffects, enableAnimations: !reducedMotion }
+  return { enableAnimations: !reducedMotion }
 }
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
@@ -167,7 +159,7 @@ function RootLayout() {
   const { location, geoLoading, geoError, selectCity, detectLocation } =
     useLocationState()
 
-  const { enableHeavyEffects, enableAnimations } = useMotionPreferences()
+  const { enableAnimations } = useMotionPreferences()
   const { data: volcanesData } = useVolcanes()
 
   // T-11: memoize to avoid new array/element references on every location update
@@ -234,11 +226,6 @@ function RootLayout() {
             enableMouseInteraction={false}
           />
         </div>
-      )}
-
-      {/* SplashCursor — only on pointer:fine devices with ≥4 CPU cores */}
-      {enableHeavyEffects && (
-        <SplashCursor />
       )}
 
       <header className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/60">
