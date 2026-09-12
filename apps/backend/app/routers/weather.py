@@ -25,7 +25,9 @@ from app.core.rate_limit import limiter
 from app.schemas.weather import (
     CurrentDetailedSchema,
     DayArcSchema,
+    ForecastSources,
     MoonPhaseSchema,
+    SourceStatus,
     WeatherCurrentResponse,
     WeatherDashboardResponse,
 )
@@ -184,6 +186,9 @@ async def get_dashboard(
 
     # daily_multi provee weather_code/uv/sunrise/sunset.
     # Si Open-Meteo falla (ej. 429), intentar fallback sintético desde Windy GFS.
+    # Capturado ANTES de la reasignación de abajo — indica si Open-Meteo global
+    # falló y tuvimos que sintetizar el daily desde Windy (ver sources/degraded).
+    used_synthetic_daily = isinstance(daily_multi, Exception) or daily_multi is None
     if isinstance(daily_multi, Exception) or daily_multi is None:
         if windy_daily_data:
             logger.warning(
@@ -383,6 +388,18 @@ async def get_dashboard(
         selected_model=model,
     )
 
+    # =========================================================================
+    # sources / degraded — fuentes reales usadas hoy (Windy GFS + Open-Meteo).
+    # No hay WRF-SMN todavía (FRA-122 fase D) — no se fabrica ese campo.
+    # =========================================================================
+    windy_available = bool(windy_hourly_data or windy_daily_data)
+    open_meteo_available = not used_synthetic_daily
+    sources = ForecastSources(
+        windy_gfs=SourceStatus(available=windy_available, used=windy_available),
+        open_meteo=SourceStatus(available=open_meteo_available, used=open_meteo_available),
+    )
+    degraded = (not windy_available) or used_synthetic_daily or current.meta.stale
+
     return WeatherDashboardResponse(
         location={"lat": lat, "lon": lon, "city": None},
         current=current_detailed,
@@ -394,6 +411,8 @@ async def get_dashboard(
         forecast_7d=forecast_7d,
         fetched_at=now,
         forecast_source=forecast_source,
+        sources=sources,
+        degraded=degraded,
     )
 
 

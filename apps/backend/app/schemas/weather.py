@@ -213,6 +213,25 @@ class HourlyConsensusSchema(BaseModel):
     rain_probability_pct: float
 
 
+class SourceStatus(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    available: bool   # se pudo obtener respuesta de esta fuente en este request
+    used: bool         # se usó efectivamente para construir la respuesta
+
+
+class ForecastSources(BaseModel):
+    """
+    Estado de las fuentes reales usadas hoy (Windy GFS + Open-Meteo). Cuando
+    se migre a WRF-SMN (FRA-122 fase D) se sumará un campo `wrf_smn` acá —
+    de momento no existe esa fuente, no se fabrica un valor para ella.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    windy_gfs: SourceStatus
+    open_meteo: SourceStatus
+
+
 class WeatherDashboardResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -227,3 +246,8 @@ class WeatherDashboardResponse(BaseModel):
     fetched_at: datetime
     # Origen del pronóstico principal: "windy_gfs" | "openmeteo_fallback" | "mixed"
     forecast_source: str = "unknown"
+    sources: ForecastSources | None = None
+    # True si la fuente primaria (Windy) no estuvo disponible, si el pronóstico
+    # diario tuvo que sintetizarse desde Windy porque Open-Meteo falló, o si
+    # `current` es un dato stale (ver SourceMeta.stale).
+    degraded: bool = False
