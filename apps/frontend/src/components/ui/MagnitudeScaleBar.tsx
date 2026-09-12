@@ -1,3 +1,6 @@
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+
 function getActiveLevelIndex(mag: number): number {
   if (mag >= 7) return 5
   if (mag >= 6) return 4
@@ -59,141 +62,160 @@ const LEVELS = [
 ] as const
 
 export function MagnitudeScaleBar({ activeMagnitude }: MagnitudeScaleBarProps) {
+  const [expanded, setExpanded] = useState(false)
   const n = LEVELS.length
   const activeIdx = activeMagnitude != null ? getActiveLevelIndex(activeMagnitude) : -1
 
   return (
     <div
-      className="rounded-xl p-4 space-y-3"
+      className="rounded-xl p-4"
       style={{
         background: 'var(--color-card)',
         border: '1px solid var(--color-border)',
       }}
     >
-      {/* Title */}
-      <p
-        className="text-xs uppercase tracking-wide"
-        style={{ color: 'var(--color-muted-foreground)' }}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-label={expanded ? 'Ocultar detalle de la escala de magnitud' : 'Ver detalle de la escala de magnitud'}
+        className="w-full flex items-center gap-2 text-left min-h-[32px]"
       >
-        Escala de magnitud (Mw) · qué pasa en tu casa
-      </p>
-
-      {/* Gradient bar + label ticks */}
-      <div className="relative pb-5">
-        {/* Gradient bar */}
-        <div
-          className="h-2 rounded-full w-full"
-          style={{
-            background:
-              'linear-gradient(to right, #3ecf7a, #a8d060, #f0d060, #f0a030, #e05545, #aa2222)',
-          }}
-        />
-
-        {/* Active magnitude dot on the bar — slides to its new position instead of jumping, so a refetch reads as "the situation moved" */}
-        {activeIdx >= 0 && (
+        {/* Gradient bar + label ticks */}
+        <div className="relative flex-1" style={{ paddingBottom: expanded ? '20px' : 0 }}>
+          {/* Gradient bar */}
           <div
-            aria-hidden="true"
-            className="motion-safe:[transition:transform_0.6s_cubic-bezier(0.16,1,0.3,1)]"
+            className="h-2 rounded-full w-full"
             style={{
-              position: 'absolute',
-              left: 0,
-              top: '-5px',
-              width: '100%',
-              transform: `translateX(${(activeIdx / (n - 1)) * 100}%)`,
+              background:
+                'linear-gradient(to right, #3ecf7a, #a8d060, #f0d060, #f0a030, #e05545, #aa2222)',
             }}
-          >
-            <div
-              aria-label={`Magnitud activa: ${LEVELS[activeIdx].label}`}
-              className="rounded-full motion-safe:[transition:all_0.6s_ease]"
-              style={{
-                transform: 'translateX(-50%)',
-                width: '12px',
-                height: '12px',
-                background: LEVELS[activeIdx].color,
-                boxShadow: `0 0 8px 2px ${LEVELS[activeIdx].color}88`,
-                border: '2px solid var(--color-background)',
-              }}
-            />
-          </div>
-        )}
+          />
 
-        {/* Tick marks + labels debajo */}
-        {LEVELS.map((level, i) => {
-          const pct = (i / (n - 1)) * 100
-          return (
+          {/* Active magnitude dot on the bar — slides to its new position instead of jumping, so a refetch reads as "the situation moved" */}
+          {activeIdx >= 0 && (
             <div
-              key={level.label}
-              className="absolute"
-              style={{ left: `${pct}%`, top: 0, transform: 'translateX(-50%)' }}
+              aria-hidden="true"
+              className="motion-safe:[transition:transform_0.6s_cubic-bezier(0.16,1,0.3,1)]"
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: '-5px',
+                width: '100%',
+                transform: `translateX(${(activeIdx / (n - 1)) * 100}%)`,
+              }}
             >
-              {/* tick */}
               <div
+                aria-label={`Magnitud activa: ${LEVELS[activeIdx].label}`}
+                className="rounded-full motion-safe:[transition:all_0.6s_ease]"
                 style={{
-                  width: '1px',
-                  height: '10px',
-                  marginTop: '0px',
-                  background: level.color,
-                  opacity: 0.85,
-                  marginLeft: 'auto',
-                  marginRight: 'auto',
+                  transform: 'translateX(-50%)',
+                  width: '12px',
+                  height: '12px',
+                  background: LEVELS[activeIdx].color,
+                  boxShadow: `0 0 8px 2px ${LEVELS[activeIdx].color}88`,
+                  border: '2px solid var(--color-background)',
                 }}
               />
-              {/* label debajo del tick */}
-              <span
+            </div>
+          )}
+
+          {/* Tick marks + labels debajo — solo cuando está expandido */}
+          {expanded && LEVELS.map((level, i) => {
+            const pct = (i / (n - 1)) * 100
+            return (
+              <div
+                key={level.label}
+                className="absolute"
+                style={{ left: `${pct}%`, top: 0, transform: 'translateX(-50%)' }}
+              >
+                {/* tick */}
+                <div
+                  style={{
+                    width: '1px',
+                    height: '10px',
+                    marginTop: '0px',
+                    background: level.color,
+                    opacity: 0.85,
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                  }}
+                />
+                {/* label debajo del tick */}
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '9px',
+                    fontWeight: 600,
+                    color: level.color,
+                    textAlign: 'center',
+                    marginTop: '2px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {level.label}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+
+        <ChevronDown
+          size={16}
+          aria-hidden="true"
+          className="shrink-0 transition-transform"
+          style={{ color: 'var(--color-muted-foreground)', transform: expanded ? 'rotate(180deg)' : undefined }}
+        />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <p
+            className="text-xs uppercase tracking-wide"
+            style={{ color: 'var(--color-muted-foreground)' }}
+          >
+            Escala de magnitud (Mw) · qué pasa en tu casa
+          </p>
+
+          {/* Level chips */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {LEVELS.map((level, i) => {
+              const isActive = i === activeIdx
+              return (
+              <div
+                key={level.label}
+                className="rounded-lg px-2 py-2 flex flex-col gap-0.5"
                 style={{
-                  display: 'block',
-                  fontSize: '9px',
-                  fontWeight: 600,
-                  color: level.color,
-                  textAlign: 'center',
-                  marginTop: '2px',
-                  whiteSpace: 'nowrap',
+                  background: isActive ? `${level.color}28` : `${level.color}14`,
+                  border: `1px solid ${isActive ? level.color : `${level.color}33`}`,
+                  outline: isActive ? `1px solid ${level.color}55` : undefined,
+                  outlineOffset: isActive ? '1px' : undefined,
                 }}
               >
-                {level.label}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Level chips */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        {LEVELS.map((level, i) => {
-          const isActive = i === activeIdx
-          return (
-          <div
-            key={level.label}
-            className="rounded-lg px-2 py-2 flex flex-col gap-0.5"
-            style={{
-              background: isActive ? `${level.color}28` : `${level.color}14`,
-              border: `1px solid ${isActive ? level.color : `${level.color}33`}`,
-              outline: isActive ? `1px solid ${level.color}55` : undefined,
-              outlineOffset: isActive ? '1px' : undefined,
-            }}
-          >
-            <div className="flex items-center gap-1">
-              <span style={{ fontSize: '10px' }}>{level.emoji}</span>
-              <span className="text-xs font-bold" style={{ color: level.color }}>
-                {level.label}
-              </span>
-              <span
-                className="text-xs"
-                style={{ color: 'var(--color-muted-foreground)' }}
-              >
-                · {level.name}
-              </span>
-            </div>
-            <span
-              className="text-xs leading-tight"
-              style={{ color: 'var(--color-foreground)', marginTop: '2px' }}
-            >
-              {level.comparison}
-            </span>
+                <div className="flex items-center gap-1">
+                  <span style={{ fontSize: '10px' }}>{level.emoji}</span>
+                  <span className="text-xs font-bold" style={{ color: level.color }}>
+                    {level.label}
+                  </span>
+                  <span
+                    className="text-xs"
+                    style={{ color: 'var(--color-muted-foreground)' }}
+                  >
+                    · {level.name}
+                  </span>
+                </div>
+                <span
+                  className="text-xs leading-tight"
+                  style={{ color: 'var(--color-foreground)', marginTop: '2px' }}
+                >
+                  {level.comparison}
+                </span>
+              </div>
+              )
+            })}
           </div>
-          )
-        })}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -3,7 +3,6 @@ import { Waves, RefreshCw, MapPin, Clock, ExternalLink } from 'lucide-react'
 import { useEarthquakes } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { EarthquakeEvent } from '@/lib/api'
-import { StatCard } from '@/components/ui/StatCard'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MagnitudeScaleBar } from '@/components/ui/MagnitudeScaleBar'
 import { EarthquakeMap } from '@/components/ui/EarthquakeMap'
@@ -18,7 +17,6 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import { magnitudeInfo } from '@/lib/magnitude'
 import { FadeContent } from '@/components/animated/FadeContent'
-import { ElectricBorder } from '@/components/animated/ElectricBorder'
 import { ShatterText } from '@/components/animated/ShatterText'
 
 interface Props { location: LocationState | null }
@@ -225,10 +223,6 @@ export function Terremotos({ location }: Props) {
   const maxMagNum = events.length > 0
     ? Math.max(...events.map(e => e.magnitude))
     : undefined
-  const maxMagnitude = maxMagNum != null ? maxMagNum.toFixed(1) : '—'
-  const closestDistance = events.length > 0
-    ? Math.min(...events.map(e => e.distance_km)).toFixed(0)
-    : '—'
   const emptyMessage = allEvents.length > 0
     ? 'Ningún sismo coincide con los filtros. Probá ajustarlos.'
     : 'Sin sismos registrados en el área.'
@@ -319,29 +313,6 @@ export function Terremotos({ location }: Props) {
                 />
               </ErrorBoundary>
             )}
-
-            {/* Mobile: "Sismos" full-width arriba, los otros 2 debajo — sm+: 3 cols iguales */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="col-span-2 sm:col-span-1">
-                <ElectricBorder color="#e05545" chaos={0.08} speed={0.5} displacement={20} borderRadius={12}>
-                  <StatCard label="Sismos encontrados" value={events.length} />
-                </ElectricBorder>
-              </div>
-              <ElectricBorder color="#f0a030" chaos={0.08} speed={0.5} displacement={20} borderRadius={12}>
-                <StatCard
-                  label="Más cercano"
-                  value={closestDistance}
-                  unit={events.length > 0 ? 'km' : undefined}
-                />
-              </ElectricBorder>
-              <ElectricBorder color="#c8a84b" chaos={0.08} speed={0.5} displacement={20} borderRadius={12}>
-                <StatCard
-                  label="Mayor magnitud"
-                  value={maxMagnitude}
-                  unit={events.length > 0 ? 'Mw' : undefined}
-                />
-              </ElectricBorder>
-            </div>
 
             {/* Hero: evento destacado — el significativo (< 2h, M ≥ 4.5) si hay uno,
                 si no, el más reciente igual, pero con tratamiento visual sobrio
