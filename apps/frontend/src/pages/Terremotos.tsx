@@ -6,8 +6,10 @@ import type { EarthquakeEvent } from '@/lib/api'
 import { StatCard } from '@/components/ui/StatCard'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MagnitudeScaleBar } from '@/components/ui/MagnitudeScaleBar'
+import { EarthquakeMap } from '@/components/ui/EarthquakeMap'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
+import { magnitudeInfo } from '@/lib/magnitude'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { ElectricBorder } from '@/components/animated/ElectricBorder'
 import { ShatterText } from '@/components/animated/ShatterText'
@@ -29,23 +31,6 @@ function translatePlace(raw: string): string {
     .replace(/\bW\b/g, 'O')
     // "of" → "de"
     .replace(/\bof\b/g, 'de')
-}
-
-interface MagInfo {
-  textColor: string
-  fontWeight: number
-  dotColor: string
-  rowBg: string
-  fontSize: string
-  glow: boolean
-}
-
-function magnitudeInfo(mag: number): MagInfo {
-  if (mag >= 6)   return { textColor: '#ff6b6b', fontWeight: 800, dotColor: '#ff3333', rowBg: 'rgba(224,85,69,0.11)', fontSize: '1.35rem', glow: true }
-  if (mag >= 4.5) return { textColor: '#e05545', fontWeight: 700, dotColor: '#e05545', rowBg: 'rgba(224,85,69,0.07)', fontSize: '1.15rem', glow: true }
-  if (mag >= 4)   return { textColor: '#f0a030', fontWeight: 600, dotColor: '#f0a030', rowBg: 'rgba(240,160,48,0.05)', fontSize: '1.05rem', glow: false }
-  if (mag >= 3)   return { textColor: '#c8a84b', fontWeight: 500, dotColor: '#c8a84b', rowBg: 'transparent',         fontSize: '0.9rem',  glow: false }
-  return               { textColor: 'var(--color-muted-foreground)', fontWeight: 400, dotColor: '#5aaad8', rowBg: 'transparent', fontSize: '0.875rem', glow: false }
 }
 
 function relativeTime(dateStr: string): string {
@@ -184,6 +169,7 @@ export function Terremotos({ location }: Props) {
   const { data, isLoading, isFetching, error, dataUpdatedAt, refetch } =
     useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
   const [showAll, setShowAll] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const syncAnnouncement = useSyncAnnouncement(dataUpdatedAt)
 
   if (location === null) return <PageSkeleton />
@@ -206,7 +192,17 @@ export function Terremotos({ location }: Props) {
 
   const rowStyle = (row: EarthquakeEvent): CSSProperties => {
     const { rowBg } = magnitudeInfo(row.magnitude)
+    if (row.id === selectedId) {
+      return { background: 'rgba(224,85,69,0.18)' }
+    }
     return rowBg !== 'transparent' ? { background: rowBg } : {}
+  }
+
+  /** Selección desde el mapa: si el evento cayó fuera del top 10 visible, expandir la lista. */
+  const handleSelect = (id: string) => {
+    setSelectedId(id)
+    const idx = events.findIndex(e => e.id === id)
+    if (idx >= 10) setShowAll(true)
   }
   const maxMagNum = events.length > 0
     ? Math.max(...events.map(e => e.magnitude))
@@ -284,6 +280,15 @@ export function Terremotos({ location }: Props) {
           <div className="space-y-5">
             {/* Escala de referencia al tope */}
             <MagnitudeScaleBar activeMagnitude={maxMagNum} />
+
+            {events.length > 0 && (
+              <EarthquakeMap
+                events={events}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                center={{ lat: location.lat, lon: location.lon }}
+              />
+            )}
 
             {/* Mobile: "Sismos" full-width arriba, los otros 2 debajo — sm+: 3 cols iguales */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -390,6 +395,7 @@ export function Terremotos({ location }: Props) {
                 data={visibleEvents}
                 emptyMessage="Sin sismos registrados en el área."
                 rowStyle={rowStyle}
+                onRowClick={(row) => setSelectedId(row.id)}
               />
             </div>
 
@@ -404,13 +410,20 @@ export function Terremotos({ location }: Props) {
                 visibleEvents.map((ev, i) => {
                   const { textColor, dotColor, fontWeight, glow } = magnitudeInfo(ev.magnitude)
                   const { rowBg } = magnitudeInfo(ev.magnitude)
+                  const isSelected = ev.id === selectedId
                   return (
                     <div
                       key={`${ev.id}-${i}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedId(ev.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedId(ev.id) }}
+                      aria-pressed={isSelected}
                       className="rounded-xl p-4 flex flex-col gap-2"
                       style={{
-                        background: rowBg !== 'transparent' ? rowBg : 'var(--color-card)',
-                        border: '1px solid var(--color-border)',
+                        background: isSelected ? 'rgba(224,85,69,0.18)' : rowBg !== 'transparent' ? rowBg : 'var(--color-card)',
+                        border: isSelected ? '1px solid #e05545' : '1px solid var(--color-border)',
+                        cursor: 'pointer',
                       }}
                     >
                       <div className="flex items-center gap-2">

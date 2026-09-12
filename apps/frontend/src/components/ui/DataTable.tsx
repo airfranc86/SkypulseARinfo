@@ -14,6 +14,7 @@ interface DataTableProps<T extends object = Record<string, unknown>> {
   data: T[]
   emptyMessage?: string
   rowStyle?: (row: T, index: number) => CSSProperties | undefined
+  onRowClick?: (row: T, index: number) => void
 }
 
 export function DataTable<T extends object = Record<string, unknown>>({
@@ -21,6 +22,7 @@ export function DataTable<T extends object = Record<string, unknown>>({
   data,
   emptyMessage = 'Sin datos disponibles.',
   rowStyle,
+  onRowClick,
 }: DataTableProps<T>): ReactElement {
   return (
     <div
@@ -63,13 +65,15 @@ export function DataTable<T extends object = Record<string, unknown>>({
               data.map((row, rowIndex) => (
                 <tr
                   key={rowIndex}
-                  style={
-                    rowStyle
+                  onClick={onRowClick ? () => onRowClick(row, rowIndex) : undefined}
+                  style={{
+                    cursor: onRowClick ? 'pointer' : undefined,
+                    ...(rowStyle
                       ? rowStyle(row, rowIndex)
                       : rowIndex % 2 !== 0
                         ? { background: 'color-mix(in oklch, var(--color-muted) 20%, transparent)' }
-                        : undefined
-                  }
+                        : undefined),
+                  }}
                 >
                   {columns.map((col) => (
                     <td

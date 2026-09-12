@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "skypulse-frontend",
+      "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "apps/frontend"],
+      "runtimeArgs": ["--prefix", "apps/frontend", "run", "dev"],
       "port": 5173
     }
   ]
