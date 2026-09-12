@@ -2,6 +2,7 @@ import { Shirt } from 'lucide-react'
 import { useLaundryForecast } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { LaundryDayCard } from '@/components/ui/LaundryDayCard'
+import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
@@ -42,14 +43,17 @@ export function TenderRopa({ location }: Props) {
       {isLoading && <PageSkeleton />}
       {error && <ErrorMessage message={(error as Error).message} />}
       {data && (
-        <div className="space-y-3">
-          {data.days.map((day, i) => (
-            <LaundryDayCard
-              key={day.date}
-              day={day}
-              index={i}
-            />
-          ))}
+        <div className="space-y-4">
+          <QualityScaleBar bestLabel={data.days.find(d => d.is_best)?.label ?? ''} />
+          <div className="space-y-3">
+            {data.days.map((day, i) => (
+              <LaundryDayCard
+                key={day.date}
+                day={day}
+                index={i}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

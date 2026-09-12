@@ -1,5 +1,6 @@
 import { type ReactElement } from 'react'
 import type { LaundryDay } from '@/lib/api'
+import { LABEL_COLOR } from '@/lib/qualityScale'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 
@@ -8,18 +9,12 @@ interface LaundryDayCardProps {
   index: number
 }
 
-function scoreLabelColor(score: number): string {
-  if (score >= 75) return '#3ecf7a'
-  if (score >= 50) return '#f0a030'
-  return '#e05545'
-}
-
 export function LaundryDayCard({
   day,
   index,
 }: LaundryDayCardProps): ReactElement {
   const isBest = day.is_best
-  const labelColor = isBest ? '#c8a84b' : scoreLabelColor(day.score)
+  const labelColor = isBest ? '#c8a84b' : LABEL_COLOR[day.label]
   const showPrecipChip = day.precip_prob > 0
   const showLowConfidence = !isBest && day.confidence_pct < 70
 

@@ -339,6 +339,13 @@ def score_tender_ropa(
         elif humidity >= 70:
             score = min(score, 44)
 
+    # Veto: lluvia real en curso, aunque no llegue al umbral de "No apto" de
+    # arriba (>1mm + alta probabilidad), tampoco debería poder salir
+    # "Excelente" — el descuento continuo de precip_score no lo garantiza si
+    # humedad/temperatura/viento son ideales.
+    if precip_mm is not None and precip_mm > 0:
+        score = min(score, 74)
+
     label, color = _label_and_color(score)
 
     if humidity is not None and humidity >= 80:
@@ -439,6 +446,16 @@ def score_hacer_deporte(
         score += 20
         factors.append("viento suave")
 
+    # Veto: el bloque de arriba solo le resta el bonus de "sin lluvia" (25 pts)
+    # a la lluvia — con el resto de los factores ideales eso deja el score
+    # justo en el límite de "Excelente" aunque esté lloviendo. Mismo patrón de
+    # techo ya usado en score_lavar_coche/score_tender_ropa: cualquier lluvia
+    # real quita el "Excelente"; lluvia moderada o más quita también el "Bueno".
+    if precip is not None and precip > 0:
+        score = min(score, 74)
+    if precip is not None and precip > 1:
+        score = min(score, 49)
+
     label, color = _label_and_color(score)
 
     if score >= 70:
@@ -534,6 +551,13 @@ def score_lavar_coche(
 
     # Veto: humedad ≥70 % → sin "Excelente" (evaporación insuficiente)
     if humidity is not None and humidity >= 70:
+        score = min(score, 74)
+
+    # Veto: la penalización de arriba solo resta puntos — con temperatura,
+    # viento y humedad ideales, lluvia leve (p.ej. 0.5mm) no alcanza a bajar
+    # el score fuera del rango "Excelente". Cualquier lluvia real en curso
+    # saca el "Excelente" del lavado del auto.
+    if p > 0:
         score = min(score, 74)
 
     label, color = _label_and_color(score)

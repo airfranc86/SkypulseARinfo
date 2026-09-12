@@ -134,7 +134,7 @@ const N = (NavIcon: LucideIcon, color: string) => <NavIcon size={15} style={{ co
 /** Live-data tools — require location + backend (Row 1, scrolls ←) */
 const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
   { to: '/prevision',      label: 'Previsión',       emoji: N(CloudSun, '#c8a84b'),       color: '#c8a84b' },
-  { to: '/hacer-deporte', label: 'Hacer deporte',   emoji: N(Activity, '#f0a030'),       color: '#f0a030' },
+  { to: '/hacer-deporte', label: 'Hacer deporte',   emoji: N(Activity, '#3fb8c4'),       color: '#3fb8c4' },
   { to: '/tender-ropa',   label: 'Secado de ropa',  emoji: N(Shirt, '#3ecf7a'),          color: '#3ecf7a' },
   { to: '/lavar-auto',    label: 'Lavar el auto',   emoji: N(Car, '#5aaad8'),            color: '#5aaad8' },
   { to: '/terremotos',    label: 'Terremotos',      emoji: N(Waves, '#e05545'),          color: '#e05545' },

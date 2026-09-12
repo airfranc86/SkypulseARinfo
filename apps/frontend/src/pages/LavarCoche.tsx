@@ -2,8 +2,10 @@ import { Car } from 'lucide-react'
 import { useLavarCoche } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { CarWashDay } from '@/lib/api'
+import { LABEL_COLOR } from '@/lib/qualityScale'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { GlowCard } from '@/components/animated/GlowCard'
+import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
@@ -15,23 +17,6 @@ const COLOR_MAP: Record<CarWashDay['color'], string> = {
   yellow: '#f0a030',
   red:    '#e05545',
 }
-
-// 4 colores distintos — uno por label, incluido "No apto" ≠ "Regular"
-const LABEL_COLOR: Record<string, string> = {
-  Excelente: '#3ecf7a',
-  Bueno:     '#f0a030',
-  Regular:   '#e05545',
-  'No apto': '#ff6b6b',  // = --color-crit-soft, ~7:1 sobre navy — el rating más grave debe ser el más legible.
-                         // Hex crudo (no var()) a propósito: barColor se concatena como `${barColor}20`/`${barColor}40`
-                         // más abajo (alpha-suffix hex de 8 dígitos), var() rompería esa interpolación.
-}
-
-const QUALITY_SCALE = [
-  { label: 'Excelente', color: LABEL_COLOR['Excelente'] },
-  { label: 'Bueno',     color: LABEL_COLOR['Bueno'] },
-  { label: 'Regular',   color: LABEL_COLOR['Regular'] },
-  { label: 'No apto',   color: LABEL_COLOR['No apto'] },
-] as const
 
 interface ScoreInfo {
   rowBg: string
@@ -45,47 +30,6 @@ function scoreInfo(color: CarWashDay['color'], score: number): ScoreInfo {
   if (color === 'yellow')              return { rowBg: 'transparent',            fontSize: '0.9rem',  fontWeight: 500 }
   if (score < 30)                      return { rowBg: 'rgba(155,32,32,0.10)',   fontSize: '0.75rem', fontWeight: 400 }
   return                                      { rowBg: 'rgba(224,85,69,0.07)',   fontSize: '0.8rem',  fontWeight: 400 }
-}
-
-// ---------------------------------------------------------------------------
-// QualityScaleBar
-// ---------------------------------------------------------------------------
-
-function QualityScaleBar({ bestLabel }: { bestLabel: string }) {
-  return (
-    <div
-      className="rounded-xl p-4"
-      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
-    >
-      <p className="text-[.55rem] uppercase tracking-widest mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
-        Escala de aptitud
-      </p>
-      <div className="flex gap-[3px] h-[10px]">
-        {QUALITY_SCALE.map((q) => (
-          <div
-            key={q.label}
-            className="flex-1 rounded-full"
-            style={{ background: q.color, opacity: 0.55 }}
-          />
-        ))}
-      </div>
-      <div className="flex mt-2.5">
-        {QUALITY_SCALE.map((q) => (
-          <div key={q.label} className="flex-1 text-center">
-            <span
-              className="text-[.48rem] leading-tight block"
-              style={{
-                color: q.color,
-                fontWeight: q.label === bestLabel ? 700 : undefined,
-              }}
-            >
-              {q.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +78,7 @@ function DayRow({ day }: { day: CarWashDay }) {
       {/* Score bar + headline + condiciones */}
       <div className="flex-1 min-w-0">
         <p
-          className="text-xs truncate mb-1"
+          className="text-xs line-clamp-2 mb-1"
           style={{ color: 'var(--color-muted-foreground)' }}
         >
           {day.headline}
@@ -209,7 +153,7 @@ export function LavarCoche({ location }: Props) {
     <div>
       <PageHeader
         icon={<Car size={32} style={{ color: '#5aaad8' }} />}
-        title="¿Cuándo lavar el auto?"
+        title="Lavar el auto"
         subtitle={location.label}
         accentColor="#5aaad8"
         modelBadge={<ModelBadge model="gfs" variant="header" />}

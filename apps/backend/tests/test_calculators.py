@@ -615,3 +615,38 @@ class TestStormVeto:
             cape_j_kg=1800.0,
         )
         assert r.label == "No apto"
+
+
+class TestActiveRainCap:
+    """
+    Bug real reportado: lluvia normal (no tormenta) con el resto de los
+    factores ideales rendía "Excelente"/"Bueno" en las 3 herramientas, porque
+    el único veto duro exigía tormenta (WMO 95/96/99) o CAPE alto — cualquier
+    lluvia común (61-67, 80-82) pasaba sin penalización real. Estos tests
+    reproducen el escenario exacto (llueve, condiciones ideales en todo lo
+    demás) y confirman el techo nuevo.
+    """
+
+    def test_hacer_deporte_lluvia_leve_no_es_excelente(self):
+        # Antes del fix: 30(temp)+25(hum)+0(precip>0 sin bonus)+20(wind) = 75 = "Excelente"
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=0.5, wind_speed_kmh=15.0)
+        assert r.label != "Excelente"
+        assert r.score <= 74
+
+    def test_hacer_deporte_lluvia_moderada_no_es_bueno(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=2.0, wind_speed_kmh=15.0)
+        assert r.label not in ("Excelente", "Bueno")
+        assert r.score <= 49
+
+    def test_lavar_coche_lluvia_leve_no_es_excelente(self):
+        r = score_lavar_coche(temp_max_c=25.0, precip_mm=0.5, wind_speed_kmh=10.0, humidity=40.0)
+        assert r.label != "Excelente"
+        assert r.score <= 74
+
+    def test_tender_ropa_lluvia_leve_no_es_excelente(self):
+        r = score_tender_ropa(
+            temp_c=25.0, humidity=40.0, wind_speed_kmh=12.0,
+            precip_mm=0.5, wind_dir_cardinal="S",
+        )
+        assert r.label != "Excelente"
+        assert r.score <= 74

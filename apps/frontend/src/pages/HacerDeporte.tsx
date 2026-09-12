@@ -27,10 +27,10 @@ export function HacerDeporte({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Activity size={32} style={{ color: '#f0a030' }} />}
+        icon={<Activity size={32} style={{ color: '#3fb8c4' }} />}
         title="Hacer deporte"
         subtitle={location.label}
-        accentColor="#f0a030"
+        accentColor="#3fb8c4"
         modelBadge={
           <ModelBadge
             model={data ? sourceToModel(data.source) : 'gfs'}

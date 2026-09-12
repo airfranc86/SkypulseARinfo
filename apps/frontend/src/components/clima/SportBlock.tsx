@@ -1,6 +1,8 @@
 import type { CurrentDetailed, HourlyEntry } from '@/lib/api'
 import { useHacerDeporte } from '@/hooks/useWeather'
 import { BorderGlow } from '@/components/animated/BorderGlow'
+import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
+import { LABEL_COLOR, scoreToLabel } from '@/lib/qualityScale'
 
 interface SportBlockProps {
   lat: number | null
@@ -93,15 +95,8 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
     })
   }
 
-  const labelColor =
-    data.color === 'green' ? '#3ecf7a'
-    : data.color === 'yellow' ? '#f0a030'
-    : '#e05545'
-
-  const labelBg =
-    data.color === 'green' ? 'rgba(62,207,122,0.12)'
-    : data.color === 'yellow' ? 'rgba(240,160,48,0.12)'
-    : 'rgba(224,85,69,0.12)'
+  const labelColor = LABEL_COLOR[data.label]
+  const labelBg = `${labelColor}1f`
 
   const blockContent = (
     <div
@@ -187,6 +182,47 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
             </div>
           </div>
 
+          {/* Mejor momento + franja horaria */}
+          {data.hourly.length > 0 && (
+            <div className="space-y-1.5">
+              {data.best_window && (
+                <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                  🕒 Mejor momento:{' '}
+                  <span style={{ color: 'var(--color-foreground)', fontWeight: 500 }}>
+                    {data.best_window}
+                  </span>
+                </p>
+              )}
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {data.hourly.map((h) => {
+                  const chipColor = LABEL_COLOR[scoreToLabel(h.score)]
+                  return (
+                    <div
+                      key={h.timestamp}
+                      className="shrink-0 rounded-lg px-2 py-1 text-center"
+                      style={{
+                        background: 'var(--color-card)',
+                        border: h.is_best ? '1px solid #c8a84b' : '1px solid var(--color-border)',
+                        boxShadow: h.is_best ? '0 0 0 1px rgba(200,168,75,0.35)' : undefined,
+                        minWidth: '2.6rem',
+                      }}
+                    >
+                      <p className="text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                        {h.hour_label}
+                      </p>
+                      <p
+                        className="text-xs font-semibold tabular-nums"
+                        style={{ color: h.is_best ? '#c8a84b' : chipColor }}
+                      >
+                        {h.score}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Actionable indicators */}
           {indicators.length === 0 ? (
             // Si el backend también dice OK → "Condiciones favorables"
@@ -234,19 +270,27 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
 
   if (data.color === 'green') {
     return (
-      <BorderGlow
-        glowColor="142 64 58"
-        backgroundColor="#0d1625"
-        borderRadius={12}
-        glowRadius={32}
-        glowIntensity={1.0}
-        colors={['#3ecf7a', '#c8a84b', '#5aaad8']}
-        fillOpacity={0.3}
-      >
-        {blockContent}
-      </BorderGlow>
+      <div className="space-y-3">
+        <BorderGlow
+          glowColor="142 64 58"
+          backgroundColor="#0d1625"
+          borderRadius={12}
+          glowRadius={32}
+          glowIntensity={1.0}
+          colors={['#3ecf7a', '#c8a84b', '#5aaad8']}
+          fillOpacity={0.3}
+        >
+          {blockContent}
+        </BorderGlow>
+        <QualityScaleBar bestLabel={data.label} />
+      </div>
     )
   }
 
-  return blockContent
+  return (
+    <div className="space-y-3">
+      {blockContent}
+      <QualityScaleBar bestLabel={data.label} />
+    </div>
+  )
 }
