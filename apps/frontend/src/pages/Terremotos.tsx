@@ -470,7 +470,7 @@ export function Terremotos({ location }: Props) {
                         {translatePlace(ev.place)}
                       </p>
                       <p style={{ fontSize: '0.75rem', color: 'var(--color-muted-foreground)' }}>
-                        {relativeTime(ev.occurred_at)} · {new Date(ev.occurred_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+                        {relativeTime(ev.occurred_at)} ({localTime(ev.occurred_at)}) · {new Date(ev.occurred_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
                       </p>
                       <p style={{ fontSize: '0.8rem', color: 'var(--color-foreground)' }}>
                         {depthLabel(ev.depth_km)}
