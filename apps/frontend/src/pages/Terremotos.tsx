@@ -7,6 +7,12 @@ import { StatCard } from '@/components/ui/StatCard'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { MagnitudeScaleBar } from '@/components/ui/MagnitudeScaleBar'
 import { EarthquakeMap } from '@/components/ui/EarthquakeMap'
+import { EarthquakeFilters } from '@/components/ui/EarthquakeFilters'
+import {
+  applyEarthquakeFilters,
+  defaultEarthquakeFilters,
+  type EarthquakeFilterState,
+} from '@/lib/earthquakeFilters'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import { magnitudeInfo } from '@/lib/magnitude'
@@ -170,13 +176,15 @@ export function Terremotos({ location }: Props) {
     useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
   const [showAll, setShowAll] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [filters, setFilters] = useState<EarthquakeFilterState>(defaultEarthquakeFilters)
   const syncAnnouncement = useSyncAnnouncement(dataUpdatedAt)
 
   if (location === null) return <PageSkeleton />
 
-  const events = [...(data?.events ?? [])].sort(
+  const allEvents = [...(data?.events ?? [])].sort(
     (a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()
   )
+  const events = applyEarthquakeFilters(allEvents, filters, dataUpdatedAt)
   const visibleEvents = showAll ? events : events.slice(0, 10)
   const hasMore = events.length > 10
 
@@ -211,6 +219,9 @@ export function Terremotos({ location }: Props) {
   const closestDistance = events.length > 0
     ? Math.min(...events.map(e => e.distance_km)).toFixed(0)
     : '—'
+  const emptyMessage = allEvents.length > 0
+    ? 'Ningún sismo coincide con los filtros. Probá ajustarlos.'
+    : 'Sin sismos registrados en el área.'
 
   return (
     <div>
@@ -281,6 +292,8 @@ export function Terremotos({ location }: Props) {
             {/* Escala de referencia al tope */}
             <MagnitudeScaleBar activeMagnitude={maxMagNum} />
 
+            <EarthquakeFilters filters={filters} onChange={setFilters} />
+
             {events.length > 0 && (
               <EarthquakeMap
                 events={events}
@@ -294,7 +307,7 @@ export function Terremotos({ location }: Props) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="col-span-2 sm:col-span-1">
                 <ElectricBorder color="#e05545" chaos={0.08} speed={0.5} displacement={20} borderRadius={12}>
-                  <StatCard label="Sismos encontrados" value={data.total} />
+                  <StatCard label="Sismos encontrados" value={events.length} />
                 </ElectricBorder>
               </div>
               <ElectricBorder color="#f0a030" chaos={0.08} speed={0.5} displacement={20} borderRadius={12}>
@@ -393,7 +406,7 @@ export function Terremotos({ location }: Props) {
               <DataTable<EarthquakeEvent>
                 columns={columns}
                 data={visibleEvents}
-                emptyMessage="Sin sismos registrados en el área."
+                emptyMessage={emptyMessage}
                 rowStyle={rowStyle}
                 onRowClick={(row) => setSelectedId(row.id)}
               />
@@ -404,7 +417,7 @@ export function Terremotos({ location }: Props) {
             <div className="sm:hidden space-y-3">
               {visibleEvents.length === 0 ? (
                 <p className="text-center py-8 text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
-                  Sin sismos registrados en el área.
+                  {emptyMessage}
                 </p>
               ) : (
                 visibleEvents.map((ev, i) => {
