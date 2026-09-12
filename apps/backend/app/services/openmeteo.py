@@ -489,6 +489,7 @@ class HourlyForecastExt:
     wind_speeds: list[float | None]
     weather_codes: list[int | None]
     is_day: list[bool]
+    freezing_level_heights_m: list[float | None] = field(default_factory=list)
 
 
 async def get_hourly_forecast_ext(
@@ -505,7 +506,7 @@ async def get_hourly_forecast_ext(
         "longitude": lon,
         "hourly": (
             "temperature_2m,precipitation,precipitation_probability,"
-            "wind_speed_10m,weather_code,is_day"
+            "wind_speed_10m,weather_code,is_day,freezing_level_height"
         ),
         "forecast_days": days,
         "timezone": "America/Argentina/Buenos_Aires",
@@ -560,6 +561,9 @@ async def get_hourly_forecast_ext(
                 wind_speeds=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
                 weather_codes=weather_codes,
                 is_day=is_day,
+                freezing_level_heights_m=[
+                    parse_float(v) for v in hourly.get("freezing_level_height", [])
+                ],
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo hourly_ext parse error: %s", exc)

@@ -126,6 +126,9 @@ class DayArcSchema(BaseModel):
     is_day: bool
 
 
+ConvectiveRisk = Literal["low", "moderate", "high", "severe"]
+
+
 class HourlyEntrySchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -138,6 +141,9 @@ class HourlyEntrySchema(BaseModel):
     weather_code: int | None
     icon: str
     is_day: bool
+    convective_risk: ConvectiveRisk | None = None
+    freezing_level_height_m: float | None = None
+    wind_gusts_kmh: float | None = None
 
 
 class DailyEntrySchema(BaseModel):
@@ -161,6 +167,7 @@ class DailyEntrySchema(BaseModel):
     wind_icon: str | None = None
     wind_intensity: str | None = None
     wind_shift: bool = False
+    convective_risk: ConvectiveRisk | None = None
 
 
 class RainForecastSchema(BaseModel):
