@@ -42,9 +42,12 @@ export function EarthquakeMap({ events, selectedId, onSelect, center }: Earthqua
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={false}
       >
+        {/* OSM's tile.openstreetmap.org blocks non-personal apps per su Tile Usage Policy
+            (osm.wiki/Blocked) — Esri's free basemap (no API key, sin límite de uso liviano)
+            no tiene ese problema. Ojo: su REST tile API usa {z}/{y}/{x}, no {z}/{x}/{y}. */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
         />
         <FlyToSelected event={selectedEvent} />
         {events.map(ev => (
