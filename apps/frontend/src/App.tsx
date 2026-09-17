@@ -48,6 +48,8 @@ const Volcanes    = lazy(() => import('@/pages/Volcanes').then(m => ({ default: 
 const Incendios   = lazy(() => import('@/pages/Incendios').then(m => ({ default: m.Incendios })))
 const Niebla        = lazy(() => import('@/pages/Niebla').then(m => ({ default: m.Niebla })))
 const HacerDeporte  = lazy(() => import('@/pages/HacerDeporte').then(m => ({ default: m.HacerDeporte })))
+const Privacidad    = lazy(() => import('@/pages/Privacidad').then(m => ({ default: m.Privacidad })))
+const NotFound      = lazy(() => import('@/pages/NotFound').then(m => ({ default: m.NotFound })))
 
 import { useVolcanes } from '@/hooks/useWeather'
 
@@ -286,14 +288,18 @@ function RootLayout() {
               <Route path="/nubes" element={<Nubes />} />
               <Route path="/metar" element={<Metar />} />
               <Route path="/niebla" element={<Niebla location={location} />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/privacidad" element={<Privacidad />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>
       </main>
 
-      <footer className="border-t border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-muted-foreground)]">
+      <footer className="border-t border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-muted-foreground)] space-y-2">
         <ModelStatusBar />
+        <Link to="/privacidad" className="block underline hover:opacity-80">
+          Política de privacidad
+        </Link>
       </footer>
 
       <ScrollToTopBubble />
@@ -321,13 +327,13 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ModelStatusProvider>
-        <BrowserRouter>
+      <BrowserRouter>
+        <ModelStatusProvider>
           <RootLayout />
-        </BrowserRouter>
-      </ModelStatusProvider>
-      {consent === 'accepted' && <Analytics />}
-      {consent === null && <CookieConsentBanner onAccept={handleAccept} onReject={handleReject} />}
+        </ModelStatusProvider>
+        {consent === 'accepted' && <Analytics />}
+        {consent === null && <CookieConsentBanner onAccept={handleAccept} onReject={handleReject} />}
+      </BrowserRouter>
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   )
