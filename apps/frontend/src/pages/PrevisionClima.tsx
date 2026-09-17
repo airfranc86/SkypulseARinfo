@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { CloudSun, ChevronDown } from 'lucide-react'
-import { useWeatherDashboard, isColdStart } from '@/hooks/useWeather'
+import { useWeatherDashboard, useSmnAlertas, isColdStart } from '@/hooks/useWeather'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
+import { SmnAlertasBlock } from '@/components/clima/SmnAlertasBlock'
 import { DayArc } from '@/components/clima/DayArc'
 import { HourlyStrip } from '@/components/clima/HourlyStrip'
 import { Forecast7d } from '@/components/clima/Forecast7d'
@@ -36,6 +37,7 @@ function dashboardErrorMessage(error: Error): string {
 export function PrevisionClima({ location }: Props) {
   const [forecastModel, setForecastModel] = useState<ForecastModel>('consensus')
   const { data, isLoading, isFetching, error, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
+  const { data: alertasData } = useSmnAlertas()
   const reducedMotion = useReducedMotion()
 
   // Colapsado en la primera visita — el hero de "ahora" es el viewport que
@@ -98,6 +100,9 @@ export function PrevisionClima({ location }: Props) {
         // FINISH: unreviewed and undocumented is unfinished.
         <FadeContent>
           <div className="space-y-5">
+            {/* Avisos oficiales SMN — solo se renderiza si hay alertas activas */}
+            <SmnAlertasBlock alertas={alertasData?.alertas ?? []} />
+
             {/* Hero (SMN) — el primer viewport es esto y nada más */}
             <WeatherHero
               current={data.current}

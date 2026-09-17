@@ -121,6 +121,14 @@ export function useVolcanes() {
   })
 }
 
+export function useSmnAlertas() {
+  return useQuery({
+    queryKey: ['smn-alertas'],
+    queryFn: () => api.alertasSmn(),
+    staleTime: STALE_VOLCANES, // mismo orden de magnitud — avisos oficiales, no cambian minuto a minuto
+  })
+}
+
 export function useLaundryForecast(lat: number | null, lon: number | null) {
   return useQuery({
     queryKey: ['laundry-forecast', lat, lon],

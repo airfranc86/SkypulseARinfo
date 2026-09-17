@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 600           # 10 minutos — clima SMN
     cache_ttl_earthquakes_seconds: int = 300    # 5 minutos — USGS sismos (era 6h, causaba datos obsoletos)
     cache_ttl_volcanes_seconds: int = 7200      # 2 horas — OAVV volcanes
+    smn_alerts_base_url: str = "https://ws.smn.gob.ar/alerts"
+    cache_ttl_smn_alertas_seconds: int = 1800   # 30 minutos — alertas SMN (endpoint no oficial)
     log_level: str = "INFO"
     cors_origins: list[str] | str = _DEFAULT_CORS
 

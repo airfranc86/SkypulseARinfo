@@ -210,6 +210,22 @@ export interface VolcanesResponse {
   volcanes: Volcan[]
 }
 
+// ── Alertas SMN ────────────────────────────────────────────────────────────────
+
+export interface SmnAlerta {
+  nivel: string
+  tipo: string
+  fecha_desde: string | null
+  fecha_hasta: string | null
+  descripcion: string
+}
+
+export interface SmnAlertasResponse {
+  alertas: SmnAlerta[]
+  available: boolean
+  fetched_at: string
+}
+
 // ── Dashboard schemas ─────────────────────────────────────────────────────────
 
 export interface MoonPhaseInfo {
@@ -420,6 +436,9 @@ export const api = {
 
   volcanes: () =>
     request<VolcanesResponse>('/api/volcanes'),
+
+  alertasSmn: () =>
+    request<SmnAlertasResponse>('/api/alertas-smn'),
 
   fireDanger: (lat: number, lon: number) =>
     request<FireDangerResponse>('/api/incendios', { lat, lon }),
