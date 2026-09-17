@@ -16,6 +16,7 @@ const TITLES: Record<string, string> = {
   '/nubes':        'SkyPulse — Nubes',
   '/metar':        'SkyPulse — METAR',
   '/niebla':       'SkyPulse — Niebla',
+  '/privacidad':   'SkyPulse — Política de privacidad',
 }
 
 const DEFAULT_TITLE = 'SkyPulse — Previsión meteorológica'

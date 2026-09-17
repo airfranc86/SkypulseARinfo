@@ -541,8 +541,8 @@ function IcaoModal({
               border: '1px solid var(--color-border)',
               color: 'var(--color-foreground)',
             }}
-            onFocus={e => { e.currentTarget.style.borderColor = '#c8a84b' }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'var(--color-border)' }}
+            onFocus={e => { e.currentTarget.style.borderColor = '#c8a84b'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(200,168,75,.15)' }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.boxShadow = 'none' }}
           />
         </div>
 

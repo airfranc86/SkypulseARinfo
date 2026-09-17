@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 interface CookieConsentBannerProps {
   onAccept: () => void
   onReject: () => void
@@ -24,7 +26,11 @@ export function CookieConsentBanner({ onAccept, onReject }: CookieConsentBannerP
         className="max-w-5xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3"
       >
         <p className="text-xs flex-1" style={{ color: 'var(--color-muted-foreground)' }}>
-          Usamos cookies de analítica (Google Tag Manager, Vercel Analytics) para entender cómo se usa SkyPulse. Podés aceptarlas o rechazarlas.
+          Usamos cookies de analítica (Google Tag Manager, Vercel Analytics) para entender cómo se usa SkyPulse. Podés aceptarlas o rechazarlas.{' '}
+          <Link to="/privacidad" className="underline hover:opacity-80">
+            Más info
+          </Link>
+          .
         </p>
         <div className="flex gap-2 shrink-0">
           <button
