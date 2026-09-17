@@ -1,18 +1,23 @@
 <!doctype html>
 <html lang="es">
   <head>
-    <!-- Google Tag Manager -->
-    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-MBG7GFM2');</script>
-    <!-- End Google Tag Manager -->
+    <!-- Google Tag Manager se carga en runtime desde src/lib/consent.ts,
+         solo tras aceptar el banner de cookies — ver CookieConsentBanner. -->
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/Logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="referrer" content="no-referrer" />
     <title>SkyPulse — Previsión meteorológica</title>
+    <meta name="description" content="Previsión meteorológica, terremotos, alertas volcánicas y más para Argentina — datos en tiempo real de SMN, USGS/EMSC, Open-Meteo y Windy." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="SkyPulse — Previsión meteorológica" />
+    <meta property="og:description" content="Previsión meteorológica, terremotos, alertas volcánicas y más para Argentina — datos en tiempo real de SMN, USGS/EMSC, Open-Meteo y Windy." />
+    <meta property="og:image" content="https://skypulse-ar.vercel.app/Logo.png" />
+    <meta property="og:url" content="https://skypulse-ar.vercel.app" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="SkyPulse — Previsión meteorológica" />
+    <meta name="twitter:description" content="Previsión meteorológica, terremotos, alertas volcánicas y más para Argentina." />
+    <meta name="twitter:image" content="https://skypulse-ar.vercel.app/Logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -21,10 +26,6 @@
     />
   </head>
   <body>
-    <!-- Google Tag Manager (noscript) -->
-    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MBG7GFM2"
-    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -9,7 +9,9 @@ import { isClientError } from '@/hooks/useWeather'
 import { useGTMPageView } from '@/hooks/useGTMPageView'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { LocationPicker } from '@/components/LocationPicker'
-import { Threads } from '@/components/animated/Threads'
+import { getConsent, setConsent, loadGTM, type ConsentStatus } from '@/lib/consent'
+import { CookieConsentBanner } from '@/components/ui/CookieConsentBanner'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import {
   ModelStatusProvider,
   type ModelCategory,
@@ -27,6 +29,10 @@ import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 // Static imports — critical path (landing + primary forecast)
 import { Landing } from '@/pages/Landing'
 import { PrevisionClima } from '@/pages/PrevisionClima'
+
+// Threads es un fondo decorativo WebGL (librería `ogl`) sin valor funcional —
+// lazy para que no pese en el bundle crítico de ninguna ruta.
+const Threads = lazy(() => import('@/components/animated/Threads').then(m => ({ default: m.Threads })))
 
 // Lazy imports — secondary pages (code-split for faster initial load)
 const TenderRopa  = lazy(() => import('@/pages/TenderRopa').then(m => ({ default: m.TenderRopa })))
@@ -219,12 +225,14 @@ function RootLayout() {
             opacity: 0.28,
           }}
         >
-          <Threads
-            color={[0.753, 0.612, 0.169]}
-            amplitude={2}
-            distance={0.3}
-            enableMouseInteraction={false}
-          />
+          <Suspense fallback={null}>
+            <Threads
+              color={[0.753, 0.612, 0.169]}
+              amplitude={2}
+              distance={0.3}
+              enableMouseInteraction={false}
+            />
+          </Suspense>
         </div>
       )}
 
@@ -258,28 +266,30 @@ function RootLayout() {
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
-        <Suspense fallback={<div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">Cargando…</div>}>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/prevision" element={<PrevisionClima location={location} />} />
-            <Route path="/tender-ropa" element={<TenderRopa location={location} />} />
-            <Route path="/sensacion-termica" element={<Navigate to="/prevision" replace />} />
-            <Route path="/cota-de-nieve" element={<CotaDeNieve location={location} />} />
-            <Route path="/hacer-deporte" element={<HacerDeporte location={location} />} />
-            <Route path="/terremotos" element={<Terremotos location={location} />} />
-            <Route path="/volcanes"   element={<Volcanes />} />
-            <Route path="/incendios"  element={<Incendios location={location} />} />
-            <Route path="/lavar-auto" element={<LavarCoche location={location} />} />
-            <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
-            <Route path="/lluvias" element={<Lluvias />} />
-            <Route path="/radar" element={<Radar />} />
-            <Route path="/desastres" element={<Desastres />} />
-            <Route path="/nubes" element={<Nubes />} />
-            <Route path="/metar" element={<Metar />} />
-            <Route path="/niebla" element={<Niebla location={location} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        <ErrorBoundary fallbackMessage="Algo falló al mostrar esta página.">
+          <Suspense fallback={<div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">Cargando…</div>}>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/prevision" element={<PrevisionClima location={location} />} />
+              <Route path="/tender-ropa" element={<TenderRopa location={location} />} />
+              <Route path="/sensacion-termica" element={<Navigate to="/prevision" replace />} />
+              <Route path="/cota-de-nieve" element={<CotaDeNieve location={location} />} />
+              <Route path="/hacer-deporte" element={<HacerDeporte location={location} />} />
+              <Route path="/terremotos" element={<Terremotos location={location} />} />
+              <Route path="/volcanes"   element={<Volcanes />} />
+              <Route path="/incendios"  element={<Incendios location={location} />} />
+              <Route path="/lavar-auto" element={<LavarCoche location={location} />} />
+              <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
+              <Route path="/lluvias" element={<Lluvias />} />
+              <Route path="/radar" element={<Radar />} />
+              <Route path="/desastres" element={<Desastres />} />
+              <Route path="/nubes" element={<Nubes />} />
+              <Route path="/metar" element={<Metar />} />
+              <Route path="/niebla" element={<Niebla location={location} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       <footer className="border-t border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-muted-foreground)]">
@@ -294,6 +304,21 @@ function RootLayout() {
 // ── App — top-level provider tree ─────────────────────────────────────────────
 
 export default function App() {
+  const [consent, setConsentState] = useState<ConsentStatus>(() => getConsent())
+
+  useEffect(() => {
+    if (consent === 'accepted') loadGTM()
+  }, [consent])
+
+  const handleAccept = () => {
+    setConsent('accepted')
+    setConsentState('accepted')
+  }
+  const handleReject = () => {
+    setConsent('rejected')
+    setConsentState('rejected')
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <ModelStatusProvider>
@@ -301,7 +326,8 @@ export default function App() {
           <RootLayout />
         </BrowserRouter>
       </ModelStatusProvider>
-      <Analytics />
+      {consent === 'accepted' && <Analytics />}
+      {consent === null && <CookieConsentBanner onAccept={handleAccept} onReject={handleReject} />}
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   )
