@@ -534,6 +534,7 @@ function IcaoModal({
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar ciudad o código ICAO…"
+            aria-label="Buscar ciudad o código ICAO"
             className="w-full rounded px-3 py-2 text-[.82rem] outline-none transition-colors"
             style={{
               background: '#060d1a',
@@ -695,6 +696,7 @@ function MetarWidget() {
             value={icao}
             onChange={e => setIcao(e.target.value.toUpperCase())}
             onKeyDown={e => { if (e.key === 'Enter') doFetch(icao) }}
+            aria-label="Código ICAO del aeródromo"
             className="flex-1 min-w-[120px] rounded px-4 py-2.5 text-[1rem] tracking-[.25em] uppercase placeholder-slate-600 outline-none transition-all"
             style={{
               background: 'var(--color-background)',
