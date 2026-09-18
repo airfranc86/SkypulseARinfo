@@ -62,10 +62,10 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange }: Props)
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Model toggle */}
+          {/* Model toggle — segmented control de alto contraste (fondo sólido + activo invertido) */}
           <div
             className="flex p-0.5 rounded-lg gap-0.5 shrink-0"
-            style={{ background: 'rgba(200,168,75,0.06)', border: '1px solid rgba(200,168,75,0.12)' }}
+            style={{ background: 'var(--color-secondary)', border: '1px solid var(--color-border)' }}
           >
             {MODEL_OPTIONS.map(({ id, label }) => (
               <button
@@ -77,11 +77,11 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange }: Props)
                 className={cn(
                   'px-3.5 py-2 min-h-[40px] rounded-md text-xs font-medium transition-colors',
                   selectedModel === id
-                    ? 'text-[var(--color-primary)]'
+                    ? 'text-[var(--color-primary-foreground)] font-semibold'
                     : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
                 )}
                 style={selectedModel === id
-                  ? { background: 'rgba(200,168,75,0.14)' }
+                  ? { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
                   : { background: 'transparent' }
                 }
               >
@@ -93,7 +93,7 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange }: Props)
           {/* View toggle */}
           <div
             className="flex p-0.5 rounded-lg gap-0.5 shrink-0"
-            style={{ background: 'rgba(200,168,75,0.06)', border: '1px solid rgba(200,168,75,0.12)' }}
+            style={{ background: 'var(--color-secondary)', border: '1px solid var(--color-border)' }}
           >
             {VIEWS.map(({ id, label }) => (
               <button
@@ -105,11 +105,11 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange }: Props)
                 className={cn(
                   'px-3.5 py-2 min-h-[40px] rounded-md text-xs font-medium transition-colors',
                   view === id
-                    ? 'text-[var(--color-primary)]'
+                    ? 'text-[var(--color-primary-foreground)] font-semibold'
                     : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
                 )}
                 style={view === id
-                  ? { background: 'rgba(200,168,75,0.14)' }
+                  ? { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
                   : { background: 'transparent' }
                 }
               >

@@ -114,9 +114,28 @@ interface WeatherIconProps {
   className?: string
   /** Used only as fallback when code is unknown — defaults to true (day) */
   isDay?: boolean
+  /** Adds a soft drop-shadow glow tinted to match the phenomenon (sun=gold, moon=lavender, precip=info blue). Off by default — opt in for hero/featured placements. */
+  glow?: boolean
 }
 
-export function WeatherIcon({ code, size = 48, className, isDay = true }: WeatherIconProps) {
+/** Glow tint per phenomenon family, using the project's brand tokens — not generic amber/indigo. */
+function glowFilter(code: string): string | undefined {
+  if (code.includes('clear-day') || code.startsWith('partly-cloudy-day')) {
+    return 'drop-shadow(0 0 8px rgba(200,168,75,0.4))' // --color-primary (dorado)
+  }
+  if (code.includes('night') || code.startsWith('moon-')) {
+    return 'drop-shadow(0 0 6px rgba(168,180,234,0.35))' // lavanda suave — nocturno
+  }
+  if (
+    code.includes('rain') || code.includes('drizzle') || code.includes('snow') ||
+    code.includes('sleet') || code.includes('hail') || code.includes('thunderstorm')
+  ) {
+    return 'drop-shadow(0 0 6px rgba(90,170,216,0.3))' // --color-info (celeste)
+  }
+  return undefined
+}
+
+export function WeatherIcon({ code, size = 48, className, isDay = true, glow = false }: WeatherIconProps) {
   const IconComponent = ICON_MAP[code] ?? (isDay ? ClearDay : ClearNight)
 
   return (
@@ -125,7 +144,7 @@ export function WeatherIcon({ code, size = 48, className, isDay = true }: Weathe
       height={size}
       className={className}
       aria-hidden="true"
-      style={{ display: 'block', flexShrink: 0 }}
+      style={{ display: 'block', flexShrink: 0, filter: glow ? glowFilter(code) : undefined }}
     />
   )
 }

@@ -58,6 +58,7 @@ export function HourlyStrip({ hourly, badge }: Props) {
               : rainPct < 60
                 ? 'rgba(240,160,48,0.12)'
                 : 'rgba(224,85,69,0.12)',
+            border: `1px solid ${rainPct < 20 ? 'rgba(62,207,122,0.3)' : rainPct < 60 ? 'rgba(240,160,48,0.3)' : 'rgba(224,85,69,0.3)'}`,
             color: rainPct < 20 ? 'var(--color-safe)' : rainPct < 60 ? 'var(--color-watch)' : 'var(--color-warn)',
           }}
         >
@@ -65,10 +66,14 @@ export function HourlyStrip({ hourly, badge }: Props) {
         </span>
       </div>
 
-      {/* Day tabs */}
+      {/* Day tabs — segmented control con fondo sólido y estado activo de alto contraste */}
       <div
-        className="flex gap-1 px-4 pt-3 overflow-x-auto"
-        style={{ scrollbarWidth: 'none' }}
+        className="flex gap-0.5 mx-4 mt-3 p-0.5 rounded-xl overflow-x-auto"
+        style={{
+          scrollbarWidth: 'none',
+          background: 'var(--color-secondary)',
+          border: '1px solid var(--color-border)',
+        }}
       >
         {dates.map((date, i) => (
           <button
@@ -79,11 +84,11 @@ export function HourlyStrip({ hourly, badge }: Props) {
             className={cn(
               'shrink-0 px-3.5 py-2 min-h-[40px] rounded-lg text-sm font-medium transition-colors',
               date === activeDate
-                ? 'text-[var(--color-primary)]'
+                ? 'text-[var(--color-primary-foreground)] font-semibold'
                 : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
             )}
             style={date === activeDate
-              ? { background: 'rgba(200,168,75,0.12)' }
+              ? { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
               : { background: 'transparent' }
             }
           >
@@ -123,8 +128,8 @@ function HourCard({ entry }: { entry: HourlyEntry }) {
     <div
       className="shrink-0 flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl"
       style={{
-        background: hasPrecip ? 'rgba(90,170,216,0.08)' : 'rgba(200,168,75,0.04)',
-        border: hasPrecip ? '1px solid rgba(90,170,216,0.15)' : '1px solid rgba(200,168,75,0.1)',
+        background: hasPrecip ? 'rgba(90,170,216,0.1)' : 'var(--color-secondary)',
+        border: hasPrecip ? '1px solid rgba(90,170,216,0.25)' : '1px solid var(--color-border)',
         minWidth: '60px',
         scrollSnapAlign: 'start',
       }}
@@ -132,13 +137,18 @@ function HourCard({ entry }: { entry: HourlyEntry }) {
       <span className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
         {entry.hour_label}
       </span>
-      <WeatherIcon code={entry.icon} size={28} isDay={entry.is_day} />
+      <WeatherIcon code={entry.icon} size={28} isDay={entry.is_day} glow />
       <span className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
         {entry.temp_c !== null ? `${Math.round(entry.temp_c)}°` : '—'}
       </span>
       {hasPrecip && (
-        <span className="text-xs" style={{ color: '#5aaad8' }}>
+        <span className="text-xs" style={{ color: 'var(--color-info)' }}>
           {Math.round(entry.precip_prob ?? 0)}%
+        </span>
+      )}
+      {entry.wind_gusts_kmh !== null && entry.wind_gusts_kmh !== undefined && entry.wind_gusts_kmh > 40 && (
+        <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+          💨 {Math.round(entry.wind_gusts_kmh)}
         </span>
       )}
     </div>

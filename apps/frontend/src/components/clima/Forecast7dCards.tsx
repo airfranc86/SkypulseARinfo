@@ -10,7 +10,7 @@ interface Props {
 
 export function Forecast7dCards({ days }: Props) {
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1 pr-20" style={{ scrollbarWidth: 'thin', scrollSnapType: 'x mandatory' }}>
+    <div className="flex gap-3 overflow-x-auto pt-2 pb-1 pr-20" style={{ scrollbarWidth: 'thin', scrollSnapType: 'x mandatory' }}>
       {days.map((day, idx) => {
         const isHighlight = idx === 0
         return <DayCard key={day.date} day={day} highlighted={isHighlight} />
@@ -26,38 +26,47 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
 
   return (
     <div
-      className="shrink-0 flex flex-col items-center gap-2 rounded-2xl px-4 py-4"
+      className="relative shrink-0 flex flex-col items-center gap-2 rounded-2xl px-4 py-4"
       style={{
         minWidth: '100px',
         scrollSnapAlign: 'start',
         background: 'var(--color-card)',
         border: highlighted
-          ? `1px solid rgba(${HIGHLIGHT_COLOR},0.33)`
+          ? `1.5px solid rgba(${HIGHLIGHT_COLOR},0.55)`
           : '1px solid var(--color-border)',
-        boxShadow: highlighted ? `0 0 14px rgba(${HIGHLIGHT_COLOR},0.08)` : 'none',
+        boxShadow: highlighted ? `0 0 18px rgba(${HIGHLIGHT_COLOR},0.18)` : 'none',
       }}
     >
+      {highlighted && (
+        <span
+          className="absolute -top-2 text-[9px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full"
+          style={{ background: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
+        >
+          Hoy
+        </span>
+      )}
+
       {/* Day label */}
       <p className="text-xs font-medium capitalize" style={{ color: 'var(--color-muted-foreground)' }}>
         {day.day_label}
       </p>
 
       {/* Icon */}
-      <WeatherIcon code={day.icon} size={40} />
+      <WeatherIcon code={day.icon} size={40} glow />
 
       {/* Max / Min */}
       <div className="flex items-baseline gap-1">
-        <span className="text-base font-bold" style={{ color: 'var(--color-foreground)' }}>
+        <span className="text-lg font-bold" style={{ color: 'var(--color-foreground)' }}>
           {day.temp_max !== null ? `${Math.round(day.temp_max)}°` : '—'}
         </span>
-        <span className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+        <span className="text-sm font-normal" style={{ color: 'var(--color-muted-foreground)' }}>
           {day.temp_min !== null ? `${Math.round(day.temp_min)}°` : '—'}
         </span>
       </div>
 
       {/* Precip prob */}
       {hasPrecip && (
-        <span className="text-xs" style={{ color: '#5aaad8' }}>
+        <span className="text-xs" style={{ color: 'var(--color-info)' }}>
           🌧 {Math.round(day.precip_prob ?? 0)}%
         </span>
       )}
