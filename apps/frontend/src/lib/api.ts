@@ -38,20 +38,34 @@ function extractErrorMessage(body: unknown, status: number): string {
   return `HTTP ${status}`
 }
 
+async function throwApiError(res: Response): Promise<never> {
+  const body = await res.json().catch(() => ({}))
+  const retryAfterHeader = res.headers.get('Retry-After')
+  const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : null
+  let message = extractErrorMessage(body, res.status)
+  if (res.status === 429 && retryAfter) message += ` Reintentá en ${retryAfter}s.`
+  throw new ApiError(message, res.status, Number.isFinite(retryAfter) ? retryAfter : null)
+}
+
 async function request<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin)
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)))
   }
   const res = await fetch(url.toString())
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    const retryAfterHeader = res.headers.get('Retry-After')
-    const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : null
-    let message = extractErrorMessage(body, res.status)
-    if (res.status === 429 && retryAfter) message += ` Reintentá en ${retryAfter}s.`
-    throw new ApiError(message, res.status, Number.isFinite(retryAfter) ? retryAfter : null)
-  }
+  if (!res.ok) await throwApiError(res)
+  return res.json()
+}
+
+async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  const url = new URL(`${BASE_URL}${path}`, window.location.origin)
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!res.ok) await throwApiError(res)
   return res.json()
 }
 
@@ -404,6 +418,34 @@ export interface MetarRawResponse {
   data?: (string | { raw_text?: string })[]
 }
 
+// ── Altitud de densidad (POST /api/v1/aeronautica/density-altitude) ──────────
+
+export type AircraftModel = 'piston' | 'turboprop'
+export type DensityRisk = 'verde' | 'amarillo' | 'naranja' | 'rojo'
+
+export interface DensityAltitudeRequest {
+  elev_ft: number
+  qnh_hpa: number
+  oat_c: number
+  td_c: number
+  wl_nom: number
+  ias_kt: number
+  aircraft_model: AircraftModel
+}
+
+export interface DensityAltitudeResponse {
+  density_altitude_ft: number
+  pressure_altitude_ft: number
+  sigma: number
+  tas_kt: number
+  wl_eff: number
+  flare_loss_pct: number
+  takeoff_run_increase_pct: number
+  engine_power_loss_pct: number | null
+  risk_level: DensityRisk
+  decision_texts: string[]
+}
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -445,6 +487,9 @@ export const api = {
 
   niebla: (lat: number, lon: number) =>
     request<NieblaResponse>('/api/niebla', { lat, lon }),
+
+  densityAltitude: (body: DensityAltitudeRequest, signal?: AbortSignal) =>
+    postJson<DensityAltitudeResponse>('/api/v1/aeronautica/density-altitude', body, signal),
 
   /** TAF en código aeronáutico crudo — a demanda, para no consumir la cuota diaria de CheckWX (198/200 por día). */
   tafRaw: (icao: string) =>

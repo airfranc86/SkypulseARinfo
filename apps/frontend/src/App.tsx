@@ -22,7 +22,7 @@ import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
 import {
   CloudSun, Activity, Shirt, Car, Waves, MountainSnow, Mountain, TreePine,
-  Cloud, Radio, CloudRain, Radar as RadarIcon, Eye, TriangleAlert, type LucideIcon,
+  Cloud, Radio, CloudRain, Radar as RadarIcon, Eye, TriangleAlert, Gauge, type LucideIcon,
 } from 'lucide-react'
 import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 
@@ -48,6 +48,7 @@ const Volcanes    = lazy(() => import('@/pages/Volcanes').then(m => ({ default: 
 const Incendios   = lazy(() => import('@/pages/Incendios').then(m => ({ default: m.Incendios })))
 const Niebla        = lazy(() => import('@/pages/Niebla').then(m => ({ default: m.Niebla })))
 const HacerDeporte  = lazy(() => import('@/pages/HacerDeporte').then(m => ({ default: m.HacerDeporte })))
+const AltitudDensidad = lazy(() => import('@/pages/AltitudDensidad').then(m => ({ default: m.AltitudDensidad })))
 const Privacidad    = lazy(() => import('@/pages/Privacidad').then(m => ({ default: m.Privacidad })))
 const NotFound      = lazy(() => import('@/pages/NotFound').then(m => ({ default: m.NotFound })))
 
@@ -151,10 +152,11 @@ const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
   { to: '/incendios',     label: 'Incendios',       emoji: N(TreePine, '#f0a030'),       color: '#f0a030' },
 ]
 
-/** Static catalog pages — no backend dependency (Row 2, scrolls →) */
+/** Technical/catalog pages (Row 2, scrolls →). Altitud de densidad calcula en el backend pero tiene fallback local. */
 const NAV_CATALOG: NavRailItem[] = [
   { to: '/nubes',     label: 'Nubes',     emoji: N(Cloud, '#7ea8c4'),     color: '#7ea8c4' },
   { to: '/metar',     label: 'METAR',     emoji: N(Radio, '#8b9fc4'),     color: '#8b9fc4' },
+  { to: '/altitud-de-densidad', label: 'Altitud de densidad', emoji: N(Gauge, '#8fc4a8'), color: '#8fc4a8' },
   { to: '/desastres', label: 'Desastres', emoji: N(TriangleAlert, '#c47e5a'), color: '#c47e5a' },
   { to: '/lluvias',   label: 'Lluvias',   emoji: N(CloudRain, '#7ab5c4'), color: '#7ab5c4' },
   { to: '/radar',     label: 'Radar',     emoji: N(RadarIcon, '#9a9ac4'),     color: '#9a9ac4' },
@@ -288,6 +290,7 @@ function RootLayout() {
               <Route path="/nubes" element={<Nubes />} />
               <Route path="/metar" element={<Metar />} />
               <Route path="/niebla" element={<Niebla location={location} />} />
+              <Route path="/altitud-de-densidad" element={<AltitudDensidad />} />
               <Route path="/privacidad" element={<Privacidad />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
