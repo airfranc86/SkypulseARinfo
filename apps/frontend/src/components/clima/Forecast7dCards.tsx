@@ -28,7 +28,7 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
     <div
       className="relative shrink-0 flex flex-col items-center gap-2 rounded-2xl px-4 py-4"
       style={{
-        minWidth: '100px',
+        minWidth: '112px',
         scrollSnapAlign: 'start',
         background: 'var(--color-card)',
         border: highlighted
@@ -52,7 +52,7 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
       </p>
 
       {/* Icon */}
-      <WeatherIcon code={day.icon} size={40} glow />
+      <WeatherIcon code={day.icon} size={56} glow />
 
       {/* Max / Min */}
       <div className="flex items-baseline gap-1">
