@@ -118,7 +118,12 @@ interface WeatherIconProps {
   glow?: boolean
 }
 
-/** Glow tint per phenomenon family, using the project's brand tokens — not generic amber/indigo. */
+/**
+ * Glow tint per phenomenon family, using the project's brand tokens — not generic amber/indigo.
+ * Precip variants (rain/drizzle/snow/sleet/hail/thunderstorm) also get brightness+saturate:
+ * the Meteocons drop gradient (#0a5ad4-ish blue) reads low-contrast against the app's dark
+ * navy background at small sizes — boosting it makes the drops actually visible, not just glowing air around the cloud.
+ */
 function glowFilter(code: string): string | undefined {
   if (code.includes('clear-day') || code.startsWith('partly-cloudy-day')) {
     return 'drop-shadow(0 0 8px rgba(200,168,75,0.4))' // --color-primary (dorado)
@@ -130,7 +135,7 @@ function glowFilter(code: string): string | undefined {
     code.includes('rain') || code.includes('drizzle') || code.includes('snow') ||
     code.includes('sleet') || code.includes('hail') || code.includes('thunderstorm')
   ) {
-    return 'drop-shadow(0 0 6px rgba(90,170,216,0.3))' // --color-info (celeste)
+    return 'brightness(1.35) saturate(1.6) drop-shadow(0 0 6px rgba(90,170,216,0.45))' // --color-info (celeste), gotas con más punch
   }
   return undefined
 }

@@ -130,14 +130,14 @@ function HourCard({ entry }: { entry: HourlyEntry }) {
       style={{
         background: hasPrecip ? 'rgba(90,170,216,0.1)' : 'var(--color-secondary)',
         border: hasPrecip ? '1px solid rgba(90,170,216,0.25)' : '1px solid var(--color-border)',
-        minWidth: '60px',
+        minWidth: '68px',
         scrollSnapAlign: 'start',
       }}
     >
       <span className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
         {entry.hour_label}
       </span>
-      <WeatherIcon code={entry.icon} size={28} isDay={entry.is_day} glow />
+      <WeatherIcon code={entry.icon} size={44} isDay={entry.is_day} glow />
       <span className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
         {entry.temp_c !== null ? `${Math.round(entry.temp_c)}°` : '—'}
       </span>
