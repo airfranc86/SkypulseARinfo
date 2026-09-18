@@ -1,0 +1,6 @@
+{
+  "verde": "Condiciones normales según los parámetros ingresados.",
+  "amarillo": "La densidad del aire reduce el margen de performance. Verificá distancias, velocidad y limitaciones del manual de vuelo.",
+  "naranja": "Condiciones desfavorables para la performance. Recalculá con datos actualizados y considerá demorar o reevaluar la operación.",
+  "rojo": "No iniciar la operación sin una evaluación específica de performance y autorización conforme a los procedimientos aplicables."
+}

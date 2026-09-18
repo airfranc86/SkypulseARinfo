@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DensityAltitudeRequest } from '@/lib/api'
-import { parseDensityForm, type DensityFieldErrors, type DensityFormValues } from '@/lib/densityAltitude'
+import {
+  parseDensityForm,
+  requestsEqual,
+  type DensityFieldErrors,
+  type DensityFormValues,
+} from '@/lib/densityAltitude'
 import { useDensityAltitudeMutation } from '@/hooks/useDensityAltitude'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { DensityAltitudeForm } from './DensityAltitudeForm'
@@ -19,10 +24,15 @@ const DEFAULT_VALUES: DensityFormValues = {
   aircraft_model: 'piston',
 }
 
+interface Submission {
+  request: DensityAltitudeRequest
+  at: Date
+}
+
 export function DensityAltitudeWidget() {
   const [values, setValues] = useState<DensityFormValues>(DEFAULT_VALUES)
   const [errors, setErrors] = useState<DensityFieldErrors>({})
-  const [submitted, setSubmitted] = useState<DensityAltitudeRequest | null>(null)
+  const [submitted, setSubmitted] = useState<Submission | null>(null)
   const [runId, setRunId] = useState(0)
   const [slowRun, setSlowRun] = useState(-1)
   const resultsRef = useRef<HTMLDivElement>(null)
@@ -42,9 +52,17 @@ export function DensityAltitudeWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId])
 
+  // El resultado en pantalla corresponde a `submitted`; si el formulario ya dice otra cosa
+  // (o dejó de ser válido), hay que marcarlo como desactualizado en vez de dejarlo como vigente.
+  const stale = useMemo(() => {
+    if (!submitted) return false
+    const parsed = parseDensityForm(values)
+    return !parsed.ok || !requestsEqual(parsed.request, submitted.request)
+  }, [values, submitted])
+
   const run = (request: DensityAltitudeRequest) => {
     mutation.reset()
-    setSubmitted(request)
+    setSubmitted({ request, at: new Date() })
     setRunId(n => n + 1)
     mutation.mutate(request)
   }
@@ -71,11 +89,14 @@ export function DensityAltitudeWidget() {
       <div ref={resultsRef} tabIndex={-1} className="scroll-mt-52 outline-none">
         {submitted && (
           <DensityAltitudeResults
-            request={submitted}
+            request={submitted.request}
+            computedAt={submitted.at}
             precise={mutation.data ?? null}
             serverStatus={serverStatus}
             errorMessage={mutation.error?.message}
-            onRetry={() => run(submitted)}
+            stale={stale}
+            onRetry={() => run(submitted.request)}
+            onRecalculate={handleSubmit}
           />
         )}
       </div>

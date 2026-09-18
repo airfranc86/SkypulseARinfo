@@ -1,9 +1,16 @@
 """Tests unitarios del cálculo de Altitud de Densidad (sin I/O)."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
-from app.services.aeronautica import classify_risk, compute_density_altitude
+from app.services.aeronautica import _RISK_INFO, classify_risk, compute_density_altitude
+
+# El frontend reutiliza estos mismos textos en su estimación local (fail-open, mientras el
+# backend despierta). Si divergen, el usuario ve dos mensajes distintos para el mismo nivel.
+FRONTEND_RISK_MESSAGES = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "riskMessages.json"
 
 
 def _calc(**overrides):
@@ -194,6 +201,15 @@ def test_each_level_has_its_documented_message_and_code(level):
     assert r.risk_level == level
     assert r.risk_message == EXPECTED_MESSAGES[level]
     assert r.risk_code == EXPECTED_CODES[level]
+
+
+@pytest.mark.unit
+def test_risk_messages_match_frontend_copy():
+    if not FRONTEND_RISK_MESSAGES.exists():
+        pytest.skip("checkout sin apps/frontend (deploy solo backend)")
+    frontend = json.loads(FRONTEND_RISK_MESSAGES.read_text(encoding="utf-8"))
+    backend = {level: message for level, (_, message) in _RISK_INFO.items()}
+    assert frontend == backend
 
 
 @pytest.mark.unit
