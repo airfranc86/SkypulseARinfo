@@ -24,6 +24,8 @@ interface Props {
   onModelChange: (m: ForecastModel) => void
   /** Llegó otro modelo y todavía se muestran los días del anterior. */
   refreshing?: boolean
+  /** Franja con lluvia prevista por fecha (solo hoy y mañana tienen horas). */
+  rainWindows?: Record<string, string>
 }
 
 type View = 'cards' | 'table' | 'chart'
@@ -43,7 +45,7 @@ const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
 const SEGMENT_BASE = 'px-3.5 py-2 min-h-[44px] rounded-md text-xs font-medium transition-colors'
 const SEGMENT_ACTIVE = { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
 
-export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshing = false }: Props) {
+export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshing = false, rainWindows }: Props) {
   const [view, setView] = useState<View>('cards')
   const modelLabel = MODEL_OPTIONS.find(({ id }) => id === selectedModel)?.label ?? selectedModel
 
@@ -110,7 +112,7 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshi
         </summary>
         <div className="px-5 pb-4 space-y-2">
           <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
-            El consenso combina GFS y ECMWF: cuando coinciden, el pronóstico es más confiable. Elegí uno solo para ver en qué difieren.
+            El consenso combina GFS y ECMWF. Cuando no coinciden, ese día lleva "Confianza media" o "Confianza baja". Elegí uno solo para ver en qué difieren.
           </p>
           <div
             role="group"
@@ -146,7 +148,9 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshi
 
       {/* Vista activa */}
       <div className="p-4" aria-busy={refreshing} style={{ opacity: refreshing ? 0.55 : 1 }}>
-        {view === 'cards' && <Forecast7dCards days={days} />}
+        {view === 'cards' && (
+          <Forecast7dCards days={days} rainWindows={rainWindows} showConfidence={selectedModel === 'consensus'} />
+        )}
         {view === 'table' && <Forecast7dTable days={days} />}
         {view === 'chart' && <Forecast7dChart days={days} />}
       </div>

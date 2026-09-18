@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
-import { Thermometer, Droplets, Sun, Wind } from 'lucide-react'
+import { Thermometer, Droplets, Sun, Wind, CloudRain, CloudLightning, type LucideIcon } from 'lucide-react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import { BorderGlow } from '@/components/animated/BorderGlow'
-import type { CurrentDetailed } from '@/lib/api'
+import type { VerdictLine, VerdictTone } from '@/lib/weatherVerdict'
+import type { CurrentDetailed, DailyEntry } from '@/lib/api'
 
 const WIND_COLOR: Record<string, string> = {
   moderada: '#c8a84b',
@@ -19,12 +20,26 @@ function minutesAgo(iso: string): string {
   return `Hace ${h}h`
 }
 
-interface Props {
-  current: CurrentDetailed
-  locationLabel: string
+const TONE: Record<VerdictTone, { Icon: LucideIcon; color: string }> = {
+  rain:  { Icon: CloudRain,      color: 'var(--color-info)' },
+  clear: { Icon: Sun,            color: 'var(--color-safe)' },
+  wind:  { Icon: Wind,           color: 'var(--color-watch)' },
+  storm: { Icon: CloudLightning, color: 'var(--color-warn)' },
 }
 
-export function WeatherHero({ current, locationLabel }: Props) {
+interface Props {
+  current: CurrentDetailed
+  /** Hoy en el pronóstico de 7 días: de ahí salen la máxima y la mínima. */
+  today?: DailyEntry
+  /** Lo que viene en las próximas 24 h, ya redactado (ver lib/weatherVerdict). */
+  verdict: VerdictLine[]
+}
+
+function formatDegrees(value: number | null): string {
+  return value !== null ? `${Math.round(value)}°` : '—'
+}
+
+export function WeatherHero({ current, today, verdict }: Props) {
   return (
     <BorderGlow
       animated
@@ -49,7 +64,19 @@ export function WeatherHero({ current, locationLabel }: Props) {
             className="text-7xl sm:text-8xl md:text-9xl font-bold leading-none tracking-tight"
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
           >
-            {current.temp_c !== null ? `${Math.round(current.temp_c)}°` : '—'}
+            {current.temp_c !== null ? Math.round(current.temp_c) : '—'}
+            {/* El ° de Playfair a este cuerpo es un aro casi tan alto como el número: se compone
+                aparte, en la sans y a escala de símbolo. */}
+            {current.temp_c !== null && (
+              <span
+                aria-hidden="true"
+                className="align-top ml-1 text-[0.42em] font-medium"
+                style={{ fontFamily: 'var(--font-sans)' }}
+              >
+                °
+              </span>
+            )}
+            {current.temp_c !== null && <span className="sr-only"> grados</span>}
           </p>
           <p
             className="mt-3 text-lg sm:text-xl"
@@ -57,12 +84,13 @@ export function WeatherHero({ current, locationLabel }: Props) {
           >
             {current.description}
           </p>
-          <p
-            className="text-sm mt-1.5"
-            style={{ color: 'var(--color-primary)' }}
-          >
-            {locationLabel}
-          </p>
+          {today && (today.temp_max !== null || today.temp_min !== null) && (
+            <p className="mt-2 text-base font-medium tabular-nums" style={{ color: 'var(--color-foreground)' }}>
+              <span>Máx {formatDegrees(today.temp_max)}</span>
+              <span aria-hidden="true" style={{ color: 'var(--color-muted-foreground)' }}> · </span>
+              <span style={{ color: 'var(--color-muted-foreground)' }}>Mín {formatDegrees(today.temp_min)}</span>
+            </p>
+          )}
           {current.observed_at && (
             <p
               className="text-xs mt-0.5"
@@ -74,8 +102,27 @@ export function WeatherHero({ current, locationLabel }: Props) {
         </div>
       </div>
 
+      {/* Lo que viene: hora, cantidad y umbral, sin porcentajes ni promesas */}
+      {verdict.length > 0 && (
+        <div role="group" aria-label="Lo que viene en las próximas 24 horas" className="mt-6 space-y-2">
+          {verdict.map(({ tone, text }) => {
+            const { Icon, color } = TONE[tone]
+            return (
+              <p
+                key={text}
+                className="flex items-start gap-2.5 text-base leading-snug"
+                style={{ color: 'var(--color-foreground)' }}
+              >
+                <Icon size={20} strokeWidth={1.75} className="mt-0.5 shrink-0" style={{ color }} aria-hidden="true" />
+                <span>{text}</span>
+              </p>
+            )
+          })}
+        </div>
+      )}
+
       {/* Stats grid */}
-      <div className="mt-7 grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Sensación — expanded chip with factor explanation */}
         <div
           className="rounded-xl px-3 py-2.5 flex flex-col gap-0.5 col-span-2 sm:col-span-1"

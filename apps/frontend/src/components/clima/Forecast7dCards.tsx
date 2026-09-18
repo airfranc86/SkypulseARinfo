@@ -1,20 +1,33 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import { describeWeatherIcon, precipKind } from '@/lib/weatherLabels'
+import { RainPill } from './RainPill'
 import type { DailyEntry } from '@/lib/api'
 
 const HIGHLIGHT_COLOR = '200,168,75' // primary gold (RGB para componer alpha)
 
 interface Props {
   days: DailyEntry[]
+  /** Franja con lluvia prevista por fecha (solo hoy y mañana tienen horas). */
+  rainWindows?: Record<string, string>
+  /** Solo el consenso mide desacuerdo entre modelos: con un modelo suelto, "confianza" no significa nada. */
+  showConfidence?: boolean
 }
 
-export function Forecast7dCards({ days }: Props) {
+export function Forecast7dCards({ days, rainWindows = {}, showConfidence = false }: Props) {
   return (
     <div className="flex gap-3 overflow-x-auto pt-2 pb-1 pr-20" style={{ scrollbarWidth: 'thin', scrollSnapType: 'x mandatory' }}>
       {days.map((day, idx) => {
         const isHighlight = idx === 0
-        return <DayCard key={day.date} day={day} highlighted={isHighlight} />
+        return (
+          <DayCard
+            key={day.date}
+            day={day}
+            highlighted={isHighlight}
+            rainWindow={rainWindows[day.date]}
+            showConfidence={showConfidence}
+          />
+        )
       })}
       {/* Espacio al final del scroll para que la última card no quede tapada
           por ScrollToTopBubble (fixed, bottom-right, ocupa los últimos 68px). */}
@@ -22,11 +35,20 @@ export function Forecast7dCards({ days }: Props) {
   )
 }
 
-function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: boolean }) {
+interface DayCardProps {
+  day: DailyEntry
+  highlighted?: boolean
+  rainWindow?: string
+  showConfidence: boolean
+}
+
+function DayCard({ day, highlighted = false, rainWindow, showConfidence }: DayCardProps) {
   const hasPrecip = (day.precip_prob ?? 0) > 15
   const condition = describeWeatherIcon(day.icon)
   // El tipo sale del ícono: con nieve, "🌧 40%" contaba otra historia.
   const precipLabel = precipKind(day.icon) ?? 'Lluvia'
+  // ALTA no se anuncia: con un solo modelo el backend la fija en 100, así que solo el aviso es informativo.
+  const lowConfidence = showConfidence && day.confidence_label !== 'ALTA'
 
   return (
     <div
@@ -78,9 +100,17 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
       </div>
 
       {/* Precip prob */}
-      {hasPrecip && (
-        <span className="text-xs" style={{ color: 'var(--color-info)' }}>
-          {precipLabel} {Math.round(day.precip_prob ?? 0)}%
+      {hasPrecip && <RainPill kind={precipLabel} pct={day.precip_prob ?? 0} window={rainWindow} />}
+
+      {lowConfidence && (
+        <span
+          className="text-[11px] px-2 py-0.5 rounded-full"
+          style={{
+            border: '1px solid var(--color-border)',
+            color: day.confidence_label === 'BAJA' ? 'var(--color-watch)' : 'var(--color-muted-foreground)',
+          }}
+        >
+          Confianza {day.confidence_label === 'BAJA' ? 'baja' : 'media'}
         </span>
       )}
 
