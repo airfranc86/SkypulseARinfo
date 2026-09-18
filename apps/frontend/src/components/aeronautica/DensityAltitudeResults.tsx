@@ -17,12 +17,13 @@ interface ResultView {
   daFt: number
   sigma: number
   tasKt: number
-  wlEff: number
+  adjustedWingLoading: number
   flareLossPct: number
   takeoffRunIncreasePct: number
   enginePowerLossPct: number | null
   risk: DensityRisk
-  decisionTexts: string[] | null
+  /** Mensaje de riesgo: solo lo entrega el servidor (la estimación local no recomienda). */
+  riskMessage: string | null
   isEstimate: boolean
 }
 
@@ -35,16 +36,17 @@ function useResultView(request: DensityAltitudeRequest, precise: DensityAltitude
   const estimate = useMemo(() => estimateDensityAltitude(request), [request])
 
   if (precise) {
+    const calc = precise.calculations
     return {
-      daFt: precise.density_altitude_ft,
-      sigma: precise.sigma,
-      tasKt: precise.tas_kt,
-      wlEff: precise.wl_eff,
+      daFt: calc.density_altitude_ft,
+      sigma: calc.sigma,
+      tasKt: calc.tas_kt,
+      adjustedWingLoading: calc.density_adjusted_wing_loading,
       flareLossPct: precise.flare_loss_pct,
       takeoffRunIncreasePct: precise.takeoff_run_increase_pct,
       enginePowerLossPct: precise.engine_power_loss_pct,
-      risk: precise.risk_level,
-      decisionTexts: precise.decision_texts,
+      risk: precise.risk.level,
+      riskMessage: precise.risk.message,
       isEstimate: false,
     }
   }
@@ -52,12 +54,12 @@ function useResultView(request: DensityAltitudeRequest, precise: DensityAltitude
     daFt: estimate.densityAltitudeFt,
     sigma: estimate.sigma,
     tasKt: estimate.tasKt,
-    wlEff: estimate.wlEff,
+    adjustedWingLoading: estimate.adjustedWingLoading,
     flareLossPct: estimate.flareLossPct,
     takeoffRunIncreasePct: estimate.takeoffRunIncreasePct,
     enginePowerLossPct: estimate.enginePowerLossPct,
     risk: estimate.risk,
-    decisionTexts: null,
+    riskMessage: null,
     isEstimate: true,
   }
 }
@@ -131,7 +133,7 @@ export function DensityAltitudeResults({ request, precise, serverStatus, errorMe
   const view = useResultView(request, precise)
   const meta = RISK_META[view.risk]
   const tasPct = tasIncreasePct(view.sigma)
-  const wlRatio = view.wlEff / request.wl_nom
+  const wlRatio = view.adjustedWingLoading / request.wl_nom
 
   return (
     <div className="space-y-3">
@@ -163,8 +165,9 @@ export function DensityAltitudeResults({ request, precise, serverStatus, errorMe
             )}
           </div>
           <p className="text-sm mt-1">
-            Altitud de densidad {INT.format(view.daFt)} ft: tu velamen carga ×{DEC2.format(wlRatio)} y la
-            aeronave necesita {signed(view.takeoffRunIncreasePct, '+')} de carrera de despegue.
+            Altitud de densidad {INT.format(view.daFt)} ft: el índice de wing loading ajustado sube ×
+            {DEC2.format(wlRatio)} y la aeronave necesita {signed(view.takeoffRunIncreasePct, '+')} de carrera
+            de despegue.
           </p>
         </div>
 
@@ -181,9 +184,9 @@ export function DensityAltitudeResults({ request, precise, serverStatus, errorMe
           <div className="grid gap-3 md:grid-cols-2">
             <SectionCard icon={<Wind size={16} aria-hidden="true" />} title="Paracaidismo">
               <Metric
-                label="Wing loading efectivo"
-                value={DEC2.format(view.wlEff)}
-                hint={`×${DEC2.format(wlRatio)} sobre tu nominal (${DEC2.format(request.wl_nom)})`}
+                label="Wing loading ajustado por densidad"
+                value={DEC2.format(view.adjustedWingLoading)}
+                hint={`×${DEC2.format(wlRatio)} sobre tu nominal (${DEC2.format(request.wl_nom)}). Índice operacional: el peso por superficie real no cambia.`}
               />
               <Metric
                 label="Velocidad verdadera"
@@ -210,10 +213,8 @@ export function DensityAltitudeResults({ request, precise, serverStatus, errorMe
             <h3 id="da-actions" className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>
               Qué hacer
             </h3>
-            {view.decisionTexts ? (
-              <ul className="space-y-1.5 text-sm list-disc pl-5" style={{ color: 'var(--color-foreground)' }}>
-                {view.decisionTexts.map(t => <li key={t}>{t}</li>)}
-              </ul>
+            {view.riskMessage ? (
+              <p className="text-sm" style={{ color: 'var(--color-foreground)' }}>{view.riskMessage}</p>
             ) : (
               <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
                 Las recomendaciones detalladas aparecen con el cálculo del servidor.

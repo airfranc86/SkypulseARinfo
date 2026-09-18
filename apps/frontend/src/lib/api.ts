@@ -433,17 +433,34 @@ export interface DensityAltitudeRequest {
   aircraft_model: AircraftModel
 }
 
-export interface DensityAltitudeResponse {
-  density_altitude_ft: number
+export type DensityRiskCode =
+  | 'NORMAL'
+  | 'REDUCED_PERFORMANCE_MARGIN'
+  | 'UNFAVORABLE_PERFORMANCE'
+  | 'SPECIFIC_EVALUATION_REQUIRED'
+
+export interface DensityAltitudeCalculations {
   pressure_altitude_ft: number
+  isa_temperature_c: number
+  station_pressure_hpa: number
+  vapor_pressure_hpa: number
+  virtual_temperature_c: number
+  density_altitude_ft: number
   sigma: number
   tas_kt: number
-  wl_eff: number
+  /** Índice operacional wl_nom / sigma — NO es el wing loading físico (W/S). */
+  density_adjusted_wing_loading: number
+}
+
+export interface DensityAltitudeResponse {
+  inputs: DensityAltitudeRequest
+  calculations: DensityAltitudeCalculations
+  risk: { level: DensityRisk; code: DensityRiskCode; message: string }
   flare_loss_pct: number
   takeoff_run_increase_pct: number
   engine_power_loss_pct: number | null
-  risk_level: DensityRisk
-  decision_texts: string[]
+  /** Siempre null: no hay fórmula aprobada de tasa de ascenso. */
+  roc: null
 }
 
 // ── API client ────────────────────────────────────────────────────────────────
