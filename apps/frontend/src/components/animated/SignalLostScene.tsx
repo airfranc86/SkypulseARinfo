@@ -21,11 +21,8 @@ const RING_DURATION = 2.7
 
 /**
  * Escena decorativa de la 404: "el radar de SkyPulse perdió la señal de esta
- * página". Un paraguas (geometría — arco + mango, sin figura humana: ver
- * craft-floor sobre por qué un stick-figure está prohibido) flota bajo la
- * lluvia mientras el radar hace ping buscando algo que no está. El ícono de
- * niebla es un asset real de Meteocons (gradiente/sombreado propio del
- * catálogo, no un boceto de líneas) — coherente con "perdido en la niebla".
+ * página". Lluvia cayendo mientras el radar hace ping buscando algo que no
+ * está.
  */
 export function SignalLostScene() {
   const reducedMotion = useReducedMotion()
@@ -88,20 +85,6 @@ export function SignalLostScene() {
           }}
         />
       ))}
-
-      {/* Paraguas — geometría (arco + mango), sin persona debajo: el objeto
-          quedó, lo que faltaba era la página. Balanceo sutil. */}
-      <motion.g
-        style={{ transformOrigin: '150px 70px' }}
-        animate={reducedMotion ? undefined : { rotate: [-3, 3, -3] }}
-        transition={reducedMotion ? undefined : { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <path d="M150 95 L150 130 Q150 140 160 140" stroke="var(--color-muted-foreground)" strokeWidth={3} fill="none" strokeLinecap="round" />
-        <path d="M90 95 Q90 45 150 45 Q210 45 210 95 Z" fill="var(--color-primary)" opacity={0.9} />
-        <path d="M110 95 Q110 60 150 55" stroke="var(--color-background)" strokeWidth={1.5} fill="none" opacity={0.35} />
-        <path d="M150 95 L150 45" stroke="var(--color-background)" strokeWidth={1.5} fill="none" opacity={0.35} />
-        <path d="M190 95 Q190 60 150 55" stroke="var(--color-background)" strokeWidth={1.5} fill="none" opacity={0.35} />
-      </motion.g>
     </svg>
   )
 }
