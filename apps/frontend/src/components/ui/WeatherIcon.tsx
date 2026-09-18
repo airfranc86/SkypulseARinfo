@@ -116,6 +116,8 @@ interface WeatherIconProps {
   isDay?: boolean
   /** Adds a soft drop-shadow glow tinted to match the phenomenon (sun=gold, moon=lavender, precip=info blue). Off by default — opt in for hero/featured placements. */
   glow?: boolean
+  /** Texto alternativo. Con label el ícono se anuncia como imagen; sin él es decorativo (aria-hidden). */
+  label?: string
 }
 
 /**
@@ -140,15 +142,18 @@ function glowFilter(code: string): string | undefined {
   return undefined
 }
 
-export function WeatherIcon({ code, size = 48, className, isDay = true, glow = false }: WeatherIconProps) {
+export function WeatherIcon({ code, size = 48, className, isDay = true, glow = false, label }: WeatherIconProps) {
   const IconComponent = ICON_MAP[code] ?? (isDay ? ClearDay : ClearNight)
+  const a11y: SVGProps<SVGSVGElement> = label
+    ? { role: 'img', 'aria-label': label }
+    : { 'aria-hidden': true }
 
   return (
     <IconComponent
       width={size}
       height={size}
       className={className}
-      aria-hidden="true"
+      {...a11y}
       style={{ display: 'block', flexShrink: 0, filter: glow ? glowFilter(code) : undefined }}
     />
   )

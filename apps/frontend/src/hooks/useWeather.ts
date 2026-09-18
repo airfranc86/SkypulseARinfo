@@ -109,6 +109,10 @@ export function useWeatherDashboard(
     },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
+    // Cambiar de modelo mantiene la página en pantalla mientras llega el pronóstico nuevo.
+    // Solo con las mismas coordenadas: con otra ciudad, mostrar el dato anterior sería mentir.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === lat && previousQuery?.queryKey[2] === lon ? previous : undefined,
     ...COLD_START_RETRY,
   })
 }

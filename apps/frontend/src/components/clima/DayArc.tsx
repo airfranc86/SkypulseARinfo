@@ -112,7 +112,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         <text
           x={cx - r + 2}
           y={cy + 12}
-          fontSize="9"
+          fontSize="11"
           fill="var(--color-muted-foreground)"
           textAnchor="start"
         >
@@ -123,7 +123,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         <text
           x={cx + r - 2}
           y={cy + 12}
-          fontSize="9"
+          fontSize="11"
           fill="var(--color-muted-foreground)"
           textAnchor="end"
         >
@@ -134,7 +134,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
         <text
           x={cx}
           y={cy + 12}
-          fontSize="9"
+          fontSize="11"
           fill="var(--color-muted-foreground)"
           textAnchor="middle"
         >
@@ -166,9 +166,9 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
             <span
               title="Cota de nieve: altura aproximada sobre el nivel del mar a partir de la cual puede nevar. Por debajo de este nivel la precipitación cae como lluvia."
               aria-label="¿Qué es la cota de nieve?"
-              className="inline-flex items-center justify-center rounded-full text-[9px] font-bold cursor-help select-none"
+              className="inline-flex items-center justify-center rounded-full text-[11px] font-bold cursor-help select-none"
               style={{
-                width: '14px', height: '14px',
+                width: '20px', height: '20px',
                 background: 'rgba(200,168,75,0.15)',
                 color: 'var(--color-primary)',
                 border: '1px solid rgba(200,168,75,0.3)',

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { Info } from 'lucide-react'
 
-export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'mixed' | 'segemar' | 'consensus'
+export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'smn_openmeteo' | 'mixed' | 'segemar' | 'consensus'
 type Variant = 'pill' | 'inline' | 'header'
 
 interface ModelMeta {
@@ -56,11 +56,19 @@ const MODELS: Record<ModelKey, ModelMeta> = {
   },
   openmeteo: {
     label: 'Open-Meteo',
-    org: 'Fallback',
+    org: 'Respaldo',
     color: '#90aabb',
     description: 'Fuente de respaldo. Los datos pueden diferir de las otras fuentes.',
     reliability: 'Variable',
     updateFreq: 'Cada hora',
+  },
+  smn_openmeteo: {
+    label: 'SMN + Open-Meteo',
+    org: 'Respaldo',
+    color: '#90aabb',
+    description: 'Observación real del SMN. El pronóstico viene de Open-Meteo porque GFS (Windy) no respondió: puede diferir de lo habitual.',
+    reliability: 'Actual: alta (SMN) · Pronóstico: variable',
+    updateFreq: 'SMN: 1h · Open-Meteo: cada hora',
   },
   segemar: {
     label: 'OAVV',
@@ -104,7 +112,6 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const meta = MODELS[model]
-  if (!meta) return null
 
   useEffect(() => {
     if (!open) return
@@ -126,6 +133,9 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
       window.removeEventListener('scroll', onScroll, true)
     }
   }, [open])
+
+  // Después de los hooks: un model desconocido no debe cambiar el orden en que se llaman.
+  if (!meta) return null
 
   if (variant === 'inline') {
     return (

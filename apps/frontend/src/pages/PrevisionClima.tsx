@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { CloudSun, ChevronDown } from 'lucide-react'
-import { useWeatherDashboard, useSmnAlertas, isColdStart } from '@/hooks/useWeather'
+import { useWeatherDashboard, useSmnAlertas, isColdStart, isClientError } from '@/hooks/useWeather'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
+import { forecastNotes, formatClock } from '@/lib/weatherLabels'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
 import { SmnAlertasBlock } from '@/components/clima/SmnAlertasBlock'
@@ -20,24 +21,27 @@ type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
 
 interface Props { location: LocationState | null }
 
-/** Derives the page-level badge from the actual current observation source. */
-function pageModel(source: string | undefined): ModelKey {
-  if (source === 'smn') return 'mixed'       // SMN actual + GFS pronóstico
-  return 'gfs'                                // solo GFS/OM cuando SMN no disponible
+/**
+ * Badge de la página según las fuentes que realmente respondieron: la observación
+ * (SMN o no) y el pronóstico (GFS vía Windy, o Open-Meteo como respaldo).
+ */
+function pageModel(currentSource: string | undefined, forecastSource: string | undefined): ModelKey {
+  const smn = currentSource === 'smn'
+  if (forecastSource === 'openmeteo') return smn ? 'smn_openmeteo' : 'openmeteo'
+  return smn ? 'mixed' : 'gfs'
 }
 
-/** Mensaje amigable para 503 por cold start de Render — evita el genérico "all_sources_unavailable". */
+/** Mensaje para el usuario según el fallo: cold start, error de validación del backend, o cualquier otro. */
 function dashboardErrorMessage(error: Error): string {
-  if (isColdStart(error)) {
-    return 'El servicio tardó en responder al despertar. Recargá la página en unos segundos.'
-  }
-  return error.message
+  if (isColdStart(error)) return 'El servicio tardó en responder al despertar.'
+  if (isClientError(error)) return error.message
+  return 'No pudimos cargar la previsión. Probá de nuevo en unos segundos.'
 }
 
 export function PrevisionClima({ location }: Props) {
   const [forecastModel, setForecastModel] = useState<ForecastModel>('consensus')
-  const { data, isLoading, isFetching, error, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
-  const { data: alertasData } = useSmnAlertas()
+  const { data, isLoading, isFetching, isPlaceholderData, error, refetch, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
+  const { data: alertasData, isError: alertasError } = useSmnAlertas()
   const reducedMotion = useReducedMotion()
 
   // Colapsado en la primera visita — el hero de "ahora" es el viewport que
@@ -61,8 +65,19 @@ export function PrevisionClima({ location }: Props) {
     }
   }
 
-  // Render dinámico: 'mixed' cuando SMN está activo, 'gfs' cuando cae a Open-Meteo
-  const badgeModel = pageModel(data?.current?.source)
+  const badgeModel = pageModel(data?.current?.source, data?.forecast_source)
+  const notes = data ? forecastNotes(data) : []
+  const updatedAt = formatClock(data?.fetched_at)
+  // Sin dato del SMN, "sin avisos" sería una afirmación que no podemos hacer.
+  const alertasUnavailable = alertasError || alertasData?.available === false
+
+  // Región viva: al cambiar de ciudad la pantalla se reemplaza y un lector de pantalla
+  // no se entera de que cargó otra cosa.
+  let liveMessage = ''
+  if (location) {
+    if (isLoading) liveMessage = `Cargando la previsión de ${location.label}…`
+    else if (data) liveMessage = `Previsión de ${location.label} actualizada.`
+  }
 
   // El backend (Render free-tier) hiberna tras inactividad — el primer request del día
   // puede tardar 20-30s en despertar y devolver 503 mientras tanto. Mostramos un aviso
@@ -77,13 +92,17 @@ export function PrevisionClima({ location }: Props) {
       <PageHeader
         icon={<CloudSun size={32} style={{ color: '#c8a84b' }} />}
         title="Previsión del clima"
-        subtitle={location?.label}
+        subtitle={location ? (updatedAt ? `${location.label} · Actualizado ${updatedAt}` : location.label) : undefined}
         modelBadge={data ? <ModelBadge model={badgeModel} variant="header" /> : undefined}
       />
 
+      <p role="status" className="sr-only">{liveMessage}</p>
+
       {isWakingUp && <WakingUpNotice />}
       {(location === null || isLoading) && !isWakingUp && <PageSkeleton />}
-      {error && !isWakingUp && <ErrorMessage message={dashboardErrorMessage(error as Error)} />}
+      {error && !isWakingUp && (
+        <ErrorMessage message={dashboardErrorMessage(error as Error)} onRetry={() => { void refetch() }} />
+      )}
 
       {data && location && (
         // FORM: Impeccable's Pick, candidate 1 of 7, seed key fe5ff169.
@@ -100,14 +119,21 @@ export function PrevisionClima({ location }: Props) {
         // FINISH: unreviewed and undocumented is unfinished.
         <FadeContent>
           <div className="space-y-5">
-            {/* Avisos oficiales SMN — solo se renderiza si hay alertas activas */}
-            <SmnAlertasBlock alertas={alertasData?.alertas ?? []} />
+            {/* Avisos oficiales SMN — con alertas activas se listan; sin respuesta del SMN se avisa */}
+            <SmnAlertasBlock alertas={alertasData?.alertas ?? []} unavailable={alertasUnavailable} />
 
-            {/* Hero (SMN) — el primer viewport es esto y nada más */}
-            <WeatherHero
-              current={data.current}
-              locationLabel={location.label}
-            />
+            {notes.length > 0 && <SourceNotes notes={notes} />}
+
+            {/* Hero (SMN) — el primer viewport es esto y nada más.
+                El wrapper recorta el brillo del BorderGlow (se extiende 40 px fuera de la
+                tarjeta): sin él la página desborda en horizontal en mobile. Los -mx-3/px-3
+                dejan 12 px de brillo a cada lado dentro de la gutter de 16 px. */}
+            <div className="-mx-3 px-3 overflow-x-clip">
+              <WeatherHero
+                current={data.current}
+                locationLabel={location.label}
+              />
+            </div>
 
             {/* Profundidad plegable: sol/luna, hora a hora, 7 días */}
             <button
@@ -163,6 +189,7 @@ export function PrevisionClima({ location }: Props) {
                     days={data.forecast_7d}
                     selectedModel={forecastModel}
                     onModelChange={setForecastModel}
+                    refreshing={isPlaceholderData}
                   />
                 </div>
               </div>
@@ -205,10 +232,22 @@ function WakingUpNotice() {
   )
 }
 
+/** Qué fuentes no respondieron y qué cambia por eso, en hechos y sin alarma. */
+function SourceNotes({ notes }: { notes: string[] }) {
+  return (
+    <div
+      className="rounded-xl px-4 py-3 space-y-1 text-xs leading-relaxed"
+      style={{ border: '1px solid rgba(240,160,48,0.3)', background: 'rgba(240,160,48,0.06)', color: 'var(--color-muted-foreground)' }}
+    >
+      {notes.map(note => <p key={note}>{note}</p>)}
+    </div>
+  )
+}
+
 /** Refleja la proporción real: hero grande + franja del toggle, el resto vive colapsado. */
 function PageSkeleton() {
   return (
-    <div className="space-y-5 animate-pulse">
+    <div className="space-y-5 animate-pulse motion-reduce:animate-none" aria-busy="true">
       <div className="h-72 sm:h-80 rounded-2xl" style={{ background: 'var(--color-muted)' }} />
       <div className="h-12 rounded-xl" style={{ background: 'var(--color-muted)' }} />
     </div>

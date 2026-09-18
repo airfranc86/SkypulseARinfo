@@ -47,12 +47,24 @@ async function throwApiError(res: Response): Promise<never> {
   throw new ApiError(message, res.status, Number.isFinite(retryAfter) ? retryAfter : null)
 }
 
+/** Sin tope, un backend que no responde deja la pantalla cargando para siempre. Con 30 s el
+ *  reintento de TanStack llega cuando Render ya despertó (el cold start ronda 20-50 s). */
+const REQUEST_TIMEOUT_MS = 30_000
+
 async function request<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin)
   if (params) {
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)))
   }
-  const res = await fetch(url.toString())
+  let res: Response
+  try {
+    res = await fetch(url.toString(), { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new ApiError('El servidor no respondió a tiempo.', 504)
+    }
+    throw error
+  }
   if (!res.ok) await throwApiError(res)
   return res.json()
 }
