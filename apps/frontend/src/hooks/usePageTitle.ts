@@ -16,6 +16,7 @@ const TITLES: Record<string, string> = {
   '/nubes':        'SkyPulse — Nubes',
   '/metar':        'SkyPulse — METAR',
   '/niebla':       'SkyPulse — Niebla',
+  '/altitud-de-densidad': 'SkyPulse — Altitud de densidad',
   '/privacidad':   'SkyPulse — Política de privacidad',
 }
 
