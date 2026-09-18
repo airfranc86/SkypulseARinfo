@@ -1,4 +1,5 @@
 import type { DensityAltitudeRequest, DensityRisk } from '@/lib/api'
+import riskMessages from '@/lib/riskMessages.json'
 
 /**
  * Estimación local de Altitud de Densidad (regla FAA, sin humedad) usada como
@@ -9,6 +10,26 @@ import type { DensityAltitudeRequest, DensityRisk } from '@/lib/api'
  * corrección por temperatura virtual. Por eso SUBESTIMA la altitud de densidad
  * en aire húmedo — la UI debe marcarlo siempre como estimación.
  */
+
+/**
+ * Copia de los mensajes aprobados del backend (_RISK_INFO). El test
+ * test_risk_messages_match_frontend_copy falla si divergen.
+ */
+export const RISK_MESSAGES: Record<DensityRisk, string> = riskMessages
+
+/**
+ * La estimación local nunca sobreestima la DA (omite la humedad, que solo la
+ * sube) y el riesgo crece con la DA: un naranja o rojo estimado es un piso que
+ * el servidor solo puede confirmar o subir. Verde y amarillo, en cambio, pueden
+ * empeorar, así que no deben tranquilizar.
+ */
+export function isEstimateFloor(risk: DensityRisk): boolean {
+  return risk === 'naranja' || risk === 'rojo'
+}
+
+export function requestsEqual(a: DensityAltitudeRequest, b: DensityAltitudeRequest): boolean {
+  return (Object.keys(a) as (keyof DensityAltitudeRequest)[]).every(key => a[key] === b[key])
+}
 
 const FT_PER_HPA = 30
 const FT_PER_DEG_C = 118.8

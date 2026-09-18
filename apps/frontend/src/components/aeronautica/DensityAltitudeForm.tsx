@@ -1,4 +1,5 @@
 import type { FormEvent, ReactNode } from 'react'
+import { Diff } from 'lucide-react'
 import type { AircraftModel } from '@/lib/api'
 import type { DensityFieldErrors, DensityFormValues } from '@/lib/densityAltitude'
 
@@ -50,26 +51,62 @@ function Field({ id, label, unit, error, children }: FieldProps) {
 
 type NumericKey = 'elev_ft' | 'qnh_hpa' | 'oat_c' | 'td_c' | 'ias_kt'
 
+const isNegative = (raw: string) => raw.trim().startsWith('-')
+
 export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Props) {
   const set = <K extends keyof DensityFormValues>(key: K, value: DensityFormValues[K]) =>
     onChange({ ...values, [key]: value })
 
-  const numeric = (key: NumericKey, id: string, label: string, unit: string) => (
-    <Field id={id} label={label} unit={unit} error={errors[key]}>
-      <input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        step="any"
-        value={values[key]}
-        onChange={e => set(key, e.target.value)}
-        aria-invalid={errors[key] ? true : undefined}
-        aria-describedby={errors[key] ? `${id}-error` : undefined}
-        className="rounded-lg px-3 text-base w-full"
-        style={CONTROL_STYLE}
-      />
-    </Field>
-  )
+  const toggleSign = (key: NumericKey) => {
+    const raw = values[key].trim()
+    if (raw === '') return
+    set(key, isNegative(raw) ? raw.slice(1) : `-${raw}`)
+  }
+
+  // El teclado decimal de iOS no tiene signo menos: temperatura y punto de rocío
+  // llevan un conmutador de signo para poder cargar valores bajo cero.
+  const numeric = (key: NumericKey, id: string, label: string, unit: string, signToggle = false) => {
+    const empty = values[key].trim() === ''
+    const negative = isNegative(values[key])
+    return (
+      <Field id={id} label={label} unit={unit} error={errors[key]}>
+        <div className="flex gap-2">
+          <input
+            id={id}
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={values[key]}
+            onChange={e => set(key, e.target.value)}
+            aria-invalid={errors[key] ? true : undefined}
+            aria-describedby={errors[key] ? `${id}-error` : undefined}
+            className="rounded-lg px-3 text-base w-full min-w-0"
+            style={CONTROL_STYLE}
+          />
+          {signToggle && (
+            <button
+              type="button"
+              onClick={() => toggleSign(key)}
+              aria-pressed={negative}
+              aria-disabled={empty || undefined}
+              aria-label={`${label} bajo cero`}
+              title={empty ? 'Escribí el número y después cambiá el signo' : 'Cambiar el signo'}
+              className="rounded-lg shrink-0 inline-flex items-center justify-center transition-colors"
+              style={{
+                width: '44px',
+                minHeight: '44px',
+                background: negative ? 'var(--color-primary)' : 'var(--color-input)',
+                color: negative ? 'var(--color-primary-foreground)' : empty ? 'var(--color-muted-foreground)' : 'var(--color-foreground)',
+                border: `1px solid ${negative ? 'var(--color-primary)' : 'var(--color-border)'}`,
+              }}
+            >
+              <Diff size={18} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </Field>
+    )
+  }
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -87,8 +124,8 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
       <div className="grid grid-cols-2 gap-3">
         {numeric('elev_ft', 'da-elev', 'Elevación', 'ft')}
         {numeric('qnh_hpa', 'da-qnh', 'QNH', 'hPa')}
-        {numeric('oat_c', 'da-oat', 'Temperatura', '°C')}
-        {numeric('td_c', 'da-td', 'Punto de rocío', '°C')}
+        {numeric('oat_c', 'da-oat', 'Temperatura', '°C', true)}
+        {numeric('td_c', 'da-td', 'Punto de rocío', '°C', true)}
         <Field id="da-wl" label="Wing loading nominal" error={errors.wl_nom}>
           <select
             id="da-wl"

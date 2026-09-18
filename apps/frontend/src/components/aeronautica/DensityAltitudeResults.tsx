@@ -1,17 +1,34 @@
 import { useMemo, type ReactNode } from 'react'
-import { PlaneTakeoff, Wind } from 'lucide-react'
+import { PlaneTakeoff, RefreshCw, Wind } from 'lucide-react'
 import type { DensityAltitudeRequest, DensityAltitudeResponse, DensityRisk } from '@/lib/api'
-import { estimateDensityAltitude, RISK_META, tasIncreasePct } from '@/lib/densityAltitude'
+import {
+  estimateDensityAltitude,
+  isEstimateFloor,
+  RISK_MESSAGES,
+  RISK_META,
+  tasIncreasePct,
+} from '@/lib/densityAltitude'
 
 export type ServerStatus = 'pending' | 'slow' | 'error' | 'success'
 
 interface Props {
   request: DensityAltitudeRequest
+  computedAt: Date
   precise: DensityAltitudeResponse | null
   serverStatus: ServerStatus
   errorMessage?: string
+  /** El formulario ya no coincide con `request`: el resultado corresponde a datos anteriores. */
+  stale: boolean
   onRetry: () => void
+  onRecalculate: () => void
 }
+
+/**
+ * server: cálculo del backend con humedad.
+ * floor: estimación local en naranja/rojo — un piso; el servidor solo puede confirmarlo o subirlo.
+ * unconfirmed: estimación local en verde/amarillo — puede empeorar, así que no se muestra como nivel.
+ */
+type Confidence = 'server' | 'floor' | 'unconfirmed'
 
 interface ResultView {
   daFt: number
@@ -22,15 +39,23 @@ interface ResultView {
   takeoffRunIncreasePct: number
   enginePowerLossPct: number | null
   risk: DensityRisk
-  /** Mensaje de riesgo: solo lo entrega el servidor (la estimación local no recomienda). */
-  riskMessage: string | null
-  isEstimate: boolean
+  riskMessage: string
+  confidence: Confidence
 }
 
 const INT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
+const NUM = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const DEC2 = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const PCT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0, signDisplay: 'exceptZero' })
+const TIME = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
-const signed = (n: number, prefix: '+' | '−') => `${prefix}${INT.format(Math.abs(n))} %`
+/** Signo real: las pérdidas se pasan en negativo y el cero queda "0 %", nunca "+0 %" ni "−0 %". */
+const pct = (n: number) => `${PCT.format(n)} %`
+
+const AIRCRAFT_LABEL: Record<DensityAltitudeRequest['aircraft_model'], string> = {
+  piston: 'Pistón',
+  turboprop: 'Turbohélice',
+}
 
 function useResultView(request: DensityAltitudeRequest, precise: DensityAltitudeResponse | null): ResultView {
   const estimate = useMemo(() => estimateDensityAltitude(request), [request])
@@ -47,7 +72,7 @@ function useResultView(request: DensityAltitudeRequest, precise: DensityAltitude
       enginePowerLossPct: precise.engine_power_loss_pct,
       risk: precise.risk.level,
       riskMessage: precise.risk.message,
-      isEstimate: false,
+      confidence: 'server',
     }
   }
   return {
@@ -59,8 +84,8 @@ function useResultView(request: DensityAltitudeRequest, precise: DensityAltitude
     takeoffRunIncreasePct: estimate.takeoffRunIncreasePct,
     enginePowerLossPct: estimate.enginePowerLossPct,
     risk: estimate.risk,
-    riskMessage: null,
-    isEstimate: true,
+    riskMessage: RISK_MESSAGES[estimate.risk],
+    confidence: isEstimateFloor(estimate.risk) ? 'floor' : 'unconfirmed',
   }
 }
 
@@ -91,7 +116,7 @@ function SectionCard({ icon, title, children }: { icon: ReactNode; title: string
   )
 }
 
-function StatusNote({ serverStatus, errorMessage, onRetry }: Omit<Props, 'request' | 'precise'>) {
+function StatusNote({ serverStatus, errorMessage, onRetry }: Pick<Props, 'serverStatus' | 'errorMessage' | 'onRetry'>) {
   if (serverStatus === 'success') {
     return (
       <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
@@ -129,33 +154,89 @@ function StatusNote({ serverStatus, errorMessage, onRetry }: Omit<Props, 'reques
   )
 }
 
-export function DensityAltitudeResults({ request, precise, serverStatus, errorMessage, onRetry }: Props) {
+function StaleNotice({ onRecalculate }: Pick<Props, 'onRecalculate'>) {
+  return (
+    <div
+      role="status"
+      className="rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap"
+      style={{ background: 'var(--color-secondary)', border: '1px solid var(--color-border)', color: 'var(--color-foreground)' }}
+    >
+      <p className="text-sm font-medium">Datos cambiados: este resultado corresponde a los valores anteriores.</p>
+      <button
+        type="button"
+        onClick={onRecalculate}
+        className="inline-flex items-center gap-2 rounded-full px-4 text-sm font-semibold shrink-0 transition-opacity hover:opacity-90"
+        style={{ minHeight: '44px', background: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
+      >
+        <RefreshCw size={16} aria-hidden="true" />
+        Recalcular
+      </button>
+    </div>
+  )
+}
+
+function EstimateNote({ confidence }: { confidence: Confidence }) {
+  if (confidence === 'server') return null
+  return (
+    <p className="text-xs" style={{ color: 'var(--color-watch)' }}>
+      {confidence === 'floor'
+        ? 'Estimación local sin corrección por humedad: el valor real puede ser peor, nunca mejor.'
+        : 'Estimación local sin corrección por humedad: el nivel real puede ser mayor que el estimado.'}
+    </p>
+  )
+}
+
+export function DensityAltitudeResults({
+  request,
+  computedAt,
+  precise,
+  serverStatus,
+  errorMessage,
+  stale,
+  onRetry,
+  onRecalculate,
+}: Props) {
   const view = useResultView(request, precise)
   const meta = RISK_META[view.risk]
   const tasPct = tasIncreasePct(view.sigma)
   const wlRatio = view.adjustedWingLoading / request.wl_nom
+  const unconfirmed = view.confidence === 'unconfirmed'
+
+  const takeoffPhrase =
+    Math.round(view.takeoffRunIncreasePct) === 0
+      ? 'sin incremento de carrera de despegue'
+      : `carrera de despegue ${pct(view.takeoffRunIncreasePct)}`
 
   return (
     <div className="space-y-3">
+      {stale && <StaleNotice onRecalculate={onRecalculate} />}
+
       <div
         className="rounded-2xl overflow-hidden"
         style={{
           background: 'var(--color-card)',
-          border: `${meta.borderPx}px solid ${meta.color}`,
-          boxShadow: meta.glow,
+          border: unconfirmed ? '1px solid var(--color-border)' : `${meta.borderPx}px solid ${meta.color}`,
+          boxShadow: unconfirmed ? 'none' : meta.glow,
+          opacity: stale ? 0.8 : 1,
+          filter: stale ? 'grayscale(0.5)' : undefined,
+          transition: 'opacity 180ms ease, filter 180ms ease',
         }}
       >
         <div
           role="status"
           aria-live="polite"
           className="px-4 py-3"
-          style={{ background: meta.color, color: 'var(--color-primary-foreground)' }}
+          style={
+            unconfirmed
+              ? { background: 'var(--color-secondary)', color: 'var(--color-foreground)' }
+              : { background: meta.color, color: 'var(--color-primary-foreground)' }
+          }
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-sm font-bold uppercase tracking-wide">
-              {meta.label} — {meta.summary}
+              {unconfirmed ? 'Sin confirmar — estimación local' : `${meta.label} — ${meta.summary}`}
             </p>
-            {view.isEstimate && (
+            {view.confidence === 'floor' && (
               <span
                 className="text-[11px] font-semibold uppercase rounded-full px-2 py-0.5"
                 style={{ border: '1.5px solid currentColor' }}
@@ -165,41 +246,43 @@ export function DensityAltitudeResults({ request, precise, serverStatus, errorMe
             )}
           </div>
           <p className="text-sm mt-1">
-            Altitud de densidad {INT.format(view.daFt)} ft: el índice de wing loading ajustado sube ×
-            {DEC2.format(wlRatio)} y la aeronave necesita {signed(view.takeoffRunIncreasePct, '+')} de carrera
-            de despegue.
+            Altitud de densidad {INT.format(view.daFt)} ft. Índice de wing loading ×{DEC2.format(wlRatio)} del
+            nominal; {takeoffPhrase}.
           </p>
         </div>
 
         <div className="p-4 space-y-4">
-          <StatusNote serverStatus={serverStatus} errorMessage={errorMessage} onRetry={onRetry} />
+          <p
+            className="text-xs tabular-nums"
+            style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-muted-foreground)' }}
+          >
+            {INT.format(request.elev_ft)} ft · QNH {NUM.format(request.qnh_hpa)} · {NUM.format(request.oat_c)} °C /
+            rocío {NUM.format(request.td_c)} °C · WL {DEC2.format(request.wl_nom)} · {INT.format(request.ias_kt)} kt ·{' '}
+            {AIRCRAFT_LABEL[request.aircraft_model]} · <time dateTime={computedAt.toISOString()}>{TIME.format(computedAt)}</time>
+          </p>
 
-          {view.isEstimate && (
-            <p className="text-xs" style={{ color: 'var(--color-watch)' }}>
-              Estimación aproximada (regla FAA, sin humedad): puede subestimar la altitud de densidad en aire
-              húmedo. Confirmá con el cálculo del servidor antes de decidir.
-            </p>
-          )}
+          <StatusNote serverStatus={serverStatus} errorMessage={errorMessage} onRetry={onRetry} />
+          <EstimateNote confidence={view.confidence} />
 
           <div className="grid gap-3 md:grid-cols-2">
             <SectionCard icon={<Wind size={16} aria-hidden="true" />} title="Paracaidismo">
               <Metric
                 label="Wing loading ajustado por densidad"
                 value={DEC2.format(view.adjustedWingLoading)}
-                hint={`×${DEC2.format(wlRatio)} sobre tu nominal (${DEC2.format(request.wl_nom)}). Índice operacional: el peso por superficie real no cambia.`}
+                hint={`×${DEC2.format(wlRatio)} del nominal (${DEC2.format(request.wl_nom)}). Índice operacional: el peso por superficie real no cambia.`}
               />
               <Metric
                 label="Velocidad verdadera"
-                value={signed(tasPct, '+')}
-                hint={`≈ ${INT.format(view.tasKt)} kt con IAS ${INT.format(request.ias_kt)}`}
+                value={`${INT.format(view.tasKt)} kt`}
+                hint={`${pct(tasPct)} respecto de IAS ${INT.format(request.ias_kt)} kt`}
               />
-              <Metric label="Autoridad de flare" value={signed(view.flareLossPct, '−')} />
+              <Metric label="Autoridad de flare" value={pct(-view.flareLossPct)} />
             </SectionCard>
 
             <SectionCard icon={<PlaneTakeoff size={16} aria-hidden="true" />} title="Avión de salto">
-              <Metric label="Carrera de despegue" value={signed(view.takeoffRunIncreasePct, '+')} />
+              <Metric label="Carrera de despegue" value={pct(view.takeoffRunIncreasePct)} />
               {view.enginePowerLossPct !== null ? (
-                <Metric label="Potencia del motor" value={signed(view.enginePowerLossPct, '−')} />
+                <Metric label="Potencia del motor" value={pct(-view.enginePowerLossPct)} />
               ) : (
                 <Metric label="Potencia del motor" value="—" hint="Sin modelo para turbohélice" />
               )}
@@ -213,12 +296,19 @@ export function DensityAltitudeResults({ request, precise, serverStatus, errorMe
             <h3 id="da-actions" className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>
               Qué hacer
             </h3>
-            {view.riskMessage ? (
-              <p className="text-sm" style={{ color: 'var(--color-foreground)' }}>{view.riskMessage}</p>
-            ) : (
-              <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
-                Las recomendaciones detalladas aparecen con el cálculo del servidor.
+            {unconfirmed ? (
+              <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
+                Esperá el cálculo del servidor antes de decidir.
               </p>
+            ) : (
+              <>
+                <p className="text-sm" style={{ color: 'var(--color-foreground)' }}>{view.riskMessage}</p>
+                {view.confidence === 'floor' && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
+                    Según la estimación local. El servidor solo puede confirmar este nivel o subirlo.
+                  </p>
+                )}
+              </>
             )}
           </section>
         </div>
