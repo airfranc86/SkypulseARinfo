@@ -7,9 +7,14 @@ import { FIELD_IDS, FIELD_LABELS, FIELD_ORDER, FOCUS_RING, type NumericKey } fro
 interface Props {
   values: DensityFormValues
   errors: DensityFieldErrors
+  /** Nadie editó el QNH todavía: sigue siendo el valor estándar, no una lectura. */
+  qnhIsDefault: boolean
   onChange: (next: DensityFormValues) => void
   onSubmit: () => void
 }
+
+/** Transición explícita: `transition-colors` incluye `outline-color` y hace desvanecer el anillo de foco. */
+const TRANSITION_COLORS = 'transition-[background-color,border-color,color]'
 
 const WL_OPTIONS = Array.from({ length: 23 }, (_, i) => (0.8 + i * 0.1).toFixed(1))
 
@@ -30,10 +35,11 @@ interface FieldProps {
   label: string
   unit?: string
   error?: string
+  note?: string
   children: ReactNode
 }
 
-function Field({ id, label, unit, error, children }: FieldProps) {
+function Field({ id, label, unit, error, note, children }: FieldProps) {
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
@@ -41,6 +47,11 @@ function Field({ id, label, unit, error, children }: FieldProps) {
         {unit && <span className="ml-1">({unit})</span>}
       </label>
       {children}
+      {note && !error && (
+        <p id={`${id}-note`} className="text-xs" style={{ color: 'var(--color-watch)' }}>
+          {note}
+        </p>
+      )}
       {error && (
         <p id={`${id}-error`} className="text-xs" style={{ color: 'var(--color-crit-soft)' }}>
           {error}
@@ -52,7 +63,7 @@ function Field({ id, label, unit, error, children }: FieldProps) {
 
 const isNegative = (raw: string) => raw.trim().startsWith('-')
 
-export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Props) {
+export function DensityAltitudeForm({ values, errors, qnhIsDefault, onChange, onSubmit }: Props) {
   const set = <K extends keyof DensityFormValues>(key: K, value: DensityFormValues[K]) =>
     onChange({ ...values, [key]: value })
 
@@ -64,13 +75,14 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
 
   // El teclado decimal de iOS no tiene signo menos: temperatura y punto de rocío
   // llevan un conmutador de signo para poder cargar valores bajo cero.
-  const numeric = (key: NumericKey, unit: string, signToggle = false) => {
+  const numeric = (key: NumericKey, unit: string, signToggle = false, note?: string) => {
     const id = FIELD_IDS[key]
     const label = FIELD_LABELS[key]
     const empty = values[key].trim() === ''
     const negative = isNegative(values[key])
+    const describedBy = errors[key] ? `${id}-error` : note ? `${id}-note` : undefined
     return (
-      <Field id={id} label={label} unit={unit} error={errors[key]}>
+      <Field id={id} label={label} unit={unit} error={errors[key]} note={note}>
         <div className="flex gap-2">
           <input
             id={id}
@@ -80,7 +92,7 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
             value={values[key]}
             onChange={e => set(key, e.target.value)}
             aria-invalid={errors[key] ? true : undefined}
-            aria-describedby={errors[key] ? `${id}-error` : undefined}
+            aria-describedby={describedBy}
             className={`rounded-lg px-3 text-base w-full min-w-0 ${FOCUS_RING}`}
             style={CONTROL_STYLE}
           />
@@ -92,7 +104,7 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
               aria-disabled={empty || undefined}
               aria-label={`${label} bajo cero`}
               title={empty ? 'Escribí el número y después cambiá el signo' : 'Cambiar el signo'}
-              className={`rounded-lg shrink-0 inline-flex items-center justify-center transition-colors ${FOCUS_RING}`}
+              className={`rounded-lg shrink-0 inline-flex items-center justify-center ${TRANSITION_COLORS} ${FOCUS_RING}`}
               style={{
                 width: '44px',
                 minHeight: '44px',
@@ -126,7 +138,7 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
     >
       <div className="grid grid-cols-2 gap-3">
         {numeric('elev_ft', 'ft')}
-        {numeric('qnh_hpa', 'hPa')}
+        {numeric('qnh_hpa', 'hPa', false, qnhIsDefault ? 'Valor estándar: actualizalo con el METAR.' : undefined)}
         {numeric('oat_c', '°C', true)}
         {numeric('td_c', '°C', true)}
         <Field id={FIELD_IDS.wl_nom} label="Wing loading nominal" error={errors.wl_nom}>
@@ -158,7 +170,7 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
                 type="button"
                 aria-pressed={active}
                 onClick={() => set('aircraft_model', opt.value)}
-                className={`flex-1 rounded-full text-sm font-medium px-4 transition-colors ${FOCUS_RING}`}
+                className={`flex-1 rounded-full text-sm font-medium px-4 ${TRANSITION_COLORS} ${FOCUS_RING}`}
                 style={{
                   minHeight: '44px',
                   background: active ? 'var(--color-primary)' : 'transparent',
