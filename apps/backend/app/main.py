@@ -34,7 +34,7 @@ from .core.http_client import create_client, close_client
 from .core.rate_limit import limiter
 from .core.upstash import UpstashRedis
 from .core import usage_counter
-from .routers import earthquakes, incendios, metar, niebla, smn_alertas, tools, volcanes, weather
+from .routers import aeronautica, earthquakes, incendios, metar, niebla, smn_alertas, tools, volcanes, weather
 from .services import checkwx as checkwx_svc
 
 
@@ -107,7 +107,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=False,   # API pública sin auth — credentials no necesarios
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Accept"],
 )
 
@@ -169,6 +169,17 @@ def _is_nan_or_inf(value: object) -> bool:
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     safe = _safe_errors(exc)
+    # Los endpoints de aeronáutica reciben un body JSON, no lat/lon: el mensaje
+    # de "coordenadas inválidas" no aplica.
+    if request.url.path.startswith("/api/v1/aeronautica"):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "error": "invalid_request",
+                "message": "Parámetros inválidos",
+                "detail": {"errors": safe},
+            },
+        )
     # Si alguno de los errores es de RANGO en lat/lon → outside_argentina
     # EXCEPCIÓN: si el input era NaN o Inf (falla el rango por ser incomaprable)
     # → clasificar como invalid_coordinates, no outside_argentina
@@ -216,3 +227,4 @@ app.include_router(incendios.router,  prefix="/api/incendios",  tags=["incendios
 app.include_router(niebla.router,    prefix="/api/niebla",    tags=["niebla"])
 app.include_router(metar.router,     prefix="/api/metar",     tags=["metar"])
 app.include_router(smn_alertas.router, prefix="/api/alertas-smn", tags=["alertas-smn"])
+app.include_router(aeronautica.router, prefix="/api/v1/aeronautica", tags=["aeronautica"])
