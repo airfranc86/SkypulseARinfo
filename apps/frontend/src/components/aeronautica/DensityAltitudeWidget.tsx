@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DensityAltitudeRequest } from '@/lib/api'
 import {
+  describeServerError,
   parseDensityForm,
   requestsEqual,
   type DensityFieldErrors,
@@ -9,6 +10,7 @@ import {
 import { useDensityAltitudeMutation } from '@/hooks/useDensityAltitude'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { DensityAltitudeForm } from './DensityAltitudeForm'
+import { FIELD_IDS, FIELD_ORDER } from './fields'
 import { DensityAltitudeResults, type ServerStatus } from './DensityAltitudeResults'
 
 /** Pasado este tiempo sin respuesta se avisa que el backend está despertando (cold start). */
@@ -35,9 +37,11 @@ export function DensityAltitudeWidget() {
   const [submitted, setSubmitted] = useState<Submission | null>(null)
   const [runId, setRunId] = useState(0)
   const [slowRun, setSlowRun] = useState(-1)
+  const formRef = useRef<HTMLDivElement>(null)
   const resultsRef = useRef<HTMLDivElement>(null)
   const reducedMotion = useReducedMotion()
   const mutation = useDensityAltitudeMutation()
+  const scrollBehavior: ScrollBehavior = reducedMotion ? 'auto' : 'smooth'
 
   useEffect(() => {
     if (!mutation.isPending) return
@@ -47,7 +51,7 @@ export function DensityAltitudeWidget() {
 
   useEffect(() => {
     if (runId === 0) return
-    resultsRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
+    resultsRef.current?.scrollIntoView({ behavior: scrollBehavior, block: 'start' })
     // Solo al enviar: no debe re-scrollear cuando cambia la preferencia de movimiento.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId])
@@ -71,10 +75,17 @@ export function DensityAltitudeWidget() {
     const parsed = parseDensityForm(values)
     if (!parsed.ok) {
       setErrors(parsed.errors)
+      const first = FIELD_ORDER.find(key => parsed.errors[key])
+      if (first) document.getElementById(FIELD_IDS[first])?.focus()
       return
     }
     setErrors({})
     run(parsed.request)
+  }
+
+  const handleEdit = () => {
+    formRef.current?.scrollIntoView({ behavior: scrollBehavior, block: 'start' })
+    document.getElementById(FIELD_IDS.elev_ft)?.focus({ preventScroll: true })
   }
 
   let serverStatus: ServerStatus = 'pending'
@@ -84,7 +95,9 @@ export function DensityAltitudeWidget() {
 
   return (
     <div className="space-y-4">
-      <DensityAltitudeForm values={values} errors={errors} onChange={setValues} onSubmit={handleSubmit} />
+      <div ref={formRef} className="scroll-mt-52">
+        <DensityAltitudeForm values={values} errors={errors} onChange={setValues} onSubmit={handleSubmit} />
+      </div>
 
       <div ref={resultsRef} tabIndex={-1} className="scroll-mt-52 outline-none">
         {submitted && (
@@ -93,10 +106,11 @@ export function DensityAltitudeWidget() {
             computedAt={submitted.at}
             precise={mutation.data ?? null}
             serverStatus={serverStatus}
-            errorMessage={mutation.error?.message}
+            errorMessage={mutation.error ? describeServerError(mutation.error) : undefined}
             stale={stale}
             onRetry={() => run(submitted.request)}
             onRecalculate={handleSubmit}
+            onEdit={handleEdit}
           />
         )}
       </div>

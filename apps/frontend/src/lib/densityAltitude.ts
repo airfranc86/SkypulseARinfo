@@ -1,5 +1,17 @@
-import type { DensityAltitudeRequest, DensityRisk } from '@/lib/api'
+import { ApiError, type DensityAltitudeRequest, type DensityRisk } from '@/lib/api'
 import riskMessages from '@/lib/riskMessages.json'
+
+/** Copy del fallo de red en lenguaje del producto; nunca el "HTTP 502" crudo. */
+export function describeServerError(error: unknown): string {
+  if (error instanceof ApiError && error.status === 429) {
+    return error.retryAfter
+      ? `Demasiadas consultas seguidas. Reintentá en ${error.retryAfter} s.`
+      : 'Demasiadas consultas seguidas.'
+  }
+  if (error instanceof ApiError && error.status >= 500) return 'El servidor no respondió.'
+  if (error instanceof DOMException && error.name === 'AbortError') return 'El servidor tardó demasiado.'
+  return 'No pudimos contactar al servidor.'
+}
 
 /**
  * Estimación local de Altitud de Densidad (regla FAA, sin humedad) usada como
