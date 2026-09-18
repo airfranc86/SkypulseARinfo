@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { RainyUmbrella } from '@/components/animated/RainyUmbrella'
+import { SignalLostScene } from '@/components/animated/SignalLostScene'
 
 const SUGGESTIONS = [
   { to: '/prevision', label: 'Previsión del clima' },
@@ -10,7 +10,7 @@ const SUGGESTIONS = [
 export function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center text-center py-12 gap-3">
-      <RainyUmbrella />
+      <SignalLostScene />
       <p
         className="text-3xl font-bold"
         style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-primary)' }}
