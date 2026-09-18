@@ -31,7 +31,7 @@ def test_isa_sea_level_dry_air_is_near_zero_density_altitude():
     assert r.density_altitude_ft == pytest.approx(0.0, abs=15.0)
     assert r.sigma == pytest.approx(1.0, abs=0.005)
     assert r.tas_kt == pytest.approx(100.0, rel=0.005)
-    assert r.wl_eff == pytest.approx(1.5, rel=0.005)
+    assert r.density_adjusted_wing_loading == pytest.approx(1.5, rel=0.005)
     assert r.risk_level == "verde"
 
 
@@ -61,8 +61,17 @@ def test_higher_density_altitude_lowers_sigma_and_raises_tas_and_wing_loading():
     high = _calc(elev_ft=5000.0, oat_c=35.0, td_c=10.0)
     assert high.sigma < low.sigma
     assert high.tas_kt > low.tas_kt
-    assert high.wl_eff > low.wl_eff
-    assert high.wl_eff == pytest.approx(1.5 / high.sigma, rel=1e-9)
+    assert high.density_adjusted_wing_loading > low.density_adjusted_wing_loading
+    assert high.density_adjusted_wing_loading == pytest.approx(1.5 / high.sigma, rel=1e-9)
+
+
+@pytest.mark.unit
+def test_intermediate_values_are_exposed_for_audit():
+    r = _calc(elev_ft=2000.0, qnh_hpa=1005.0, oat_c=30.0, td_c=20.0)
+    assert r.isa_temperature_c == pytest.approx(15.0 - 1.98 * (r.pressure_altitude_ft / 1000.0), abs=1e-9)
+    assert 0 < r.vapor_pressure_hpa < 60
+    assert r.station_pressure_hpa < 1005.0  # menor que QNH por estar a 2000 ft
+    assert r.virtual_temperature_c > 30.0  # el vapor de agua vuelve el aire menos denso
 
 
 # ---------------------------------------------------------------------------
@@ -100,23 +109,40 @@ def test_negative_density_altitude_never_reports_performance_credit():
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "wl_eff, da_ft, expected",
+    "adjusted_wl, da_ft, expected",
     [
         (1.00, 0.0, "verde"),
-        (1.10, 2999.9, "verde"),          # WL_eff ≤ 1.10×nom y DA < 3000
-        (1.00, 3000.0, "amarillo"),       # DA ∈ [3000, 6000]
-        (1.11, 0.0, "amarillo"),          # WL_eff > 1.10×nom
+        (1.10, 2999.9, "verde"),          # índice ≤ 1.10×nom y DA < 3000
+        (1.00, 3000.0, "amarillo"),       # DA ∈ [3000, 6000)
+        (1.11, 0.0, "amarillo"),          # índice > 1.10×nom
         (1.00, 5999.9, "amarillo"),
-        (1.00, 6000.0, "naranja"),        # borde compartido → la categoría más severa
-        (1.26, 0.0, "naranja"),           # WL_eff > 1.25×nom
-        (1.00, 9000.0, "naranja"),        # DA ∈ [6000, 9000]
-        (1.00, 9000.1, "rojo"),           # DA > 9000
-        (1.36, 0.0, "rojo"),              # WL_eff > 1.35×nom
+        (1.26, 0.0, "naranja"),           # índice > 1.25×nom
+        (1.00, 6000.1, "naranja"),
+        (1.36, 0.0, "rojo"),              # índice > 1.35×nom
         (1.30, 9500.0, "rojo"),           # gana la condición más severa
     ],
 )
-def test_classify_risk_thresholds(wl_eff, da_ft, expected):
-    assert classify_risk(wl_eff=wl_eff, wl_nom=1.0, da_ft=da_ft) == expected
+def test_classify_risk_thresholds(adjusted_wl, da_ft, expected):
+    assert classify_risk(adjusted_wl=adjusted_wl, wl_nom=1.0, da_ft=da_ft) == expected
+
+
+@pytest.mark.unit
+def test_boundary_6000_ft_is_orange_by_documented_precedence():
+    """El ticket define DA ∈ [3000, 6000] (amarillo) y [6000, 9000] (naranja): 6000 pertenece a
+    ambos intervalos. Precedencia documentada: en un borde compartido gana la categoría más severa."""
+    assert classify_risk(adjusted_wl=1.0, wl_nom=1.0, da_ft=6000.0) == "naranja"
+    assert classify_risk(adjusted_wl=1.0, wl_nom=1.0, da_ft=5999.99) == "amarillo"
+
+
+@pytest.mark.unit
+def test_boundary_9000_ft_is_still_orange_and_red_starts_above():
+    assert classify_risk(adjusted_wl=1.0, wl_nom=1.0, da_ft=9000.0) == "naranja"
+    assert classify_risk(adjusted_wl=1.0, wl_nom=1.0, da_ft=9000.01) == "rojo"
+
+
+@pytest.mark.unit
+def test_boundary_3000_ft_is_yellow_not_green():
+    assert classify_risk(adjusted_wl=1.0, wl_nom=1.0, da_ft=3000.0) == "amarillo"
 
 
 @pytest.mark.unit
@@ -127,33 +153,60 @@ def test_end_to_end_hot_high_day_is_orange():
 
 
 # ---------------------------------------------------------------------------
-# Textos de decisión
+# Mensajes de decisión — genéricos, sin números operativos inventados
 # ---------------------------------------------------------------------------
 
-@pytest.mark.unit
-def test_green_has_a_single_all_clear_text():
-    r = _calc()
-    assert len(r.decision_texts) == 1
+EXPECTED_MESSAGES = {
+    "verde": "Condiciones normales según los parámetros ingresados.",
+    "amarillo": (
+        "La densidad del aire reduce el margen de performance. "
+        "Verificá distancias, velocidad y limitaciones del manual de vuelo."
+    ),
+    "naranja": (
+        "Condiciones desfavorables para la performance. "
+        "Recalculá con datos actualizados y considerá demorar o reevaluar la operación."
+    ),
+    "rojo": (
+        "No iniciar la operación sin una evaluación específica de performance "
+        "y autorización conforme a los procedimientos aplicables."
+    ),
+}
+
+EXPECTED_CODES = {
+    "verde": "NORMAL",
+    "amarillo": "REDUCED_PERFORMANCE_MARGIN",
+    "naranja": "UNFAVORABLE_PERFORMANCE",
+    "rojo": "SPECIFIC_EVALUATION_REQUIRED",
+}
+
+_CASES = {
+    "verde": dict(elev_ft=0.0, oat_c=15.0, td_c=5.0),
+    "amarillo": dict(elev_ft=2000.0, oat_c=25.0, td_c=10.0),
+    "naranja": dict(elev_ft=5000.0, oat_c=35.0, td_c=10.0),
+    "rojo": dict(elev_ft=8000.0, oat_c=38.0, td_c=15.0),
+}
 
 
 @pytest.mark.unit
-def test_piston_gets_mixture_advice_from_yellow_upwards_but_turboprop_does_not():
-    piston = _calc(elev_ft=4000.0, oat_c=30.0, aircraft_model="piston")
-    turbo = _calc(elev_ft=4000.0, oat_c=30.0, aircraft_model="turboprop")
-    assert piston.risk_level != "verde"
-    assert any("mezcla" in t.lower() for t in piston.decision_texts)
-    assert not any("mezcla" in t.lower() for t in turbo.decision_texts)
+@pytest.mark.parametrize("level", ["verde", "amarillo", "naranja", "rojo"])
+def test_each_level_has_its_documented_message_and_code(level):
+    r = _calc(**_CASES[level])
+    assert r.risk_level == level
+    assert r.risk_message == EXPECTED_MESSAGES[level]
+    assert r.risk_code == EXPECTED_CODES[level]
 
 
 @pytest.mark.unit
-def test_orange_asks_to_raise_turn_initiation_height_by_45_m():
-    r = _calc(elev_ft=5000.0, oat_c=35.0, td_c=10.0)
-    assert r.risk_level == "naranja"
-    assert any("45 metros" in t for t in r.decision_texts)
+@pytest.mark.parametrize("level", ["verde", "amarillo", "naranja", "rojo"])
+def test_message_does_not_depend_on_aircraft_model(level):
+    piston = _calc(**_CASES[level], aircraft_model="piston")
+    turbo = _calc(**_CASES[level], aircraft_model="turboprop")
+    assert piston.risk_message == turbo.risk_message
 
 
 @pytest.mark.unit
-def test_red_recommends_not_swooping():
-    r = _calc(elev_ft=8000.0, oat_c=38.0, td_c=15.0)
-    assert r.risk_level == "rojo"
-    assert any("swooping" in t.lower() for t in r.decision_texts)
+@pytest.mark.parametrize("level", ["verde", "amarillo", "naranja", "rojo"])
+def test_messages_never_prescribe_unsourced_operational_numbers(level):
+    message = _calc(**_CASES[level]).risk_message
+    assert not any(ch.isdigit() for ch in message)
+    assert "mezcla" not in message.lower()

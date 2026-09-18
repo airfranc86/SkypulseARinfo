@@ -18,17 +18,24 @@ export interface DensityEstimate {
   pressureAltitudeFt: number
   sigma: number
   tasKt: number
-  wlEff: number
+  /** Índice operacional wl_nom / sigma (no el wing loading físico). */
+  adjustedWingLoading: number
   flareLossPct: number
   takeoffRunIncreasePct: number
   enginePowerLossPct: number | null
   risk: DensityRisk
 }
 
-export function classifyRisk(wlEff: number, wlNom: number, daFt: number): DensityRisk {
-  if (wlEff > 1.35 * wlNom || daFt > 9000) return 'rojo'
-  if (wlEff > 1.25 * wlNom || daFt >= 6000) return 'naranja'
-  if (wlEff > 1.1 * wlNom || daFt >= 3000) return 'amarillo'
+/**
+ * Espejo de classify_risk() del backend. Precedencia (gana la primera que aplica):
+ * rojo: índice > 1.35×nominal o DA > 9.000 · naranja: índice > 1.25×nominal o
+ * 6.000 <= DA <= 9.000 · amarillo: índice > 1.10×nominal o 3.000 <= DA < 6.000 ·
+ * verde: el resto. En el borde compartido de 6.000 ft se escala a naranja.
+ */
+export function classifyRisk(adjustedWl: number, wlNom: number, daFt: number): DensityRisk {
+  if (adjustedWl > 1.35 * wlNom || daFt > 9000) return 'rojo'
+  if (adjustedWl > 1.25 * wlNom || daFt >= 6000) return 'naranja'
+  if (adjustedWl > 1.1 * wlNom || daFt >= 3000) return 'amarillo'
   return 'verde'
 }
 
@@ -45,7 +52,7 @@ export function estimateDensityAltitude(input: DensityAltitudeRequest): DensityE
     pressureAltitudeFt,
     sigma,
     tasKt: input.ias_kt / Math.sqrt(sigma),
-    wlEff: input.wl_nom / sigma,
+    adjustedWingLoading: input.wl_nom / sigma,
     flareLossPct: 4 * daK,
     takeoffRunIncreasePct: 10 * daK,
     enginePowerLossPct: input.aircraft_model === 'piston' ? 3.5 * daK : null,

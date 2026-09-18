@@ -26,11 +26,45 @@ async def test_density_altitude_happy_path(async_client: AsyncClient):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["risk_level"] == "naranja"
-    assert 6000 <= data["density_altitude_ft"] <= 9000
-    assert data["wl_eff"] > 1.5
+    assert data["risk"]["level"] == "naranja"
+    assert data["risk"]["code"] == "UNFAVORABLE_PERFORMANCE"
+    assert data["risk"]["message"]
+    assert 6000 <= data["calculations"]["density_altitude_ft"] <= 9000
+    assert data["calculations"]["density_adjusted_wing_loading"] > 1.5
     assert data["engine_power_loss_pct"] is not None
-    assert isinstance(data["decision_texts"], list) and data["decision_texts"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_response_echoes_inputs_and_exposes_intermediate_values(async_client: AsyncClient):
+    data = (await async_client.post(URL, json=VALID_BODY)).json()
+
+    assert data["inputs"] == {**VALID_BODY, "elev_ft": 5000.0, "oat_c": 35.0, "td_c": 10.0,
+                              "wl_nom": 1.5, "ias_kt": 100.0}
+    for key in (
+        "pressure_altitude_ft", "isa_temperature_c", "station_pressure_hpa",
+        "vapor_pressure_hpa", "virtual_temperature_c", "density_altitude_ft",
+        "sigma", "tas_kt", "density_adjusted_wing_loading",
+    ):
+        assert isinstance(data["calculations"][key], float), key
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_roc_is_null_until_an_approved_formula_exists(async_client: AsyncClient):
+    data = (await async_client.post(URL, json=VALID_BODY)).json()
+
+    assert "roc" in data
+    assert data["roc"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_legacy_contract_fields_are_gone(async_client: AsyncClient):
+    data = (await async_client.post(URL, json=VALID_BODY)).json()
+
+    for legacy in ("wl_eff", "decision_texts", "risk_level", "density_altitude_ft", "sigma", "tas_kt"):
+        assert legacy not in data, legacy
 
 
 @pytest.mark.asyncio
