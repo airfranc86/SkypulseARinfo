@@ -20,7 +20,7 @@ export function ErrorMessage({ message, onRetry }: ErrorMessageProps) {
         <button
           type="button"
           onClick={onRetry}
-          className="text-xs font-medium rounded-full px-3 min-h-[32px] shrink-0 transition-opacity hover:opacity-80"
+          className="text-xs font-medium rounded-full px-4 min-h-[44px] shrink-0 transition-opacity hover:opacity-80"
           style={{ background: 'rgba(224,85,69,0.14)', color: '#e05545', border: '1px solid rgba(224,85,69,0.4)' }}
         >
           Reintentar

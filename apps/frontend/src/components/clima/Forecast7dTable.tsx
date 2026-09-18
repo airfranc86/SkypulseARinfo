@@ -1,5 +1,6 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
+import { describeWeatherIcon } from '@/lib/weatherLabels'
 import type { DailyEntry } from '@/lib/api'
 
 interface Props {
@@ -10,18 +11,21 @@ export function Forecast7dTable({ days }: Props) {
   return (
     <div>
       <p
-        className="md:hidden text-[10px] text-center pb-1.5"
+        className="md:hidden text-[11px] text-center pb-1.5"
         style={{ color: 'var(--color-muted-foreground)' }}
       >
         ← Deslizá para ver más →
       </p>
-      <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--color-border)' }}>
+      {/* relative: el <caption class="sr-only"> es absoluto y sin ancestro posicionado dentro del scroller ensancharía la página */}
+      <div className="relative overflow-x-auto rounded-xl" style={{ border: '1px solid var(--color-border)' }}>
         <table className="w-full text-sm border-collapse" style={{ minWidth: '560px' }}>
+          <caption className="sr-only">Pronóstico de los próximos {days.length} días</caption>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'rgba(200,168,75,0.04)' }}>
-              {['Día', 'Tiempo', 'Máx', 'Mín', 'Lluvia%', 'Viento'].map((h) => (
+              {['Día', 'Tiempo', 'Máx', 'Mín', 'Lluvia %', 'Viento'].map((h) => (
                 <th
                   key={h}
+                  scope="col"
                   className="text-left px-4 py-2.5 font-medium text-xs"
                   style={{ color: 'var(--color-muted-foreground)' }}
                 >
@@ -32,6 +36,7 @@ export function Forecast7dTable({ days }: Props) {
           </thead>
           <tbody>
             {days.map((day, i) => {
+              const condition = describeWeatherIcon(day.icon)
               return (
                 <tr
                   key={day.date}
@@ -39,16 +44,23 @@ export function Forecast7dTable({ days }: Props) {
                     borderBottom: i < days.length - 1 ? '1px solid var(--color-border)' : 'none',
                   }}
                 >
-                  <td className="px-4 py-3">
+                  <th scope="row" className="px-4 py-3 text-left font-normal">
                     <p className="font-medium capitalize" style={{ color: 'var(--color-foreground)' }}>
                       {day.day_label}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
                       {day.day_label_long}
                     </p>
-                  </td>
+                  </th>
                   <td className="px-4 py-3">
-                    <WeatherIcon code={day.icon} size={28} />
+                    <div className="flex items-center gap-2">
+                      <WeatherIcon code={day.icon} size={28} />
+                      {condition && (
+                        <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+                          {condition}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 font-semibold" style={{ color: 'var(--color-foreground)' }}>
                     {day.temp_max !== null ? `${Math.round(day.temp_max)}°C` : '—'}
@@ -88,14 +100,14 @@ export function Forecast7dTable({ days }: Props) {
                           />
                         )}
                         {day.wind_dir_cardinal && (
-                          <span className="text-[10px]" style={{ color: 'var(--color-muted-foreground)' }}>
+                          <span className="text-[11px]" style={{ color: 'var(--color-muted-foreground)' }}>
                             {day.wind_dir_cardinal}
                           </span>
                         )}
                       </div>
                       {day.wind_shift && day.wind_dir_cardinal && (
                         <span
-                          className="text-[10px] px-1.5 py-0.5 rounded-full w-fit"
+                          className="text-[11px] px-1.5 py-0.5 rounded-full w-fit"
                           style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
                         >
                           ↻ Rota al {day.wind_dir_cardinal}

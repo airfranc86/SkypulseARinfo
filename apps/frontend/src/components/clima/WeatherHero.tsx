@@ -65,7 +65,7 @@ export function WeatherHero({ current, locationLabel }: Props) {
           </p>
           {current.observed_at && (
             <p
-              className="text-[10px] mt-0.5"
+              className="text-xs mt-0.5"
               style={{ color: 'var(--color-muted-foreground)' }}
             >
               {minutesAgo(current.observed_at)}
@@ -87,7 +87,7 @@ export function WeatherHero({ current, locationLabel }: Props) {
             {current.feels_like_c !== null ? `${Math.round(current.feels_like_c)}°C` : '—'}
           </span>
           <span
-            className="text-[10px] leading-snug mt-0.5"
+            className="text-[11px] leading-snug mt-0.5"
             style={{ color: 'var(--color-muted-foreground)' }}
           >
             humedad · viento · rocío

@@ -1,5 +1,6 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
+import { describeWeatherIcon, precipKind } from '@/lib/weatherLabels'
 import type { DailyEntry } from '@/lib/api'
 
 const HIGHLIGHT_COLOR = '200,168,75' // primary gold (RGB para componer alpha)
@@ -23,6 +24,9 @@ export function Forecast7dCards({ days }: Props) {
 
 function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: boolean }) {
   const hasPrecip = (day.precip_prob ?? 0) > 15
+  const condition = describeWeatherIcon(day.icon)
+  // El tipo sale del ícono: con nieve, "🌧 40%" contaba otra historia.
+  const precipLabel = precipKind(day.icon) ?? 'Lluvia'
 
   return (
     <div
@@ -39,7 +43,7 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
     >
       {highlighted && (
         <span
-          className="absolute -top-2 text-[9px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full"
+          className="absolute -top-2 text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full"
           style={{ background: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
         >
           Hoy
@@ -51,8 +55,17 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
         {day.day_label}
       </p>
 
-      {/* Icon */}
+      {/* Icon + condición en palabras (el ícono solo no llega a lectores de pantalla;
+          con la palabra visible al lado, el ícono queda decorativo) */}
       <WeatherIcon code={day.icon} size={56} glow />
+      {condition && (
+        <p
+          className="text-xs text-center leading-tight min-h-[2rem]"
+          style={{ color: 'var(--color-muted-foreground)' }}
+        >
+          {condition}
+        </p>
+      )}
 
       {/* Max / Min */}
       <div className="flex items-baseline gap-1">
@@ -67,7 +80,7 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
       {/* Precip prob */}
       {hasPrecip && (
         <span className="text-xs" style={{ color: 'var(--color-info)' }}>
-          🌧 {Math.round(day.precip_prob ?? 0)}%
+          {precipLabel} {Math.round(day.precip_prob ?? 0)}%
         </span>
       )}
 
@@ -100,14 +113,14 @@ function DayCard({ day, highlighted = false }: { day: DailyEntry; highlighted?: 
               />
             )}
             {day.wind_dir_cardinal && (
-              <span className="text-[9px]" style={{ color: 'var(--color-muted-foreground)' }}>
+              <span className="text-[11px]" style={{ color: 'var(--color-muted-foreground)' }}>
                 {day.wind_dir_cardinal}
               </span>
             )}
           </div>
           {day.wind_shift && day.wind_dir_cardinal && (
             <span
-              className="text-[9px] px-1.5 py-0.5 rounded-full"
+              className="text-[11px] px-1.5 py-0.5 rounded-full"
               style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
             >
               ↻ Rota al {day.wind_dir_cardinal}

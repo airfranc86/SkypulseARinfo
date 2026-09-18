@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { cn } from '@/lib/utils'
+import { describeWeatherIcon } from '@/lib/weatherLabels'
 import type { HourlyConsensus, HourlyEntry } from '@/lib/api'
 
 interface Props {
@@ -29,7 +30,10 @@ function dateTabLabel(date: string, index: number): string {
 export function HourlyStrip({ hourly, badge }: Props) {
   const groups = useMemo(() => groupByDate(hourly.entries), [hourly.entries])
   const dates = Object.keys(groups)
-  const [activeDate, setActiveDate] = useState(dates[0] ?? '')
+  const [selectedDate, setSelectedDate] = useState(dates[0] ?? '')
+  // Si el día elegido ya no está en los datos (p. ej. pasó la medianoche y el pronóstico se
+  // refrescó), se vuelve al primero en vez de mostrar "Sin datos" con las pestañas visibles.
+  const activeDate = groups[selectedDate] ? selectedDate : (dates[0] ?? '')
   const activeEntries = groups[activeDate] ?? []
 
   const rainPct = Math.round(hourly.rain_probability_pct)
@@ -79,10 +83,10 @@ export function HourlyStrip({ hourly, badge }: Props) {
           <button
             key={date}
             type="button"
-            onClick={() => setActiveDate(date)}
+            onClick={() => setSelectedDate(date)}
             aria-pressed={date === activeDate}
             className={cn(
-              'shrink-0 px-3.5 py-2 min-h-[40px] rounded-lg text-sm font-medium transition-colors',
+              'shrink-0 px-3.5 py-2 min-h-[44px] rounded-lg text-sm font-medium transition-colors',
               date === activeDate
                 ? 'text-[var(--color-primary-foreground)] font-semibold'
                 : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
@@ -126,7 +130,9 @@ function HourCard({ entry }: { entry: HourlyEntry }) {
 
   return (
     <div
-      className="shrink-0 flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl"
+      // relative: el .sr-only de adentro es absoluto; sin un ancestro posicionado dentro del
+      // scroller, su posición estática (hasta 2000 px a la derecha) ensancha toda la página.
+      className="relative shrink-0 flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl"
       style={{
         background: hasPrecip ? 'rgba(90,170,216,0.1)' : 'var(--color-secondary)',
         border: hasPrecip ? '1px solid rgba(90,170,216,0.25)' : '1px solid var(--color-border)',
@@ -137,18 +143,28 @@ function HourCard({ entry }: { entry: HourlyEntry }) {
       <span className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
         {entry.hour_label}
       </span>
-      <WeatherIcon code={entry.icon} size={44} isDay={entry.is_day} glow />
+      <WeatherIcon
+        code={entry.icon}
+        size={44}
+        isDay={entry.is_day}
+        glow
+        label={describeWeatherIcon(entry.icon) ?? undefined}
+      />
       <span className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
         {entry.temp_c !== null ? `${Math.round(entry.temp_c)}°` : '—'}
       </span>
       {hasPrecip && (
         <span className="text-xs" style={{ color: 'var(--color-info)' }}>
-          {Math.round(entry.precip_prob ?? 0)}%
+          <span aria-hidden="true">{Math.round(entry.precip_prob ?? 0)}%</span>
+          <span className="sr-only">
+            Probabilidad de precipitación {Math.round(entry.precip_prob ?? 0)} por ciento
+          </span>
         </span>
       )}
       {entry.wind_gusts_kmh !== null && entry.wind_gusts_kmh !== undefined && entry.wind_gusts_kmh > 40 && (
         <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-          💨 {Math.round(entry.wind_gusts_kmh)}
+          <span aria-hidden="true">💨 {Math.round(entry.wind_gusts_kmh)}</span>
+          <span className="sr-only">Ráfagas de {Math.round(entry.wind_gusts_kmh)} kilómetros por hora</span>
         </span>
       )}
     </div>
