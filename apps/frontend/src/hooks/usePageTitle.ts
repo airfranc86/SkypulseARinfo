@@ -20,12 +20,18 @@ const TITLES: Record<string, string> = {
   '/privacidad':   'SkyPulse — Política de privacidad',
 }
 
-const DEFAULT_TITLE = 'SkyPulse — Previsión meteorológica'
+/** Toda ruta real debe estar en TITLES: lo que no figura acá cae en el 404. */
+const NOT_FOUND_TITLE = 'SkyPulse — 404 · Visibilidad nula'
+
+/** react-router ignora mayúsculas y la barra final al matchear; el lookup también debe hacerlo. */
+function normalizePath(pathname: string): string {
+  return pathname.toLowerCase().replace(/\/+$/, '') || '/'
+}
 
 export function usePageTitle(): void {
   const location = useLocation()
 
   useEffect(() => {
-    document.title = TITLES[location.pathname] ?? DEFAULT_TITLE
+    document.title = TITLES[normalizePath(location.pathname)] ?? NOT_FOUND_TITLE
   }, [location.pathname])
 }
