@@ -2,6 +2,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { Diff } from 'lucide-react'
 import type { AircraftModel } from '@/lib/api'
 import type { DensityFieldErrors, DensityFormValues } from '@/lib/densityAltitude'
+import { FIELD_IDS, FIELD_LABELS, FIELD_ORDER, FOCUS_RING, type NumericKey } from './fields'
 
 interface Props {
   values: DensityFormValues
@@ -19,7 +20,7 @@ const AIRCRAFT_OPTIONS: { value: AircraftModel; label: string }[] = [
 
 const CONTROL_STYLE = {
   background: 'var(--color-input)',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--color-border-strong)',
   color: 'var(--color-foreground)',
   minHeight: '44px',
 } as const
@@ -37,7 +38,7 @@ function Field({ id, label, unit, error, children }: FieldProps) {
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-xs font-medium" style={{ color: 'var(--color-muted-foreground)' }}>
         {label}
-        {unit && <span className="ml-1 opacity-70">({unit})</span>}
+        {unit && <span className="ml-1">({unit})</span>}
       </label>
       {children}
       {error && (
@@ -48,8 +49,6 @@ function Field({ id, label, unit, error, children }: FieldProps) {
     </div>
   )
 }
-
-type NumericKey = 'elev_ft' | 'qnh_hpa' | 'oat_c' | 'td_c' | 'ias_kt'
 
 const isNegative = (raw: string) => raw.trim().startsWith('-')
 
@@ -65,7 +64,9 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
 
   // El teclado decimal de iOS no tiene signo menos: temperatura y punto de rocío
   // llevan un conmutador de signo para poder cargar valores bajo cero.
-  const numeric = (key: NumericKey, id: string, label: string, unit: string, signToggle = false) => {
+  const numeric = (key: NumericKey, unit: string, signToggle = false) => {
+    const id = FIELD_IDS[key]
+    const label = FIELD_LABELS[key]
     const empty = values[key].trim() === ''
     const negative = isNegative(values[key])
     return (
@@ -80,7 +81,7 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
             onChange={e => set(key, e.target.value)}
             aria-invalid={errors[key] ? true : undefined}
             aria-describedby={errors[key] ? `${id}-error` : undefined}
-            className="rounded-lg px-3 text-base w-full min-w-0"
+            className={`rounded-lg px-3 text-base w-full min-w-0 ${FOCUS_RING}`}
             style={CONTROL_STYLE}
           />
           {signToggle && (
@@ -91,13 +92,13 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
               aria-disabled={empty || undefined}
               aria-label={`${label} bajo cero`}
               title={empty ? 'Escribí el número y después cambiá el signo' : 'Cambiar el signo'}
-              className="rounded-lg shrink-0 inline-flex items-center justify-center transition-colors"
+              className={`rounded-lg shrink-0 inline-flex items-center justify-center transition-colors ${FOCUS_RING}`}
               style={{
                 width: '44px',
                 minHeight: '44px',
                 background: negative ? 'var(--color-primary)' : 'var(--color-input)',
                 color: negative ? 'var(--color-primary-foreground)' : empty ? 'var(--color-muted-foreground)' : 'var(--color-foreground)',
-                border: `1px solid ${negative ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                border: `1px solid ${negative ? 'var(--color-primary)' : 'var(--color-border-strong)'}`,
               }}
             >
               <Diff size={18} aria-hidden="true" />
@@ -113,6 +114,8 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
     onSubmit()
   }
 
+  const errorFields = FIELD_ORDER.filter(key => errors[key])
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -122,16 +125,16 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
       style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
     >
       <div className="grid grid-cols-2 gap-3">
-        {numeric('elev_ft', 'da-elev', 'Elevación', 'ft')}
-        {numeric('qnh_hpa', 'da-qnh', 'QNH', 'hPa')}
-        {numeric('oat_c', 'da-oat', 'Temperatura', '°C', true)}
-        {numeric('td_c', 'da-td', 'Punto de rocío', '°C', true)}
-        <Field id="da-wl" label="Wing loading nominal" error={errors.wl_nom}>
+        {numeric('elev_ft', 'ft')}
+        {numeric('qnh_hpa', 'hPa')}
+        {numeric('oat_c', '°C', true)}
+        {numeric('td_c', '°C', true)}
+        <Field id={FIELD_IDS.wl_nom} label="Wing loading nominal" error={errors.wl_nom}>
           <select
-            id="da-wl"
+            id={FIELD_IDS.wl_nom}
             value={values.wl_nom}
             onChange={e => set('wl_nom', e.target.value)}
-            className="rounded-lg px-3 text-base w-full"
+            className={`rounded-lg px-3 text-base w-full ${FOCUS_RING}`}
             style={CONTROL_STYLE}
           >
             {WL_OPTIONS.map(v => (
@@ -139,7 +142,7 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
             ))}
           </select>
         </Field>
-        {numeric('ias_kt', 'da-ias', 'Velocidad indicada', 'kt')}
+        {numeric('ias_kt', 'kt')}
       </div>
 
       <div>
@@ -155,12 +158,12 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
                 type="button"
                 aria-pressed={active}
                 onClick={() => set('aircraft_model', opt.value)}
-                className="flex-1 rounded-full text-sm font-medium px-4 transition-colors"
+                className={`flex-1 rounded-full text-sm font-medium px-4 transition-colors ${FOCUS_RING}`}
                 style={{
                   minHeight: '44px',
                   background: active ? 'var(--color-primary)' : 'transparent',
                   color: active ? 'var(--color-primary-foreground)' : 'var(--color-foreground)',
-                  border: `1px solid ${active ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  border: `1px solid ${active ? 'var(--color-primary)' : 'var(--color-border-strong)'}`,
                 }}
               >
                 {opt.label}
@@ -170,9 +173,21 @@ export function DensityAltitudeForm({ values, errors, onChange, onSubmit }: Prop
         </div>
       </div>
 
+      {/* Un solo anuncio para lectores de pantalla; el detalle de cada campo va en su aria-describedby. */}
+      {errorFields.length > 0 && (
+        <p
+          role="alert"
+          className="text-sm rounded-lg px-3 py-2"
+          style={{ color: 'var(--color-crit-soft)', border: '1px solid rgba(224,85,69,0.35)', background: 'rgba(224,85,69,0.08)' }}
+        >
+          {errorFields.length === 1 ? 'Revisá este campo: ' : `Revisá estos ${errorFields.length} campos: `}
+          {errorFields.map(key => FIELD_LABELS[key]).join(', ')}.
+        </p>
+      )}
+
       <button
         type="submit"
-        className="w-full rounded-full text-base font-semibold transition-opacity hover:opacity-90"
+        className={`w-full rounded-full text-base font-semibold transition-opacity hover:opacity-90 ${FOCUS_RING}`}
         style={{
           minHeight: '48px',
           background: 'var(--color-primary)',

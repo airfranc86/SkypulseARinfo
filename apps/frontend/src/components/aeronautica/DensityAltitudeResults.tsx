@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { PlaneTakeoff, RefreshCw, Wind } from 'lucide-react'
+import { Pencil, PlaneTakeoff, RefreshCw, Wind } from 'lucide-react'
 import type { DensityAltitudeRequest, DensityAltitudeResponse, DensityRisk } from '@/lib/api'
 import {
   estimateDensityAltitude,
@@ -8,6 +8,7 @@ import {
   RISK_META,
   tasIncreasePct,
 } from '@/lib/densityAltitude'
+import { FOCUS_RING } from './fields'
 
 export type ServerStatus = 'pending' | 'slow' | 'error' | 'success'
 
@@ -21,6 +22,7 @@ interface Props {
   stale: boolean
   onRetry: () => void
   onRecalculate: () => void
+  onEdit: () => void
 }
 
 /**
@@ -51,6 +53,9 @@ const TIME = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digi
 
 /** Signo real: las pérdidas se pasan en negativo y el cero queda "0 %", nunca "+0 %" ni "−0 %". */
 const pct = (n: number) => `${PCT.format(n)} %`
+
+/** Diferencias menores que esto se leen como "igual a la pista" (ruido de redondeo). */
+const SAME_AS_FIELD_FT = 50
 
 const AIRCRAFT_LABEL: Record<DensityAltitudeRequest['aircraft_model'], string> = {
   piston: 'Pistón',
@@ -89,6 +94,14 @@ function useResultView(request: DensityAltitudeRequest, precise: DensityAltitude
   }
 }
 
+function deltaPhrase(daFt: number, elevFt: number): string {
+  const delta = Math.round(daFt - elevFt)
+  const field = `la elevación de pista (${INT.format(elevFt)} ft)`
+  if (Math.abs(delta) < SAME_AS_FIELD_FT) return `Prácticamente igual a ${field}.`
+  if (delta > 0) return `${INT.format(delta)} ft por encima de ${field}.`
+  return `${INT.format(-delta)} ft por debajo de ${field}.`
+}
+
 function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2" style={{ borderTop: '1px solid var(--color-border)' }}>
@@ -125,20 +138,23 @@ function StatusNote({ serverStatus, errorMessage, onRetry }: Pick<Props, 'server
     )
   }
 
+  // Tono informativo, no rojo: el rojo queda reservado al nivel de riesgo, y la
+  // situación está cubierta (se muestra la estimación local).
   if (serverStatus === 'error') {
     return (
       <div
         role="alert"
         className="rounded-lg p-3 text-sm flex items-center justify-between gap-3 flex-wrap"
-        style={{ border: '1px solid rgba(224,85,69,0.35)', background: 'rgba(224,85,69,0.08)', color: 'var(--color-crit-soft)' }}
+        style={{ border: '1px solid rgba(90,170,216,0.35)', background: 'rgba(90,170,216,0.10)', color: 'var(--color-foreground)' }}
       >
-        <span>{errorMessage ?? 'No se pudo contactar al servidor.'} Mostrando estimación local.</span>
+        <span>{errorMessage ?? 'No pudimos contactar al servidor.'} Mostrando la estimación local.</span>
         <button
           type="button"
           onClick={onRetry}
-          className="text-xs font-medium rounded-full px-3 shrink-0"
-          style={{ minHeight: '32px', background: 'rgba(224,85,69,0.14)', color: '#e05545', border: '1px solid rgba(224,85,69,0.4)' }}
+          className={`inline-flex items-center gap-2 rounded-full px-4 text-sm font-semibold shrink-0 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
+          style={{ minHeight: '44px', background: 'var(--color-info)', color: 'var(--color-background)' }}
         >
+          <RefreshCw size={16} aria-hidden="true" />
           Reintentar
         </button>
       </div>
@@ -165,7 +181,7 @@ function StaleNotice({ onRecalculate }: Pick<Props, 'onRecalculate'>) {
       <button
         type="button"
         onClick={onRecalculate}
-        className="inline-flex items-center gap-2 rounded-full px-4 text-sm font-semibold shrink-0 transition-opacity hover:opacity-90"
+        className={`inline-flex items-center gap-2 rounded-full px-4 text-sm font-semibold shrink-0 transition-opacity hover:opacity-90 ${FOCUS_RING}`}
         style={{ minHeight: '44px', background: 'var(--color-primary)', color: 'var(--color-primary-foreground)' }}
       >
         <RefreshCw size={16} aria-hidden="true" />
@@ -195,6 +211,7 @@ export function DensityAltitudeResults({
   stale,
   onRetry,
   onRecalculate,
+  onEdit,
 }: Props) {
   const view = useResultView(request, precise)
   const meta = RISK_META[view.risk]
@@ -202,16 +219,12 @@ export function DensityAltitudeResults({
   const wlRatio = view.adjustedWingLoading / request.wl_nom
   const unconfirmed = view.confidence === 'unconfirmed'
 
-  const takeoffPhrase =
-    Math.round(view.takeoffRunIncreasePct) === 0
-      ? 'sin incremento de carrera de despegue'
-      : `carrera de despegue ${pct(view.takeoffRunIncreasePct)}`
-
   return (
     <div className="space-y-3">
       {stale && <StaleNotice onRecalculate={onRecalculate} />}
 
-      <div
+      <section
+        aria-labelledby="da-result-title"
         className="rounded-2xl overflow-hidden"
         style={{
           background: 'var(--color-card)',
@@ -222,6 +235,7 @@ export function DensityAltitudeResults({
           transition: 'opacity 180ms ease, filter 180ms ease',
         }}
       >
+        {/* Lectura de instrumento: el nivel como título, la DA en cifra grande y su relación con la pista. */}
         <div
           role="status"
           aria-live="polite"
@@ -233,9 +247,9 @@ export function DensityAltitudeResults({
           }
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-sm font-bold uppercase tracking-wide">
+            <h2 id="da-result-title" className="text-sm font-bold uppercase tracking-wide">
               {unconfirmed ? 'Sin confirmar — estimación local' : `${meta.label} — ${meta.summary}`}
-            </p>
+            </h2>
             {view.confidence === 'floor' && (
               <span
                 className="text-[11px] font-semibold uppercase rounded-full px-2 py-0.5"
@@ -245,10 +259,16 @@ export function DensityAltitudeResults({
               </span>
             )}
           </div>
-          <p className="text-sm mt-1">
-            Altitud de densidad {INT.format(view.daFt)} ft. Índice de wing loading ×{DEC2.format(wlRatio)} del
-            nominal; {takeoffPhrase}.
+          <p className="mt-2 flex items-baseline gap-2 flex-wrap">
+            <span
+              className="text-4xl font-medium tabular-nums leading-none"
+              style={{ fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}
+            >
+              {INT.format(view.daFt)}
+            </span>
+            <span className="text-base">ft de altitud de densidad</span>
           </p>
+          <p className="text-sm mt-1">{deltaPhrase(view.daFt, request.elev_ft)}</p>
         </div>
 
         <div className="p-4 space-y-4">
@@ -263,6 +283,29 @@ export function DensityAltitudeResults({
 
           <StatusNote serverStatus={serverStatus} errorMessage={errorMessage} onRetry={onRetry} />
           <EstimateNote confidence={view.confidence} />
+
+          {/* La decisión va antes que las cifras: es lo que se busca al abrir la herramienta. */}
+          <section aria-labelledby="da-actions" className="pt-1">
+            <h3 id="da-actions" className="text-sm font-semibold mb-1.5" style={{ color: 'var(--color-primary)' }}>
+              Qué hacer
+            </h3>
+            {unconfirmed ? (
+              <p className="text-base font-medium max-w-lg" style={{ color: 'var(--color-foreground)' }}>
+                Esperá el cálculo del servidor antes de decidir.
+              </p>
+            ) : (
+              <>
+                <p className="text-base font-medium max-w-lg" style={{ color: 'var(--color-foreground)' }}>
+                  {view.riskMessage}
+                </p>
+                {view.confidence === 'floor' && (
+                  <p className="text-xs mt-1 max-w-lg" style={{ color: 'var(--color-muted-foreground)' }}>
+                    Según la estimación local. El servidor solo puede confirmar este nivel o subirlo.
+                  </p>
+                )}
+              </>
+            )}
+          </section>
 
           <div className="grid gap-3 md:grid-cols-2">
             <SectionCard icon={<Wind size={16} aria-hidden="true" />} title="Paracaidismo">
@@ -292,27 +335,22 @@ export function DensityAltitudeResults({
             </SectionCard>
           </div>
 
-          <section aria-labelledby="da-actions">
-            <h3 id="da-actions" className="text-sm font-semibold mb-2" style={{ color: 'var(--color-primary)' }}>
-              Qué hacer
-            </h3>
-            {unconfirmed ? (
-              <p className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
-                Esperá el cálculo del servidor antes de decidir.
-              </p>
-            ) : (
-              <>
-                <p className="text-sm" style={{ color: 'var(--color-foreground)' }}>{view.riskMessage}</p>
-                {view.confidence === 'floor' && (
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
-                    Según la estimación local. El servidor solo puede confirmar este nivel o subirlo.
-                  </p>
-                )}
-              </>
-            )}
-          </section>
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`inline-flex items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors ${FOCUS_RING}`}
+            style={{
+              minHeight: '44px',
+              background: 'transparent',
+              color: 'var(--color-foreground)',
+              border: '1px solid var(--color-border-strong)',
+            }}
+          >
+            <Pencil size={16} aria-hidden="true" />
+            Editar datos
+          </button>
         </div>
-      </div>
+      </section>
     </div>
   )
 }
