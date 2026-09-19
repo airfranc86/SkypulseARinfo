@@ -22,7 +22,11 @@ RISK_COLOR_MAP: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 class FireDangerSlot(BaseModel, frozen=True):
-    """Un slot horario del pronóstico de riesgo de incendio."""
+    """Un slot horario del pronóstico de riesgo de incendio.
+
+    `fwi` e `is_estimated` se conservan por compatibilidad con los clientes: Open-Meteo no trae FWI, así
+    que `fwi` siempre es None e `is_estimated` siempre es True.
+    """
     date: str
     hour_label: str
     fwi: float | None
@@ -44,5 +48,5 @@ class FireDangerResponse(BaseModel, frozen=True):
     peak_score: float
     peak_label: str
     peak_hour_label: str
-    source: str                 # "windy_firedanger" | "windy_gfs_estimated"
-    is_estimated: bool
+    source: str                 # "openmeteo" (un backend anterior mandaba "windy_gfs_estimated" | "windy_firedanger")
+    is_estimated: bool          # siempre True: Open-Meteo no trae FWI

@@ -1,16 +1,22 @@
-"""Tests de integración para GET /api/incendios."""
+"""Tests de integración para GET /api/incendios.
+
+El riesgo se estima con la serie horaria de Open-Meteo. Windy, cuya key del plan Testing devuelve
+datos mezclados al azar, ya no interviene.
+"""
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
 
 from app.schemas.weather import SourceMeta, WeatherCurrentResponse
-from app.services.fire_danger import FireDangerEntry
-from app.services.windy import WindyNotConfiguredError
+from app.services.fire_danger import FireDangerEntry, compute_fire_risk
+from tests.hourly_fixtures import AR, make_uniform_hourly
+
+OPEN_METEO = "app.services.fire_danger.get_hourly_forecast_ext"
 
 
 def _make_current_weather(
@@ -46,10 +52,9 @@ def _make_current_weather(
 @pytest.fixture(autouse=True)
 def mock_aggregate_current_unavailable():
     """
-    Por defecto, aggregate_current no está disponible en los tests — mantiene
-    el comportamiento de "solo Windy" sin tener que tocar cada test existente
-    uno por uno. Los tests que prueban el path con observación real lo
-    parchean explícitamente adentro (el patch interno gana mientras dura).
+    Por defecto, aggregate_current no está disponible en los tests — mantiene el comportamiento de
+    "solo pronóstico" sin tener que tocar cada test uno por uno. Los tests que prueban el path con
+    observación real lo parchean explícitamente adentro (el patch interno gana mientras dura).
     """
     with patch(
         "app.routers.incendios.aggregate_current",
@@ -66,7 +71,6 @@ def mock_aggregate_current_unavailable():
 def _make_entry(
     score: float = 35.0,
     label: str = "Bajo",
-    is_estimated: bool = True,
     date: str = "2026-05-26",
     hour_label: str = "12:00",
     timestamp_s: int | None = None,
@@ -74,24 +78,21 @@ def _make_entry(
     return FireDangerEntry(
         date=date,
         hour_label=hour_label,
-        fwi=None if is_estimated else round(score / 2, 2),
         fire_risk_score=score,
         fire_risk_label=label,
         temp_c=28.0,
         humidity=45.0,
         wind_kmh=20.0,
         precip_mm=0.0,
-        is_estimated=is_estimated,
         timestamp_s=timestamp_s if timestamp_s is not None else int(time.time()),
     )
 
 
-def _make_entries(n: int = 3, is_estimated: bool = True) -> list[FireDangerEntry]:
+def _make_entries(n: int = 3) -> list[FireDangerEntry]:
     """
-    Slots horarios sintéticos empezando en "ahora" — entries[0] es el más
-    cercano al momento actual por construcción, igual que un array de Windy
-    bien alineado. Para el caso desalineado (bug real), ver
-    TestClosestToNowSelection más abajo.
+    Slots horarios sintéticos empezando en "ahora" — entries[0] es el más cercano al momento actual
+    por construcción. Para el caso desalineado (la serie arranca en la madrugada), ver
+    test_current_reflects_closest_slot_not_raw_index_zero.
     """
     hours = ["09:00", "12:00", "15:00", "18:00", "21:00", "00:00"]
     scores = [25.0, 45.0, 60.0, 50.0, 30.0, 20.0]
@@ -101,7 +102,6 @@ def _make_entries(n: int = 3, is_estimated: bool = True) -> list[FireDangerEntry
         _make_entry(
             score=scores[i % len(scores)],
             label=labels[i % len(labels)],
-            is_estimated=is_estimated,
             hour_label=hours[i % len(hours)],
             timestamp_s=now + i * 3600,
         )
@@ -117,23 +117,18 @@ class TestIncendiosRouter:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_windy_not_configured_returns_503(self, async_client: AsyncClient):
-        """Cuando Windy no está configurado → 503 con detail windy_not_configured."""
-        with patch(
-            "app.routers.incendios.get_fire_danger",
-            new_callable=AsyncMock,
-            side_effect=WindyNotConfiguredError("windy_api_key no configurada"),
-        ):
+    async def test_no_entries_returns_503(self, async_client: AsyncClient):
+        """Sin pronóstico de Open-Meteo no hay riesgo que estimar → 503 fire_danger_unavailable."""
+        with patch("app.routers.incendios.get_fire_danger", new_callable=AsyncMock, return_value=[]):
             response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
 
         assert response.status_code == 503
-        assert response.json()["detail"] == "windy_not_configured"
+        assert response.json()["detail"] == "fire_danger_unavailable"
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_happy_path_estimated_returns_200(self, async_client: AsyncClient):
-        """Happy path con datos estimados (GFS fallback) → 200 con campos completos."""
-        entries = _make_entries(n=6, is_estimated=True)
+    async def test_happy_path_returns_200_with_the_estimate_from_open_meteo(self, async_client: AsyncClient):
+        entries = _make_entries(n=6)
         with patch(
             "app.routers.incendios.get_fire_danger",
             new_callable=AsyncMock,
@@ -155,8 +150,8 @@ class TestIncendiosRouter:
         assert "source" in data
         assert "is_estimated" in data
 
-        # Source correcto para datos estimados
-        assert data["source"] == "windy_gfs_estimated"
+        # Open-Meteo no trae FWI: el puntaje siempre es una estimación
+        assert data["source"] == "openmeteo"
         assert data["is_estimated"] is True
 
         # current = primer slot
@@ -165,26 +160,22 @@ class TestIncendiosRouter:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_happy_path_fwi_model_returns_windy_source(self, async_client: AsyncClient):
-        """Happy path con modelo fireDanger (FWI real) → source = windy_firedanger."""
-        entries = _make_entries(n=4, is_estimated=False)
+    async def test_no_slot_claims_a_real_fwi(self, async_client: AsyncClient):
         with patch(
             "app.routers.incendios.get_fire_danger",
             new_callable=AsyncMock,
-            return_value=entries,
+            return_value=_make_entries(n=4),
         ):
             response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["source"] == "windy_firedanger"
-        assert data["is_estimated"] is False
+        slots = response.json()["slots"]
+        assert all(s["fwi"] is None and s["is_estimated"] is True for s in slots)
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_peak_is_max_score_slot(self, async_client: AsyncClient):
         """El peak debe ser el slot con mayor fire_risk_score."""
-        entries = _make_entries(n=6, is_estimated=True)
+        entries = _make_entries(n=6)
         expected_peak = max(entries, key=lambda e: e.fire_risk_score)
         with patch(
             "app.routers.incendios.get_fire_danger",
@@ -224,7 +215,7 @@ class TestIncendiosRouter:
     @pytest.mark.integration
     async def test_slot_fields_present(self, async_client: AsyncClient):
         """Cada slot debe tener todos los campos requeridos."""
-        entries = _make_entries(n=2, is_estimated=True)
+        entries = _make_entries(n=2)
         with patch(
             "app.routers.incendios.get_fire_danger",
             new_callable=AsyncMock,
@@ -248,11 +239,10 @@ class TestIncendiosRouter:
     @pytest.mark.integration
     async def test_current_reflects_closest_slot_not_raw_index_zero(self, async_client: AsyncClient):
         """
-        Cableado end-to-end del bug reportado en vivo: el array de Windy
-        empezaba varias horas antes de "ahora" (10°C, madrugada) mientras la
-        temperatura real en ese momento era 22°C. La respuesta debe reflejar
-        el slot correcto, y el array `slots` debe arrancar ahí también — el
-        frontend toma slots[0] directamente como "condiciones actuales".
+        Cableado end-to-end del bug reportado en vivo: la serie empezaba varias horas antes de "ahora"
+        (10°C, madrugada) mientras la temperatura real en ese momento era 22°C. La respuesta debe
+        reflejar el slot correcto, y el array `slots` debe arrancar ahí también — el frontend toma
+        slots[0] directamente como "condiciones actuales".
         """
         now = int(time.time())
         entries = [
@@ -261,7 +251,6 @@ class TestIncendiosRouter:
             _make_entry(score=45.0, label="Moderado", hour_label="10:00", timestamp_s=now),
             _make_entry(score=55.0, label="Moderado", hour_label="13:00", timestamp_s=now + 3 * 3600),
         ]
-        # temp_c=28.0 fijo en el helper — distinguimos por score/label en su lugar.
         with patch(
             "app.routers.incendios.get_fire_danger",
             new_callable=AsyncMock,
@@ -294,20 +283,19 @@ class TestIncendiosRouter:
 
 # ---------------------------------------------------------------------------
 # Reemplazo de temp/humedad/viento "actuales" por observación real
-# (bug reportado en vivo: Windy GFS mostraba 10-13°C con ~26°C reales)
+# (bug reportado en vivo: el pronóstico mostraba 10-13°C con ~26°C reales)
 # ---------------------------------------------------------------------------
 
 class TestIncendiosCurrentWeatherOverride:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_current_uses_real_observation_when_estimated(self, async_client: AsyncClient):
+    async def test_current_uses_real_observation_and_recomputes_the_score(self, async_client: AsyncClient):
         """
-        Score estimado (sin FWI real) + aggregate_current disponible → el slot
-        actual usa temp/humedad/viento reales, y el score se recalcula con
-        esos valores (no queda un score de Windy junto a una temp real).
+        aggregate_current disponible → el slot actual usa temp/humedad/viento reales, y el puntaje se
+        recalcula con esos valores (no queda un puntaje de pronóstico junto a una temperatura real).
         """
-        entries = _make_entries(n=3, is_estimated=True)  # temp_c=28.0 en Windy
+        entries = _make_entries(n=3)  # temp_c=28.0 en el pronóstico
         real_weather = _make_current_weather(temp_c=26.0, humidity=40.0, wind_speed_kmh=10.0)
         with patch(
             "app.routers.incendios.get_fire_danger",
@@ -326,46 +314,18 @@ class TestIncendiosCurrentWeatherOverride:
         assert current_slot["temp_c"] == pytest.approx(26.0)
         assert current_slot["humidity"] == pytest.approx(40.0)
         assert current_slot["wind_kmh"] == pytest.approx(10.0)
-        # El score ya no es el 25.0 sintético de Windy — fue recalculado.
+        # El puntaje ya no es el 25.0 sintético del pronóstico — fue recalculado.
         assert data["current_score"] != entries[0].fire_risk_score
         assert data["current_score"] == current_slot["fire_risk_score"]
+        assert data["current_score"] == compute_fire_risk(26.0, 40.0, 10.0, 0.0)[0]
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_current_display_overridden_but_score_kept_when_fwi_real(
+    async def test_falls_back_to_the_forecast_when_aggregate_current_fails(
         self, async_client: AsyncClient
     ):
-        """
-        Con FWI real (is_estimated=False), la temp mostrada se actualiza pero
-        el score/label quedan intactos — vienen del modelo fireDanger real,
-        no de una fórmula que podamos recalcular con temp/humedad/viento.
-        """
-        entries = _make_entries(n=3, is_estimated=False)
-        real_weather = _make_current_weather(temp_c=26.0, humidity=40.0, wind_speed_kmh=10.0)
-        with patch(
-            "app.routers.incendios.get_fire_danger",
-            new_callable=AsyncMock,
-            return_value=entries,
-        ), patch(
-            "app.routers.incendios.aggregate_current",
-            new_callable=AsyncMock,
-            return_value=real_weather,
-        ):
-            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
-
-        data = response.json()
-        current_slot = data["slots"][0]
-        assert current_slot["temp_c"] == pytest.approx(26.0)
-        assert data["current_score"] == entries[0].fire_risk_score
-        assert data["current_label"] == entries[0].fire_risk_label
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_falls_back_to_windy_when_aggregate_current_fails(
-        self, async_client: AsyncClient
-    ):
-        """aggregate_current falla → sigue respondiendo 200 con los datos de Windy tal cual."""
-        entries = _make_entries(n=3, is_estimated=True)
+        """aggregate_current falla → sigue respondiendo 200 con los datos del pronóstico tal cual."""
+        entries = _make_entries(n=3)
         with patch(
             "app.routers.incendios.get_fire_danger",
             new_callable=AsyncMock,
@@ -378,3 +338,69 @@ class TestIncendiosCurrentWeatherOverride:
         data = response.json()
         assert data["slots"][0]["temp_c"] == pytest.approx(entries[0].temp_c)
         assert data["current_score"] == entries[0].fire_risk_score
+
+
+# ---------------------------------------------------------------------------
+# De punta a punta: la serie horaria de Open-Meteo → el endpoint
+# ---------------------------------------------------------------------------
+
+class TestIncendiosFromOpenMeteo:
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_hourly_slots_from_now_with_the_score_of_the_forecast(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=34.0, humidity=20.0, wind=25.0, precip=0.0)
+        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=forecast):
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "openmeteo"
+        assert data["is_estimated"] is True
+
+        slots = data["slots"]
+        # Una franja por hora, desde la hora más cercana a ahora: "Próximas 24 h" del frontend son 24 franjas.
+        assert len(slots) >= 24
+        hours = [int(s["hour_label"][:2]) for s in slots[:24]]
+        assert all(nxt == (prev + 1) % 24 for prev, nxt in zip(hours, hours[1:]))
+        this_hour = datetime.now(AR).replace(minute=0, second=0, microsecond=0)
+        candidates = {f"{this_hour:%H}:00", f"{this_hour + timedelta(hours=1):%H}:00"}
+        assert slots[0]["hour_label"] in candidates
+
+        expected_score, expected_label = compute_fire_risk(34.0, 20.0, 25.0, 0.0)
+        assert data["current_score"] == expected_score
+        assert data["current_label"] == expected_label
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_open_meteo_down_returns_503(self, async_client: AsyncClient):
+        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=None):
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "fire_danger_unavailable"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_no_windy_key_is_not_an_error_anymore(self, async_client: AsyncClient):
+        # El conftest deja windy_api_key vacío: antes eso respondía 503 windy_not_configured.
+        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=make_uniform_hourly()):
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_windy_is_never_called_even_when_it_is_configured(self, async_client: AsyncClient, monkeypatch):
+        import app.core.config as cfg
+
+        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
+        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=make_uniform_hourly()), patch(
+            "app.services.windy.fetch_raw",
+            new_callable=AsyncMock,
+            side_effect=AssertionError("Incendios no debe consultar Windy"),
+        ) as windy:
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 200
+        windy.assert_not_called()

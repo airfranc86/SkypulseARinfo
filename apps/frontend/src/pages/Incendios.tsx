@@ -6,6 +6,7 @@ import { HourlyAccessibleList } from '@/components/ui/HourlyAccessibleList'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ModelBadge } from '@/components/ui/ModelBadge'
+import { toolSourceToModel } from '@/lib/toolSource'
 import { BurnText } from '@/components/animated/BurnText'
 
 // ---------------------------------------------------------------------------
@@ -359,7 +360,7 @@ export function Incendios({ location }: Props) {
         titleNode={<BurnText text="Incendios" fontSize="1.5rem" />}
         subtitle="Riesgo de incendio forestal por ubicación"
         accentColor="#e05545"
-        modelBadge={data ? <ModelBadge model={data.is_estimated ? 'gfs' : 'windy_ecmwf'} variant="header" /> : undefined}
+        modelBadge={data ? <ModelBadge model={toolSourceToModel(data.source)} variant="header" /> : undefined}
       />
 
       {isLoading && <PageSkeleton />}
@@ -405,17 +406,17 @@ export function Incendios({ location }: Props) {
               currentColor={data.current_color}
             />
 
-            {/* Source badge */}
+            {/* Open-Meteo no trae el índice FWI: el puntaje siempre es una estimación */}
             <div className="flex justify-center -mt-2">
               <span
                 className="text-[.6rem] font-semibold uppercase tracking-wide px-2.5 py-1 rounded"
                 style={{
-                  color: data.is_estimated ? 'var(--color-watch)' : 'var(--color-safe)',
-                  background: data.is_estimated ? 'rgba(240,160,48,.08)' : 'rgba(62,207,122,.08)',
-                  border: `1px solid ${data.is_estimated ? 'rgba(240,160,48,.25)' : 'rgba(62,207,122,.25)'}`,
+                  color: 'var(--color-watch)',
+                  background: 'rgba(240,160,48,.08)',
+                  border: '1px solid rgba(240,160,48,.25)',
                 }}
               >
-                {data.is_estimated ? 'Estimado' : 'Modelo Windy FWI'}
+                Estimado
               </span>
             </div>
 
@@ -491,7 +492,7 @@ export function Incendios({ location }: Props) {
 
             {/* Footer — compact single line */}
             <p className="text-[.6rem] text-center" style={{ color: 'var(--color-muted-foreground)' }}>
-              ⓘ {data.is_estimated ? 'Estimado' : 'Windy'} · Caché 1 h
+              ⓘ Estimado · Caché 1 h
             </p>
           </div>
         </FadeContent>
