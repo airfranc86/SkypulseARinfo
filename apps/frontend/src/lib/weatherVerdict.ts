@@ -79,8 +79,9 @@ export function rainIntensity(mmPerHour: number): RainIntensity {
 }
 
 /**
- * Horas que cubre la franja `index`: con Windy son 3 h, con Open-Meteo 1 h. Se infiere de la
- * distancia al vecino (la última usa el paso anterior) para convertir milímetros en mm/h.
+ * Horas que cubre la franja `index`: hoy son 3 h (el backend arma franjas de 3 h con Open-Meteo), pero
+ * puede haber franjas de 1 h. Se infiere de la distancia al vecino (la última usa el paso anterior)
+ * para convertir milímetros en mm/h.
  */
 export function slotHours(entries: HourlyEntry[], index: number): number {
   const current = entries[index]

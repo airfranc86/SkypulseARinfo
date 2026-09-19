@@ -368,7 +368,9 @@ export interface WeatherDashboardResponse {
   hourly: HourlyConsensus
   forecast_7d: DailyEntry[]
   fetched_at: string
-  forecast_source?: 'mixed' | 'openmeteo'  // "mixed" = Windy+Open-Meteo, "openmeteo" = fallback puro
+  // "openmeteo" = todo el pronóstico de Open-Meteo (lo que manda el backend hoy). "mixed" = Windy + Open-Meteo y
+  // "openmeteo_fallback" = respaldo puro: los mandaba la versión anterior, con Windy.
+  forecast_source?: 'openmeteo' | 'openmeteo_fallback' | 'mixed'
   sources?: ForecastSources | null
   degraded?: boolean
 }
