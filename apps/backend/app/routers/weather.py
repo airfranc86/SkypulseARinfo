@@ -33,8 +33,8 @@ from app.services.dashboard_builder import (
     build_7d_forecast,
     build_hourly_schema,
     build_rain_forecast,
-    current_temp_850,
 )
+from app.services.hourly_slots import current_temp_850
 from app.services.weather_aggregator import aggregate_current
 from app.services.openmeteo import (
     get_multi_model_daily,

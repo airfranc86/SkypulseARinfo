@@ -128,173 +128,6 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
 
 
 # ---------------------------------------------------------------------------
-# Pronóstico horario
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class HourlyForecastData:
-    timestamps: list[int]
-    hour_labels: list[str]            # "14:00" en hora local AR
-    temps_c: list[float | None]
-    humidities: list[float | None]
-    precipitations: list[float | None]
-    wind_speeds_kmh: list[float | None]
-    temps_850hpa: list[float | None]
-    elevation_m: float | None
-    weather_codes: list[int | None] = field(default_factory=list)
-
-
-async def get_hourly_forecast(lat: float, lon: float) -> HourlyForecastData | None:
-    """
-    Retorna pronóstico horario de 48h con temperatura en 850 hPa (para cota de nieve).
-    Devuelve None ante cualquier error.
-    """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": (
-            "temperature_2m,relative_humidity_2m,precipitation,"
-            "wind_speed_10m,temperature_850hPa,weather_code"
-        ),
-        "timezone": "America/Argentina/Buenos_Aires",
-        "models": "ecmwf_ifs04",
-        "wind_speed_unit": "kmh",
-        "forecast_days": 2,
-    }
-    key = _cache_key(params)
-
-    async def _fetch() -> HourlyForecastData | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo hourly forecast failed: %s", exc)
-            return None
-
-        try:
-            hourly = data["hourly"]
-            time_list: list[str] = hourly.get("time", [])
-
-            timestamps: list[int] = []
-            hour_labels: list[str] = []
-            for t in time_list:
-                dt = datetime.fromisoformat(t)
-                timestamps.append(int(dt.timestamp()))
-                hour_labels.append(t[11:16])  # "14:00"
-
-            weather_codes: list[int | None] = []
-            for v in hourly.get("weather_code", []):
-                pf = parse_float(v)
-                weather_codes.append(int(pf) if pf is not None else None)
-
-            return HourlyForecastData(
-                timestamps=timestamps,
-                hour_labels=hour_labels,
-                temps_c=[parse_float(v) for v in hourly.get("temperature_2m", [])],
-                humidities=[parse_float(v) for v in hourly.get("relative_humidity_2m", [])],
-                precipitations=[parse_float(v) for v in hourly.get("precipitation", [])],
-                wind_speeds_kmh=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
-                temps_850hpa=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
-                elevation_m=parse_float(data.get("elevation")),
-                weather_codes=weather_codes,
-            )
-        except (KeyError, TypeError) as exc:
-            logger.warning("Open-Meteo hourly parse error: %s", exc)
-            return None
-
-    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
-
-
-# ---------------------------------------------------------------------------
-# Pronóstico diario
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class DailyForecastData:
-    dates: list[str]                        # ["2026-05-20", ...]
-    day_labels: list[str]                   # ["lunes", "martes", ...]
-    temp_max: list[float | None]
-    temp_min: list[float | None]
-    precip_sum: list[float | None]          # mm totales del día
-    wind_speed_max: list[float | None]      # km/h
-    humidity_mean: list[float | None]       # %
-    precip_prob_max: list[float | None] = field(default_factory=list)  # % probabilidad diaria
-    weather_code: list[int | None] = field(default_factory=list)       # peor código WMO del día
-
-
-async def get_daily_forecast(lat: float, lon: float, days: int = 5) -> DailyForecastData | None:
-    """
-    Retorna pronóstico diario para los próximos `days` días.
-    Devuelve None ante cualquier error.
-    """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "daily": (
-            "temperature_2m_max,temperature_2m_min,precipitation_sum,"
-            "precipitation_probability_max,wind_speed_10m_max,relative_humidity_2m_mean,"
-            "weather_code"
-        ),
-        "forecast_days": days,
-        "timezone": "America/Argentina/Buenos_Aires",
-        "wind_speed_unit": "kmh",
-        "models": "gfs_seamless",
-    }
-    key = _cache_key(params)
-
-    async def _fetch() -> DailyForecastData | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo daily forecast failed: %s", exc)
-            return None
-
-        try:
-            daily = data["daily"]
-            time_list: list[str] = daily.get("time", [])
-
-            day_labels: list[str] = []
-            for t in time_list:
-                dt = datetime.fromisoformat(t)
-                day_labels.append(_DAY_LABELS_ES[dt.weekday()])
-
-            weather_code: list[int | None] = []
-            for v in daily.get("weather_code", []):
-                pf = parse_float(v)
-                weather_code.append(int(pf) if pf is not None else None)
-
-            return DailyForecastData(
-                dates=list(time_list),
-                day_labels=day_labels,
-                temp_max=[parse_float(v) for v in daily.get("temperature_2m_max", [])],
-                temp_min=[parse_float(v) for v in daily.get("temperature_2m_min", [])],
-                precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
-                wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
-                humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
-                precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
-                weather_code=weather_code,
-            )
-        except (KeyError, TypeError) as exc:
-            logger.warning("Open-Meteo daily parse error: %s", exc)
-            return None
-
-    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
-
-
-# ---------------------------------------------------------------------------
 # Pronóstico diario extendido (dashboard)
 # ---------------------------------------------------------------------------
 
@@ -500,6 +333,8 @@ class HourlyForecastExt:
     temps_850_c: list[float | None] = field(default_factory=list)      # temperatura a 850 hPa (cota de nieve)
     humidities: list[float | None] = field(default_factory=list)       # % a 2 m
     cloud_covers: list[float | None] = field(default_factory=list)     # % de nubosidad total
+    wind_dirs_deg: list[float | None] = field(default_factory=list)    # de dónde sopla, en grados
+    elevation_m: float | None = None                                   # altitud del punto (cota de nieve)
 
 
 async def get_hourly_forecast_ext(
@@ -509,8 +344,9 @@ async def get_hourly_forecast_ext(
 ) -> HourlyForecastExt | None:
     """
     Pronóstico horario extendido con weather_code, precip_probability, is_day, ráfagas, CAPE,
-    temperatura a 850 hPa, humedad y nubosidad. Es la fuente del dashboard: reemplaza a Windy, cuya
-    clave del plan Testing devuelve datos mezclados al azar.
+    temperatura a 850 hPa, humedad, nubosidad y dirección del viento, más la elevación del punto. Es
+    la fuente del dashboard y de las herramientas: reemplaza a Windy, cuya clave del plan Testing
+    devuelve datos mezclados al azar. Con el mismo `days` comparten caché.
     Usa best_match (sin modelo específico) para máxima disponibilidad.
     """
     params = {
@@ -519,7 +355,8 @@ async def get_hourly_forecast_ext(
         "hourly": (
             "temperature_2m,precipitation,precipitation_probability,"
             "wind_speed_10m,weather_code,is_day,freezing_level_height,"
-            "wind_gusts_10m,cape,temperature_850hPa,relative_humidity_2m,cloud_cover"
+            "wind_gusts_10m,cape,temperature_850hPa,relative_humidity_2m,cloud_cover,"
+            "wind_direction_10m"
         ),
         "forecast_days": days,
         "timezone": "America/Argentina/Buenos_Aires",
@@ -584,6 +421,8 @@ async def get_hourly_forecast_ext(
                 temps_850_c=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
                 humidities=[parse_float(v) for v in hourly.get("relative_humidity_2m", [])],
                 cloud_covers=[parse_float(v) for v in hourly.get("cloud_cover", [])],
+                wind_dirs_deg=[parse_float(v) for v in hourly.get("wind_direction_10m", [])],
+                elevation_m=parse_float(data.get("elevation")),
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo hourly_ext parse error: %s", exc)

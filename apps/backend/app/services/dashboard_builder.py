@@ -13,9 +13,7 @@ la tira y el veredicto del héroe no cambien.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta, date as _Date
-from typing import TypeVar
 
 from app.schemas.weather import (
     DailyEntrySchema,
@@ -26,6 +24,7 @@ from app.schemas.weather import (
 )
 from app.services.calculators import compute_convective_risk
 from app.services.forecast_merge import merge_daily_fields
+from app.services.hourly_slots import three_hour_slots, upcoming_slots
 from app.services.openmeteo import (
     HourlyForecastExt,
     MultiModelDailyData,
@@ -47,91 +46,11 @@ _MONTHS_ES = [
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ]
 
-# Franjas de 3 h (las horas locales 00, 03, 06… 21), como siempre mostró la tira horaria.
-_SLOT_HOURS = 3
+# Las franjas de 3 h salen de services/hourly_slots.py (las comparten las herramientas).
 # "Lluvia esperada hoy" mira las próximas 24 h (8 franjas) y el riesgo de llovizna, las próximas 12 h (4).
 _RAIN_HORIZON_SLOTS = 8
 _DRIZZLE_SLOTS = 4
-_HOUR_S = 3600
 _DAY_HOURS = 24
-
-_T = TypeVar("_T")
-
-
-# ---------------------------------------------------------------------------
-# Franjas de 3 h a partir de la serie horaria de Open-Meteo
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class _Slot:
-    """Una franja de 3 h armada con las horas de Open-Meteo que terminan en `hour_label`.
-
-    Lo acumulado o extremo (lluvia, probabilidad, ráfaga, CAPE, código de tiempo) abarca las 3 h
-    previas, como el `past3hprecip` de Windy; lo instantáneo (temperatura, humedad, nubosidad)
-    es el valor de la hora en punto.
-    """
-    timestamp: int
-    hour_label: str
-    date: str
-    temp_c: float | None
-    precip_mm: float | None
-    precip_prob: float | None
-    weather_code: int | None
-    is_day: bool
-    wind_gust_kmh: float | None
-    cape_j_kg: float | None
-    freezing_level_m: float | None
-    humidity: float | None
-    cloud_cover: float | None
-
-
-def _window(values: list[_T | None], index: int) -> list[_T]:
-    """Los valores no nulos de las 3 h que terminan en `index` (inclusive)."""
-    start = max(0, index - _SLOT_HOURS + 1)
-    return [v for v in values[start:index + 1] if v is not None]
-
-
-def _at(values: list[_T | None], index: int) -> _T | None:
-    """El valor en `index`, o None si la serie es más corta (variable que Open-Meteo no mandó)."""
-    return values[index] if index < len(values) else None
-
-
-def _three_hour_slots(om: HourlyForecastExt) -> list[_Slot]:
-    """Una franja cada 3 h, en las horas locales múltiplo de 3. Sin dato no se inventa un cero."""
-    slots: list[_Slot] = []
-    for i, label in enumerate(om.hour_labels):
-        if int(label[:2]) % _SLOT_HOURS:
-            continue
-        rain = _window(om.precipitations, i)
-        probs = _window(om.precip_probs, i)
-        codes = _window(om.weather_codes, i)
-        gusts = _window(om.wind_gusts_kmh, i)
-        capes = _window(om.cape_j_kg, i)
-        slots.append(
-            _Slot(
-                timestamp=om.timestamps[i],
-                hour_label=label,
-                date=om.dates[i],
-                temp_c=_at(om.temps_c, i),
-                precip_mm=round(sum(rain), 2) if rain else None,
-                precip_prob=max(probs) if probs else None,
-                # El peor código de las 3 h (los códigos WMO crecen con la severidad).
-                weather_code=max(codes) if codes else None,
-                is_day=om.is_day[i] if i < len(om.is_day) else True,
-                wind_gust_kmh=max(gusts) if gusts else None,
-                cape_j_kg=max(capes) if capes else None,
-                freezing_level_m=_at(om.freezing_level_heights_m, i),
-                humidity=_at(om.humidities, i),
-                cloud_cover=_at(om.cloud_covers, i),
-            )
-        )
-    return slots
-
-
-def _upcoming_slots(om: HourlyForecastExt, now: datetime) -> list[_Slot]:
-    """Las franjas de las próximas 24 h, desde la que cubre la hora en curso (igual que el frontend)."""
-    cutoff = now.timestamp() - _HOUR_S
-    return [s for s in _three_hour_slots(om) if s.timestamp > cutoff][:_RAIN_HORIZON_SLOTS]
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +67,11 @@ def build_rain_forecast(
     ahora), riesgo de llovizna y condiciones de secado. Sin serie horaria devuelve "Sin datos de
     lluvia" en vez de suponer un cielo seco.
     """
-    slots = _upcoming_slots(om_hourly, now or datetime.now(timezone.utc)) if om_hourly is not None else []
+    slots = (
+        upcoming_slots(om_hourly, now or datetime.now(timezone.utc), limit=_RAIN_HORIZON_SLOTS)
+        if om_hourly is not None
+        else []
+    )
     if not slots:
         return RainForecastSchema(
             status_text="Sin datos de lluvia",
@@ -298,7 +221,7 @@ def build_hourly_schema(om_hourly: HourlyForecastExt | None) -> HourlyConsensusS
             freezing_level_height_m=s.freezing_level_m,
             wind_gusts_kmh=s.wind_gust_kmh,
         )
-        for s in _three_hour_slots(om_hourly)
+        for s in three_hour_slots(om_hourly)
     ]
 
     # Probabilidad máxima de las primeras 24 h de la serie
@@ -319,15 +242,6 @@ def _rain_label(max_prob: float) -> str:
     if max_prob < 60:
         return "Lluvia posible"
     return "Alta probabilidad de lluvia"
-
-
-def current_temp_850(om_hourly: HourlyForecastExt | None, now: datetime | None = None) -> float | None:
-    """Temperatura a 850 hPa de la hora más cercana a `now` (insumo de la cota de nieve), o None."""
-    if om_hourly is None or not om_hourly.timestamps or not om_hourly.temps_850_c:
-        return None
-    target = (now or datetime.now(timezone.utc)).timestamp()
-    nearest = min(range(len(om_hourly.timestamps)), key=lambda i: abs(om_hourly.timestamps[i] - target))
-    return _at(om_hourly.temps_850_c, nearest)
 
 
 # ---------------------------------------------------------------------------

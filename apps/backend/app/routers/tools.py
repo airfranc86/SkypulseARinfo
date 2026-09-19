@@ -1,9 +1,12 @@
 """Router para herramientas de decisión meteorológica.
 
-Jerarquía de fuentes (orden de prioridad):
-    1. SMN — observación actual (a través de `aggregate_current`)
-    2. Windy GFS (NOAA) — pronósticos horarios y diarios
-    3. Open-Meteo — fallback solo si Windy no está configurado o falla
+Fuentes:
+    1. SMN — observación actual (a través de `aggregate_current`).
+    2. Open-Meteo — pronóstico horario (serie de 7 días, best_match): la misma que usa el dashboard.
+
+Windy ya no interviene: la key del plan Testing "returns randomly shuffled and slightly modified
+data" (ver https://api.windy.com/point-forecast/pricing), así que sus datos no se le muestran al
+usuario. El armado de las franjas y de los días vive en `services/tools_builder.py`.
 
 Los endpoints exponen el campo `source` en la respuesta para que el frontend
 pueda mostrar de dónde provienen los datos.
@@ -12,12 +15,10 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Callable
 
 from fastapi import APIRouter, HTTPException, Request
 
-from app.core.config import settings
-from app.core.params import LatParam, LonParam, SOURCE_WINDY, SOURCE_OPENMETEO, SOURCE_UNAVAILABLE
+from app.core.params import LatParam, LonParam, SOURCE_OPENMETEO_FORECAST, SOURCE_UNAVAILABLE
 from app.core.rate_limit import limiter
 from app.schemas.tools import (
     CarWashDay,
@@ -30,75 +31,37 @@ from app.schemas.tools import (
     ToolResult,
 )
 from app.services import calculators
-from app.services.openmeteo import (
-    HourlyForecastData,
-    get_daily_forecast,
-    get_hourly_forecast,
-)
+from app.services.hourly_slots import current_temp_850, upcoming_slots
+from app.services.openmeteo import HourlyForecastExt, get_hourly_forecast_ext
+from app.services.tools_builder import conditions_now, daily_aggregates, outlook, slot_scores
 from app.services.weather_aggregator import aggregate_current
-from app.services.windy import (
-    LaundryDayRaw,
-    WindyDailyEntry,
-    WindyHourlyEntry,
-    WindyNotConfiguredError,
-    get_daily_forecast as windy_get_daily_forecast,
-    get_hourly_forecast as windy_get_hourly_forecast,
-    get_laundry_forecast as get_windy_laundry,
-    get_temp_850hpa_first as windy_get_temp_850,
-)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Serie de 7 días: la misma que pide el dashboard, así comparten caché.
+_FORECAST_DAYS = 7
+# Lluvia esperada para tender (próximas ~6 h) y para hacer deporte (próximas ~12 h).
+_TENDER_OUTLOOK_HOURS = 6
+_SPORT_OUTLOOK_HOURS = 12
+# Franjas de 3 h de la tira: 24 para tender (72 h) y 12 para deporte (36 h).
+_TENDER_SLOTS = 24
+_SPORT_SLOTS = 12
+# Cuánto puede haber terminado una franja para seguir contando como la de ahora.
+_SLOT_GRACE_S = 1800
 
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
 
 
-def _build_hourly_scores(
-    forecast: HourlyForecastData,
-    score_fn: Callable[..., ToolResult],
-    hours: int,
-) -> list[HourlyScore]:
-    """Construye la lista de HourlyScore para las primeras `hours` horas del forecast."""
-    results: list[HourlyScore] = []
-    for i in range(min(hours, len(forecast.timestamps))):
-        temp = forecast.temps_c[i] if i < len(forecast.temps_c) else None
-        humidity = forecast.humidities[i] if i < len(forecast.humidities) else None
-        precip = forecast.precipitations[i] if i < len(forecast.precipitations) else None
-        wind = forecast.wind_speeds_kmh[i] if i < len(forecast.wind_speeds_kmh) else None
-        weather_code = forecast.weather_codes[i] if i < len(forecast.weather_codes) else None
-        calc_result = score_fn(temp, humidity, wind, precip, weather_code=weather_code)
-        results.append(
-            HourlyScore(
-                timestamp=forecast.timestamps[i],
-                hour_label=forecast.hour_labels[i],
-                score=calc_result.score,
-                is_best=False,
-            )
-        )
-    return results
-
-
-def _build_hourly_scores_from_windy(
-    hourly: list[WindyHourlyEntry],
-    score_fn: Callable[..., ToolResult],
-    hours: int,
-) -> list[HourlyScore]:
-    """Versión que toma WindyHourlyEntry. Cada slot puede ser de 3 h en GFS."""
-    results: list[HourlyScore] = []
-    for h in hourly[:hours]:
-        calc_result = score_fn(h.temp_c, h.humidity, h.wind_speed_kmh, h.precip_3h_mm, cape_j_kg=h.cape_j_kg)
-        results.append(
-            HourlyScore(
-                timestamp=h.timestamp_s,
-                hour_label=h.hour_label,
-                score=calc_result.score,
-                is_best=False,
-            )
-        )
-    return results
+async def _hourly_or_503(lat: float, lon: float) -> HourlyForecastExt:
+    """La serie horaria de Open-Meteo; 503 si no llegó o vino vacía."""
+    om = await get_hourly_forecast_ext(lat, lon, days=_FORECAST_DAYS)
+    if om is None or not om.timestamps:
+        raise HTTPException(status_code=503, detail="forecast_unavailable")
+    return om
 
 
 def _mark_best(hourly: list[HourlyScore]) -> list[HourlyScore]:
@@ -165,63 +128,6 @@ def _best_hour_label(hourly: list[HourlyScore], min_score: int = 40) -> str | No
     return f"A las {best.hour_label}"
 
 
-def _first_storm_code(codes: list[int | None]) -> int | None:
-    """
-    Devuelve el primer código WMO de tormenta/granizo (95/96/99) encontrado en
-    la ventana — usado para el score "actual", que debe reflejar una tormenta
-    pronosticada para dentro de unas horas, no solo el instante exacto de la
-    consulta (que puede caer justo antes de que empiece a llover).
-    """
-    for c in codes:
-        if calculators.is_storm_wmo_code(c):
-            return c
-    return None
-
-
-def _max_cape(values: list[float | None]) -> float | None:
-    real = [v for v in values if v is not None]
-    return max(real) if real else None
-
-
-def _filter_future(hourly: list[HourlyScore], grace_s: int = 1800) -> list[HourlyScore]:
-    """
-    Filtra entradas claramente pasadas.
-    grace_s: margen de gracia (default 30 min) para incluir el slot activo actual.
-    """
-    now_ts = int(datetime.now(timezone.utc).timestamp())
-    return [h for h in hourly if h.timestamp >= now_ts - grace_s]
-
-
-# ---------------------------------------------------------------------------
-# Helpers de fallback Windy → Open-Meteo
-# ---------------------------------------------------------------------------
-
-async def _windy_hourly_or_none(lat: float, lon: float) -> list[WindyHourlyEntry] | None:
-    """Intenta obtener slots horarios de Windy. None ante cualquier fallo recuperable."""
-    if not settings.windy_api_key:
-        return None
-    try:
-        return await windy_get_hourly_forecast(lat, lon)
-    except WindyNotConfiguredError:
-        return None
-    except Exception as exc:
-        logger.warning("Windy hourly failed, will fallback: %s", exc)
-        return None
-
-
-async def _windy_daily_or_none(lat: float, lon: float, days: int) -> list[WindyDailyEntry] | None:
-    """Intenta obtener pronóstico diario de Windy. None ante cualquier fallo."""
-    if not settings.windy_api_key:
-        return None
-    try:
-        return await windy_get_daily_forecast(lat, lon, days=days)
-    except WindyNotConfiguredError:
-        return None
-    except Exception as exc:
-        logger.warning("Windy daily failed, will fallback: %s", exc)
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -241,87 +147,31 @@ async def get_tender_ropa(
     Aptitud para tender ropa al aire libre.
 
     Datos requeridos:
-        - pronóstico horario: Windy GFS (primario), Open-Meteo (fallback).
+        - pronóstico horario: Open-Meteo (temperatura, humedad y viento de ahora; lluvia, CAPE y
+          tormenta de las próximas ~6 h; una franja de 3 h por cada puntaje de la tira).
     """
     logger.info("GET /tender-ropa lat=%.2f lon=%.2f", lat, lon)
 
-    # 1. Intentar Windy primero (mismo patrón que hacer-deporte/lavar-coche)
-    windy_hourly = await _windy_hourly_or_none(lat, lon)
+    om = await _hourly_or_503(lat, lon)
+    now = datetime.now(timezone.utc)
 
-    if windy_hourly is not None and windy_hourly:
-        source = SOURCE_WINDY
-
-        first = windy_hourly[0]
-        temp_c = first.temp_c
-        humidity = first.humidity
-        wind_speed_kmh = first.wind_speed_kmh
-
-        # Precipitación esperada próximas ~6h (2 slots de 3h en GFS)
-        next_2 = windy_hourly[:2]
-        precip_vals = [s.precip_3h_mm for s in next_2 if s.precip_3h_mm is not None]
-        precip_next_6h = sum(precip_vals) if precip_vals else None
-        cape_j_kg = _max_cape([s.cape_j_kg for s in next_2])
-
-        current_result = calculators.score_tender_ropa(
-            temp_c=temp_c,
-            humidity=humidity,
-            wind_speed_kmh=wind_speed_kmh,
-            precip_next_6h=precip_next_6h,
-            cape_j_kg=cape_j_kg,
-        )
-
-        # score_tender_ropa ya matchea el orden posicional de este helper
-        # (temp_c, humidity, wind_speed_kmh, precip) — sin closure de reorden.
-        hourly = _build_hourly_scores_from_windy(windy_hourly, calculators.score_tender_ropa, hours=24)
-        hourly = _mark_best(hourly)
-        future_hourly_tr = _filter_future(hourly)
-        best_window = _best_window_consecutive(future_hourly_tr, min_score=70)
-
-        return ToolResult(
-            tool="tender-ropa",
-            score=current_result.score,
-            label=current_result.label,
-            color=current_result.color,
-            headline=current_result.headline,
-            reason=current_result.reason,
-            best_window=best_window,
-            hourly=hourly,
-            temp=temp_c,
-            humidity=humidity,
-            wind_speed=wind_speed_kmh,
-            precip=precip_next_6h,
-            source=source,
-        )
-
-    # 2. Fallback Open-Meteo
-    source = SOURCE_OPENMETEO
-    forecast = await get_hourly_forecast(lat, lon)
-    if forecast is None:
-        raise HTTPException(status_code=503, detail="forecast_unavailable")
-
-    # Acumular precipitación esperada en las próximas 6 horas
-    precip_list = forecast.precipitations[:6]
-    precip_next_6h = sum(v for v in precip_list if v is not None) if precip_list else None
-    storm_code = _first_storm_code(forecast.weather_codes[:6])
-
-    # Condiciones actuales = primera hora del forecast
-    temp_c = forecast.temps_c[0] if forecast.temps_c else None
-    humidity = forecast.humidities[0] if forecast.humidities else None
-    wind_speed_kmh = forecast.wind_speeds_kmh[0] if forecast.wind_speeds_kmh else None
+    current = conditions_now(om, now)
+    ahead = outlook(om, now, hours=_TENDER_OUTLOOK_HOURS)
 
     current_result = calculators.score_tender_ropa(
-        temp_c=temp_c,
-        humidity=humidity,
-        wind_speed_kmh=wind_speed_kmh,
-        precip_next_6h=precip_next_6h,
-        weather_code=storm_code,
+        temp_c=current.temp_c,
+        humidity=current.humidity,
+        wind_speed_kmh=current.wind_speed_kmh,
+        precip_next_6h=ahead.precip_mm,
+        weather_code=ahead.storm_code,
+        cape_j_kg=ahead.cape_j_kg,
     )
 
-    # Construir hourly 24h
-    hourly = _build_hourly_scores(forecast, calculators.score_tender_ropa, hours=24)
-    hourly = _mark_best(hourly)
-    future_hourly_tr = _filter_future(hourly)
-    best_window = _best_window_consecutive(future_hourly_tr, min_score=70)
+    # score_tender_ropa ya matchea el orden posicional de slot_scores
+    # (temp_c, humidity, wind_speed_kmh, precip) — sin closure de reorden.
+    slots = upcoming_slots(om, now, limit=_TENDER_SLOTS, grace_s=_SLOT_GRACE_S)
+    hourly = _mark_best(slot_scores(slots, calculators.score_tender_ropa))
+    best_window = _best_window_consecutive(hourly, min_score=70)
 
     return ToolResult(
         tool="tender-ropa",
@@ -332,11 +182,11 @@ async def get_tender_ropa(
         reason=current_result.reason,
         best_window=best_window,
         hourly=hourly,
-        temp=temp_c,
-        humidity=humidity,
-        wind_speed=wind_speed_kmh,
-        precip=precip_next_6h,
-        source=source,
+        temp=current.temp_c,
+        humidity=current.humidity,
+        wind_speed=current.wind_speed_kmh,
+        precip=ahead.precip_mm,
+        source=SOURCE_OPENMETEO_FORECAST,
     )
 
 
@@ -397,8 +247,8 @@ async def get_cota_de_nieve(
 
     Datos requeridos:
         - temp actual: SMN (vía aggregate_current); si SMN no disponible, Open-Meteo.
-        - temp_850hPa: Windy GFS (primario), Open-Meteo (fallback).
-        - elevation_m: Open-Meteo (única fuente disponible; Windy no la provee).
+        - temp_850hPa y elevation_m: Open-Meteo (serie horaria). Sin ellos la cota se estima con la
+          temperatura actual y altitud 0, y `source` queda en "unavailable".
     """
     logger.info("GET /cota-de-nieve lat=%.2f lon=%.2f", lat, lon)
 
@@ -407,41 +257,12 @@ async def get_cota_de_nieve(
     if weather.temp_c is None:
         raise HTTPException(status_code=503, detail="weather_unavailable")
 
-    # 2. Temperatura en 850 hPa: Windy primario
-    temp_850_hpa: float | None = None
-    source = SOURCE_UNAVAILABLE
+    # 2. Temperatura en 850 hPa de la hora en curso y altitud del punto, de Open-Meteo
+    om = await get_hourly_forecast_ext(lat, lon, days=_FORECAST_DAYS)
+    temp_850_hpa = current_temp_850(om, datetime.now(timezone.utc))
+    source = SOURCE_OPENMETEO_FORECAST if temp_850_hpa is not None else SOURCE_UNAVAILABLE
 
-    if settings.windy_api_key:
-        try:
-            temp_850_hpa = await windy_get_temp_850(lat, lon)
-            if temp_850_hpa is not None:
-                source = SOURCE_WINDY
-        except WindyNotConfiguredError:
-            pass
-        except Exception as exc:
-            logger.warning("Windy temp_850 failed, falling back to Open-Meteo: %s", exc)
-
-    # 3. Fallback Open-Meteo: provee temp_850 + elevation
-    forecast = None
-    if temp_850_hpa is None:
-        forecast = await get_hourly_forecast(lat, lon)
-        if forecast is not None and forecast.temps_850hpa:
-            # Tomar el primer valor no-None de la serie horaria
-            for v in forecast.temps_850hpa:
-                if v is not None:
-                    temp_850_hpa = v
-                    source = SOURCE_OPENMETEO
-                    break
-    else:
-        # Windy dio el temp_850 pero igual necesitamos elevation. Open-Meteo es la
-        # única fuente disponible; si falla, asumimos 0 (lo que ya hacía antes).
-        forecast = await get_hourly_forecast(lat, lon)
-
-    station_altitude_m = (
-        forecast.elevation_m
-        if forecast is not None and forecast.elevation_m is not None
-        else 0.0
-    )
+    station_altitude_m = om.elevation_m if om is not None and om.elevation_m is not None else 0.0
 
     result = calculators.compute_cota_de_nieve(
         temp_c=weather.temp_c,
@@ -487,93 +308,33 @@ async def get_hacer_deporte(
     Aptitud para hacer deporte.
 
     Datos requeridos:
-        - condiciones actuales: SMN (vía aggregate_current).
-        - pronóstico horario: Windy GFS (primario), Open-Meteo (fallback).
+        - pronóstico horario: Open-Meteo (temperatura, humedad y viento de ahora; lluvia, CAPE y
+          tormenta de las próximas ~12 h; una franja de 3 h por cada puntaje de la tira).
     """
     logger.info("GET /hacer-deporte lat=%.2f lon=%.2f", lat, lon)
 
-    # 1. Intentar Windy primero
-    windy_hourly = await _windy_hourly_or_none(lat, lon)
+    om = await _hourly_or_503(lat, lon)
+    now = datetime.now(timezone.utc)
 
-    if windy_hourly is not None and windy_hourly:
-        source = SOURCE_WINDY
-
-        # Primera entrada = condiciones más cercanas al "ahora"
-        first = windy_hourly[0]
-        temp_c = first.temp_c
-        humidity = first.humidity
-        wind_speed_kmh = first.wind_speed_kmh
-
-        # Precipitación acumulada próximas ~12h (4 slots de 3h)
-        next_4 = windy_hourly[:4]
-        precip_vals = [s.precip_3h_mm for s in next_4 if s.precip_3h_mm is not None]
-        precip = sum(precip_vals) if precip_vals else None
-        cape_j_kg = _max_cape([s.cape_j_kg for s in next_4])
-
-        current_result = calculators.score_hacer_deporte(
-            temp_c=temp_c,
-            humidity=humidity,
-            precip=precip,
-            wind_speed_kmh=wind_speed_kmh,
-            cape_j_kg=cape_j_kg,
-        )
-
-        def _score_fn(t, h, w, p, cape_j_kg=None):
-            return calculators.score_hacer_deporte(t, h, p, w, cape_j_kg=cape_j_kg)
-
-        # 12 entradas (~36h en GFS, suficiente para tomar la mejor "hora" del día)
-        hourly_scores = _build_hourly_scores_from_windy(windy_hourly, _score_fn, hours=12)
-        hourly_scores = _mark_best(hourly_scores)
-        future_scores = _filter_future(hourly_scores)
-        best_window = _best_hour_label(future_scores, min_score=40)
-
-        return ToolResult(
-            tool="hacer-deporte",
-            score=current_result.score,
-            label=current_result.label,
-            color=current_result.color,
-            headline=current_result.headline,
-            reason=current_result.reason,
-            best_window=best_window,
-            hourly=hourly_scores,
-            temp=temp_c,
-            humidity=humidity,
-            wind_speed=wind_speed_kmh,
-            precip=precip,
-            source=source,
-        )
-
-    # 2. Fallback Open-Meteo
-    source = SOURCE_OPENMETEO
-    forecast = await get_hourly_forecast(lat, lon)
-    if forecast is None:
-        raise HTTPException(status_code=503, detail="forecast_unavailable")
-
-    # Condiciones actuales = primera hora
-    temp_c = forecast.temps_c[0] if forecast.temps_c else None
-    humidity = forecast.humidities[0] if forecast.humidities else None
-    wind_speed_kmh = forecast.wind_speeds_kmh[0] if forecast.wind_speeds_kmh else None
-
-    # Precipitación acumulada próximas 12h
-    precip_list = forecast.precipitations[:12]
-    precip = sum(v for v in precip_list if v is not None) if precip_list else None
-    storm_code = _first_storm_code(forecast.weather_codes[:12])
+    current = conditions_now(om, now)
+    ahead = outlook(om, now, hours=_SPORT_OUTLOOK_HOURS)
 
     current_result = calculators.score_hacer_deporte(
-        temp_c=temp_c,
-        humidity=humidity,
-        precip=precip,
-        wind_speed_kmh=wind_speed_kmh,
-        weather_code=storm_code,
+        temp_c=current.temp_c,
+        humidity=current.humidity,
+        precip=ahead.precip_mm,
+        wind_speed_kmh=current.wind_speed_kmh,
+        weather_code=ahead.storm_code,
+        cape_j_kg=ahead.cape_j_kg,
     )
 
-    def _score_fn(t, h, w, p, weather_code=None):
-        return calculators.score_hacer_deporte(t, h, p, w, weather_code=weather_code)
+    def _score_fn(t, h, w, p, weather_code=None, cape_j_kg=None):
+        return calculators.score_hacer_deporte(t, h, p, w, weather_code=weather_code, cape_j_kg=cape_j_kg)
 
-    hourly = _build_hourly_scores(forecast, _score_fn, hours=12)
-    hourly = _mark_best(hourly)
-    future_hourly = _filter_future(hourly)
-    best_window = _best_hour_label(future_hourly, min_score=40)
+    # 12 franjas de 3 h (~36 h, suficiente para tomar la mejor "hora" del día)
+    slots = upcoming_slots(om, now, limit=_SPORT_SLOTS, grace_s=_SLOT_GRACE_S)
+    hourly_scores = _mark_best(slot_scores(slots, _score_fn))
+    best_window = _best_hour_label(hourly_scores, min_score=40)
 
     return ToolResult(
         tool="hacer-deporte",
@@ -583,12 +344,12 @@ async def get_hacer_deporte(
         headline=current_result.headline,
         reason=current_result.reason,
         best_window=best_window,
-        hourly=hourly,
-        temp=temp_c,
-        humidity=humidity,
-        wind_speed=wind_speed_kmh,
-        precip=precip,
-        source=source,
+        hourly=hourly_scores,
+        temp=current.temp_c,
+        humidity=current.humidity,
+        wind_speed=current.wind_speed_kmh,
+        precip=ahead.precip_mm,
+        source=SOURCE_OPENMETEO_FORECAST,
     )
 
 
@@ -607,77 +368,35 @@ async def get_lavar_coche(
     Mejores días para lavar el coche.
 
     Datos requeridos:
-        - pronóstico diario 5 días: Windy GFS (primario), Open-Meteo (fallback).
+        - pronóstico de 5 días: Open-Meteo, agregando por día las horas de la serie horaria.
     """
     logger.info("GET /lavar-coche lat=%.2f lon=%.2f", lat, lon)
 
-    # 1. Intentar Windy primero
-    windy_daily = await _windy_daily_or_none(lat, lon, days=5)
+    om = await _hourly_or_503(lat, lon)
 
-    if windy_daily is not None and windy_daily:
-        source = SOURCE_WINDY
-        days_result: list[CarWashDay] = []
-        for d in windy_daily:
-            result = calculators.score_lavar_coche(
-                temp_max_c=d.temp_max_c,
-                precip_mm=d.precip_sum_mm,
-                wind_speed_kmh=d.wind_speed_max_kmh,
-                humidity=d.humidity_mean,
-                cape_j_kg=d.cape_max_j_kg,
-            )
-            days_result.append(
-                CarWashDay(
-                    date=d.date,
-                    day_label=_day_label_es(d.date),
-                    score=result.score,
-                    label=result.label,
-                    color=result.color,
-                    headline=result.headline,
-                    precip_mm=d.precip_sum_mm or 0.0,
-                    temp_max_c=d.temp_max_c or 0.0,
-                    temp_min_c=d.temp_min_c or 0.0,
-                    wind_speed_kmh=d.wind_speed_max_kmh or 0.0,
-                    humidity=d.humidity_mean or 0.0,
-                    is_best=False,
-                )
-            )
-
-        if days_result:
-            best_idx = max(range(len(days_result)), key=lambda i: days_result[i].score)
-            days_result[best_idx] = CarWashDay(
-                **{**days_result[best_idx].model_dump(), "is_best": True}
-            )
-
-        return CarWashForecastResponse(days=days_result, source=source)
-
-    # 2. Fallback Open-Meteo
-    source = SOURCE_OPENMETEO
-    daily = await get_daily_forecast(lat, lon, days=5)
-    if daily is None:
-        raise HTTPException(status_code=503, detail="forecast_unavailable")
-
-    days_result = []
-    for i in range(len(daily.dates)):
+    days_result: list[CarWashDay] = []
+    for d in daily_aggregates(om, days=5):
         result = calculators.score_lavar_coche(
-            temp_max_c=daily.temp_max[i] if i < len(daily.temp_max) else None,
-            precip_mm=daily.precip_sum[i] if i < len(daily.precip_sum) else None,
-            wind_speed_kmh=daily.wind_speed_max[i] if i < len(daily.wind_speed_max) else None,
-            humidity=daily.humidity_mean[i] if i < len(daily.humidity_mean) else None,
-            weather_code=daily.weather_code[i] if i < len(daily.weather_code) else None,
+            temp_max_c=d.temp_max_c,
+            precip_mm=d.precip_sum_mm,
+            wind_speed_kmh=d.wind_speed_max_kmh,
+            humidity=d.humidity_mean,
+            weather_code=d.weather_code,
+            cape_j_kg=d.cape_max_j_kg,
         )
         days_result.append(
             CarWashDay(
-                date=daily.dates[i],
-                day_label=daily.day_labels[i],
+                date=d.date,
+                day_label=_day_label_es(d.date),
                 score=result.score,
                 label=result.label,
                 color=result.color,
                 headline=result.headline,
-                precip_mm=daily.precip_sum[i] or 0.0,
-                temp_max_c=daily.temp_max[i] or 0.0,
-                temp_min_c=daily.temp_min[i] or 0.0,
-                wind_speed_kmh=daily.wind_speed_max[i] or 0.0,
-                humidity=daily.humidity_mean[i] or 0.0,
+                precip_mm=d.precip_sum_mm or 0.0,
+                temp_max_c=d.temp_max_c or 0.0,
+                temp_min_c=d.temp_min_c or 0.0,
+                wind_speed_kmh=d.wind_speed_max_kmh or 0.0,
+                humidity=d.humidity_mean or 0.0,
                 is_best=False,
             )
         )
@@ -688,7 +407,7 @@ async def get_lavar_coche(
             **{**days_result[best_idx].model_dump(), "is_best": True}
         )
 
-    return CarWashForecastResponse(days=days_result, source=source)
+    return CarWashForecastResponse(days=days_result, source=SOURCE_OPENMETEO_FORECAST)
 
 
 # ---------------------------------------------------------------------------
@@ -737,80 +456,44 @@ async def get_laundry_forecast_endpoint(
 ) -> LaundryForecastResponse:
     logger.info("GET /tender-ropa/forecast lat=%.2f lon=%.2f", lat, lon)
 
-    source = SOURCE_WINDY
-    raw_days: list[LaundryDayRaw] | None = None
+    om = await _hourly_or_503(lat, lon)
 
-    # 1. Intentar Windy
-    try:
-        raw_days = await get_windy_laundry(lat, lon)
-    except WindyNotConfiguredError:
-        logger.info("Windy not configured, falling back to Open-Meteo")
-    except Exception as exc:
-        logger.warning("Windy forecast failed, falling back to Open-Meteo: %s", exc)
-
-    # 2. Fallback a Open-Meteo
-    if raw_days is None:
-        source = SOURCE_OPENMETEO
-        daily = await get_daily_forecast(lat, lon, days=7)
-        if daily is None:
-            raise HTTPException(status_code=503, detail="forecast_unavailable")
-
-        raw_days = []
-        for i in range(len(daily.dates)):
-            prob = (
-                daily.precip_prob_max[i]
-                if daily.precip_prob_max and i < len(daily.precip_prob_max) and daily.precip_prob_max[i] is not None
-                else None
-            )
-            raw_days.append(
-                LaundryDayRaw(
-                    date=daily.dates[i],
-                    temp_max_c=daily.temp_max[i] or 0.0,
-                    temp_min_c=daily.temp_min[i] or 0.0,
-                    humidity_mean=daily.humidity_mean[i] or 0.0,
-                    wind_speed_kmh=daily.wind_speed_max[i] or 0.0,
-                    precip_sum_mm=daily.precip_sum[i] or 0.0,
-                    precip_prob=prob if prob is not None else 0.0,
-                    weather_code=daily.weather_code[i] if i < len(daily.weather_code) else None,
-                )
-            )
-
-    # 3. Calcular score por día
+    # Calcular score por día: temperatura máxima, humedad y viento medios, lluvia total del día
     days_result: list[LaundryDay] = []
-    for idx, raw in enumerate(raw_days):
+    for idx, day in enumerate(daily_aggregates(om, days=7)):
         calc = calculators.score_tender_ropa(
-            temp_c=raw.temp_max_c,
-            humidity=raw.humidity_mean,
-            wind_speed_kmh=raw.wind_speed_kmh,
-            precip_mm=raw.precip_sum_mm,
-            wind_dir_cardinal=raw.wind_dir_cardinal,
-            precip_prob_pct=raw.precip_prob,
-            weather_code=raw.weather_code,
-            cape_j_kg=raw.cape_j_kg,
+            temp_c=day.temp_max_c,
+            humidity=day.humidity_mean,
+            wind_speed_kmh=day.wind_speed_mean_kmh,
+            precip_mm=day.precip_sum_mm,
+            wind_dir_cardinal=day.wind_dir_cardinal,
+            precip_prob_pct=day.precip_prob_max,
+            weather_code=day.weather_code,
+            cape_j_kg=day.cape_max_j_kg,
         )
         confidence_pct = _CONFIDENCE[idx] if idx < len(_CONFIDENCE) else 75
         days_result.append(
             LaundryDay(
-                date=raw.date,
-                day_label=_format_day_label(raw.date),
+                date=day.date,
+                day_label=_format_day_label(day.date),
                 score=calc.score,
                 label=calc.label,
                 headline=calc.headline,
-                temp_max_c=round(raw.temp_max_c, 1),
-                humidity=round(raw.humidity_mean, 1),
-                wind_speed_kmh=round(raw.wind_speed_kmh, 1),
-                precip_prob=round(raw.precip_prob, 1),
+                temp_max_c=round(day.temp_max_c or 0.0, 1),
+                humidity=round(day.humidity_mean or 0.0, 1),
+                wind_speed_kmh=round(day.wind_speed_mean_kmh or 0.0, 1),
+                precip_prob=round(day.precip_prob_max or 0.0, 1),
                 is_best=False,
                 confidence_pct=confidence_pct,
                 confidence_label=_confidence_label(confidence_pct),
             )
         )
 
-    # 4. Marcar el día con mayor score
+    # Marcar el día con mayor score
     if days_result:
         best_idx = max(range(len(days_result)), key=lambda i: days_result[i].score)
         days_result[best_idx] = LaundryDay(
             **{**days_result[best_idx].model_dump(), "is_best": True}
         )
 
-    return LaundryForecastResponse(days=days_result, source=source)
+    return LaundryForecastResponse(days=days_result, source=SOURCE_OPENMETEO_FORECAST)
