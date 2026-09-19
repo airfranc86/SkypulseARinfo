@@ -48,7 +48,7 @@ export function PrevisionClima({ location }: Props) {
   // acaba de tocar. Se actualiza al llegar el dato (derivado durante el render, sin efecto).
   const [shownModel, setShownModel] = useState<ForecastModel>(forecastModel)
   if (data && !isPlaceholderData && shownModel !== forecastModel) setShownModel(forecastModel)
-  const { data: alertasData, isError: alertasError } = useSmnAlertas()
+  const { data: alertasData, isError: alertasError, isPending: alertasPending } = useSmnAlertas()
   const reducedMotion = useReducedMotion()
 
   // Colapsado en la primera visita — el hero de "ahora" es el viewport que
@@ -76,19 +76,21 @@ export function PrevisionClima({ location }: Props) {
   const notes = data ? forecastNotes(data) : []
   const updatedAt = formatClock(data?.fetched_at)
 
+  // Sin dato del SMN, "sin avisos" sería una afirmación que no podemos hacer.
+  const alertasUnavailable = alertasError || alertasData?.available === false
+  const alertas = alertasUnavailable ? [] : (alertasData?.alertas ?? [])
+  // Solo naranja y rojo cambian el peso del héroe (borde y brillo del color del aviso) y encabezan el veredicto.
+  const severity = criticalLevel(alertas)
+  const alertasNowMs = alertasData ? Date.parse(alertasData.fetched_at) : Number.NaN
+
   // Hora de referencia: cuándo el servidor armó este pronóstico. Con NaN nada se recorta.
   const nowMs = data ? Date.parse(data.fetched_at) : Number.NaN
   const upcoming = data ? entriesFromNow(data.hourly.entries, nowMs) : []
   const verdict = data
-    ? buildVerdict(data.hourly.entries, nowMs, data.rain_today.status_text.toLowerCase().includes('llovizna'))
+    ? buildVerdict(data.hourly.entries, nowMs, data.rain_today.status_text.toLowerCase().includes('llovizna'), alertas)
     : []
   const rainWindows = rainWindowsByDate(upcoming)
   const today = data?.forecast_7d.find((day) => day.day_label === 'Hoy')
-  // Sin dato del SMN, "sin avisos" sería una afirmación que no podemos hacer.
-  const alertasUnavailable = alertasError || alertasData?.available === false
-  // Solo naranja y rojo cambian el peso del héroe (borde y brillo del color del aviso).
-  const severity = alertasUnavailable ? null : criticalLevel(alertasData?.alertas ?? [])
-  const alertasNowMs = alertasData ? Date.parse(alertasData.fetched_at) : Number.NaN
 
   // Región viva: al cambiar de ciudad la pantalla se reemplaza y un lector de pantalla
   // no se entera de que cargó otra cosa.
@@ -126,6 +128,16 @@ export function PrevisionClima({ location }: Props) {
 
       <p role="status" className="sr-only">{liveMessage}</p>
 
+      {/* Avisos oficiales del SMN — ordenados por gravedad y fuera de la rama de datos: son lo más
+          urgente y no pueden depender de que el pronóstico cargue (con el pronóstico caído seguían
+          ocultos). Si el SMN no respondió se avisa; mientras llegan hay una línea reservada. */}
+      <SmnAlertasBlock
+        alertas={alertas}
+        unavailable={alertasUnavailable}
+        nowMs={alertasNowMs}
+        pending={alertasPending}
+      />
+
       {isWakingUp && <WakingUpNotice />}
       {(location === null || isLoading) && !isWakingUp && <PageSkeleton />}
       {error && !isWakingUp && (
@@ -147,13 +159,6 @@ export function PrevisionClima({ location }: Props) {
         // FINISH: unreviewed and undocumented is unfinished.
         <FadeContent>
           <div className="space-y-4">
-            {/* Avisos oficiales SMN — ordenados por gravedad; sin respuesta del SMN se avisa */}
-            <SmnAlertasBlock
-              alertas={alertasData?.alertas ?? []}
-              unavailable={alertasUnavailable}
-              nowMs={alertasNowMs}
-            />
-
             {notes.length > 0 && <SourceNotes notes={notes} />}
 
             {/* Hero (SMN) — el primer viewport es esto y nada más.

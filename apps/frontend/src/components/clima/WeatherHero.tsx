@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CloudRain, CloudLightning, Sun, Wind, type LucideIcon } from 'lucide-react'
+import { CloudRain, CloudLightning, OctagonAlert, Sun, TriangleAlert, Wind, type LucideIcon } from 'lucide-react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import { BorderGlow } from '@/components/animated/BorderGlow'
@@ -14,11 +14,17 @@ const WIND_COLOR: Record<string, string> = {
   intensa: '#ff7a66',
 }
 
-const TONE: Record<VerdictTone, { Icon: LucideIcon; color: string }> = {
+const TONE: Record<Exclude<VerdictTone, 'alert'>, { Icon: LucideIcon; color: string }> = {
   rain:  { Icon: CloudRain,      color: 'var(--color-info)' },
   clear: { Icon: Sun,            color: 'var(--color-safe)' },
   wind:  { Icon: Wind,           color: 'var(--color-watch)' },
   storm: { Icon: CloudLightning, color: '#ff7a66' },
+}
+
+/** El aviso del SMN lleva el ícono y el color de su nivel, los mismos de su tarjeta. */
+const ALERT_TONE: Record<CriticalLevel, { Icon: LucideIcon; color: string }> = {
+  rojo:    { Icon: OctagonAlert,  color: LEVEL_COLOR.rojo },
+  naranja: { Icon: TriangleAlert, color: LEVEL_COLOR.naranja },
 }
 
 /** Brillo y borde del héroe según el aviso crítico vigente: el peso visual escala con la gravedad. */
@@ -127,7 +133,7 @@ export function WeatherHero({ current, today, verdict, severity = null, sources 
       {verdict.length > 0 && (
         <div role="group" aria-label="Lo que viene en las próximas 24 horas" className="mt-4 space-y-2">
           {verdict.map((line, index) => {
-            const { Icon, color } = TONE[line.tone]
+            const { Icon, color } = line.tone === 'alert' ? ALERT_TONE[line.level ?? 'naranja'] : TONE[line.tone]
             const headline = index === 0
             return (
               <p

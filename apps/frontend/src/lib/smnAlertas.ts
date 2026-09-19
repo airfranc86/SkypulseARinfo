@@ -33,6 +33,14 @@ export function sortAlertas(alertas: SmnAlerta[]): SmnAlerta[] {
     .map(({ alerta }) => alerta)
 }
 
+/** Los avisos críticos (naranja y rojo), del más grave al menos grave. */
+export function criticalAlertas(alertas: SmnAlerta[]): SmnAlerta[] {
+  return sortAlertas(alertas).filter((alerta) => {
+    const level = alertLevel(alerta.nivel)
+    return level === 'rojo' || level === 'naranja'
+  })
+}
+
 /** El nivel crítico más alto entre los avisos (solo naranja y rojo cambian el peso del héroe). */
 export function criticalLevel(alertas: SmnAlerta[]): CriticalLevel | null {
   const levels = alertas.map((alerta) => alertLevel(alerta.nivel))
@@ -95,4 +103,17 @@ export function vigenciaText(alerta: SmnAlerta, nowMs: number): string | null {
   if (notStarted) return `desde ${whenAr(desde, nowMs)}`
   if (hasta !== null) return `hasta ${whenAr(hasta, nowMs)}`
   return null
+}
+
+/**
+ * Una oración por aviso crítico, para la región viva: cuando los avisos llegan después del
+ * pronóstico, nada en la pantalla anuncia que apareció algo grave. Vacío si no hay ninguno.
+ */
+export function alertSummary(alertas: SmnAlerta[], nowMs: number): string {
+  return criticalAlertas(alertas)
+    .map((alerta) => {
+      const vigencia = vigenciaText(alerta, nowMs)
+      return `Aviso ${alertLevel(alerta.nivel)} del SMN: ${alerta.tipo}${vigencia ? `, ${vigencia}` : ''}.`
+    })
+    .join(' ')
 }

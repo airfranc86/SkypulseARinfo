@@ -1,5 +1,5 @@
 import { AlertTriangle, CircleAlert, Info, OctagonAlert, TriangleAlert, type LucideIcon } from 'lucide-react'
-import { LEVEL_COLOR, alertLevel, sortAlertas, vigenciaText, type AlertLevel } from '@/lib/smnAlertas'
+import { LEVEL_COLOR, alertLevel, alertSummary, sortAlertas, vigenciaText, type AlertLevel } from '@/lib/smnAlertas'
 import type { SmnAlerta } from '@/lib/api'
 
 interface SmnAlertasBlockProps {
@@ -8,6 +8,8 @@ interface SmnAlertasBlockProps {
   unavailable?: boolean
   /** Hora de referencia (ms) para la vigencia de cada aviso. */
   nowMs?: number
+  /** Los avisos todavía no llegaron: se reserva una línea en vez de dejar que empujen el resto al llegar. */
+  pending?: boolean
 }
 
 /**
@@ -26,11 +28,23 @@ const STYLE: Record<AlertLevel, { Icon: LucideIcon; tint: string; border: string
 const SMN_URL = 'https://www.smn.gob.ar/'
 
 /** Avisos oficiales del SMN, mostrados tal cual vienen de la fuente — sin interpretación propia. */
-export function SmnAlertasBlock({ alertas, unavailable = false, nowMs = Number.NaN }: SmnAlertasBlockProps) {
+export function SmnAlertasBlock({ alertas, unavailable = false, nowMs = Number.NaN, pending = false }: SmnAlertasBlockProps) {
+  if (pending && !unavailable && alertas.length === 0) {
+    return (
+      <p
+        role="status"
+        className="mb-4 rounded-xl px-4 py-3 text-xs"
+        style={{ border: '1px solid var(--color-border)', color: 'var(--color-muted-foreground)' }}
+      >
+        Consultando avisos del SMN…
+      </p>
+    )
+  }
+
   if (unavailable) {
     return (
       <p
-        className="rounded-xl px-4 py-3 text-xs leading-relaxed flex items-start gap-2"
+        className="mb-4 rounded-xl px-4 py-3 text-xs leading-relaxed flex items-start gap-2"
         style={{
           border: '1px solid var(--color-border)',
           background: 'var(--color-secondary)',
@@ -57,8 +71,13 @@ export function SmnAlertasBlock({ alertas, unavailable = false, nowMs = Number.N
 
   if (alertas.length === 0) return null
 
+  const summary = alertSummary(alertas, nowMs)
+
   return (
-    <section aria-labelledby="smn-alertas-title" className="space-y-2">
+    <section aria-labelledby="smn-alertas-title" className="mb-4 space-y-2">
+      {/* Un solo anuncio para todos los avisos críticos (una oración por aviso): cuando llegan después
+          del pronóstico, nada más en pantalla avisa que apareció algo grave. */}
+      {summary && <p role="alert" className="sr-only">{summary}</p>}
       <h2
         id="smn-alertas-title"
         className="text-xs uppercase tracking-wide font-medium"

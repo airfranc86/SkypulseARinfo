@@ -114,10 +114,12 @@ test('llovizna sin lluvia medida', () => {
   assert.deepEqual(verdict(hourly(), true), ['Llovizna posible, sin lluvia medida en el pronóstico'])
 })
 
-test('riesgo de tormentas reemplaza a las ráfagas', () => {
+test('riesgo de tormentas reemplaza a las ráfagas y encabeza', () => {
   const lines = verdict(hourly({ 2: 1 }, { gust: { 3: 55 }, convective: { 4: 'high' } }))
   assert.equal(lines.length, 2)
-  assert.equal(lines[1], 'Riesgo alto de tormentas a las 18:00')
+  assert.equal(lines[0], 'Riesgo alto de tormentas a las 18:00')
+  assert.ok(lines[1].startsWith('Lluvia'))
+  assert.ok(!lines.some((l) => l.includes('Ráfagas')))
 })
 
 test('ráfagas fuertes se avisan con hora', () => {
@@ -126,6 +128,86 @@ test('ráfagas fuertes se avisan con hora', () => {
 })
 
 const NBSP = String.fromCharCode(0xa0)
+
+const alerta = (nivel: string, tipo: string, hasta: string | null = null) => ({
+  nivel, tipo, fecha_desde: null, fecha_hasta: hasta, descripcion: '',
+})
+const ROJO = alerta('rojo', 'Tormentas', '2026-09-19T00:00:00Z') // hasta las 21:00 AR
+const NARANJA = alerta('naranja', 'Viento', '2026-09-20T02:00:00Z') // hasta el sáb 23:00 AR
+const withAlerts = (entries: TestEntry[], alertas: ReturnType<typeof alerta>[]) =>
+  buildVerdict(entries as never, NOW_MS, false, alertas as never)
+const plain = (lines: { text: string }[]) => norm(lines)
+
+test('un aviso rojo es el titular y no hay línea de lluvia ni de "sin lluvia"', () => {
+  const lines = withAlerts(hourly(), [ROJO])
+  assert.deepEqual(plain(lines), ['Aviso rojo del SMN: Tormentas · hasta las 21:00'])
+  assert.equal(lines[0].tone, 'alert')
+  assert.equal(lines[0].level, 'rojo')
+})
+
+test('con aviso crítico la lluvia prevista tampoco entra: los avisos y el modelo no se contradicen', () => {
+  assert.deepEqual(plain(withAlerts(hourly({ 2: 1.2, 3: 2.0, 4: 0.6 }), [NARANJA])), [
+    'Aviso naranja del SMN: Viento · hasta el sáb 23:00',
+  ])
+})
+
+test('con aviso crítico se conservan las ráfagas y el riesgo de tormentas del modelo', () => {
+  assert.deepEqual(plain(withAlerts(hourly({}, { gust: { 3: 55 } }), [ROJO])), [
+    'Aviso rojo del SMN: Tormentas · hasta las 21:00',
+    'Ráfagas de hasta 55 km/h a las 17:00',
+  ])
+  assert.deepEqual(plain(withAlerts(hourly({}, { convective: { 4: 'high' } }), [ROJO])), [
+    'Aviso rojo del SMN: Tormentas · hasta las 21:00',
+    'Riesgo alto de tormentas a las 18:00',
+  ])
+})
+
+test('un aviso amarillo o de nivel desconocido no cambia el veredicto', () => {
+  const rain = hourly({ 2: 1.2, 3: 2.0, 4: 0.6 })
+  const base = plain(buildVerdict(rain as never, NOW_MS, false))
+  assert.deepEqual(plain(withAlerts(rain, [alerta('amarillo', 'Lluvias')])), base)
+  assert.deepEqual(plain(withAlerts(rain, [alerta('sin especificar', 'X')])), base)
+})
+
+test('varios avisos críticos: titular el más grave y se cuenta el resto', () => {
+  assert.deepEqual(plain(withAlerts(hourly(), [NARANJA, ROJO])), [
+    'Aviso rojo del SMN: Tormentas · hasta las 21:00 · +1 aviso más',
+  ])
+  assert.deepEqual(plain(withAlerts(hourly(), [NARANJA, ROJO, alerta('naranja', 'Nevadas')])), [
+    'Aviso rojo del SMN: Tormentas · hasta las 21:00 · +2 avisos más',
+  ])
+})
+
+test('un aviso sin vigencia no inventa una hora', () => {
+  assert.deepEqual(plain(withAlerts(hourly(), [alerta('rojo', 'Tormentas')])), ['Aviso rojo del SMN: Tormentas'])
+})
+
+test('del aviso, el tipo y la vigencia viajan marcados como hechos', () => {
+  const [line] = withAlerts(hourly(), [ROJO])
+  assert.deepEqual(
+    line.segments.filter((s) => s.fact).map((s) => s.text.replaceAll(NBSP, ' ')),
+    ['Tormentas', 'hasta las 21:00'],
+  )
+})
+
+test('riesgo alto de tormentas sin aviso es el titular y no se le pone debajo un "sin lluvia"', () => {
+  const lines = buildVerdict(hourly({}, { convective: { 4: 'high' } }) as never, NOW_MS, false)
+  assert.deepEqual(plain(lines), ['Riesgo alto de tormentas a las 18:00'])
+  assert.equal(lines[0].tone, 'storm')
+})
+
+test('tormenta con lluvia prevista: la tormenta encabeza y la lluvia acompaña', () => {
+  assert.deepEqual(
+    plain(buildVerdict(hourly({ 2: 1.2, 3: 2.0, 4: 0.6 }, { convective: { 4: 'high' } }) as never, NOW_MS, false)),
+    ['Riesgo alto de tormentas a las 18:00', 'Lluvia débil prevista de 16:00 a 18:00 · ≈ 4 mm en total'],
+  )
+})
+
+test('tormenta y llovizna posible: tampoco se dice "llovizna" bajo un riesgo alto', () => {
+  assert.deepEqual(plain(buildVerdict(hourly({}, { convective: { 4: 'severe' } }) as never, NOW_MS, true)), [
+    'Riesgo severo de tormentas a las 18:00',
+  ])
+})
 
 test('los datos duros del titular viajan marcados como hechos', () => {
   const [headline] = buildVerdict(hourly({ 2: 1.2, 3: 2.0, 4: 0.6 }) as never, NOW_MS, false)
@@ -143,7 +225,7 @@ test('ráfagas y tormentas: velocidad y hora son hechos', () => {
     ['55 km/h', '17:00'],
   )
   const storm = buildVerdict(hourly({}, { convective: { 4: 'high' } }) as never, NOW_MS, false)
-  assert.deepEqual(storm[1].segments.filter((s) => s.fact).map((s) => s.text), ['18:00'])
+  assert.deepEqual(storm[0].segments.filter((s) => s.fact).map((s) => s.text), ['18:00'])
 })
 
 test('"24 h" no se parte entre renglones', () => {
