@@ -17,3 +17,8 @@ test('toolSourceToModel: un backend anterior (con Windy) sigue mostrando su fuen
   assert.equal(toolSourceToModel('windy_ecmwf'), 'windy_ecmwf')
   assert.equal(toolSourceToModel('openmeteo_fallback'), 'openmeteo')
 })
+
+test('toolSourceToModel: Incendios de un backend anterior conserva su badge', () => {
+  assert.equal(toolSourceToModel('windy_gfs_estimated'), 'gfs')
+  assert.equal(toolSourceToModel('windy_firedanger'), 'windy_ecmwf')
+})
