@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { addDays, arDateKey, dayLabel, formatShortDate } from '../src/lib/dates.ts'
+import { addDays, arDateKey, dayLabel, formatShortDate, weekdayShort } from '../src/lib/dates.ts'
 
 test('arDateKey: el día es el de Buenos Aires, no el UTC', () => {
   // 03:23Z del 19/09 = 00:23 del 19/09 en Argentina
@@ -28,6 +28,15 @@ test('dayLabel: Hoy, Mañana y después el día de la semana', () => {
   assert.deepEqual(dayLabel('2026-09-20', '2026-09-19'), { title: 'Mañana', date: '20 sep' })
   assert.deepEqual(dayLabel('2026-09-21', '2026-09-19'), { title: 'lun', date: '21 sep' })
   assert.deepEqual(dayLabel('2026-10-01', '2026-09-19'), { title: 'jue', date: '1 oct' })
+})
+
+test('weekdayShort: el día de la semana en tres letras, sin "Hoy" ni "Mañana"', () => {
+  // 19/09/2026 es sábado: en un eje de siete días "Mañana" no entra en la banda de una barra
+  assert.equal(weekdayShort('2026-09-19'), 'sáb')
+  assert.equal(weekdayShort('2026-09-20'), 'dom')
+  assert.equal(weekdayShort('2026-09-21'), 'lun')
+  assert.equal(weekdayShort('2026-09-23'), 'mié')
+  assert.equal(weekdayShort('2026-10-01'), 'jue')
 })
 
 test('dayLabel: una fecha repetida de la semana se distingue por el número', () => {

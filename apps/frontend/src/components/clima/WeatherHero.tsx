@@ -5,13 +5,19 @@ import { WindArrow } from '@/components/ui/WindArrow'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import { cn } from '@/lib/utils'
 import { LEVEL_COLOR, type CriticalLevel } from '@/lib/smnAlertas'
+import { uvCategory, type UvLevel } from '@/lib/uvScale'
 import type { VerdictLine, VerdictTone } from '@/lib/weatherVerdict'
 import type { CurrentDetailed, DailyEntry } from '@/lib/api'
+import { ToolShortcuts } from './ToolShortcuts'
+import { windColor } from './windColor'
 
-/** Intensa: #ff7a66 (6,5:1 sobre la tarjeta); el rojo anterior, #e03535, llegaba a 3,75:1. */
-const WIND_COLOR: Record<string, string> = {
-  moderada: '#c8a84b',
-  intensa: '#ff7a66',
+/** La escala del UV usa la misma rampa que los avisos (verde, amarillo, naranja, rojo) y el violeta de la OMS para el extremo. */
+const UV_COLOR: Record<UvLevel, string> = {
+  bajo: LEVEL_COLOR.verde,
+  moderado: LEVEL_COLOR.amarillo,
+  alto: LEVEL_COLOR.naranja,
+  'muy-alto': LEVEL_COLOR.rojo,
+  extremo: '#c88bff',
 }
 
 const TONE: Record<Exclude<VerdictTone, 'alert'>, { Icon: LucideIcon; color: string }> = {
@@ -61,7 +67,7 @@ interface Props {
 
 export function WeatherHero({ current, today, verdict, severity = null, sources }: Props) {
   const glow = severity ? SEVERITY_GLOW[severity] : DEFAULT_GLOW
-  const windColor = current.wind_intensity ? (WIND_COLOR[current.wind_intensity] ?? 'var(--color-foreground)') : 'var(--color-foreground)'
+  const windTone = windColor(current.wind_intensity, 'var(--color-foreground)')
 
   return (
     <BorderGlow
@@ -173,23 +179,24 @@ export function WeatherHero({ current, today, verdict, severity = null, sources 
         {current.wind_speed_kmh !== null && (
           <span className="inline-flex items-center gap-1">
             Viento{' '}
-            <span className="font-medium" style={{ color: windColor }}>{Math.round(current.wind_speed_kmh)} km/h</span>
+            <span className="font-medium" style={{ color: windTone }}>{Math.round(current.wind_speed_kmh)} km/h</span>
             {current.wind_dir_deg !== null && current.wind_dir_deg !== undefined && (
-              <WindArrow deg={current.wind_dir_deg} size={14} color={windColor} />
+              <WindArrow deg={current.wind_dir_deg} size={14} color={windTone} />
             )}
             {current.wind_dir_cardinal && <span>{current.wind_dir_cardinal}</span>}
           </span>
         )}
-        {current.uv_index !== null && (
-          <span>
-            UV <span className="font-medium" style={{ color: 'var(--color-foreground)' }}>{Math.round(current.uv_index)}</span>
-          </span>
-        )}
+        {current.uv_index !== null && <UvReading index={current.uv_index} />}
       </p>
+
+      {/* Del dato a la decisión: las herramientas que usan este mismo pronóstico */}
+      <div className="mt-4">
+        <ToolShortcuts />
+      </div>
 
       {/* Pie: de dónde salen los datos y cuándo se midieron */}
       {(sources || current.observed_at) && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           {sources}
           {current.observed_at && (
             <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
@@ -200,5 +207,22 @@ export function WeatherHero({ current, today, verdict, severity = null, sources 
       )}
     </div>
     </BorderGlow>
+  )
+}
+
+/** "UV 7 · alto": el número solo no dice si hay que cuidarse; la palabra sale de la escala de la OMS. */
+function UvReading({ index }: { index: number }) {
+  const category = uvCategory(index)
+  return (
+    <span>
+      UV <span className="font-medium" style={{ color: 'var(--color-foreground)' }}>{Math.round(index)}</span>
+      {category && (
+        <>
+          <span aria-hidden="true"> · </span>
+          <span className="sr-only">, </span>
+          <span className="font-medium" style={{ color: UV_COLOR[category.level] }}>{category.label}</span>
+        </>
+      )}
+    </span>
   )
 }

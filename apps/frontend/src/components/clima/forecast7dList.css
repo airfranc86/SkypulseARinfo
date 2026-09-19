@@ -1,0 +1,62 @@
+/*
+ * Lista de 7 días: cada fila se reacomoda según el ancho de la lista, no el de la pantalla.
+ * Los cortes están en rem: con el texto del navegador al 150 o 200 % la lista pasa sola a la
+ * disposición apilada en vez de recortar la temperatura o la condición.
+ *
+ *   angosta   día · temperaturas / ícono · condición / datos      (celulares chicos, texto grande)
+ *   media     día | ícono | condición · datos | temperaturas      (celular normal)
+ *   ancha     todo en una línea                                    (escritorio)
+ */
+.forecast-list {
+  container-type: inline-size;
+}
+
+.day-row {
+  display: grid;
+  align-items: start;
+  column-gap: 0.75rem;
+  row-gap: 0.25rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    'day day temps'
+    'icon cond cond'
+    'meta meta meta';
+}
+
+.day-row[data-meta='false'] {
+  grid-template-areas:
+    'day day temps'
+    'icon cond cond';
+}
+
+.day-row__day { grid-area: day; }
+.day-row__temps { grid-area: temps; }
+.day-row__icon { grid-area: icon; align-self: center; }
+.day-row__cond { grid-area: cond; align-self: center; }
+.day-row__meta { grid-area: meta; }
+
+@container (min-width: 19rem) {
+  .day-row {
+    grid-template-columns: 3.25rem 2.5rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      'day icon cond temps'
+      'day icon meta meta';
+  }
+
+  .day-row[data-meta='false'] {
+    grid-template-areas: 'day icon cond temps';
+  }
+}
+
+@container (min-width: 36rem) {
+  .day-row {
+    align-items: center;
+    column-gap: 1rem;
+    grid-template-columns: 5rem 3rem 11rem minmax(0, 1fr) auto;
+    grid-template-areas: 'day icon cond meta temps';
+  }
+
+  .day-row[data-meta='false'] {
+    grid-template-areas: 'day icon cond meta temps';
+  }
+}
