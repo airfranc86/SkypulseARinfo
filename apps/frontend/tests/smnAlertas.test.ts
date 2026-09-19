@@ -1,6 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { alertLevel, criticalLevel, sortAlertas, vigenciaText } from '../src/lib/smnAlertas.ts'
+import {
+  alertLevel,
+  alertSummary,
+  criticalAlertas,
+  criticalLevel,
+  sortAlertas,
+  vigenciaText,
+} from '../src/lib/smnAlertas.ts'
 
 // Hora de referencia: 14:47 hora argentina (UTC-3) del viernes 18/09/2026.
 const NOW_MS = Date.UTC(2026, 8, 18, 17, 47)
@@ -40,6 +47,28 @@ test('criticalLevel: solo naranja y rojo cambian el peso del héroe', () => {
   assert.equal(criticalLevel([alerta('amarillo'), alerta('verde')]), null)
   assert.equal(criticalLevel([alerta('amarillo'), alerta('naranja')]), 'naranja')
   assert.equal(criticalLevel([alerta('naranja'), alerta('rojo'), alerta('amarillo')]), 'rojo')
+})
+
+test('criticalAlertas: solo naranja y rojo, del más grave al menos grave', () => {
+  const input = [alerta('amarillo', { tipo: 'A' }), alerta('naranja', { tipo: 'B' }), alerta('rojo', { tipo: 'C' }), alerta('verde')]
+  assert.deepEqual(criticalAlertas(input).map((a) => a.tipo), ['C', 'B'])
+  assert.deepEqual(criticalAlertas([alerta('amarillo')]), [])
+  assert.deepEqual(criticalAlertas([]), [])
+})
+
+test('alertSummary: una oración por aviso crítico, para el lector de pantalla', () => {
+  const input = [
+    alerta('naranja', { tipo: 'Viento', hasta: '2026-09-20T02:00:00Z' }),
+    alerta('rojo', { tipo: 'Tormentas', hasta: '2026-09-19T00:00:00Z' }),
+    alerta('amarillo', { tipo: 'Lluvias' }),
+  ]
+  assert.equal(
+    alertSummary(input, NOW_MS),
+    'Aviso rojo del SMN: Tormentas, hasta las 21:00. Aviso naranja del SMN: Viento, hasta el sáb 23:00.',
+  )
+  assert.equal(alertSummary([alerta('rojo', { tipo: 'Tormentas' })], NOW_MS), 'Aviso rojo del SMN: Tormentas.')
+  assert.equal(alertSummary([alerta('amarillo')], NOW_MS), '')
+  assert.equal(alertSummary([], NOW_MS), '')
 })
 
 test('vigenciaText: hasta hoy → hora; otro día → día y hora (hora argentina)', () => {

@@ -19,7 +19,9 @@ export function FadeContent({ children, delay = 0, className }: FadeContentProps
   // Con movimiento reducido el contenido aparece sin desplazamiento ni transición.
   const style: CSSProperties = {
     opacity: visible ? 1 : 0,
-    transform: visible || reducedMotion ? 'translateY(0)' : 'translateY(8px)',
+    // `none` y no `translateY(0)`: cualquier transform, aunque sea identidad, vuelve a este div el bloque
+    // contenedor de los descendientes con position:fixed.
+    transform: visible || reducedMotion ? 'none' : 'translateY(8px)',
     transition: reducedMotion ? 'none' : 'opacity 0.4s ease, transform 0.4s ease',
   }
 

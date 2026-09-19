@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react'
+import { createPortal } from 'react-dom'
 import { Info } from 'lucide-react'
 
 export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'smn_openmeteo' | 'mixed' | 'segemar' | 'consensus'
@@ -111,15 +112,22 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  const popoverId = useId()
   const meta = MODELS[model]
 
   useEffect(() => {
     if (!open) return
     const onClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      // El popover vive en un portal (fuera del wrapper del botón): un clic adentro no es "afuera".
+      const target = e.target as Node
+      const inside = ref.current?.contains(target) || popoverRef.current?.contains(target)
+      if (!inside) setOpen(false)
     }
     const onEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key !== 'Escape') return
+      setOpen(false)
+      buttonRef.current?.focus()
     }
     // Con el popover en position:fixed (para poder salir del recorte de tarjetas
     // con overflow-x:auto), el scroll lo dejaría "flotando" desconectado del botón.
@@ -145,7 +153,9 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           type="button"
           onClick={() => setOpen(v => !v)}
           aria-label={`Modelo de datos: ${meta.label} · ${meta.org}. Tap para más info.`}
+          aria-haspopup="dialog"
           aria-expanded={open}
+          aria-controls={open ? popoverId : undefined}
           className="text-[10px] font-medium px-2 py-1 rounded-full flex items-center gap-1 min-h-[44px] transition-opacity hover:opacity-100"
           style={{
             background: `${meta.color}1f`,
@@ -157,7 +167,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           <span aria-hidden="true" style={{ fontSize: '0.5rem' }}>●</span>
           {meta.label}
         </button>
-        {open && <ModelPopover meta={meta} triggerRef={buttonRef} />}
+        {open && <ModelPopover id={popoverId} popRef={popoverRef} meta={meta} triggerRef={buttonRef} />}
       </div>
     )
   }
@@ -170,7 +180,9 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           type="button"
           onClick={() => setOpen(v => !v)}
           aria-label={`Modelo: ${meta.label} · ${meta.org}. Tap para más info.`}
+          aria-haspopup="dialog"
           aria-expanded={open}
+          aria-controls={open ? popoverId : undefined}
           className="text-[11px] font-medium px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 min-h-[44px] transition-opacity hover:opacity-100"
           style={{
             background: `${meta.color}14`,
@@ -184,7 +196,7 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
           <span style={{ color: meta.color, opacity: 0.65 }}>· {meta.org}</span>
           <Info size={10} aria-hidden="true" style={{ opacity: 0.5 }} />
         </button>
-        {open && <ModelPopover meta={meta} triggerRef={buttonRef} />}
+        {open && <ModelPopover id={popoverId} popRef={popoverRef} meta={meta} triggerRef={buttonRef} />}
       </div>
     )
   }
@@ -193,12 +205,23 @@ export function ModelBadge({ model, variant = 'inline' }: Props) {
 }
 
 /**
- * Posición calculada contra el trigger real y clampeada a los bordes del
- * viewport (position:fixed) — con `left`/`right` fijos por variant, el popover
- * de 256px se salía de pantalla en mobile cuando el botón caía cerca de un borde.
+ * Posición calculada contra el trigger real y clampeada a los bordes del viewport (position:fixed).
+ *
+ * Se renderiza en un portal a `body`: con `position:fixed`, cualquier ancestro con `transform`
+ * (FadeContent, BorderGlow) pasa a ser el bloque contenedor y el popover aparecía a cientos de
+ * píxeles del botón. Al abrir recibe el foco (queda anunciado como diálogo); con Escape vuelve al botón.
  */
-function ModelPopover({ meta, triggerRef }: { meta: ModelMeta; triggerRef: React.RefObject<HTMLButtonElement | null> }) {
-  const popRef = useRef<HTMLDivElement>(null)
+function ModelPopover({
+  id,
+  meta,
+  triggerRef,
+  popRef,
+}: {
+  id: string
+  meta: ModelMeta
+  triggerRef: React.RefObject<HTMLButtonElement | null>
+  popRef: React.RefObject<HTMLDivElement | null>
+}) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
 
   useLayoutEffect(() => {
@@ -212,14 +235,21 @@ function ModelPopover({ meta, triggerRef }: { meta: ModelMeta; triggerRef: React
     const maxLeft = Math.max(margin, window.innerWidth - popWidth - margin)
     const left = Math.min(Math.max(triggerRect.left, margin), maxLeft)
     setPos({ top: triggerRect.bottom + gap, left })
-  }, [triggerRef])
+  }, [triggerRef, popRef])
 
-  return (
+  // Ya posicionado y visible: el foco pasa al diálogo.
+  useEffect(() => {
+    if (pos) popRef.current?.focus({ preventScroll: true })
+  }, [pos, popRef])
+
+  return createPortal(
     <div
       ref={popRef}
+      id={id}
       role="dialog"
       aria-label={`Información sobre ${meta.label}`}
-      className="fixed w-64 max-w-[calc(100vw-2rem)] rounded-xl p-3 text-xs shadow-xl z-50"
+      tabIndex={-1}
+      className="fixed w-64 max-w-[calc(100vw-2rem)] rounded-xl p-3 text-xs shadow-xl z-50 outline-none"
       style={{
         background: 'var(--color-card)',
         border: `1px solid ${meta.color}55`,
@@ -259,6 +289,7 @@ function ModelPopover({ meta, triggerRef }: { meta: ModelMeta; triggerRef: React
           )}
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   )
 }
