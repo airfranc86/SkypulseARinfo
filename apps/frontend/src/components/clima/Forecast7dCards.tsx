@@ -2,6 +2,7 @@ import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import { describeWeatherIcon, precipKind } from '@/lib/weatherLabels'
 import { RainPill } from './RainPill'
+import { ConfidenceChip } from './ConfidenceChip'
 import type { DailyEntry } from '@/lib/api'
 
 const HIGHLIGHT_COLOR = '200,168,75' // primary gold (RGB para componer alpha)
@@ -47,8 +48,6 @@ function DayCard({ day, highlighted = false, rainWindow, showConfidence }: DayCa
   const condition = describeWeatherIcon(day.icon)
   // El tipo sale del ícono: con nieve, "🌧 40%" contaba otra historia.
   const precipLabel = precipKind(day.icon) ?? 'Lluvia'
-  // ALTA no se anuncia: con un solo modelo el backend la fija en 100, así que solo el aviso es informativo.
-  const lowConfidence = showConfidence && day.confidence_label !== 'ALTA'
 
   return (
     <div
@@ -102,17 +101,7 @@ function DayCard({ day, highlighted = false, rainWindow, showConfidence }: DayCa
       {/* Precip prob */}
       {hasPrecip && <RainPill kind={precipLabel} pct={day.precip_prob ?? 0} window={rainWindow} />}
 
-      {lowConfidence && (
-        <span
-          className="text-[11px] px-2 py-0.5 rounded-full"
-          style={{
-            border: '1px solid var(--color-border)',
-            color: day.confidence_label === 'BAJA' ? 'var(--color-watch)' : 'var(--color-muted-foreground)',
-          }}
-        >
-          Confianza {day.confidence_label === 'BAJA' ? 'baja' : 'media'}
-        </span>
-      )}
+      {showConfidence && <ConfidenceChip label={day.confidence_label} />}
 
       {/* Viento — siempre visible si hay dato */}
       {day.wind_speed_max !== null && (

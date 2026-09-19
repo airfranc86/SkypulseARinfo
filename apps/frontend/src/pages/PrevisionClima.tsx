@@ -43,6 +43,11 @@ function dashboardErrorMessage(error: Error): string {
 export function PrevisionClima({ location }: Props) {
   const [forecastModel, setForecastModel] = useState<ForecastModel>('consensus')
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
+  // Modelo de los datos que hay en pantalla. Mientras llega el pedido nuevo (`isPlaceholderData`)
+  // siguen los días del modelo anterior: el badge y la confianza deben nombrar ese, no el que se
+  // acaba de tocar. Se actualiza al llegar el dato (derivado durante el render, sin efecto).
+  const [shownModel, setShownModel] = useState<ForecastModel>(forecastModel)
+  if (data && !isPlaceholderData && shownModel !== forecastModel) setShownModel(forecastModel)
   const { data: alertasData, isError: alertasError } = useSmnAlertas()
   const reducedMotion = useReducedMotion()
 
@@ -144,7 +149,11 @@ export function PrevisionClima({ location }: Props) {
             </div>
 
             {/* Los próximos 3 días, sin abrir el detalle */}
-            <NextDays days={data.forecast_7d.slice(1, 4)} rainWindows={rainWindows} />
+            <NextDays
+              days={data.forecast_7d.slice(1, 4)}
+              rainWindows={rainWindows}
+              showConfidence={shownModel === 'consensus'}
+            />
 
             {/* Profundidad plegable: sol/luna, hora a hora, 7 días */}
             <button
@@ -199,6 +208,7 @@ export function PrevisionClima({ location }: Props) {
                   <Forecast7d
                     days={data.forecast_7d}
                     selectedModel={forecastModel}
+                    shownModel={shownModel}
                     onModelChange={setForecastModel}
                     refreshing={isPlaceholderData}
                     rainWindows={rainWindows}

@@ -20,7 +20,10 @@ const MODEL_BADGE_KEY: Record<ForecastModel, ModelKey> = {
 interface Props {
   days: DailyEntry[]
   badge?: ReactNode
+  /** El modelo elegido en el selector (responde al instante al clic). */
   selectedModel: ForecastModel
+  /** El modelo de los días que hay en pantalla: difiere de `selectedModel` mientras llega el nuevo. */
+  shownModel: ForecastModel
   onModelChange: (m: ForecastModel) => void
   /** Llegó otro modelo y todavía se muestran los días del anterior. */
   refreshing?: boolean
@@ -45,7 +48,7 @@ const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
 const SEGMENT_BASE = 'px-3.5 py-2 min-h-[44px] rounded-md text-xs font-medium transition-colors'
 const SEGMENT_ACTIVE = { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
 
-export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshing = false, rainWindows }: Props) {
+export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChange, refreshing = false, rainWindows }: Props) {
   const [view, setView] = useState<View>('cards')
   const modelLabel = MODEL_OPTIONS.find(({ id }) => id === selectedModel)?.label ?? selectedModel
 
@@ -66,7 +69,8 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshi
           >
             Pronóstico 7 días
           </h2>
-          <ModelBadge model={MODEL_BADGE_KEY[selectedModel]} variant="header" />
+          {/* El badge nombra de dónde salen los días que se ven, no lo que se acaba de tocar */}
+          <ModelBadge model={MODEL_BADGE_KEY[shownModel]} variant="header" />
           {badge}
         </div>
 
@@ -149,7 +153,7 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshi
       {/* Vista activa */}
       <div className="p-4" aria-busy={refreshing} style={{ opacity: refreshing ? 0.55 : 1 }}>
         {view === 'cards' && (
-          <Forecast7dCards days={days} rainWindows={rainWindows} showConfidence={selectedModel === 'consensus'} />
+          <Forecast7dCards days={days} rainWindows={rainWindows} showConfidence={shownModel === 'consensus'} />
         )}
         {view === 'table' && <Forecast7dTable days={days} />}
         {view === 'chart' && <Forecast7dChart days={days} />}

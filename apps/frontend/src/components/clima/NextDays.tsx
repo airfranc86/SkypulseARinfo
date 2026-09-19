@@ -1,6 +1,7 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { describeWeatherIcon, precipKind } from '@/lib/weatherLabels'
 import { RainPill } from './RainPill'
+import { ConfidenceChip } from './ConfidenceChip'
 import type { DailyEntry } from '@/lib/api'
 
 interface NextDaysProps {
@@ -8,12 +9,14 @@ interface NextDaysProps {
   days: DailyEntry[]
   /** Franja con lluvia prevista por fecha, cuando hay horas para calcularla. */
   rainWindows: Record<string, string>
+  /** Solo el consenso mide desacuerdo entre modelos (ver ConfidenceChip). */
+  showConfidence?: boolean
 }
 
 const PILL_MIN_PROB = 15
 
 /** Los próximos días de un vistazo, sin abrir el detalle: un solo panel, una columna por día. */
-export function NextDays({ days, rainWindows }: NextDaysProps) {
+export function NextDays({ days, rainWindows, showConfidence = false }: NextDaysProps) {
   if (days.length === 0) return null
 
   return (
@@ -55,6 +58,7 @@ export function NextDays({ days, rainWindows }: NextDaysProps) {
                 window={rainWindows[day.date]}
               />
             )}
+            {showConfidence && <ConfidenceChip label={day.confidence_label} />}
           </div>
         )
       })}

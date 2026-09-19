@@ -5,7 +5,8 @@
  * in each SVG file work in the browser (they would be silently stripped in
  * <img> tags due to browser security restrictions).
  */
-import type { SVGProps } from 'react'
+import { useLayoutEffect, useRef, type SVGProps } from 'react'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 
 import ClearDay            from '@/assets/meteocons/clear-day.svg?react'
 import ClearNight          from '@/assets/meteocons/clear-night.svg?react'
@@ -142,14 +143,36 @@ function glowFilter(code: string): string | undefined {
   return undefined
 }
 
+/**
+ * Cuadro (en segundos) en el que se congela el ícono con movimiento reducido. A t = 0 las gotas de
+ * lluvia y los copos están en opacidad 0; a 0,45 s hay dos a mitad de caída.
+ */
+const REST_FRAME_S = 0.45
+
 export function WeatherIcon({ code, size = 48, className, isDay = true, glow = false, label }: WeatherIconProps) {
   const IconComponent = ICON_MAP[code] ?? (isDay ? ClearDay : ClearNight)
+  const svgRef = useRef<SVGSVGElement>(null)
+  const reducedMotion = useReducedMotion()
   const a11y: SVGProps<SVGSVGElement> = label
     ? { role: 'img', 'aria-label': label }
     : { 'aria-hidden': true }
 
+  // Los Meteocons animan con SMIL, que ignora prefers-reduced-motion: se pausan en un cuadro
+  // donde el fenómeno (gotas, copos, rayo) se ve. Al volver a permitir movimiento, se reanudan.
+  useLayoutEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    if (reducedMotion) {
+      svg.setCurrentTime(REST_FRAME_S)
+      svg.pauseAnimations()
+    } else {
+      svg.unpauseAnimations()
+    }
+  }, [reducedMotion, code])
+
   return (
     <IconComponent
+      ref={svgRef}
       width={size}
       height={size}
       className={className}
