@@ -1,19 +1,20 @@
-"""Tests de integración para el router GET /api/tools/*."""
+"""Tests de integración para el router GET /api/tools/*.
+
+Las herramientas salen de la serie horaria de Open-Meteo (la misma del dashboard). Windy, cuya key del
+plan Testing devuelve datos mezclados al azar, ya no interviene: `TestToolsDoNotUseWindy` lo vigila.
+"""
 from __future__ import annotations
 
-import pytest
-import time
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from httpx import AsyncClient
 
-from app.schemas.weather import WeatherCurrentResponse, SourceMeta
-from app.services.openmeteo import HourlyForecastData
-from app.services.windy import (
-    WindyDailyEntry,
-    WindyHourlyEntry,
-    WindyNotConfiguredError,
-)
+from app.schemas.weather import SourceMeta, WeatherCurrentResponse
+from tests.hourly_fixtures import make_uniform_hourly
+
+HOURLY = "app.routers.tools.get_hourly_forecast_ext"
 
 
 # ---------------------------------------------------------------------------
@@ -49,32 +50,8 @@ def _make_weather_response(
     )
 
 
-def _make_hourly_forecast(
-    n: int = 48,
-    temp_c: float = 22.0,
-    humidity: float = 55.0,
-    precip: float = 0.0,
-    wind_speed: float = 15.0,
-    temp_850: float | None = 8.0,
-    elevation_m: float = 25.0,
-    weather_code: int | None = None,
-) -> HourlyForecastData:
-    """Construye un HourlyForecastData sintético con n horas."""
-    base_ts = int(time.time()) + 3600  # 1h en el futuro — _filter_future conserva todos los slots
-    base_hour = datetime.fromtimestamp(base_ts, tz=timezone.utc).hour
-    timestamps = [base_ts + i * 3600 for i in range(n)]
-    hour_labels = [f"{(base_hour + i) % 24:02d}:00" for i in range(n)]
-    return HourlyForecastData(
-        timestamps=timestamps,
-        hour_labels=hour_labels,
-        temps_c=[temp_c] * n,
-        humidities=[humidity] * n,
-        precipitations=[precip] * n,
-        wind_speeds_kmh=[wind_speed] * n,
-        temps_850hpa=[temp_850] * n,
-        elevation_m=elevation_m,
-        weather_codes=[weather_code] * n,
-    )
+def _patch_hourly(forecast):
+    return patch(HOURLY, new_callable=AsyncMock, return_value=forecast)
 
 
 # ---------------------------------------------------------------------------
@@ -87,17 +64,9 @@ class TestTenderRopa:
     @pytest.mark.integration
     async def test_happy_path_returns_200(self, async_client: AsyncClient):
         """Datos de forecast completos → 200 con ToolResult válido."""
-        forecast = _make_hourly_forecast(
-            temp_c=25.0, humidity=50.0, precip=0.0, wind_speed=15.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
+        forecast = make_uniform_hourly(temp_c=25.0, humidity=50.0, precip=0.0, wind=15.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
 
         assert response.status_code == 200
         data = response.json()
@@ -112,19 +81,19 @@ class TestTenderRopa:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_source_is_open_meteo(self, async_client: AsyncClient):
+        with _patch_hourly(make_uniform_hourly()):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
+
+        assert response.json()["source"] == "openmeteo"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_hourly_has_is_best_flag(self, async_client: AsyncClient):
         """Al menos una hora debe tener is_best=True si hay puntajes altos."""
-        forecast = _make_hourly_forecast(
-            temp_c=25.0, humidity=50.0, precip=0.0, wind_speed=15.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
+        forecast = make_uniform_hourly(temp_c=25.0, humidity=50.0, precip=0.0, wind=15.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
 
         data = response.json()
         best_hours = [h for h in data["hourly"] if h["is_best"]]
@@ -132,16 +101,44 @@ class TestTenderRopa:
 
     @pytest.mark.asyncio
     @pytest.mark.integration
+    async def test_the_strip_starts_at_the_current_slot_and_is_in_order(self, async_client: AsyncClient):
+        with _patch_hourly(make_uniform_hourly()):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
+
+        stamps = [h["timestamp"] for h in response.json()["hourly"]]
+        now = datetime.now(timezone.utc).timestamp()
+        assert stamps == sorted(stamps)
+        assert stamps[0] > now - 1800 - 5      # ninguna franja terminó hace más de media hora
+        assert stamps[1] - stamps[0] == 3 * 3600
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_current_conditions_come_from_the_forecast(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=27.0, humidity=41.0, wind=12.0, precip=0.5)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
+
+        data = response.json()
+        assert data["temp"] == pytest.approx(27.0)
+        assert data["humidity"] == pytest.approx(41.0)
+        assert data["wind_speed"] == pytest.approx(12.0)
+        assert data["precip"] == pytest.approx(3.0)      # 0,5 mm por hora, las próximas 6 h
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_forecast_none_returns_503(self, async_client: AsyncClient):
         """Cuando forecast retorna None → 503 con detail='forecast_unavailable'."""
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=None,
-        ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
+        with _patch_hourly(None):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "forecast_unavailable"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_empty_forecast_returns_503(self, async_client: AsyncClient):
+        with _patch_hourly(make_uniform_hourly(hours=0)):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
 
         assert response.status_code == 503
         assert response.json()["detail"] == "forecast_unavailable"
@@ -165,116 +162,80 @@ class TestTenderRopa:
     @pytest.mark.integration
     async def test_best_window_present_when_high_score(self, async_client: AsyncClient):
         """Con condiciones ideales, best_window debe estar presente."""
-        forecast = _make_hourly_forecast(
-            temp_c=25.0, humidity=50.0, precip=0.0, wind_speed=15.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
+        forecast = make_uniform_hourly(temp_c=25.0, humidity=50.0, precip=0.0, wind=15.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
 
-        data = response.json()
-        # Con score >= 70 en todas las horas, debe haber best_window
-        assert data["best_window"] is not None
+        # Con score >= 70 en todas las franjas, debe haber best_window
+        assert response.json()["best_window"] is not None
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_best_window_none_when_all_low_score(self, async_client: AsyncClient):
-        """Con condiciones malas en todas las horas, best_window = None."""
-        forecast = _make_hourly_forecast(
-            temp_c=5.0, humidity=90.0, precip=5.0, wind_speed=30.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
+        """Con condiciones malas en todas las franjas, best_window = None."""
+        forecast = make_uniform_hourly(temp_c=5.0, humidity=90.0, precip=5.0, wind=30.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
+
+        assert response.json()["best_window"] is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_storm_code_in_the_next_hours_overrides_perfect_conditions(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=25.0, humidity=45.0, wind=12.0, weather_code=95)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
 
         data = response.json()
-        assert data["best_window"] is None
+        assert data["label"] == "No apto"
+        assert "tormenta" in data["headline"].lower()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_high_cape_overrides_perfect_conditions(self, async_client: AsyncClient):
+        """El CAPE de Open-Meteo (1000 J/kg o más) también vetea, como antes con el de Windy."""
+        forecast = make_uniform_hourly(temp_c=25.0, humidity=45.0, wind=12.0, cape=1500.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
+
+        assert response.json()["label"] == "No apto"
 
 
-class TestTenderRopaWindyPath:
-    """Cuando Windy GFS está disponible, tender-ropa debe preferirlo (antes solo usaba Open-Meteo).
+class TestToolsDoNotUseWindy:
+    """Con Windy "configurado y sano", ninguna herramienta lo consulta: sus datos vienen mezclados.
 
-    Vive antes de TestRateLimiting a propósito: ese test agota el cupo de
-    /tender-ropa para el resto de la sesión (el limiter no se resetea entre tests).
+    Vive antes de TestRateLimiting a propósito: ese test agota el cupo de /tender-ropa para el
+    resto de la sesión (el limiter no se resetea entre tests).
     """
 
     @pytest.mark.asyncio
     @pytest.mark.integration
-    async def test_uses_windy_when_available(
-        self, async_client: AsyncClient, monkeypatch
-    ):
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/tools/tender-ropa?lat=-34.6&lon=-58.4",
+            "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4",
+            "/api/tools/lavar-coche?lat=-34.6&lon=-58.4",
+            "/api/tools/cota-de-nieve?lat=-34.6&lon=-58.4",
+        ],
+    )
+    async def test_windy_is_never_called(self, async_client: AsyncClient, monkeypatch, path: str):
         import app.core.config as cfg
+
         monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        windy_hourly = _make_windy_hourly(24)
         with patch(
-            "app.routers.tools.windy_get_hourly_forecast",
+            "app.services.windy.fetch_raw",
             new_callable=AsyncMock,
-            return_value=windy_hourly,
+            side_effect=AssertionError("las herramientas no deben consultar Windy"),
+        ) as windy, _patch_hourly(make_uniform_hourly()), patch(
+            "app.routers.tools.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=_make_weather_response(),
         ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
+            response = await async_client.get(path)
 
         assert response.status_code == 200
-        data = response.json()
-        assert data["source"] == "windy_gfs"
-        assert data["tool"] == "tender-ropa"
-        assert len(data["hourly"]) <= 24
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_falls_back_to_openmeteo_when_windy_errors(
-        self, async_client: AsyncClient, monkeypatch
-    ):
-        import app.core.config as cfg
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        forecast = _make_hourly_forecast(temp_c=25.0, humidity=50.0, precip=0.0)
-        with patch(
-            "app.routers.tools.windy_get_hourly_forecast",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("windy down"),
-        ), patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
-
-        assert response.status_code == 200
-        assert response.json()["source"] == "openmeteo_fallback"
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_uses_openmeteo_when_windy_not_configured(
-        self, async_client: AsyncClient
-    ):
-        # disable_windy_by_default ya garantiza windy_api_key vacío
-        forecast = _make_hourly_forecast(temp_c=25.0, humidity=50.0, precip=0.0)
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/tender-ropa?lat=-34.6&lon=-58.4"
-            )
-
-        assert response.status_code == 200
-        assert response.json()["source"] == "openmeteo_fallback"
+        windy.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -379,16 +340,9 @@ class TestCotaDeNieve:
     @pytest.mark.integration
     async def test_andina_returns_three_methods(self, async_client: AsyncClient):
         """Zona andina con temp_850 disponible → 3 métodos + average."""
-        forecast = _make_hourly_forecast(
-            temp_c=10.0, humidity=60.0, precip=0.0, wind_speed=10.0,
-            temp_850=5.0, elevation_m=750.0,
-        )
+        forecast = make_uniform_hourly(temp_c=10.0, temp_850=5.0, elevation_m=750.0)
         weather = _make_weather_response(temp_c=10.0)
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ), patch(
+        with _patch_hourly(forecast), patch(
             "app.routers.tools.aggregate_current",
             new_callable=AsyncMock,
             return_value=weather,
@@ -404,18 +358,29 @@ class TestCotaDeNieve:
         assert data["m850_hpa_m"] is not None
         assert data["average_m"] >= 0
         assert data["description"]
+        assert data["source"] == "openmeteo"
+        assert data["station_altitude_m"] == pytest.approx(750.0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_uses_the_850_hpa_temperature_of_the_current_hour(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_850=5.0, elevation_m=750.0)
+        with _patch_hourly(forecast), patch(
+            "app.routers.tools.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=_make_weather_response(temp_c=10.0),
+        ):
+            response = await async_client.get("/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0")
+
+        # 1500 m + (5 °C / 6,5 °C/km) = 2269,2 m
+        assert response.json()["m850_hpa_m"] == pytest.approx(2269.2, abs=0.1)
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_weather_unavailable_returns_503(self, async_client: AsyncClient):
         """Cuando weather falla → 503."""
         from fastapi import HTTPException
-        forecast = _make_hourly_forecast()
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ), patch(
+        with _patch_hourly(make_uniform_hourly()), patch(
             "app.routers.tools.aggregate_current",
             new_callable=AsyncMock,
             side_effect=HTTPException(status_code=503, detail="all_sources_unavailable"),
@@ -439,26 +404,53 @@ class TestCotaDeNieve:
     @pytest.mark.integration
     async def test_elevation_none_uses_zero(self, async_client: AsyncClient):
         """Si elevation_m es None en el forecast, station_altitude_m = 0.0."""
-        forecast = _make_hourly_forecast(elevation_m=None)
-        # Need to rebuild with elevation_m None
-        import dataclasses
-        forecast = dataclasses.replace(forecast, elevation_m=None)
-        weather = _make_weather_response(temp_c=15.0)
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ), patch(
+        forecast = make_uniform_hourly(elevation_m=None)
+        with _patch_hourly(forecast), patch(
             "app.routers.tools.aggregate_current",
             new_callable=AsyncMock,
-            return_value=weather,
+            return_value=_make_weather_response(temp_c=15.0),
         ):
             response = await async_client.get(
                 "/api/tools/cota-de-nieve?lat=-34.6&lon=-58.4"
             )
 
         assert response.status_code == 200
+        assert response.json()["station_altitude_m"] == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_source_unavailable_when_temp_850_missing(self, async_client: AsyncClient):
+        """Sin temp_850 en Open-Meteo → source = unavailable y solo dos métodos."""
+        forecast = make_uniform_hourly(temp_850=None, elevation_m=750.0)
+        with _patch_hourly(forecast), patch(
+            "app.routers.tools.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=_make_weather_response(temp_c=10.0),
+        ):
+            response = await async_client.get(
+                "/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0"
+            )
+
+        assert response.status_code == 200
         data = response.json()
+        assert data["source"] == "unavailable"
+        assert data["m850_hpa_m"] is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_forecast_down_still_answers_with_the_two_surface_methods(self, async_client: AsyncClient):
+        """Si Open-Meteo horario falla, la cota se estima con la temperatura actual y altitud 0."""
+        with _patch_hourly(None), patch(
+            "app.routers.tools.aggregate_current",
+            new_callable=AsyncMock,
+            return_value=_make_weather_response(temp_c=10.0),
+        ):
+            response = await async_client.get("/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "unavailable"
+        assert data["m850_hpa_m"] is None
         assert data["station_altitude_m"] == pytest.approx(0.0)
 
 
@@ -472,17 +464,9 @@ class TestHacerDeporte:
     @pytest.mark.integration
     async def test_happy_path_returns_200(self, async_client: AsyncClient):
         """Condiciones favorables → 200 con ToolResult válido."""
-        forecast = _make_hourly_forecast(
-            temp_c=20.0, humidity=50.0, precip=0.0, wind_speed=10.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
+        forecast = make_uniform_hourly(temp_c=20.0, humidity=50.0, precip=0.0, wind=10.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
 
         assert response.status_code == 200
         data = response.json()
@@ -491,19 +475,27 @@ class TestHacerDeporte:
         assert data["label"] in ("Excelente", "Bueno", "Regular", "No apto")
         assert isinstance(data["hourly"], list)
         assert len(data["hourly"]) == 12
+        assert data["source"] == "openmeteo"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_current_conditions_come_from_the_forecast(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=19.0, humidity=48.0, wind=9.0, precip=0.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
+
+        data = response.json()
+        assert data["temp"] == pytest.approx(19.0)
+        assert data["humidity"] == pytest.approx(48.0)
+        assert data["wind_speed"] == pytest.approx(9.0)
+        assert data["precip"] == pytest.approx(0.0)
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_forecast_none_returns_503(self, async_client: AsyncClient):
         """Forecast None → 503."""
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=None,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
+        with _patch_hourly(None):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
 
         assert response.status_code == 503
         assert response.json()["detail"] == "forecast_unavailable"
@@ -512,9 +504,7 @@ class TestHacerDeporte:
     @pytest.mark.integration
     async def test_outside_argentina_returns_422(self, async_client: AsyncClient):
         """Coordenadas fuera de Argentina → 422."""
-        response = await async_client.get(
-            "/api/tools/hacer-deporte?lat=-60&lon=-58.4"
-        )
+        response = await async_client.get("/api/tools/hacer-deporte?lat=-60&lon=-58.4")
         assert response.status_code == 422
         assert response.json()["error"] == "outside_argentina"
 
@@ -522,17 +512,9 @@ class TestHacerDeporte:
     @pytest.mark.integration
     async def test_best_window_when_high_score(self, async_client: AsyncClient):
         """Con score alto, best_window debe ser la mejor hora."""
-        forecast = _make_hourly_forecast(
-            temp_c=20.0, humidity=50.0, precip=0.0, wind_speed=10.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
+        forecast = make_uniform_hourly(temp_c=20.0, humidity=50.0, precip=0.0, wind=10.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
 
         data = response.json()
         # Con score >= 40, best_window debe existir (formato "A las HH:MM")
@@ -542,65 +524,119 @@ class TestHacerDeporte:
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_best_window_none_when_all_low(self, async_client: AsyncClient):
-        """Con score < 40 en todas las horas, best_window = None."""
-        forecast = _make_hourly_forecast(
-            temp_c=5.0, humidity=90.0, precip=5.0, wind_speed=30.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
+        """Con score < 40 en todas las franjas, best_window = None."""
+        forecast = make_uniform_hourly(temp_c=5.0, humidity=90.0, precip=5.0, wind=30.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
 
-        data = response.json()
-        assert data["best_window"] is None
+        assert response.json()["best_window"] is None
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_hourly_has_is_best_flag(self, async_client: AsyncClient):
-        """Exactamente una hora tiene is_best=True (la de mayor score)."""
-        forecast = _make_hourly_forecast(
-            temp_c=20.0, humidity=50.0, precip=0.0, wind_speed=10.0
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
+        """Exactamente una franja tiene is_best=True (la de mayor score)."""
+        forecast = make_uniform_hourly(temp_c=20.0, humidity=50.0, precip=0.0, wind=10.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
 
-        data = response.json()
-        best_hours = [h for h in data["hourly"] if h["is_best"]]
+        best_hours = [h for h in response.json()["hourly"] if h["is_best"]]
         assert len(best_hours) == 1
 
     @pytest.mark.asyncio
     @pytest.mark.integration
     async def test_storm_forecast_overrides_perfect_conditions(self, async_client: AsyncClient):
         """
-        Cableado end-to-end del veto de tormenta: weather_code=95 en el
-        forecast real que llega al router debe forzar "No apto" pese a que
-        temperatura/humedad/viento sean ideales — el bug reportado en vivo.
+        Cableado end-to-end del veto de tormenta: weather_code=95 en el forecast que llega al router
+        debe forzar "No apto" pese a que temperatura/humedad/viento sean ideales — el bug reportado
+        en vivo.
         """
-        forecast = _make_hourly_forecast(
-            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed=10.0, weather_code=95,
-        )
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
+        forecast = make_uniform_hourly(temp_c=18.0, humidity=50.0, precip=0.0, wind=10.0, weather_code=95)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
 
         data = response.json()
         assert data["label"] == "No apto"
         assert "tormenta" in data["headline"].lower()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_high_cape_overrides_perfect_conditions(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=18.0, humidity=50.0, precip=0.0, wind=10.0, cape=1500.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/hacer-deporte?lat=-34.6&lon=-58.4")
+
+        assert response.json()["label"] == "No apto"
+
+
+# ---------------------------------------------------------------------------
+# /api/tools/lavar-coche
+# ---------------------------------------------------------------------------
+
+class TestLavarCoche:
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_five_days_from_open_meteo_with_one_best(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=22.0, humidity=50.0, precip=0.0, wind=10.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/lavar-coche?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "openmeteo"
+        assert len(data["days"]) == 5
+        assert len([d for d in data["days"] if d["is_best"]]) == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_a_day_carries_the_totals_and_the_wind_max_of_its_hours(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=22.0, humidity=50.0, precip=0.0, wind=18.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/lavar-coche?lat=-34.6&lon=-58.4")
+
+        day = response.json()["days"][0]
+        assert day["temp_max_c"] == pytest.approx(22.0)
+        assert day["temp_min_c"] == pytest.approx(22.0)
+        assert day["humidity"] == pytest.approx(50.0)
+        assert day["wind_speed_kmh"] == pytest.approx(18.0)
+        assert day["precip_mm"] == pytest.approx(0.0)
+        assert day["day_label"] == day["day_label"].lower()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_a_rainy_series_is_not_a_good_day_to_wash(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=22.0, humidity=60.0, precip=1.0, wind=10.0)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/lavar-coche?lat=-34.6&lon=-58.4")
+
+        day = response.json()["days"][0]
+        assert day["precip_mm"] == pytest.approx(24.0)
+        assert day["label"] in ("Regular", "No apto")
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_a_storm_in_the_day_vetoes_it(self, async_client: AsyncClient):
+        forecast = make_uniform_hourly(temp_c=22.0, humidity=50.0, precip=0.0, wind=10.0, weather_code=96)
+        with _patch_hourly(forecast):
+            response = await async_client.get("/api/tools/lavar-coche?lat=-34.6&lon=-58.4")
+
+        assert all(d["label"] == "No apto" for d in response.json()["days"])
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_forecast_none_returns_503(self, async_client: AsyncClient):
+        with _patch_hourly(None):
+            response = await async_client.get("/api/tools/lavar-coche?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "forecast_unavailable"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_outside_argentina_returns_422(self, async_client: AsyncClient):
+        response = await async_client.get("/api/tools/lavar-coche?lat=-60&lon=-58.4")
+
+        assert response.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -613,12 +649,8 @@ class TestRateLimiting:
     @pytest.mark.integration
     async def test_rate_limit_returns_429(self, async_client: AsyncClient):
         """Más de 30 requests por minuto → 429."""
-        forecast = _make_hourly_forecast()
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
+        forecast = make_uniform_hourly()
+        with _patch_hourly(forecast):
             responses = []
             for _ in range(35):
                 r = await async_client.get(
@@ -627,294 +659,3 @@ class TestRateLimiting:
                 responses.append(r.status_code)
 
         assert 429 in responses
-
-
-# ---------------------------------------------------------------------------
-# Helpers: factories de Windy
-# ---------------------------------------------------------------------------
-
-def _make_windy_hourly(n: int = 12) -> list[WindyHourlyEntry]:
-    """Slots horarios sintéticos de Windy con condiciones favorables."""
-    base_ts_ms = 1747742400000  # 2026-05-20 12:00 UTC
-    out: list[WindyHourlyEntry] = []
-    for i in range(n):
-        ts_ms = base_ts_ms + i * 3 * 3600 * 1000  # cada 3h
-        out.append(
-            WindyHourlyEntry(
-                timestamp_ms=ts_ms,
-                timestamp_s=ts_ms // 1000,
-                date="2026-05-20" if i < 5 else "2026-05-21",
-                hour_label=f"{(9 + i * 3) % 24:02d}:00",
-                temp_c=20.0,
-                humidity=55.0,
-                wind_speed_kmh=12.0,
-                wind_gust_kmh=20.0,
-                wind_dir_deg=180.0,
-                wind_dir_cardinal="S",
-                precip_3h_mm=0.0,
-                cloud_cover_pct=20.0,
-                dewpoint_c=10.0,
-                temp_850_c=5.0,
-            )
-        )
-    return out
-
-
-def _make_windy_daily(n: int = 5) -> list[WindyDailyEntry]:
-    """Días sintéticos de Windy con condiciones favorables para lavar coche."""
-    from datetime import date, timedelta
-    base = date(2026, 5, 20)
-    out: list[WindyDailyEntry] = []
-    for i in range(n):
-        out.append(
-            WindyDailyEntry(
-                date=(base + timedelta(days=i)).isoformat(),
-                temp_max_c=24.0,
-                temp_min_c=14.0,
-                humidity_mean=55.0,
-                wind_speed_max_kmh=18.0,
-                wind_speed_mean_kmh=12.0,
-                wind_gust_max_kmh=28.0,
-                wind_dir_cardinal="S",
-                precip_sum_mm=0.0,
-                precip_prob=0.0,
-                cloud_cover_mean=20.0,
-            )
-        )
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Tests: Windy primary path para hacer-deporte, lavar-coche, cota-de-nieve
-# (tender-ropa vive junto a TestTenderRopa, arriba — antes de TestRateLimiting,
-#  que agota el cupo de /tender-ropa para el resto de la sesión de tests)
-# ---------------------------------------------------------------------------
-
-class TestHacerDeporteWindyPath:
-    """Cuando Windy GFS está disponible, los endpoints deben preferirlo."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_uses_windy_when_available(
-        self, async_client: AsyncClient, monkeypatch
-    ):
-        import app.core.config as cfg
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        windy_hourly = _make_windy_hourly(12)
-        with patch(
-            "app.routers.tools.windy_get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=windy_hourly,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["source"] == "windy_gfs"
-        assert data["tool"] == "hacer-deporte"
-        assert len(data["hourly"]) <= 12
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_falls_back_to_openmeteo_when_windy_errors(
-        self, async_client: AsyncClient, monkeypatch
-    ):
-        import app.core.config as cfg
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        forecast = _make_hourly_forecast(temp_c=20.0, humidity=50.0, precip=0.0)
-        with patch(
-            "app.routers.tools.windy_get_hourly_forecast",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("windy down"),
-        ), patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
-
-        assert response.status_code == 200
-        assert response.json()["source"] == "openmeteo_fallback"
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_uses_openmeteo_when_windy_not_configured(
-        self, async_client: AsyncClient
-    ):
-        # disable_windy_by_default ya garantiza windy_api_key vacío
-        forecast = _make_hourly_forecast(temp_c=20.0, humidity=50.0, precip=0.0)
-        with patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4"
-            )
-
-        assert response.status_code == 200
-        assert response.json()["source"] == "openmeteo_fallback"
-
-
-class TestLavarCocheWindyPath:
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_uses_windy_when_available(
-        self, async_client: AsyncClient, monkeypatch
-    ):
-        import app.core.config as cfg
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        windy_daily = _make_windy_daily(5)
-        with patch(
-            "app.routers.tools.windy_get_daily_forecast",
-            new_callable=AsyncMock,
-            return_value=windy_daily,
-        ):
-            response = await async_client.get(
-                "/api/tools/lavar-coche?lat=-34.6&lon=-58.4"
-            )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["source"] == "windy_gfs"
-        assert len(data["days"]) == 5
-        # Exactamente un día marcado como best
-        best = [d for d in data["days"] if d["is_best"]]
-        assert len(best) == 1
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_falls_back_to_openmeteo_when_windy_errors(
-        self, async_client: AsyncClient, monkeypatch
-    ):
-        import app.core.config as cfg
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        from app.services.openmeteo import DailyForecastData
-        daily = DailyForecastData(
-            dates=["2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24"],
-            day_labels=["miércoles", "jueves", "viernes", "sábado", "domingo"],
-            temp_max=[22.0] * 5,
-            temp_min=[12.0] * 5,
-            precip_sum=[0.0] * 5,
-            wind_speed_max=[15.0] * 5,
-            humidity_mean=[55.0] * 5,
-        )
-        with patch(
-            "app.routers.tools.windy_get_daily_forecast",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("windy 500"),
-        ), patch(
-            "app.routers.tools.get_daily_forecast",
-            new_callable=AsyncMock,
-            return_value=daily,
-        ):
-            response = await async_client.get(
-                "/api/tools/lavar-coche?lat=-34.6&lon=-58.4"
-            )
-
-        assert response.status_code == 200
-        assert response.json()["source"] == "openmeteo_fallback"
-
-
-class TestCotaDeNieveWindyPath:
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_uses_windy_for_temp_850(
-        self, async_client: AsyncClient, monkeypatch
-    ):
-        import app.core.config as cfg
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        forecast = _make_hourly_forecast(temp_850=None, elevation_m=750.0)
-        weather = _make_weather_response(temp_c=10.0)
-        with patch(
-            "app.routers.tools.windy_get_temp_850",
-            new_callable=AsyncMock,
-            return_value=4.5,
-        ), patch(
-            "app.routers.tools.aggregate_current",
-            new_callable=AsyncMock,
-            return_value=weather,
-        ), patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0"
-            )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["source"] == "windy_gfs"
-        assert data["m850_hpa_m"] is not None
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_falls_back_to_openmeteo_when_windy_errors(
-        self, async_client: AsyncClient, monkeypatch
-    ):
-        import app.core.config as cfg
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-
-        forecast = _make_hourly_forecast(temp_850=5.0, elevation_m=750.0)
-        weather = _make_weather_response(temp_c=10.0)
-        with patch(
-            "app.routers.tools.windy_get_temp_850",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("windy timeout"),
-        ), patch(
-            "app.routers.tools.aggregate_current",
-            new_callable=AsyncMock,
-            return_value=weather,
-        ), patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0"
-            )
-
-        assert response.status_code == 200
-        assert response.json()["source"] == "openmeteo_fallback"
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_source_unavailable_when_temp_850_missing(
-        self, async_client: AsyncClient
-    ):
-        """Sin Windy y sin temp_850 en OM → source = unavailable."""
-        forecast = _make_hourly_forecast(temp_850=None, elevation_m=750.0)
-        # temp_850 None se replica vía dataclasses.replace para evitar list[None]
-        import dataclasses
-        forecast = dataclasses.replace(forecast, temps_850hpa=[None] * len(forecast.temps_850hpa))
-        weather = _make_weather_response(temp_c=10.0)
-        with patch(
-            "app.routers.tools.aggregate_current",
-            new_callable=AsyncMock,
-            return_value=weather,
-        ), patch(
-            "app.routers.tools.get_hourly_forecast",
-            new_callable=AsyncMock,
-            return_value=forecast,
-        ):
-            response = await async_client.get(
-                "/api/tools/cota-de-nieve?lat=-38.0&lon=-70.0"
-            )
-
-        assert response.status_code == 200
-        data = response.json()
-        # Sin temp_850 disponible → source unavailable
-        assert data["source"] == "unavailable"
-        assert data["m850_hpa_m"] is None

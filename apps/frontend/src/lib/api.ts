@@ -152,7 +152,7 @@ export interface SnowLevelResponse {
   temp_c: number
   station_altitude_m: number
   description: string
-  source?: string  // "windy_gfs" | "openmeteo_fallback" | "unavailable"
+  source?: string  // "openmeteo" | "unavailable" (un backend anterior mandaba "windy_gfs" | "openmeteo_fallback")
 }
 
 export interface CarWashDay {

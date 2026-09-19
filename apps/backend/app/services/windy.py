@@ -8,9 +8,10 @@ misma distribución pero ningún orden (autocorrelación a 1 franja de −0,10 c
 una tormenta que GFS y ECMWF pronosticaban apareció en otra franja o no apareció. Además
 `past3hprecip-surface` llega en metros ("m") y acá se lee como milímetros.
 
-El dashboard de Previsión ya no lo usa: todo sale de Open-Meteo. Lo siguen usando las herramientas
-(tender-ropa, hacer-deporte, lavar-coche, cota de nieve e incendios) hasta migrarlas. Con un plan
-Professional (y la unidad corregida) volvería a ser una fuente válida.
+Ni el dashboard de Previsión ni las herramientas (tender-ropa, hacer-deporte, lavar-coche, cota de
+nieve) lo usan: todo sale de Open-Meteo. Solo lo consulta Incendios (`services/fire_danger.py`, vía
+`fetch_raw`) hasta migrarlo. Con un plan Professional (y la unidad corregida) volvería a ser una
+fuente válida.
 
 Exports principales:
     - get_laundry_forecast: 7 días agregados a partir de slots de 3h (uso: tender-ropa).

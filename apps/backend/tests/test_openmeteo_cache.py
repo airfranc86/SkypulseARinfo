@@ -19,10 +19,8 @@ import app.services.openmeteo as om_module
 from app.services.openmeteo import (
     _cache_key,
     get_current,
-    get_daily_forecast,
     get_daily_forecast_ext,
     get_fog_inference_forecast,
-    get_hourly_forecast,
     get_hourly_forecast_ext,
     get_visibility_forecast,
 )
@@ -47,34 +45,6 @@ _CURRENT_PAYLOAD = {
         "precipitation": 0.0,
         "cloud_cover": 10,
         "weather_code": 0,
-    },
-}
-
-_HOURLY_PAYLOAD = {
-    "latitude": -31.4,
-    "longitude": -64.2,
-    "elevation": 430.0,
-    "hourly": {
-        "time": ["2024-01-15T14:00", "2024-01-15T15:00"],
-        "temperature_2m": [23.5, 22.0],
-        "relative_humidity_2m": [52, 55],
-        "precipitation": [0.0, 0.1],
-        "wind_speed_10m": [18.0, 15.0],
-        "temperature_850hPa": [12.0, 11.5],
-    },
-}
-
-_DAILY_PAYLOAD = {
-    "latitude": -31.4,
-    "longitude": -64.2,
-    "daily": {
-        "time": ["2024-01-15", "2024-01-16"],
-        "temperature_2m_max": [30.0, 28.0],
-        "temperature_2m_min": [18.0, 17.0],
-        "precipitation_sum": [0.0, 2.5],
-        "precipitation_probability_max": [10, 60],
-        "wind_speed_10m_max": [25.0, 30.0],
-        "relative_humidity_2m_mean": [50, 65],
     },
 }
 
@@ -278,7 +248,7 @@ async def test_get_current_no_stale_fallback_available_returns_none():
 
 
 # ---------------------------------------------------------------------------
-# Deduplicación concurrente — get_daily_forecast (bucket forecast)
+# Deduplicación concurrente — get_daily_forecast_ext (bucket forecast)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -290,11 +260,11 @@ async def test_get_daily_forecast_concurrent_dedup():
             nonlocal call_count
             call_count += 1
             await asyncio.sleep(0.05)
-            return httpx.Response(200, json=_DAILY_PAYLOAD)
+            return httpx.Response(200, json=_DAILY_EXT_PAYLOAD)
 
         mock.get(OM_URL).mock(side_effect=slow_handler)
 
-        results = await asyncio.gather(*[get_daily_forecast(-31.4, -64.2) for _ in range(4)])
+        results = await asyncio.gather(*[get_daily_forecast_ext(-31.4, -64.2) for _ in range(4)])
 
     assert call_count == 1
     assert all(r is results[0] for r in results)
@@ -306,7 +276,7 @@ async def test_get_daily_forecast_concurrent_dedup():
 
 @pytest.mark.asyncio
 async def test_forecast_and_nowcast_buckets_are_isolated():
-    """get_daily_forecast y get_visibility_forecast usan buckets distintos."""
+    """get_daily_forecast_ext y get_visibility_forecast usan buckets distintos."""
     forecast_calls = 0
     nowcast_calls = 0
 
@@ -314,7 +284,7 @@ async def test_forecast_and_nowcast_buckets_are_isolated():
         def daily_handler(request):
             nonlocal forecast_calls
             forecast_calls += 1
-            return httpx.Response(200, json=_DAILY_PAYLOAD)
+            return httpx.Response(200, json=_DAILY_EXT_PAYLOAD)
 
         def vis_handler(request):
             nonlocal nowcast_calls
@@ -324,15 +294,15 @@ async def test_forecast_and_nowcast_buckets_are_isolated():
         # respx matches by URL, but both use the same base URL with different params.
         # We mock generically and rely on call_count per fixture.
         mock.get(OM_URL).mock(side_effect=lambda req: (
-            httpx.Response(200, json=_DAILY_PAYLOAD)
+            httpx.Response(200, json=_DAILY_EXT_PAYLOAD)
             if "daily" in str(req.url)
             else httpx.Response(200, json=_VISIBILITY_PAYLOAD)
         ))
 
-        await get_daily_forecast(-31.4, -64.2)
+        await get_daily_forecast_ext(-31.4, -64.2)
         await get_visibility_forecast(-31.4, -64.2)
         # Second calls — should be cache hits inside their respective buckets
-        await get_daily_forecast(-31.4, -64.2)
+        await get_daily_forecast_ext(-31.4, -64.2)
         await get_visibility_forecast(-31.4, -64.2)
 
     # Each function should only have fetched once (second call is a hit)
@@ -344,24 +314,6 @@ async def test_forecast_and_nowcast_buckets_are_isolated():
 # ---------------------------------------------------------------------------
 # Hit / Miss para las otras 6 funciones (smoke test — 1 fetch cada una)
 # ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_get_hourly_forecast_caches():
-    call_count = 0
-
-    with respx.mock(assert_all_called=False) as mock:
-        def handler(request):
-            nonlocal call_count
-            call_count += 1
-            return httpx.Response(200, json=_HOURLY_PAYLOAD)
-
-        mock.get(OM_URL).mock(side_effect=handler)
-
-        await get_hourly_forecast(-31.4, -64.2)
-        await get_hourly_forecast(-31.4, -64.2)
-
-    assert call_count == 1
-
 
 @pytest.mark.asyncio
 async def test_get_daily_forecast_ext_caches():

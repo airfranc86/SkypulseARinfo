@@ -2,8 +2,6 @@
 
 Cubre:
 - _cap_vis, _classify_visibility (puras)
-- get_hourly_forecast
-- get_daily_forecast
 - get_daily_forecast_ext
 - get_multi_model_daily
 - get_hourly_forecast_ext
@@ -17,19 +15,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.openmeteo import (
-    DailyForecastData,
     DailyForecastDataExt,
     FogInferenceSlot,
-    HourlyForecastData,
     HourlyForecastExt,
     MultiModelDailyData,
     VisibilityData,
     _cap_vis,
     _classify_visibility,
-    get_daily_forecast,
     get_daily_forecast_ext,
     get_fog_inference_forecast,
-    get_hourly_forecast,
     get_hourly_forecast_ext,
     get_multi_model_daily,
     get_visibility_forecast,
@@ -39,36 +33,6 @@ from app.services.openmeteo import (
 # ---------------------------------------------------------------------------
 # Helpers de payload
 # ---------------------------------------------------------------------------
-
-def _make_hourly_payload(n: int = 4) -> dict:
-    times = [f"2026-05-20T{9 + i:02d}:00" for i in range(n)]
-    return {
-        "elevation": 25.0,
-        "hourly": {
-            "time": times,
-            "temperature_2m": [22.0 + i for i in range(n)],
-            "relative_humidity_2m": [55.0] * n,
-            "precipitation": [0.0] * n,
-            "wind_speed_10m": [15.0] * n,
-            "temperature_850hPa": [-5.0] * n,
-        },
-    }
-
-
-def _make_daily_payload(n: int = 3) -> dict:
-    dates = [f"2026-05-{20 + i:02d}" for i in range(n)]
-    return {
-        "daily": {
-            "time": dates,
-            "temperature_2m_max": [25.0 + i for i in range(n)],
-            "temperature_2m_min": [15.0] * n,
-            "precipitation_sum": [0.0, 5.0, 2.0][:n],
-            "precipitation_probability_max": [10, 60, 40][:n],
-            "wind_speed_10m_max": [20.0] * n,
-            "relative_humidity_2m_mean": [55.0] * n,
-        }
-    }
-
 
 def _make_daily_ext_payload(n: int = 3) -> dict:
     dates = [f"2026-05-{20 + i:02d}" for i in range(n)]
@@ -225,125 +189,6 @@ class TestClassifyVisibility:
         _, _, color = _classify_visibility(8000.0)
         assert color.startswith("#")
         assert len(color) == 7
-
-
-# ---------------------------------------------------------------------------
-# get_hourly_forecast
-# ---------------------------------------------------------------------------
-
-class TestGetHourlyForecast:
-
-    @pytest.mark.asyncio
-    async def test_returns_hourly_forecast_data(self):
-        payload = _make_hourly_payload(n=4)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_hourly_forecast(-34.6, -58.4)
-        assert isinstance(result, HourlyForecastData)
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_timeout(self):
-        from httpx import TimeoutException
-        mock_client = AsyncMock()
-        mock_client.request = AsyncMock(side_effect=TimeoutException("timeout"))
-        with patch("app.services.openmeteo.get_client", return_value=mock_client):
-            result = await get_hourly_forecast(-34.6, -58.4)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_5xx(self):
-        payload = {}
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload, status_code=500)):
-            result = await get_hourly_forecast(-34.6, -58.4)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_timestamps_length_matches_time_list(self):
-        payload = _make_hourly_payload(n=6)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_hourly_forecast(-34.6, -58.4)
-        assert len(result.timestamps) == 6
-        assert len(result.hour_labels) == 6
-
-    @pytest.mark.asyncio
-    async def test_hour_label_format_hh_mm(self):
-        payload = _make_hourly_payload(n=2)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_hourly_forecast(-34.6, -58.4)
-        for label in result.hour_labels:
-            assert len(label) == 5
-            assert label[2] == ":"
-
-    @pytest.mark.asyncio
-    async def test_elevation_m_parsed(self):
-        payload = _make_hourly_payload(n=2)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_hourly_forecast(-34.6, -58.4)
-        assert result.elevation_m == pytest.approx(25.0)
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_invalid_payload(self):
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client({"wrong": "payload"})):
-            result = await get_hourly_forecast(-34.6, -58.4)
-        assert result is None
-
-
-# ---------------------------------------------------------------------------
-# get_daily_forecast
-# ---------------------------------------------------------------------------
-
-class TestGetDailyForecast:
-
-    @pytest.mark.asyncio
-    async def test_returns_daily_forecast_data(self):
-        payload = _make_daily_payload(n=3)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_daily_forecast(-34.6, -58.4)
-        assert isinstance(result, DailyForecastData)
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_timeout(self):
-        from httpx import TimeoutException
-        mock_client = AsyncMock()
-        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
-        with patch("app.services.openmeteo.get_client", return_value=mock_client):
-            result = await get_daily_forecast(-34.6, -58.4)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_dates_count_matches_input(self):
-        payload = _make_daily_payload(n=4)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_daily_forecast(-34.6, -58.4)
-        assert len(result.dates) == 4
-
-    @pytest.mark.asyncio
-    async def test_day_labels_are_spanish_weekdays(self):
-        valid_days = {"lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"}
-        payload = _make_daily_payload(n=3)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_daily_forecast(-34.6, -58.4)
-        for label in result.day_labels:
-            assert label in valid_days
-
-    @pytest.mark.asyncio
-    async def test_temp_max_parsed(self):
-        payload = _make_daily_payload(n=2)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_daily_forecast(-34.6, -58.4)
-        assert result.temp_max[0] == pytest.approx(25.0)
-
-    @pytest.mark.asyncio
-    async def test_precip_prob_max_parsed(self):
-        payload = _make_daily_payload(n=2)
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
-            result = await get_daily_forecast(-34.6, -58.4)
-        assert result.precip_prob_max[1] == pytest.approx(60.0)
-
-    @pytest.mark.asyncio
-    async def test_returns_none_on_invalid_payload(self):
-        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client({"bad": True})):
-            result = await get_daily_forecast(-34.6, -58.4)
-        assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +444,20 @@ class TestGetHourlyForecastExt:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_returns_none_on_5xx(self):
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client({}, status_code=500)):
+            result = await get_hourly_forecast_ext(-34.6, -58.4)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_one_timestamp_and_label_per_hour(self):
+        payload = _make_hourly_ext_payload(n=6)
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
+            result = await get_hourly_forecast_ext(-34.6, -58.4)
+        assert len(result.timestamps) == 6
+        assert len(result.hour_labels) == 6
+
+    @pytest.mark.asyncio
     async def test_timestamps_are_the_real_instants_of_the_argentine_hours(self):
         """Open-Meteo manda la hora local sin zona ("09:00" de Argentina). El timestamp tiene que ser
         el instante real (12:00 UTC) y no el del reloj del servidor: en Render, que corre en UTC,
@@ -657,6 +516,38 @@ class TestGetHourlyForecastExt:
         assert result.temps_850_c == []
         assert result.humidities == []
         assert result.cloud_covers == []
+
+    @pytest.mark.asyncio
+    async def test_asks_for_the_wind_direction(self):
+        """La dirección pondera el puntaje de tender ropa: viento del sur seca, del oeste no."""
+        payload = _make_hourly_ext_payload(n=2)
+        mock_client = _mock_http_client(payload)
+        with patch("app.services.openmeteo.get_client", return_value=mock_client):
+            await get_hourly_forecast_ext(-34.6, -58.4)
+
+        requested = mock_client.request.call_args.kwargs["params"]["hourly"].split(",")
+        assert "wind_direction_10m" in requested
+
+    @pytest.mark.asyncio
+    async def test_parses_wind_direction_and_elevation(self):
+        """La elevación del punto alimenta la cota de nieve; antes había que pedirla en otra llamada."""
+        payload = _make_hourly_ext_payload(n=3)
+        payload["hourly"]["wind_direction_10m"] = [180, 270.5, None]
+        payload["elevation"] = 1450.0
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
+            result = await get_hourly_forecast_ext(-34.6, -58.4)
+
+        assert result.wind_dirs_deg == [180.0, 270.5, None]
+        assert result.elevation_m == 1450.0
+
+    @pytest.mark.asyncio
+    async def test_wind_direction_and_elevation_are_optional_in_the_payload(self):
+        payload = _make_hourly_ext_payload(n=2)
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
+            result = await get_hourly_forecast_ext(-34.6, -58.4)
+
+        assert result.wind_dirs_deg == []
+        assert result.elevation_m is None
 
 
 # ---------------------------------------------------------------------------
