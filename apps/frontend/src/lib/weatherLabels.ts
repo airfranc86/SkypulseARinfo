@@ -54,9 +54,9 @@ type StatusInput = Pick<WeatherDashboardResponse, 'degraded'> & {
 }
 
 /**
- * Avisos de estado de los datos, en hechos. Vacío cuando todo llegó completo. Ya no hay avisos por
- * "GFS (Windy) no respondió": Open-Meteo es la única fuente del pronóstico y, si falla, no hay
- * pronóstico (el backend responde 503) en vez de un pronóstico armado con otra fuente.
+ * Avisos de estado de los datos, en hechos. Vacío cuando todo llegó completo. Open-Meteo es la única
+ * fuente del pronóstico y, si falla, no hay pronóstico (el backend responde 503) en vez de un
+ * pronóstico armado con otra fuente: solo puede avisarse la observación vieja.
  */
 export function forecastNotes(data: StatusInput): string[] {
   const notes: string[] = []

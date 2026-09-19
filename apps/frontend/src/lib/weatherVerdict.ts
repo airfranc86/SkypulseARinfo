@@ -5,8 +5,8 @@ import { alertLevel, criticalAlertas, vigenciaText, type CriticalLevel } from '.
 /**
  * Lluvia = más de 0,1 mm en el tramo. Es el mismo umbral con el que el backend arma
  * `rain_today.has_rain_today` (dashboard_builder). No se usa `precip_prob` de las
- * entradas horarias: con Windy el backend la aproxima como 100 si llueve y 0 si no,
- * así que un "100 %" horario no es una probabilidad.
+ * entradas horarias: es la probabilidad de que llueva, no lo que se prevé que caiga,
+ * y el veredicto se arma con los milímetros.
  */
 export const RAIN_MM = 0.1
 

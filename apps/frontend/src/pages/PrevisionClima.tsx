@@ -27,15 +27,9 @@ type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
 
 interface Props { location: LocationState | null }
 
-/**
- * Badge de la página según de dónde salen los datos: la observación (SMN o no) y el pronóstico.
- * El pronóstico sale de Open-Meteo; "mixed" (GFS vía Windy) solo lo mandaba la versión anterior del
- * backend, cuya key de Windy devolvía los datos mezclados al azar.
- */
-function pageModel(currentSource: string | undefined, forecastSource: string | undefined): ModelKey {
-  const smn = currentSource === 'smn'
-  if (forecastSource === 'mixed') return smn ? 'mixed' : 'gfs'
-  return smn ? 'smn_openmeteo' : 'openmeteo_forecast'
+/** Badge de la página según de dónde sale la observación: SMN o Open-Meteo. El pronóstico siempre sale de Open-Meteo. */
+function pageModel(currentSource: string | undefined): ModelKey {
+  return currentSource === 'smn' ? 'smn_openmeteo' : 'openmeteo_forecast'
 }
 
 /** Mensaje para el usuario según el fallo: cold start, error de validación del backend, o cualquier otro. */
@@ -82,7 +76,7 @@ export function PrevisionClima({ location }: Props) {
   const scrollTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(scrollTimer.current), [])
 
-  const badgeModel = pageModel(data?.current?.source, data?.forecast_source)
+  const badgeModel = pageModel(data?.current?.source)
   const notes = data ? forecastNotes(data) : []
   const updatedAt = formatClock(data?.fetched_at)
 

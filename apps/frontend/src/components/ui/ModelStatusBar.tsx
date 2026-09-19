@@ -5,11 +5,6 @@ import { useModelStatus } from '@/hooks/useModelStatus'
 
 const SOURCE_LABELS: Record<string, string> = {
   smn:                  'SMN',
-  windy_ecmwf:          'Windy ECMWF',
-  windy_gfs:            'Windy GFS',
-  windy_firedanger:     'Windy FWI',
-  windy_gfs_estimated:  'Windy',
-  openmeteo_fallback:   'Open-Meteo',
   openmeteo:            'Open-Meteo',
   usgs:                 'USGS',
   emsc:                 'EMSC',

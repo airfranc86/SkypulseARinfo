@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { Info } from 'lucide-react'
 
-export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'ecmwf' | 'windy_ecmwf' | 'openmeteo' | 'openmeteo_forecast' | 'smn_openmeteo' | 'mixed' | 'segemar' | 'consensus'
+export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'ecmwf' | 'openmeteo_forecast' | 'smn_openmeteo' | 'segemar' | 'consensus'
 type Variant = 'pill' | 'inline' | 'header'
 
 interface ModelMeta {
@@ -39,14 +39,6 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     reliability: '~90% a 3 días',
     updateFreq: '2 veces al día',
   },
-  windy_ecmwf: {
-    label: 'ECMWF',
-    org: 'Windy',
-    color: '#c8a84b',
-    description: 'Modelo europeo de pronóstico, vía Windy.',
-    reliability: '~90% a 3 días',
-    updateFreq: '2 veces al día',
-  },
   usgs: {
     label: 'USGS',
     org: 'EE.UU.',
@@ -63,15 +55,7 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     reliability: 'Tiempo real · datos INPRES',
     updateFreq: 'Continua',
   },
-  openmeteo: {
-    label: 'Open-Meteo',
-    org: 'Respaldo',
-    color: '#90aabb',
-    description: 'Fuente de respaldo. Los datos pueden diferir de las otras fuentes.',
-    reliability: 'Variable',
-    updateFreq: 'Cada hora',
-  },
-  // Previsión: el pronóstico sale de Open-Meteo. Antes lo mostraban "de respaldo" (cuando Windy fallaba).
+  // El pronóstico (Previsión, herramientas e Incendios) sale de Open-Meteo.
   openmeteo_forecast: {
     label: 'Open-Meteo',
     org: 'Modelos',
@@ -95,14 +79,6 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     description: 'Observatorio Argentino de Vigilancia Volcánica del Servicio Geológico Minero Argentino.',
     reliability: 'Fuente oficial Argentina',
     updateFreq: 'Caché 2h',
-  },
-  mixed: {
-    label: 'SMN + GFS',
-    org: 'Mixto',
-    color: '#c8a84b',
-    description: 'Esta página combina observación en tiempo real (SMN) y pronóstico numérico (GFS · NOAA).',
-    reliability: 'Actual: alta (SMN) · Pronóstico: ~85% a 3d',
-    updateFreq: 'SMN: 1h · GFS: 4x/día',
   },
   consensus: {
     label: 'Consenso',
