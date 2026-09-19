@@ -5,16 +5,9 @@ import { SportBlock } from '@/components/clima/SportBlock'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
-import type { ModelKey } from '@/components/ui/ModelBadge'
+import { toolSourceToModel } from '@/lib/toolSource'
 
 interface Props { location: LocationState | null }
-
-function sourceToModel(source?: string): ModelKey {
-  if (source === 'windy_gfs') return 'gfs'
-  if (source === 'windy_ecmwf') return 'windy_ecmwf'
-  if (source?.startsWith('openmeteo')) return 'openmeteo'
-  return 'gfs'
-}
 
 export function HacerDeporte({ location }: Props) {
   const lat = location?.lat ?? null
@@ -31,12 +24,7 @@ export function HacerDeporte({ location }: Props) {
         title="Hacer deporte"
         subtitle={location.label}
         accentColor="#3fb8c4"
-        modelBadge={
-          <ModelBadge
-            model={data ? sourceToModel(data.source) : 'gfs'}
-            variant="header"
-          />
-        }
+        modelBadge={<ModelBadge model={toolSourceToModel(data?.source)} variant="header" />}
       />
 
       {isLoading && <PageSkeleton />}

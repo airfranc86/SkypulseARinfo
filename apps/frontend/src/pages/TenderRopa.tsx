@@ -6,16 +6,9 @@ import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
-import type { ModelKey } from '@/components/ui/ModelBadge'
+import { toolSourceToModel } from '@/lib/toolSource'
 
 interface Props { location: LocationState | null }
-
-function sourceToModel(source?: string): ModelKey {
-  if (source === 'windy_gfs') return 'gfs'
-  if (source === 'windy_ecmwf') return 'windy_ecmwf'
-  if (source?.startsWith('openmeteo')) return 'openmeteo'
-  return 'gfs'
-}
 
 export function TenderRopa({ location }: Props) {
   const { data, isLoading, error } = useLaundryForecast(
@@ -32,12 +25,7 @@ export function TenderRopa({ location }: Props) {
         title="Secado de ropa"
         subtitle={location.label}
         accentColor="#3ecf7a"
-        modelBadge={
-          <ModelBadge
-            model={data ? sourceToModel(data.source) : 'gfs'}
-            variant="header"
-          />
-        }
+        modelBadge={<ModelBadge model={toolSourceToModel(data?.source)} variant="header" />}
       />
 
       {isLoading && <PageSkeleton />}
