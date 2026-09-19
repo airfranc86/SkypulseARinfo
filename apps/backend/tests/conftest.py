@@ -113,30 +113,15 @@ def clear_openmeteo_caches():
 
 
 # ---------------------------------------------------------------------------
-# Forzar Windy desactivado por defecto en tests
+# Caché de EMSC entre tests
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def disable_windy_by_default(monkeypatch):
-    """
-    Garantiza que `settings.windy_api_key` está vacío durante los tests, salvo
-    que un test lo sobreescriba explícitamente. Esto asegura que los endpoints
-    que intentan Windy primero caigan determinísticamente al fallback Open-Meteo
-    (que es donde apuntan los mocks existentes).
-
-    También limpia el cache crudo de Windy entre tests.
-    """
-    import app.core.config as cfg
-    import app.services.windy as windy_module
-
-    monkeypatch.setattr(cfg.settings, "windy_api_key", "", raising=False)
-    windy_module._raw_cache.clear()
-
+def clear_emsc_cache():
+    """Limpia el TTLCache de EMSC antes y después de cada test."""
     import app.services.emsc as emsc_module
     emsc_module._event_cache.clear()
-
     yield
-    windy_module._raw_cache.clear()
     emsc_module._event_cache.clear()
 
 

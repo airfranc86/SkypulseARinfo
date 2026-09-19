@@ -213,27 +213,6 @@ class HourlyConsensusSchema(BaseModel):
     rain_probability_pct: float
 
 
-class SourceStatus(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    available: bool   # se pudo obtener respuesta de esta fuente en este request
-    used: bool         # se usó efectivamente para construir la respuesta
-
-
-class ForecastSources(BaseModel):
-    """
-    Estado de las fuentes del pronóstico. Hoy la única es Open-Meteo. `windy_gfs` se conserva
-    (siempre available=False, used=False) para no romper a los clientes que ya lo leen: Windy no se
-    consulta, porque la key del plan Testing devuelve datos mezclados al azar. Cuando se migre a
-    WRF-SMN (FRA-122 fase D) se sumará un campo `wrf_smn` acá — de momento no existe esa fuente,
-    no se fabrica un valor para ella.
-    """
-    model_config = ConfigDict(frozen=True)
-
-    windy_gfs: SourceStatus
-    open_meteo: SourceStatus
-
-
 class WeatherDashboardResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -248,7 +227,6 @@ class WeatherDashboardResponse(BaseModel):
     fetched_at: datetime
     # Origen del pronóstico principal. El dashboard siempre responde "openmeteo".
     forecast_source: str = "unknown"
-    sources: ForecastSources | None = None
     # True si `current` es un dato stale (ver SourceMeta.stale). Ya no hay fuente de respaldo que
     # degradar: sin pronóstico diario el endpoint responde 503.
     degraded: bool = False

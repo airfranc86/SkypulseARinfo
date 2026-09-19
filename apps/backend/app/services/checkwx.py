@@ -68,7 +68,7 @@ def _get_cache(kind: str) -> TTLCache:
 
 _counter: _Counter | None = None
 # Serializa solo el chequeo+reserva de cupo (sin I/O) — mismo patrón que
-# SingleFlightCache/windy.py/oavv.py. El fetch HTTP real queda fuera del
+# SingleFlightCache/oavv.py. El fetch HTTP real queda fuera del
 # lock para no serializar requests de ICAOs distintos entre sí.
 _quota_lock = asyncio.Lock()
 
