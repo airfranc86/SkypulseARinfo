@@ -16,20 +16,20 @@ Un segundo perfil, más operativo: personas que necesitan interpretar reportes a
 
 SkyPulse convierte datos meteorológicos y de desastres naturales en respuestas accionables. Dos frentes activos y complementarios (confirmado explícitamente por el usuario — no es uno u otro):
 
-- **Dashboard cuantitativo**: 15 herramientas/guías (previsión 7 días, terremotos, METAR/TAF, volcanes, incendios, niebla, cota de nieve, tender ropa, lavar auto, hacer deporte, radar, nubes, lluvias, desastres) que agregan datos reales de SMN, GFS/ECMWF (Open-Meteo), Windy, USGS, EMSC y CheckWX.
+- **Dashboard cuantitativo**: 15 herramientas/guías (previsión 7 días, terremotos, METAR/TAF, volcanes, incendios, niebla, cota de nieve, tender ropa, lavar auto, hacer deporte, radar, nubes, lluvias, desastres) que agregan datos reales de SMN, GFS/ECMWF (Open-Meteo), USGS, EMSC y CheckWX.
 - **Sistema narrativo por fenómeno**: tarjetas con formato fijo ("cómo se ve / qué significa / acción") por tipo de nube, fenómeno aeronáutico o desastre. Hoy vive como catálogo estático dentro de páginas del dashboard (Nubes, Desastres); la dirección declarada del proyecto es evolucionar hacia generación más dinámica (plantillas → híbrido).
 
 Éxito = el usuario entiende su situación climática o de riesgo y sabe qué hacer, en segundos, sin conocimiento técnico previo.
 
 ## Positioning
 
-Un solo producto argentino que cruza fuentes oficiales y técnicas dispersas (SMN, GFS, ECMWF, USGS, EMSC, CheckWX, Windy) en herramientas organizadas por decisión concreta (¿tiendo la ropa hoy?, ¿es seguro volar?, ¿este sismo es grave?), en vez de mostrar datos crudos como un panel meteorológico genérico. Ningún competidor genérico (AccuWeather, Weather Channel) hace ese cruce multi-fuente ni lo traduce a decisión + narrativa consistente por fenómeno.
+Un solo producto argentino que cruza fuentes oficiales y técnicas dispersas (SMN, GFS, ECMWF, USGS, EMSC, CheckWX) en herramientas organizadas por decisión concreta (¿tiendo la ropa hoy?, ¿es seguro volar?, ¿este sismo es grave?), en vez de mostrar datos crudos como un panel meteorológico genérico. Ningún competidor genérico (AccuWeather, Weather Channel) hace ese cruce multi-fuente ni lo traduce a decisión + narrativa consistente por fenómeno.
 
 ## Operating Context
 
 - Mobile-first; uso frecuente casual/nocturno (ej. desde el sillón) y uso urgente en movimiento.
 - Frontend: React 19 + Vite + TanStack Query + Tailwind v4, desplegado en Vercel. Backend: FastAPI (Python) desplegado en Render, con cold start conocido tras inactividad.
-- Multi-fuente con fallback: Open-Meteo y Windy comparten caché; SMN, USGS, EMSC y CheckWX tienen cada uno su propio gate/caché. Upstash Redis para contadores de cuota (plan free — la base se borra tras 14 días sin actividad).
+- Multi-fuente: Open-Meteo alimenta previsión, herramientas e incendios con una sola serie horaria y una sola caché; SMN, USGS, EMSC y CheckWX tienen cada uno su propio gate/caché. Upstash Redis para contadores de cuota (plan free — la base se borra tras 14 días sin actividad).
 
 ## Capabilities and Constraints
 

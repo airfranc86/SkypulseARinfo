@@ -1,7 +1,6 @@
 """Tests de integración para el router GET /api/tools/*.
 
-Las herramientas salen de la serie horaria de Open-Meteo (la misma del dashboard). Windy, cuya key del
-plan Testing devuelve datos mezclados al azar, ya no interviene: `TestToolsDoNotUseWindy` lo vigila.
+Las herramientas salen de la serie horaria de Open-Meteo (la misma del dashboard).
 """
 from __future__ import annotations
 
@@ -199,43 +198,6 @@ class TestTenderRopa:
             response = await async_client.get("/api/tools/tender-ropa?lat=-34.6&lon=-58.4")
 
         assert response.json()["label"] == "No apto"
-
-
-class TestToolsDoNotUseWindy:
-    """Con Windy "configurado y sano", ninguna herramienta lo consulta: sus datos vienen mezclados.
-
-    Vive antes de TestRateLimiting a propósito: ese test agota el cupo de /tender-ropa para el
-    resto de la sesión (el limiter no se resetea entre tests).
-    """
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    @pytest.mark.parametrize(
-        "path",
-        [
-            "/api/tools/tender-ropa?lat=-34.6&lon=-58.4",
-            "/api/tools/hacer-deporte?lat=-34.6&lon=-58.4",
-            "/api/tools/lavar-coche?lat=-34.6&lon=-58.4",
-            "/api/tools/cota-de-nieve?lat=-34.6&lon=-58.4",
-        ],
-    )
-    async def test_windy_is_never_called(self, async_client: AsyncClient, monkeypatch, path: str):
-        import app.core.config as cfg
-
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-        with patch(
-            "app.services.windy.fetch_raw",
-            new_callable=AsyncMock,
-            side_effect=AssertionError("las herramientas no deben consultar Windy"),
-        ) as windy, _patch_hourly(make_uniform_hourly()), patch(
-            "app.routers.tools.aggregate_current",
-            new_callable=AsyncMock,
-            return_value=_make_weather_response(),
-        ):
-            response = await async_client.get(path)
-
-        assert response.status_code == 200
-        windy.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -644,6 +606,8 @@ class TestLavarCoche:
 # ---------------------------------------------------------------------------
 
 class TestRateLimiting:
+    """Va al final a propósito: este test agota el cupo de /tender-ropa para el resto de la sesión
+    (el limiter no se resetea entre tests)."""
 
     @pytest.mark.asyncio
     @pytest.mark.integration

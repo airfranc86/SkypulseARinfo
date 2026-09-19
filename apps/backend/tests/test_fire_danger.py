@@ -1,14 +1,13 @@
 """Tests unitarios para app.services.fire_danger.
 
-El riesgo se estima con la serie horaria de Open-Meteo (temperatura, humedad, viento y lluvia). Windy,
-cuya key del plan Testing devuelve datos mezclados al azar, ya no interviene: el modelo `fireDanger`
-(FWI) tampoco estaba disponible en ese plan, así que en producción el puntaje ya era una estimación.
+El riesgo se estima con la serie horaria de Open-Meteo (temperatura, humedad, viento y lluvia); no hay
+FWI: Open-Meteo no lo trae.
 
 Cubre:
 - compute_fire_risk: todos los umbrales y casos límite
 - fire_entries_from_hourly: una entrada por hora, con la lluvia de las 3 h previas
 - closest_to_now: la entrada más cercana a ahora
-- get_fire_danger: pide 7 días a Open-Meteo, sin Windy ni key
+- get_fire_danger: pide 7 días a Open-Meteo
 """
 from __future__ import annotations
 
@@ -256,26 +255,3 @@ class TestGetFireDanger:
     async def test_without_open_meteo_there_are_no_entries(self):
         with patch(OPEN_METEO, new_callable=AsyncMock, return_value=None):
             assert await get_fire_danger(-34.6, -58.4) == []
-
-    @pytest.mark.asyncio
-    async def test_works_without_a_windy_key(self):
-        # El conftest deja windy_api_key vacío: antes eso lanzaba WindyNotConfiguredError.
-        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=make_hourly(24)):
-            entries = await get_fire_danger(-34.6, -58.4)
-
-        assert len(entries) == 24
-
-    @pytest.mark.asyncio
-    async def test_never_calls_windy_even_when_it_is_configured(self, monkeypatch):
-        import app.core.config as cfg
-
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=make_hourly(24)), patch(
-            "app.services.windy.fetch_raw",
-            new_callable=AsyncMock,
-            side_effect=AssertionError("Incendios no debe consultar Windy"),
-        ) as windy:
-            entries = await get_fire_danger(-34.6, -58.4)
-
-        assert len(entries) == 24
-        windy.assert_not_called()

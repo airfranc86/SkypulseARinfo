@@ -30,8 +30,8 @@ def _label_and_color(score: int) -> tuple[ScoreLabel, ScoreColor]:
 # clasificación para mostrar el ícono de tormenta.
 _STORM_WMO_CODES = {95, 96, 99}
 
-# CAPE (J/kg) — único indicador de riesgo convectivo que la Windy Point
-# Forecast API expone (no entrega weather_code). A partir de ~1000 J/kg el
+# CAPE (J/kg) — indicador de riesgo convectivo que complementa al código WMO (el CAPE puede anticipar
+# tormentas que el weather_code todavía no marca). A partir de ~1000 J/kg el
 # potencial de tormenta moderada-severa (incl. granizo) ya es real; por
 # encima de 2500 J/kg se considera extremo. Fuente: umbrales NOAA SPC.
 _CAPE_STORM_THRESHOLD_J_KG = 1000.0

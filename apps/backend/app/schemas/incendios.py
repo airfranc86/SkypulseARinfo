@@ -48,5 +48,5 @@ class FireDangerResponse(BaseModel, frozen=True):
     peak_score: float
     peak_label: str
     peak_hour_label: str
-    source: str                 # "openmeteo" (un backend anterior mandaba "windy_gfs_estimated" | "windy_firedanger")
+    source: str                 # "openmeteo"
     is_estimated: bool          # siempre True: Open-Meteo no trae FWI

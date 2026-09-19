@@ -1,7 +1,6 @@
 """Tests de integración para GET /api/tools/tender-ropa/forecast.
 
-El pronóstico de 7 días sale de la serie horaria de Open-Meteo agregada por día. Windy, cuya key del
-plan Testing devuelve datos mezclados al azar, ya no interviene.
+El pronóstico de 7 días sale de la serie horaria de Open-Meteo agregada por día.
 """
 from __future__ import annotations
 
@@ -170,26 +169,6 @@ class TestLaundryForecastUnavailable:
 
         assert response.status_code == 503
         assert response.json()["detail"] == "forecast_unavailable"
-
-
-class TestLaundryForecastDoesNotUseWindy:
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_windy_is_never_called(self, async_client: AsyncClient, monkeypatch):
-        """Con Windy "configurado y sano", el pronóstico no lo consulta: sus datos vienen mezclados."""
-        import app.core.config as cfg
-
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-        with patch(
-            "app.services.windy.fetch_raw",
-            new_callable=AsyncMock,
-            side_effect=AssertionError("tender-ropa/forecast no debe consultar Windy"),
-        ) as windy, _patch_hourly(_good_days()):
-            response = await async_client.get(URL)
-
-        assert response.status_code == 200
-        windy.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

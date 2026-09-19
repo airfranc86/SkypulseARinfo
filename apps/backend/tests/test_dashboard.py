@@ -387,52 +387,6 @@ async def test_dashboard_single_model_available(async_client: AsyncClient):
     assert len(response.json()["forecast_7d"]) == 7
 
 
-# ---------------------------------------------------------------------------
-# Windy no alimenta el dashboard (plan Testing: datos mezclados al azar)
-# ---------------------------------------------------------------------------
-
-@contextmanager
-def _windy_tripwire(monkeypatch):
-    """Windy configurado y sano en apariencia: si el dashboard lo consulta, el test lo detecta."""
-    import app.core.config as cfg
-
-    monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-    with (
-        patch("app.services.windy.get_hourly_forecast", new_callable=AsyncMock, return_value=[]) as hourly,
-        patch("app.services.windy.get_daily_forecast", new_callable=AsyncMock, return_value=[]) as daily,
-        patch("app.services.windy.fetch_raw", new_callable=AsyncMock, return_value={}) as raw,
-    ):
-        yield [hourly, daily, raw]
-
-
-@pytest.mark.asyncio
-@pytest.mark.integration
-async def test_dashboard_never_consults_windy_even_when_configured(async_client: AsyncClient, monkeypatch):
-    with _windy_tripwire(monkeypatch) as windy_calls, _dashboard_mocks():
-        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
-
-    assert response.status_code == 200
-    for call in windy_calls:
-        call.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.integration
-async def test_dashboard_has_no_windy_fallback_when_open_meteo_fails(async_client: AsyncClient, monkeypatch):
-    """Antes, si Open-Meteo diario fallaba, el pronóstico se sintetizaba desde Windy."""
-    with (
-        _windy_tripwire(monkeypatch) as windy_calls,
-        patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_make_current_response()),
-        patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=None),
-        patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=None),
-    ):
-        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
-
-    assert response.status_code == 503
-    for call in windy_calls:
-        call.assert_not_called()
-
-
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_dashboard_forecast_source_is_openmeteo(async_client: AsyncClient):
@@ -556,16 +510,15 @@ def _make_current_response_stale() -> WeatherCurrentResponse:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_dashboard_sources_open_meteo_only_and_not_degraded(async_client: AsyncClient):
+async def test_dashboard_is_not_degraded_with_a_fresh_observation(async_client: AsyncClient):
     """Open-Meteo es la única fuente; con la observación fresca no hay nada degradado."""
     with _dashboard_mocks():
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
 
     data = response.json()
     assert data["degraded"] is False
-    # windy_gfs sigue en la respuesta (compatibilidad) pero no se consulta
-    assert data["sources"]["windy_gfs"] == {"available": False, "used": False}
-    assert data["sources"]["open_meteo"] == {"available": True, "used": True}
+    # Sin Windy no hay estado por fuente que informar: `sources` ya no viaja en la respuesta.
+    assert "sources" not in data
 
 
 @pytest.mark.asyncio

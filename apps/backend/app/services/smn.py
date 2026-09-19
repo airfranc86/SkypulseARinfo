@@ -144,7 +144,7 @@ async def get_nearest_observation(lat: float, lon: float) -> SmnObservation | No
         observed_at = _parse_observed_at(best.get("date", ""))
     except (ValueError, TypeError):
         # Fecha no parseable → no sabemos cuándo se observó → marcar como siempre vencido.
-        # El aggregator lo rechazará por stale y caerá a Windy GFS.
+        # El aggregator lo rechazará por stale y caerá a Open-Meteo.
         # NUNCA usar now() aquí: haría que datos desconocidamente viejos pasen el check.
         logger.warning(
             "SMN: no se pudo parsear 'date' de la estación %s (valor=%r) — se trata como dato vencido",

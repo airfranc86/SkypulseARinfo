@@ -88,11 +88,11 @@ async def test_u2_record_fails_open_when_upstash_down():
 @pytest.mark.asyncio
 async def test_u3_get_usage_reflects_records_in_memory_mode():
     usage_counter.configure_memory()
-    usage_counter.record("windy")
-    usage_counter.record("windy")
+    usage_counter.record("open_meteo")
+    usage_counter.record("open_meteo")
     await usage_counter._wait_pending_for_tests()
 
-    assert await usage_counter.get_usage("windy") == 2
+    assert await usage_counter.get_usage("open_meteo") == 2
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,6 @@ import { SportBlock } from '@/components/clima/SportBlock'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
-import { toolSourceToModel } from '@/lib/toolSource'
 
 interface Props { location: LocationState | null }
 
@@ -24,7 +23,7 @@ export function HacerDeporte({ location }: Props) {
         title="Hacer deporte"
         subtitle={location.label}
         accentColor="#3fb8c4"
-        modelBadge={<ModelBadge model={toolSourceToModel(data?.source)} variant="header" />}
+        modelBadge={<ModelBadge model="openmeteo_forecast" variant="header" />}
       />
 
       {isLoading && <PageSkeleton />}

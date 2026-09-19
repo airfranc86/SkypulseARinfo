@@ -152,7 +152,7 @@ export interface SnowLevelResponse {
   temp_c: number
   station_altitude_m: number
   description: string
-  source?: string  // "openmeteo" | "unavailable" (un backend anterior mandaba "windy_gfs" | "openmeteo_fallback")
+  source?: string  // "openmeteo" | "unavailable"
 }
 
 export interface CarWashDay {
@@ -348,16 +348,6 @@ export interface HourlyConsensus {
   rain_probability_pct: number
 }
 
-export interface SourceStatus {
-  available: boolean
-  used: boolean
-}
-
-export interface ForecastSources {
-  windy_gfs: SourceStatus
-  open_meteo: SourceStatus
-}
-
 export interface WeatherDashboardResponse {
   location: { lat: number; lon: number; city: string | null }
   current: CurrentDetailed
@@ -368,10 +358,8 @@ export interface WeatherDashboardResponse {
   hourly: HourlyConsensus
   forecast_7d: DailyEntry[]
   fetched_at: string
-  // "openmeteo" = todo el pronóstico de Open-Meteo (lo que manda el backend hoy). "mixed" = Windy + Open-Meteo y
-  // "openmeteo_fallback" = respaldo puro: los mandaba la versión anterior, con Windy.
-  forecast_source?: 'openmeteo' | 'openmeteo_fallback' | 'mixed'
-  sources?: ForecastSources | null
+  // Todo el pronóstico sale de Open-Meteo.
+  forecast_source?: 'openmeteo'
   degraded?: boolean
 }
 

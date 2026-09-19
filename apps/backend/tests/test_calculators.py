@@ -570,7 +570,7 @@ class TestStormVeto:
     """
     Ninguna de las 3 herramientas miraba el tipo de fenómeno — solo mm de
     lluvia. Un pronóstico de tormenta con granizo (weather_code 95/96/99, o
-    CAPE alto en la ruta Windy) podía dar "Excelente" si temperatura/humedad/
+    CAPE alto) podía dar "Excelente" si temperatura/humedad/
     viento eran buenos. Estos tests reproducen exactamente ese escenario:
     condiciones perfectas en todo excepto el tipo de fenómeno.
     """
@@ -595,7 +595,7 @@ class TestStormVeto:
         assert r.label == "No apto"
 
     def test_hacer_deporte_cape_alto_veta_sin_weather_code(self):
-        """Windy no entrega weather_code — el veto debe activarse solo con CAPE."""
+        """Sin weather_code (la serie no lo trae) — el veto debe activarse solo con CAPE."""
         r = score_hacer_deporte(
             temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0,
             cape_j_kg=1500.0,

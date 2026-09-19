@@ -40,8 +40,8 @@ export function HourlyStrip({ hourly, badge, nowMs, selectedDate, onSelectDate }
   const activeDate = groups[selectedDate] ? selectedDate : (dates[0] ?? '')
   const activeEntries = groups[activeDate] ?? []
 
-  // El resumen sale de los milímetros previstos, no de `precip_prob`: con Windy el backend
-  // la aproxima como 100 (llueve) o 0 (no llueve), y eso no es una probabilidad.
+  // El resumen sale de los milímetros previstos, no de `precip_prob`: una probabilidad no dice
+  // si llueve ni cuánto.
   const rainWindow = rainWindowLabel(activeEntries)
 
   return (

@@ -102,9 +102,9 @@ Al migrar un servicio de `async with httpx.AsyncClient(...) as client:` a `get_c
 
 3. **Timeout por call**: el singleton no tiene timeout global; pasar `timeout=settings.http_timeout_seconds` en cada `.get()`/`.post()`.
 
-### Gotcha — Windy (plan Testing)
+### Gotcha — Windy (ya no se usa)
 
-La key de Windy de producción es del plan *Testing* (gratis): según [su página de precios](https://api.windy.com/point-forecast/pricing) "returns randomly shuffled and slightly modified data" y no sirve para producción (además `past3hprecip` llega en metros, no en mm). **No mostrarle al usuario nada que salga de Windy** (`services/windy.py`). El dashboard de Previsión, las herramientas (tender-ropa, hacer-deporte, lavar-coche, cota de nieve) e Incendios ya salen de Open-Meteo; el módulo quedó sin consumidores y está pendiente de borrar. Para validar un dato de pronóstico, compararlo con Open-Meteo GFS en los mismos instantes UTC: una serie física real tiene autocorrelación alta entre franjas vecinas (la de Windy daba −0,10).
+Windy se sacó del proyecto (`services/windy.py`, la key y sus settings). La key de producción era del plan *Testing* (gratis): según [su página de precios](https://api.windy.com/point-forecast/pricing) "returns randomly shuffled and slightly modified data" y no sirve para producción (además `past3hprecip` llegaba en metros, no en mm). **No volver a mostrarle al usuario datos de Windy con una key de ese plan.** Todo el pronóstico (dashboard de Previsión, herramientas e Incendios) sale de Open-Meteo. Para validar un dato de pronóstico, compararlo con Open-Meteo GFS en los mismos instantes UTC: una serie física real tiene autocorrelación alta entre franjas vecinas (la de Windy daba −0,10 y −0,03; la de Open-Meteo, 0,9 o más).
 
 ---
 

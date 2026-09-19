@@ -4,9 +4,9 @@ Fuentes del dashboard:
     1. SMN — observación actual (vía `aggregate_current`).
     2. Open-Meteo — todo el pronóstico: diario multi-modelo (GFS + ECMWF) y horario (lluvia,
        probabilidad, ráfagas, CAPE, 850 hPa, weather_code, uv, sunrise/sunset).
-    Windy no alimenta el dashboard: la key del plan Testing devuelve los datos mezclados al azar (ver
-    services/windy.py). Si Open-Meteo diario falla no hay pronóstico: se responde 503 en vez de
-    mostrar datos que no son.
+    Windy ya no es fuente de nada: la key del plan Testing devolvía los datos mezclados al azar (ver
+    CLAUDE.md). Si Open-Meteo diario falla no hay pronóstico: se responde 503 en vez de mostrar datos
+    que no son.
 """
 from __future__ import annotations
 
@@ -22,9 +22,7 @@ from app.core.rate_limit import limiter
 from app.schemas.weather import (
     CurrentDetailedSchema,
     DayArcSchema,
-    ForecastSources,
     MoonPhaseSchema,
-    SourceStatus,
     WeatherCurrentResponse,
     WeatherDashboardResponse,
 )
@@ -309,15 +307,9 @@ async def get_dashboard(
         om_hourly=om_hourly_data,
     )
 
-    # =========================================================================
-    # sources / degraded — Open-Meteo es la única fuente de pronóstico. `windy_gfs` sigue en la
-    # respuesta (available/used en False) para no romper a los clientes que ya la leen: no se
-    # consulta. No hay WRF-SMN todavía (FRA-122 fase D) — no se fabrica ese campo.
-    # =========================================================================
-    sources = ForecastSources(
-        windy_gfs=SourceStatus(available=False, used=False),
-        open_meteo=SourceStatus(available=True, used=True),
-    )
+    # Open-Meteo es la única fuente de pronóstico: no hay estado por fuente que informar. Lo único que
+    # degrada la respuesta es una observación vieja. (Cuando se migre a WRF-SMN, FRA-122 fase D, se
+    # sumará esa fuente — no se fabrica un valor para ella.)
     degraded = current.meta.stale
 
     return WeatherDashboardResponse(
@@ -331,7 +323,6 @@ async def get_dashboard(
         forecast_7d=forecast_7d,
         fetched_at=now,
         forecast_source=SOURCE_OPENMETEO_FORECAST,
-        sources=sources,
         degraded=degraded,
     )
 

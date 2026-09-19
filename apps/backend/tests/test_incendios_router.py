@@ -1,7 +1,6 @@
 """Tests de integración para GET /api/incendios.
 
-El riesgo se estima con la serie horaria de Open-Meteo. Windy, cuya key del plan Testing devuelve
-datos mezclados al azar, ya no interviene.
+El riesgo se estima con la serie horaria de Open-Meteo.
 """
 from __future__ import annotations
 
@@ -380,27 +379,3 @@ class TestIncendiosFromOpenMeteo:
         assert response.status_code == 503
         assert response.json()["detail"] == "fire_danger_unavailable"
 
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_no_windy_key_is_not_an_error_anymore(self, async_client: AsyncClient):
-        # El conftest deja windy_api_key vacío: antes eso respondía 503 windy_not_configured.
-        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=make_uniform_hourly()):
-            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
-
-        assert response.status_code == 200
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_windy_is_never_called_even_when_it_is_configured(self, async_client: AsyncClient, monkeypatch):
-        import app.core.config as cfg
-
-        monkeypatch.setattr(cfg.settings, "windy_api_key", "fake-key", raising=False)
-        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=make_uniform_hourly()), patch(
-            "app.services.windy.fetch_raw",
-            new_callable=AsyncMock,
-            side_effect=AssertionError("Incendios no debe consultar Windy"),
-        ) as windy:
-            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
-
-        assert response.status_code == 200
-        windy.assert_not_called()

@@ -36,8 +36,7 @@ from app.utils.wmo_codes import describe_wmo, resolve_daily_icon
 
 # Zona horaria Argentina = UTC-3. Pública porque routers/weather.py también la
 # necesita (_parse_ar_dt) — evita que el router importe de vuelta símbolos
-# privados de acá (el mismo problema de encapsulamiento que fire_danger.py
-# tenía con windy.py).
+# privados de acá.
 AR_TZ = timezone(timedelta(hours=-3))
 
 # Meses en español para day_label_long
