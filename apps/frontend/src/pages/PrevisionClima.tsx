@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CloudSun, ChevronDown } from 'lucide-react'
 import { useWeatherDashboard, useSmnAlertas, isColdStart, isClientError } from '@/hooks/useWeather'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
@@ -14,10 +14,14 @@ import { SmnAlertasBlock } from '@/components/clima/SmnAlertasBlock'
 import { DayArc } from '@/components/clima/DayArc'
 import { HourlyStrip } from '@/components/clima/HourlyStrip'
 import { Forecast7d } from '@/components/clima/Forecast7d'
+import { HOURLY_ANCHOR_ID, dayRowId } from '@/components/clima/anchors'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 
 const DETAIL_EXPANDED_KEY = 'skypulse:prevision-detail-expanded'
+
+/** Lo que dura el despliegue del detalle (grid-template-rows 0.5 s) más un margen: recién ahí el destino está en su lugar. */
+const DETAIL_TRANSITION_MS = 520
 
 type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
 
@@ -72,6 +76,11 @@ export function PrevisionClima({ location }: Props) {
     }
   }
 
+  // Día elegido en la tira de horas. Lo controla la página porque "Próximos días" también lo elige.
+  const [hourlyDate, setHourlyDate] = useState('')
+  const scrollTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(scrollTimer.current), [])
+
   const badgeModel = pageModel(data?.current?.source, data?.forecast_source)
   const notes = data ? forecastNotes(data) : []
   const updatedAt = formatClock(data?.fetched_at)
@@ -91,6 +100,28 @@ export function PrevisionClima({ location }: Props) {
     : []
   const rainWindows = rainWindowsByDate(upcoming)
   const today = data?.forecast_7d.find((day) => day.day_label === 'Hoy')
+  const hourlyDates = new Set(upcoming.map((entry) => entry.date))
+
+  // Un día de "Próximos días": abre el detalle y lleva a sus horas; si ese día no tiene horas, a su fila
+  // en el pronóstico de 7 días. Abrir así no cambia la preferencia guardada del botón de abajo.
+  const openDay = (date: string) => {
+    const hasHours = hourlyDates.has(date)
+    if (hasHours) setHourlyDate(date)
+    const wasCollapsed = !detailExpanded
+    if (wasCollapsed) setDetailExpanded(true)
+    window.clearTimeout(scrollTimer.current)
+    scrollTimer.current = window.setTimeout(
+      () => {
+        const target = document.getElementById(hasHours ? HOURLY_ANCHOR_ID : dayRowId(date))
+        if (!target) return
+        target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
+        // El foco va al título de la tira (o a la fila) para que un lector de pantalla diga dónde quedó.
+        const focusTarget = hasHours ? document.getElementById(`${HOURLY_ANCHOR_ID}-title`) : target
+        focusTarget?.focus({ preventScroll: true })
+      },
+      wasCollapsed && !reducedMotion ? DETAIL_TRANSITION_MS : 0,
+    )
+  }
 
   // Región viva: al cambiar de ciudad la pantalla se reemplaza y un lector de pantalla
   // no se entera de que cargó otra cosa.
@@ -180,6 +211,7 @@ export function PrevisionClima({ location }: Props) {
               days={data.forecast_7d.slice(1, 4)}
               rainWindows={rainWindows}
               showConfidence={shownModel === 'consensus'}
+              onSelectDay={openDay}
             />
 
             {/* Profundidad plegable: sol/luna, hora a hora, 7 días */}
@@ -229,7 +261,7 @@ export function PrevisionClima({ location }: Props) {
                   />
 
                   {/* Hourly 48h — GFS */}
-                  <HourlyStrip hourly={data.hourly} nowMs={nowMs} />
+                  <HourlyStrip hourly={data.hourly} nowMs={nowMs} selectedDate={hourlyDate} onSelectDate={setHourlyDate} />
 
                   {/* 7-day forecast — GFS */}
                   <Forecast7d

@@ -30,6 +30,11 @@ export function formatShortDate(date: string): string {
   return `${day} ${MONTHS[month - 1]}`
 }
 
+/** "sáb": el día de la semana en tres letras. Para ejes donde "Mañana" no entra en la banda de una barra. */
+export function weekdayShort(date: string): string {
+  return WEEKDAYS[new Date(`${date}T12:00:00Z`).getUTCDay()]
+}
+
 /**
  * Rótulo de un día: "Hoy", "Mañana" o el día de la semana, siempre con su fecha. Con diez días en
  * pantalla "dom" y "lun" se repiten, y solo el número permite saber cuál es cuál.

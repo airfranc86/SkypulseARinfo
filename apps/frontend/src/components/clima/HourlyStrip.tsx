@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { Wind } from 'lucide-react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { cn } from '@/lib/utils'
+import { HOURLY_ANCHOR_ID } from './anchors'
 import { arDateKey, dayLabel } from '@/lib/dates'
 import { describeWeatherIcon } from '@/lib/weatherLabels'
 import { GUST_KMH, entriesFromNow, formatMm, isRainy, rainWindowLabel } from '@/lib/weatherVerdict'
@@ -13,6 +14,9 @@ interface Props {
   badge?: ReactNode
   /** Hora de referencia (ms): la tira arranca en la hora en curso, no a medianoche. */
   nowMs: number
+  /** El día elegido. Lo controla la página para que "Próximos días" pueda llevar a las horas de uno. */
+  selectedDate: string
+  onSelectDate: (date: string) => void
 }
 
 /** Group entries by date */
@@ -24,14 +28,13 @@ function groupByDate(entries: HourlyEntry[]): Record<string, HourlyEntry[]> {
   }, {})
 }
 
-export function HourlyStrip({ hourly, badge, nowMs }: Props) {
+export function HourlyStrip({ hourly, badge, nowMs, selectedDate, onSelectDate }: Props) {
   const visible = useMemo(() => entriesFromNow(hourly.entries, nowMs), [hourly.entries, nowMs])
   const groups = useMemo(() => groupByDate(visible), [visible])
   const dates = Object.keys(groups)
   // "Hoy" es el día argentino de la hora de referencia. La fecha de la primera franja no sirve: si el
   // pronóstico arranca con horas de ayer, la primera pestaña (hoy) se rotulaba "Mañana".
   const todayDate = Number.isFinite(nowMs) ? arDateKey(nowMs) : (hourly.entries[0]?.date ?? '')
-  const [selectedDate, setSelectedDate] = useState(dates[0] ?? '')
   // Si el día elegido ya no está en los datos (p. ej. pasó la medianoche y el pronóstico se
   // refrescó), se vuelve al primero en vez de mostrar "Sin datos" con las pestañas visibles.
   const activeDate = groups[selectedDate] ? selectedDate : (dates[0] ?? '')
@@ -43,7 +46,8 @@ export function HourlyStrip({ hourly, badge, nowMs }: Props) {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden"
+      id={HOURLY_ANCHOR_ID}
+      className="scroll-mt-52 rounded-2xl overflow-hidden"
       style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
     >
       {/* Resumen de lluvia del día elegido */}
@@ -52,7 +56,13 @@ export function HourlyStrip({ hourly, badge, nowMs }: Props) {
         style={{ borderBottom: '1px solid var(--color-border)' }}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <h2 className="text-sm font-medium shrink-0" style={{ color: 'var(--color-foreground)' }}>
+          {/* tabIndex -1: al elegir un día en "Próximos días" el foco llega acá y se anuncia dónde se está */}
+          <h2
+            id={`${HOURLY_ANCHOR_ID}-title`}
+            tabIndex={-1}
+            className="text-sm font-medium shrink-0 outline-none"
+            style={{ color: 'var(--color-foreground)' }}
+          >
             Pronóstico por hora
           </h2>
           {badge}
@@ -92,7 +102,7 @@ export function HourlyStrip({ hourly, badge, nowMs }: Props) {
             <button
               key={date}
               type="button"
-              onClick={() => setSelectedDate(date)}
+              onClick={() => onSelectDate(date)}
               aria-pressed={date === activeDate}
               className={cn(
                 'shrink-0 px-3.5 py-1.5 min-h-[44px] rounded-lg text-center leading-tight transition-colors',

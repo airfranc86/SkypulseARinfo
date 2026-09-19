@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
+import { weekdayShort } from '@/lib/dates'
 import type { DailyEntry } from '@/lib/api'
 
 interface Props {
@@ -57,7 +58,8 @@ function chartSummary(days: DailyEntry[]): string {
 export function Forecast7dChart({ days }: Props) {
   const chartData = days.map((d) => ({
     ...d,
-    label: d.day_label,
+    // Tres letras: con "Hoy" y "Mañana" las etiquetas de 390 px se tocaban ("HoyMañanadom").
+    label: weekdayShort(d.date),
     temp_max: d.temp_max !== null ? Math.round(d.temp_max) : null,
     temp_min: d.temp_min !== null ? Math.round(d.temp_min) : null,
     precip_prob: d.precip_prob !== null ? Math.round(d.precip_prob) : null,
@@ -84,8 +86,10 @@ export function Forecast7dChart({ days }: Props) {
           >
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(200,168,75,0.1)" vertical={false} />
   
+            {/* interval 0: los siete días con rótulo. Con el automático, en 390 px el eje omitía uno. */}
             <XAxis
               dataKey="label"
+              interval={0}
               tick={{ fill: 'var(--color-muted-foreground)', fontSize: 11 }}
               axisLine={false}
               tickLine={false}
@@ -112,6 +116,8 @@ export function Forecast7dChart({ days }: Props) {
             />
   
             <Tooltip
+              // El eje dice "sáb"; el tooltip, el día entero.
+              labelFormatter={(label, payload) => (payload?.[0]?.payload as DailyEntry | undefined)?.day_label_long ?? label}
               contentStyle={{
                 background: 'var(--color-card)',
                 border: '1px solid var(--color-border)',

@@ -1,6 +1,7 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import { describeWeatherIcon } from '@/lib/weatherLabels'
+import { windColor } from './windColor'
 import type { DailyEntry } from '@/lib/api'
 
 interface Props {
@@ -77,26 +78,14 @@ export function Forecast7dTable({ days }: Props) {
                         {day.wind_icon
                           ? <WeatherIcon code={day.wind_icon} size={20} />
                           : null}
-                        <span
-                          style={{
-                            color: day.wind_intensity === 'intensa'
-                              ? '#e03535'
-                              : day.wind_intensity === 'moderada'
-                                ? '#c8a84b'
-                                : 'var(--color-muted-foreground)',
-                          }}
-                        >
+                        <span style={{ color: windColor(day.wind_intensity) }}>
                           {day.wind_speed_max !== null ? `${Math.round(day.wind_speed_max)} km/h` : '—'}
                         </span>
                         {day.wind_dir_dominant_deg !== null && day.wind_dir_dominant_deg !== undefined && (
                           <WindArrow
                             deg={day.wind_dir_dominant_deg}
                             size={13}
-                            color={
-                              day.wind_intensity === 'intensa' ? '#e03535'
-                              : day.wind_intensity === 'moderada' ? '#c8a84b'
-                              : 'var(--color-muted-foreground)'
-                            }
+                            color={windColor(day.wind_intensity)}
                           />
                         )}
                         {day.wind_dir_cardinal && (
