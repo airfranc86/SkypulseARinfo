@@ -5,8 +5,10 @@ import { useReducedMotion } from '@/hooks/useReducedMotion'
 import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
 import { forecastNotes, formatClock } from '@/lib/weatherLabels'
+import { buildVerdict, entriesFromNow, rainWindowsByDate } from '@/lib/weatherVerdict'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
+import { NextDays } from '@/components/clima/NextDays'
 import { SmnAlertasBlock } from '@/components/clima/SmnAlertasBlock'
 import { DayArc } from '@/components/clima/DayArc'
 import { HourlyStrip } from '@/components/clima/HourlyStrip'
@@ -68,6 +70,15 @@ export function PrevisionClima({ location }: Props) {
   const badgeModel = pageModel(data?.current?.source, data?.forecast_source)
   const notes = data ? forecastNotes(data) : []
   const updatedAt = formatClock(data?.fetched_at)
+
+  // Hora de referencia: cuándo el servidor armó este pronóstico. Con NaN nada se recorta.
+  const nowMs = data ? Date.parse(data.fetched_at) : Number.NaN
+  const upcoming = data ? entriesFromNow(data.hourly.entries, nowMs) : []
+  const verdict = data
+    ? buildVerdict(data.hourly.entries, nowMs, data.rain_today.status_text.toLowerCase().includes('llovizna'))
+    : []
+  const rainWindows = rainWindowsByDate(upcoming)
+  const today = data?.forecast_7d.find((day) => day.day_label === 'Hoy')
   // Sin dato del SMN, "sin avisos" sería una afirmación que no podemos hacer.
   const alertasUnavailable = alertasError || alertasData?.available === false
 
@@ -129,11 +140,11 @@ export function PrevisionClima({ location }: Props) {
                 tarjeta): sin él la página desborda en horizontal en mobile. Los -mx-3/px-3
                 dejan 12 px de brillo a cada lado dentro de la gutter de 16 px. */}
             <div className="-mx-3 px-3 overflow-x-clip">
-              <WeatherHero
-                current={data.current}
-                locationLabel={location.label}
-              />
+              <WeatherHero current={data.current} today={today} verdict={verdict} />
             </div>
+
+            {/* Los próximos 3 días, sin abrir el detalle */}
+            <NextDays days={data.forecast_7d.slice(1, 4)} rainWindows={rainWindows} />
 
             {/* Profundidad plegable: sol/luna, hora a hora, 7 días */}
             <button
@@ -182,7 +193,7 @@ export function PrevisionClima({ location }: Props) {
                   />
 
                   {/* Hourly 48h — GFS */}
-                  <HourlyStrip hourly={data.hourly} />
+                  <HourlyStrip hourly={data.hourly} nowMs={nowMs} />
 
                   {/* 7-day forecast — GFS */}
                   <Forecast7d
@@ -190,6 +201,7 @@ export function PrevisionClima({ location }: Props) {
                     selectedModel={forecastModel}
                     onModelChange={setForecastModel}
                     refreshing={isPlaceholderData}
+                    rainWindows={rainWindows}
                   />
                 </div>
               </div>
