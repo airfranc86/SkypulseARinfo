@@ -47,11 +47,11 @@ def compute_convective_risk(cape_j_kg: float | None) -> ConvectiveRisk:
     """
     Clasifica el riesgo convectivo usando SOLO CAPE (J/kg) — sin CIN.
 
-    CIN no está disponible hoy en ninguna fuente consistente con CAPE: Windy
-    Point Forecast (la fuente de CAPE) no la expone, y pedirla a Open-Meteo
-    mezclaría dos modelos con horas de corrida distintas para un mismo par
-    CAPE/CIN — metodológicamente inválido. Queda pendiente para cuando se
-    migre a WRF-SMN (FRA-122 fase D), de donde saldrían ambas del mismo modelo.
+    CIN no está disponible hoy en ninguna fuente consistente con CAPE: el
+    dashboard toma el CAPE de Open-Meteo (best_match) y pedirle también la CIN
+    mezclaría dos variables de modelos con horas de corrida distintas para un
+    mismo par CAPE/CIN — metodológicamente inválido. Queda pendiente para cuando
+    se migre a WRF-SMN (FRA-122 fase D), de donde saldrían ambas del mismo modelo.
 
     Umbral "high" ajustado a 3000 J/kg (en vez de los ~2500 J/kg de umbrales
     globales tipo NOAA SPC) porque la convección local con orografía de las

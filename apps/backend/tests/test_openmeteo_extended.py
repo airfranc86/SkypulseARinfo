@@ -598,6 +598,66 @@ class TestGetHourlyForecastExt:
             result = await get_hourly_forecast_ext(-34.6, -58.4)
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_timestamps_are_the_real_instants_of_the_argentine_hours(self):
+        """Open-Meteo manda la hora local sin zona ("09:00" de Argentina). El timestamp tiene que ser
+        el instante real (12:00 UTC) y no el del reloj del servidor: en Render, que corre en UTC,
+        salía 3 h antes y toda la tira horaria quedaba corrida."""
+        from datetime import datetime, timezone
+
+        payload = _make_hourly_ext_payload(n=2)  # 2026-05-20T09:00 y T10:00, hora argentina
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
+            result = await get_hourly_forecast_ext(-34.6, -58.4)
+
+        noon_utc = int(datetime(2026, 5, 20, 12, 0, tzinfo=timezone.utc).timestamp())
+        assert result.timestamps == [noon_utc, noon_utc + 3600]
+
+    @pytest.mark.asyncio
+    async def test_asks_for_gusts_cape_850hpa_humidity_and_cloud_cover(self):
+        """Lo que antes solo daba Windy (ráfagas, CAPE, 850 hPa, humedad y nubosidad) se pide acá."""
+        payload = _make_hourly_ext_payload(n=2)
+        mock_client = _mock_http_client(payload)
+        with patch("app.services.openmeteo.get_client", return_value=mock_client):
+            await get_hourly_forecast_ext(-34.6, -58.4)
+
+        requested = mock_client.request.call_args.kwargs["params"]["hourly"].split(",")
+        for variable in ("wind_gusts_10m", "cape", "temperature_850hPa", "relative_humidity_2m", "cloud_cover"):
+            assert variable in requested
+
+    @pytest.mark.asyncio
+    async def test_parses_gusts_cape_850hpa_humidity_and_cloud_cover(self):
+        payload = _make_hourly_ext_payload(n=3)
+        payload["hourly"].update(
+            {
+                "wind_gusts_10m": [31.0, 55.5, None],
+                "cape": [0, 1390, 250.5],
+                "temperature_850hPa": [12.9, 13.0, None],
+                "relative_humidity_2m": [60, 88, 95],
+                "cloud_cover": [10, 90, 100],
+            }
+        )
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
+            result = await get_hourly_forecast_ext(-34.6, -58.4)
+
+        assert result.wind_gusts_kmh == [31.0, 55.5, None]
+        assert result.cape_j_kg == [0.0, 1390.0, 250.5]
+        assert result.temps_850_c == [12.9, 13.0, None]
+        assert result.humidities == [60.0, 88.0, 95.0]
+        assert result.cloud_covers == [10.0, 90.0, 100.0]
+
+    @pytest.mark.asyncio
+    async def test_extra_variables_are_optional_in_the_payload(self):
+        """Un payload sin las variables nuevas (caché vieja, otro modelo) sigue parseando."""
+        payload = _make_hourly_ext_payload(n=2)
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
+            result = await get_hourly_forecast_ext(-34.6, -58.4)
+
+        assert result.wind_gusts_kmh == []
+        assert result.cape_j_kg == []
+        assert result.temps_850_c == []
+        assert result.humidities == []
+        assert result.cloud_covers == []
+
 
 # ---------------------------------------------------------------------------
 # get_visibility_forecast

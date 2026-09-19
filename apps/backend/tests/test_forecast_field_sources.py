@@ -1,29 +1,31 @@
-"""Tests for field-source priority in build_7d_forecast.
+"""Tests de las fuentes de cada campo en build_7d_forecast: todo sale de Open-Meteo.
 
-PR1 (precip_prob):
-  T1 — OM primary when Windy available
-  T2 — OM primary when Windy absent
-  T3 — Windy fallback when OM has no data
+Windy dejó de alimentar el pronóstico de 7 días: la clave del plan Testing devuelve datos mezclados
+al azar, y con la cantidad de lluvia de Windy y la probabilidad de Open-Meteo la tarjeta de un día
+podía decir "Lluvia 100 %" con 0,01 mm. Ahora la cantidad, la probabilidad, el ícono y las
+temperaturas salen del mismo lugar.
 
-PR2 (temp_max / temp_min):
-  T4 — OM primary when Windy available
-  T5 — Windy fallback when OM has no data
-  T6 — both None → no crash, returns None
-
-PR3 (Windy-primary fields):
-  T7  — precip_sum uses Windy primary
-  T8  — wind_speed_max uses Windy primary
-  T10 — consensus averages multiple OM models
-  T11 — selected_model filters OM list
+T1  — precip_prob: el máximo entre los modelos
+T2  — precip_prob con un solo modelo
+T3  — precip_prob sin dato → None
+T4  — temp_max: promedio del consenso
+T6  — temp_max sin dato → None, sin romper
+T7  — precip_sum: promedio del consenso, o el del modelo elegido
+T8  — wind_speed_max: promedio del consenso
+T9  — cantidad y probabilidad de un día salen de la misma fuente
+T10 — consenso promedia varios modelos
+T11 — el modelo elegido filtra la lista
+T12 — riesgo convectivo diario desde el CAPE horario de Open-Meteo
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
-from datetime import date
 
 from app.services.dashboard_builder import build_7d_forecast
 from app.services.openmeteo import DailyForecastDataExt, MultiModelDailyData
-from app.services.windy import WindyDailyEntry
+from tests.hourly_fixtures import AR, make_hourly
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +44,6 @@ def _make_om(
     precip_prob_max: list[float | None] | None = None,
     precip_sum: list[float | None] | None = None,
     wind_speed_max: list[float | None] | None = None,
-    model_name: str = "ecmwf_ifs025",
 ) -> DailyForecastDataExt:
     return DailyForecastDataExt(
         dates=_DATES,
@@ -62,195 +63,151 @@ def _make_om(
     )
 
 
-def _make_multi(om: DailyForecastDataExt | None = None) -> MultiModelDailyData:
-    m = om or _make_om()
+def _make_multi(*models: DailyForecastDataExt) -> MultiModelDailyData:
+    """Un MultiModelDailyData con los modelos dados (ECMWF, GFS…, en ese orden)."""
+    names = ["ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
+    chosen = models or (_make_om(),)
     return MultiModelDailyData(
-        models={"ecmwf_ifs025": m, "gfs_seamless": m},
+        models=dict(zip(names, chosen)),
         consensus_pct_per_day=[100.0] * _N,
         rain_consensus_per_day=["all_agree_dry"] * _N,
     )
 
 
-def _make_windy(
-    *,
-    temp_max_c: float = 23.0,
-    temp_min_c: float = 11.0,
-    precip_prob: float = 0.0,
-    precip_sum_mm: float = 0.0,
-    wind_speed_max_kmh: float = 18.0,
-) -> list[WindyDailyEntry]:
-    return [
-        WindyDailyEntry(
-            date=d,
-            temp_max_c=temp_max_c,
-            temp_min_c=temp_min_c,
-            humidity_mean=58.0,
-            wind_speed_max_kmh=wind_speed_max_kmh,
-            wind_speed_mean_kmh=12.0,
-            wind_gust_max_kmh=27.0,
-            wind_dir_cardinal="S",
-            precip_sum_mm=precip_sum_mm,
-            precip_prob=precip_prob,
-            cloud_cover_mean=25.0,
-        )
-        for d in _DATES
-    ]
-
-
-def _first(daily_multi: MultiModelDailyData, windy: list[WindyDailyEntry] | None = None) -> object:
-    """Run build_7d_forecast and return the first day entry."""
-    entries = build_7d_forecast(daily_multi, windy, snow_level_m=None)
-    return entries[0]
+def _first(daily_multi: MultiModelDailyData, **kwargs):
+    """Corre build_7d_forecast y devuelve el primer día."""
+    return build_7d_forecast(daily_multi, snow_level_m=None, **kwargs)[0]
 
 
 # ---------------------------------------------------------------------------
-# T1 — precip_prob: OM primary when Windy available (Windy has 0, OM has 60)
+# T1 / T2 / T3 — precip_prob
 # ---------------------------------------------------------------------------
 
-def test_precip_prob_uses_om_when_windy_available():
-    om = _make_om(precip_prob_max=[60.0] * _N)
-    multi = _make_multi(om)
-    windy = _make_windy(precip_prob=0.0)
+def test_precip_prob_is_the_maximum_across_models():
+    multi = _make_multi(_make_om(precip_prob_max=[30.0] * _N), _make_om(precip_prob_max=[60.0] * _N))
 
-    entry = _first(multi, windy)
-    assert entry.precip_prob == pytest.approx(60.0), (
-        "precip_prob must come from OM (primary) even when Windy is available"
-    )
+    assert _first(multi).precip_prob == pytest.approx(60.0)
 
-
-# ---------------------------------------------------------------------------
-# T2 — precip_prob: OM primary when Windy absent
-# ---------------------------------------------------------------------------
 
 def test_precip_prob_not_zero_when_om_has_rain_forecast():
-    om = _make_om(precip_prob_max=[45.0] * _N)
-    multi = _make_multi(om)
+    multi = _make_multi(_make_om(precip_prob_max=[45.0] * _N))
 
-    entry = _first(multi, windy=None)
-    assert entry.precip_prob == pytest.approx(45.0)
+    assert _first(multi).precip_prob == pytest.approx(45.0)
 
 
-# ---------------------------------------------------------------------------
-# T3 — precip_prob: Windy fallback when OM has no data
-# ---------------------------------------------------------------------------
+def test_precip_prob_without_data_is_none():
+    multi = _make_multi(_make_om(precip_prob_max=[None] * _N))
 
-def test_precip_prob_fallback_to_windy_when_om_none():
-    om = _make_om(precip_prob_max=[None] * _N)
-    multi = _make_multi(om)
-    windy = _make_windy(precip_prob=30.0)
-
-    entry = _first(multi, windy)
-    assert entry.precip_prob == pytest.approx(30.0), (
-        "When OM precip_prob_max is None, must fall back to Windy precip_prob"
-    )
+    assert _first(multi).precip_prob is None
 
 
 # ---------------------------------------------------------------------------
-# T4 — temp_max: OM primary when Windy available
+# T4 / T6 — temp_max
 # ---------------------------------------------------------------------------
 
-def test_temp_max_uses_om_not_windy_snapshots():
-    om = _make_om(temp_max=[22.0] * _N)
-    multi = _make_multi(om)
-    windy = _make_windy(temp_max_c=18.0)  # Windy lower — should NOT win
+def test_temp_max_comes_from_the_open_meteo_daily_aggregate():
+    multi = _make_multi(_make_om(temp_max=[22.0] * _N))
 
-    entry = _first(multi, windy)
-    assert entry.temp_max == pytest.approx(22.0), (
-        "temp_max must come from OM (native daily max), not Windy max(temp_3h snapshots)"
-    )
+    assert _first(multi).temp_max == pytest.approx(22.0)
 
-
-# ---------------------------------------------------------------------------
-# T5 — temp_max: Windy fallback when OM has no data
-# ---------------------------------------------------------------------------
-
-def test_temp_max_fallback_to_windy_when_om_none():
-    om = _make_om(temp_max=[None] * _N)
-    multi = _make_multi(om)
-    windy = _make_windy(temp_max_c=19.0)
-
-    entry = _first(multi, windy)
-    assert entry.temp_max == pytest.approx(19.0), (
-        "When OM temp_max is None, must fall back to Windy temp_max_c"
-    )
-
-
-# ---------------------------------------------------------------------------
-# T6 — temp_max: both None → no crash, returns None
-# ---------------------------------------------------------------------------
 
 def test_temp_max_both_none():
-    om = _make_om(temp_max=[None] * _N)
-    multi = _make_multi(om)
+    multi = _make_multi(_make_om(temp_max=[None] * _N))
 
-    entry = _first(multi, windy=None)  # No Windy either
-    assert entry.temp_max is None, "Both sources None → entry.temp_max must be None (no crash)"
+    assert _first(multi).temp_max is None, "sin dato en ningún modelo → None, sin romper"
 
 
 # ---------------------------------------------------------------------------
-# T7 — precip_sum: Windy primary over OM
+# T7 / T8 — precip_sum y wind_speed_max: también de Open-Meteo
 # ---------------------------------------------------------------------------
 
-def test_precip_sum_uses_windy_primary():
-    om = _make_om(precip_sum=[2.1] * _N)
-    multi = _make_multi(om)
-    windy = _make_windy(precip_sum_mm=3.5)
+def test_precip_sum_is_the_consensus_mean_of_open_meteo():
+    """Mañana en el pronóstico real: GFS 16,8 mm y ECMWF 14 mm → 15,4 mm."""
+    multi = _make_multi(_make_om(precip_sum=[14.0] * _N), _make_om(precip_sum=[16.8] * _N))
 
-    entry = _first(multi, windy)
-    assert entry.precip_sum == pytest.approx(3.5), (
-        "precip_sum must come from Windy (higher temporal resolution), not OM"
+    assert _first(multi).precip_sum == pytest.approx(15.4)
+
+
+def test_precip_sum_of_the_selected_model():
+    multi = _make_multi(_make_om(precip_sum=[14.0] * _N), _make_om(precip_sum=[16.8] * _N))
+
+    assert _first(multi, selected_model="gfs").precip_sum == pytest.approx(16.8)
+    assert _first(multi, selected_model="ecmwf").precip_sum == pytest.approx(14.0)
+
+
+def test_wind_speed_max_is_the_consensus_mean_of_open_meteo():
+    multi = _make_multi(_make_om(wind_speed_max=[30.0] * _N), _make_om(wind_speed_max=[40.0] * _N))
+
+    assert _first(multi).wind_speed_max == pytest.approx(35.0)
+
+
+# ---------------------------------------------------------------------------
+# T9 — la cantidad y la probabilidad de un día cuentan la misma historia
+# ---------------------------------------------------------------------------
+
+def test_amount_and_probability_of_a_rainy_day_come_from_the_same_source():
+    """El día que mostraba "Lluvia 100 %" con 0,01 mm: la probabilidad era de Open-Meteo y la
+    cantidad de Windy. Ahora ambas son de Open-Meteo y coinciden."""
+    multi = _make_multi(
+        _make_om(precip_sum=[14.0] * _N, precip_prob_max=[97.0] * _N),
+        _make_om(precip_sum=[16.8] * _N, precip_prob_max=[100.0] * _N),
     )
 
-
-# ---------------------------------------------------------------------------
-# T8 — wind_speed_max: Windy primary over OM
-# ---------------------------------------------------------------------------
-
-def test_wind_speed_max_uses_windy_primary():
-    om = _make_om(wind_speed_max=[32.0] * _N)
-    multi = _make_multi(om)
-    windy = _make_windy(wind_speed_max_kmh=45.0)
-
-    entry = _first(multi, windy)
-    assert entry.wind_speed_max == pytest.approx(45.0), (
-        "wind_speed_max must come from Windy (max over 3h slots captures gusts better)"
-    )
+    entry = _first(multi)
+    assert entry.precip_prob == pytest.approx(100.0)
+    assert entry.precip_sum == pytest.approx(15.4)
+    assert entry.precip_sum > 10  # una tormenta, no una traza
 
 
 # ---------------------------------------------------------------------------
-# T10 — consensus averages multiple OM models
+# T10 / T11 — consenso y modelo elegido
 # ---------------------------------------------------------------------------
 
 def test_consensus_mode_averages_multiple_om_models():
-    om_a = _make_om(temp_max=[20.0] * _N, model_name="ecmwf_ifs025")
-    om_b = _make_om(temp_max=[22.0] * _N, model_name="gfs_seamless")
-    om_c = _make_om(temp_max=[24.0] * _N, model_name="icon_seamless")
-    multi = MultiModelDailyData(
-        models={"ecmwf_ifs025": om_a, "gfs_seamless": om_b, "icon_seamless": om_c},
-        consensus_pct_per_day=[80.0] * _N,
-        rain_consensus_per_day=["all_agree_dry"] * _N,
+    multi = _make_multi(
+        _make_om(temp_max=[20.0] * _N),
+        _make_om(temp_max=[22.0] * _N),
+        _make_om(temp_max=[24.0] * _N),
     )
 
-    entries = build_7d_forecast(multi, windy_daily=None, snow_level_m=None, selected_model="consensus")
-    assert entries[0].temp_max == pytest.approx(22.0), (
-        "Consensus mode: mean([20, 22, 24]) == 22.0"
-    )
+    assert _first(multi, selected_model="consensus").temp_max == pytest.approx(22.0)
 
-
-# ---------------------------------------------------------------------------
-# T11 — selected_model filters OM list to a single model
-# ---------------------------------------------------------------------------
 
 def test_selected_model_filters_om_list():
-    om_ecmwf = _make_om(temp_max=[22.0] * _N)
-    om_gfs   = _make_om(temp_max=[18.0] * _N)  # different value
-    multi = MultiModelDailyData(
-        models={"ecmwf_ifs025": om_ecmwf, "gfs_seamless": om_gfs},
-        consensus_pct_per_day=[100.0] * _N,
-        rain_consensus_per_day=["all_agree_dry"] * _N,
-    )
+    multi = _make_multi(_make_om(temp_max=[22.0] * _N), _make_om(temp_max=[18.0] * _N))
 
-    entries = build_7d_forecast(multi, windy_daily=None, snow_level_m=None, selected_model="ecmwf")
-    assert entries[0].temp_max == pytest.approx(22.0), (
-        "Mode=ecmwf: only ecmwf_ifs025 contributes; gfs_seamless (18.0) must be ignored"
-    )
+    entry = _first(multi, selected_model="ecmwf")
+    assert entry.temp_max == pytest.approx(22.0), "solo ecmwf_ifs025 aporta; gfs_seamless (18.0) se ignora"
+
+
+# ---------------------------------------------------------------------------
+# T12 — riesgo convectivo diario: el CAPE máximo del día, de Open-Meteo
+# ---------------------------------------------------------------------------
+
+def _week_of_hours(**overrides):
+    return make_hourly(hours=_N * 24, start=datetime(2026, 5, 20, 0, 0, tzinfo=AR), **overrides)
+
+
+def test_daily_convective_risk_is_the_highest_cape_of_that_day():
+    hourly = _week_of_hours(cape_j_kg={2 * 24 + 16: 3200.0, 3 * 24 + 10: 400.0})
+
+    entries = build_7d_forecast(_make_multi(), snow_level_m=None, om_hourly=hourly)
+
+    assert entries[2].convective_risk == "high"     # 22/05: 3200 J/kg
+    assert entries[3].convective_risk == "low"      # 23/05: 400 J/kg
+    assert entries[0].convective_risk == "low"      # hay dato y es 0 J/kg
+
+
+def test_daily_convective_risk_is_unknown_without_hourly_data():
+    entries = build_7d_forecast(_make_multi(), snow_level_m=None, om_hourly=None)
+
+    assert all(e.convective_risk is None for e in entries), "sin dato no se finge un cielo tranquilo"
+
+
+def test_daily_convective_risk_is_unknown_for_days_beyond_the_hourly_horizon():
+    hourly = make_hourly(hours=2 * 24, start=datetime(2026, 5, 20, 0, 0, tzinfo=AR))  # solo 2 días
+
+    entries = build_7d_forecast(_make_multi(), snow_level_m=None, om_hourly=hourly)
+
+    assert entries[0].convective_risk == "low"
+    assert entries[5].convective_risk is None
