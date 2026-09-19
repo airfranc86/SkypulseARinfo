@@ -125,6 +125,53 @@ test('ráfagas fuertes se avisan con hora', () => {
   assert.deepEqual(lines, ['Sin lluvia prevista en las próximas 24 h', 'Ráfagas de hasta 55 km/h a las 17:00'])
 })
 
+const NBSP = String.fromCharCode(0xa0)
+
+test('los datos duros del titular viajan marcados como hechos', () => {
+  const [headline] = buildVerdict(hourly({ 2: 1.2, 3: 2.0, 4: 0.6 }) as never, NOW_MS, false)
+  assert.deepEqual(
+    headline.segments.filter((s) => s.fact).map((s) => s.text.replaceAll(NBSP, ' ')),
+    ['de 16:00 a 18:00', '≈ 4 mm'],
+  )
+  assert.equal(headline.segments.map((s) => s.text).join(''), headline.text)
+})
+
+test('ráfagas y tormentas: velocidad y hora son hechos', () => {
+  const lines = buildVerdict(hourly({}, { gust: { 3: 55 } }) as never, NOW_MS, false)
+  assert.deepEqual(
+    lines[1].segments.filter((s) => s.fact).map((s) => s.text.replaceAll(NBSP, ' ')),
+    ['55 km/h', '17:00'],
+  )
+  const storm = buildVerdict(hourly({}, { convective: { 4: 'high' } }) as never, NOW_MS, false)
+  assert.deepEqual(storm[1].segments.filter((s) => s.fact).map((s) => s.text), ['18:00'])
+})
+
+test('"24 h" no se parte entre renglones', () => {
+  const [line] = buildVerdict(hourly() as never, NOW_MS, false)
+  assert.ok(line.text.includes(`24${NBSP}h`))
+})
+
+test('"mañana" se cuenta desde el día argentino de la hora de referencia, no desde la primera franja', () => {
+  // 23:30 AR del 18/09. Con franjas de 3 h la próxima ya es la de las 00:00 del 19/09: esa lluvia es de mañana.
+  const at = (hoursFromMidnightAr: number, mm: number) => {
+    const ts = Date.UTC(2026, 8, 18, 3, 0) / 1000 + hoursFromMidnightAr * 3600
+    const local = new Date((ts - 3 * 3600) * 1000)
+    return {
+      timestamp: ts,
+      hour_label: `${String(local.getUTCHours()).padStart(2, '0')}:00`,
+      date: local.toISOString().slice(0, 10),
+      temp_c: 15, precip_mm: mm, precip_prob: 0, weather_code: 1, icon: 'clear-night', is_day: false,
+      wind_gusts_kmh: 10, convective_risk: null,
+    }
+  }
+  const entries = [at(18, 0), at(21, 0), at(24, 1.5), at(27, 0), at(30, 0)]
+  const nowMs = Date.UTC(2026, 8, 19, 2, 30) // 23:30 AR del 18/09
+  assert.deepEqual(
+    buildVerdict(entries as never, nowMs, false).map((l) => l.text.replaceAll(String.fromCharCode(0xa0), ' ')),
+    ['Lluvia débil prevista mañana a las 00:00 · ≈ 2 mm en total'],
+  )
+})
+
 test('rainIntensity: límites de las clases AMS/NWS', () => {
   assert.equal(rainIntensity(0.3), 'débil')
   assert.equal(rainIntensity(2.4), 'débil')
