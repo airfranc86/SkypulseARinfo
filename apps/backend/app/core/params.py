@@ -17,5 +17,7 @@ LonParam = Annotated[
 # Etiquetas canónicas de fuente de datos (campo `source` en respuestas)
 SOURCE_WINDY = "windy_gfs"
 SOURCE_OPENMETEO = "openmeteo_fallback"
-SOURCE_MIXED = "mixed"           # Windy datos + Open-Meteo codes/uv/sun
+SOURCE_MIXED = "mixed"           # Windy datos + Open-Meteo codes/uv/sun (ya no lo emite el dashboard)
 SOURCE_UNAVAILABLE = "unavailable"
+# Open-Meteo como fuente principal del pronóstico (dashboard de Previsión): no es un respaldo.
+SOURCE_OPENMETEO_FORECAST = "openmeteo"

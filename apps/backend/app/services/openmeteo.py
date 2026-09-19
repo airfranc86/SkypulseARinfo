@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.core import usage_counter
 from app.core.cache import SingleFlightCache
@@ -14,6 +14,10 @@ from app.core.http_client import fetch_with_retry, get_client
 from app.utils.parsing import parse_float
 
 _DAY_LABELS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+# Argentina no usa horario de verano: UTC-3 todo el año. Open-Meteo devuelve las horas en esta zona
+# (parámetro `timezone`) y sin sufijo, así que hay que anclarlas para obtener el instante real.
+_AR_TZ = timezone(timedelta(hours=-3))
 
 logger = logging.getLogger(__name__)
 
@@ -490,6 +494,12 @@ class HourlyForecastExt:
     weather_codes: list[int | None]
     is_day: list[bool]
     freezing_level_heights_m: list[float | None] = field(default_factory=list)
+    # Lo que antes solo daba Windy. Vacías si la respuesta no las trae (caché vieja, otro modelo).
+    wind_gusts_kmh: list[float | None] = field(default_factory=list)   # máx. de la hora previa
+    cape_j_kg: list[float | None] = field(default_factory=list)        # energía convectiva (tormentas)
+    temps_850_c: list[float | None] = field(default_factory=list)      # temperatura a 850 hPa (cota de nieve)
+    humidities: list[float | None] = field(default_factory=list)       # % a 2 m
+    cloud_covers: list[float | None] = field(default_factory=list)     # % de nubosidad total
 
 
 async def get_hourly_forecast_ext(
@@ -498,7 +508,9 @@ async def get_hourly_forecast_ext(
     days: int = 2,
 ) -> HourlyForecastExt | None:
     """
-    Pronóstico horario extendido con weather_code, precip_probability e is_day.
+    Pronóstico horario extendido con weather_code, precip_probability, is_day, ráfagas, CAPE,
+    temperatura a 850 hPa, humedad y nubosidad. Es la fuente del dashboard: reemplaza a Windy, cuya
+    clave del plan Testing devuelve datos mezclados al azar.
     Usa best_match (sin modelo específico) para máxima disponibilidad.
     """
     params = {
@@ -506,7 +518,8 @@ async def get_hourly_forecast_ext(
         "longitude": lon,
         "hourly": (
             "temperature_2m,precipitation,precipitation_probability,"
-            "wind_speed_10m,weather_code,is_day,freezing_level_height"
+            "wind_speed_10m,weather_code,is_day,freezing_level_height,"
+            "wind_gusts_10m,cape,temperature_850hPa,relative_humidity_2m,cloud_cover"
         ),
         "forecast_days": days,
         "timezone": "America/Argentina/Buenos_Aires",
@@ -536,7 +549,9 @@ async def get_hourly_forecast_ext(
             hour_labels: list[str] = []
             dates: list[str] = []
             for t in time_list:
-                dt = datetime.fromisoformat(t)
+                # La hora viene sin zona: anclarla a UTC-3. `.timestamp()` sobre un naive usaría el
+                # reloj del servidor (UTC en Render) y el instante saldría 3 h antes.
+                dt = datetime.fromisoformat(t).replace(tzinfo=_AR_TZ)
                 timestamps.append(int(dt.timestamp()))
                 hour_labels.append(t[11:16])   # "14:00"
                 dates.append(t[:10])           # "2026-05-20"
@@ -564,6 +579,11 @@ async def get_hourly_forecast_ext(
                 freezing_level_heights_m=[
                     parse_float(v) for v in hourly.get("freezing_level_height", [])
                 ],
+                wind_gusts_kmh=[parse_float(v) for v in hourly.get("wind_gusts_10m", [])],
+                cape_j_kg=[parse_float(v) for v in hourly.get("cape", [])],
+                temps_850_c=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
+                humidities=[parse_float(v) for v in hourly.get("relative_humidity_2m", [])],
+                cloud_covers=[parse_float(v) for v in hourly.get("cloud_cover", [])],
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo hourly_ext parse error: %s", exc)

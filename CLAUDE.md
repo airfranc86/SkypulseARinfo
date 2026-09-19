@@ -102,6 +102,10 @@ Al migrar un servicio de `async with httpx.AsyncClient(...) as client:` a `get_c
 
 3. **Timeout por call**: el singleton no tiene timeout global; pasar `timeout=settings.http_timeout_seconds` en cada `.get()`/`.post()`.
 
+### Gotcha — Windy (plan Testing)
+
+La key de Windy de producción es del plan *Testing* (gratis): según [su página de precios](https://api.windy.com/point-forecast/pricing) "returns randomly shuffled and slightly modified data" y no sirve para producción (además `past3hprecip` llega en metros, no en mm). **No mostrarle al usuario nada que salga de Windy** (`services/windy.py`). El dashboard de Previsión ya sale entero de Open-Meteo; las herramientas (tender-ropa, hacer-deporte, lavar-coche, cota de nieve, incendios) todavía lo consumen y están pendientes de migrar. Para validar un dato de pronóstico, compararlo con Open-Meteo GFS en los mismos instantes UTC: una serie física real tiene autocorrelación alta entre franjas vecinas (la de Windy daba −0,10).
+
 ---
 
 ## Reglas Git — este proyecto

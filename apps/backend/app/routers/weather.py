@@ -1,14 +1,12 @@
 """Router para datos meteorológicos actuales y dashboard completo.
 
-Jerarquía de fuentes:
+Fuentes del dashboard:
     1. SMN — observación actual (vía `aggregate_current`).
-    2. Windy GFS — pronósticos horarios y diarios (temp, humedad, viento, precip).
-    3. Open-Meteo — fallback de pronósticos. Provee:
-       - weather_code (WMO) → íconos y descripciones.
-       - uv_index → no provisto por Windy GFS gratuito.
-       - sunrise/sunset/daylight_duration → cálculo astronómico.
-       Si Open-Meteo falla (ej. 429 rate-limit), el dashboard usa un fallback
-       sintético construido a partir de Windy GFS + fórmula astronómica local.
+    2. Open-Meteo — todo el pronóstico: diario multi-modelo (GFS + ECMWF) y horario (lluvia,
+       probabilidad, ráfagas, CAPE, 850 hPa, weather_code, uv, sunrise/sunset).
+    Windy no alimenta el dashboard: la key del plan Testing devuelve los datos mezclados al azar (ver
+    services/windy.py). Si Open-Meteo diario falla no hay pronóstico: se responde 503 en vez de
+    mostrar datos que no son.
 """
 from __future__ import annotations
 
@@ -19,8 +17,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Literal
 
-from app.core.config import settings
-from app.core.params import LatParam, LonParam, SOURCE_WINDY, SOURCE_OPENMETEO, SOURCE_MIXED
+from app.core.params import LatParam, LonParam, SOURCE_OPENMETEO_FORECAST
 from app.core.rate_limit import limiter
 from app.schemas.weather import (
     CurrentDetailedSchema,
@@ -36,7 +33,7 @@ from app.services.dashboard_builder import (
     build_7d_forecast,
     build_hourly_schema,
     build_rain_forecast,
-    build_synthetic_daily_multi,
+    current_temp_850,
 )
 from app.services.weather_aggregator import aggregate_current
 from app.services.openmeteo import (
@@ -44,13 +41,6 @@ from app.services.openmeteo import (
     get_hourly_forecast_ext,
     DailyForecastDataExt,
     HourlyForecastExt,
-)
-from app.services.windy import (
-    WindyDailyEntry,
-    WindyHourlyEntry,
-    WindyNotConfiguredError,
-    get_daily_forecast as windy_get_daily_forecast,
-    get_hourly_forecast as windy_get_hourly_forecast,
 )
 from app.utils.moon_phase import compute_moon_phase, compute_moon_position
 from app.utils.wind import wind_icon_code, wind_intensity_tier
@@ -98,34 +88,6 @@ async def get_current_weather(
 
 
 # ---------------------------------------------------------------------------
-# Wrappers Windy con fallback a None
-# ---------------------------------------------------------------------------
-
-async def _safe_windy_hourly(lat: float, lon: float) -> list[WindyHourlyEntry] | None:
-    if not settings.windy_api_key:
-        return None
-    try:
-        return await windy_get_hourly_forecast(lat, lon)
-    except WindyNotConfiguredError:
-        return None
-    except Exception as exc:
-        logger.warning("Windy hourly failed in /dashboard: %s", exc)
-        return None
-
-
-async def _safe_windy_daily(lat: float, lon: float, days: int) -> list[WindyDailyEntry] | None:
-    if not settings.windy_api_key:
-        return None
-    try:
-        return await windy_get_daily_forecast(lat, lon, days=days)
-    except WindyNotConfiguredError:
-        return None
-    except Exception as exc:
-        logger.warning("Windy daily failed in /dashboard: %s", exc)
-        return None
-
-
-# ---------------------------------------------------------------------------
 # GET /dashboard
 # ---------------------------------------------------------------------------
 
@@ -134,9 +96,9 @@ async def _safe_windy_daily(lat: float, lon: float, days: int) -> list[WindyDail
     response_model=WeatherDashboardResponse,
     summary="Dashboard meteorológico completo",
     description=(
-        "Retorna condiciones actuales (SMN), pronóstico horario 7 días (Windy GFS), "
-        "pronóstico 7 días (Windy GFS con weather codes/uv/sunrise/sunset desde Open-Meteo), "
-        "fase lunar, arco solar y pronóstico de lluvia. "
+        "Retorna condiciones actuales (SMN), pronóstico horario de 7 días en franjas de 3 h, "
+        "pronóstico diario de 7 días, fase lunar, arco solar y pronóstico de lluvia. "
+        "Todo el pronóstico sale de Open-Meteo. "
         "El parámetro `model` permite seleccionar GFS, ECMWF o el consenso multi-modelo."
     ),
 )
@@ -153,18 +115,15 @@ async def get_dashboard(
 
     # Fetch en paralelo:
     #   - current (SMN/OM): bloqueante.
-    #   - multi-model Open-Meteo: SIEMPRE — provee weather_code/uv/sunrise/sunset.
-    #   - Windy hourly + daily: best-effort.
-    #   - Open-Meteo hourly_ext: fallback de horario si Windy falla.
+    #   - multi-model Open-Meteo diario: bloqueante — provee el pronóstico, weather_code, uv,
+    #     sunrise y sunset.
+    #   - Open-Meteo horario: best-effort — sin él la tira horaria queda vacía.
     current_task = aggregate_current(lat, lon)
     om_daily_task = get_multi_model_daily(lat, lon, days=7)
     om_hourly_task = get_hourly_forecast_ext(lat, lon, days=7)
-    windy_hourly_task = _safe_windy_hourly(lat, lon)
-    windy_daily_task = _safe_windy_daily(lat, lon, days=7)
 
-    (current, daily_multi, om_hourly, windy_hourly, windy_daily) = await asyncio.gather(
+    (current, daily_multi, om_hourly) = await asyncio.gather(
         current_task, om_daily_task, om_hourly_task,
-        windy_hourly_task, windy_daily_task,
         return_exceptions=True,
     )
 
@@ -173,38 +132,15 @@ async def get_dashboard(
         logger.error("aggregate_current falló en /dashboard: %s", current)
         raise HTTPException(status_code=503, detail="current_unavailable")
 
-    # Resolver datos opcionales ANTES del check de daily_multi (necesarios para fallback)
     om_hourly_data: HourlyForecastExt | None = (
         om_hourly if not isinstance(om_hourly, Exception) else None
     )
-    windy_hourly_data: list[WindyHourlyEntry] | None = (
-        windy_hourly if not isinstance(windy_hourly, Exception) else None
-    )
-    windy_daily_data: list[WindyDailyEntry] | None = (
-        windy_daily if not isinstance(windy_daily, Exception) else None
-    )
 
-    # daily_multi provee weather_code/uv/sunrise/sunset.
-    # Si Open-Meteo falla (ej. 429), intentar fallback sintético desde Windy GFS.
-    # Capturado ANTES de la reasignación de abajo — indica si Open-Meteo global
-    # falló y tuvimos que sintetizar el daily desde Windy (ver sources/degraded).
-    used_synthetic_daily = isinstance(daily_multi, Exception) or daily_multi is None
+    # Sin el pronóstico diario no hay dashboard: antes se sintetizaba desde Windy, pero esos datos
+    # vienen mezclados al azar. Un error honesto vale más que un pronóstico falso.
     if isinstance(daily_multi, Exception) or daily_multi is None:
-        if windy_daily_data:
-            logger.warning(
-                "get_multi_model_daily falló (%s) — usando fallback sintético desde Windy GFS",
-                daily_multi,
-            )
-            daily_multi = build_synthetic_daily_multi(windy_daily_data, lat, lon)
-        else:
-            logger.error(
-                "get_multi_model_daily falló y Windy no disponible — sin datos para armar el dashboard: %s",
-                daily_multi,
-            )
-            raise HTTPException(status_code=503, detail="forecast_unavailable")
-
-    # Determinar fuente del pronóstico
-    forecast_source = SOURCE_MIXED if windy_hourly_data or windy_daily_data else SOURCE_OPENMETEO
+        logger.error("get_multi_model_daily falló — sin datos para armar el dashboard: %s", daily_multi)
+        raise HTTPException(status_code=503, detail="forecast_unavailable")
 
     # Referencia: primer modelo Open-Meteo disponible (para sunrise/sunset/daylight)
     ref_daily: DailyForecastDataExt = next(iter(daily_multi.models.values()))
@@ -343,62 +279,46 @@ async def get_dashboard(
     try:
         from app.services.calculators import compute_cota_de_nieve
         if current.temp_c is not None:
-            # Si tenemos Windy hourly con temp_850, lo usamos. Caso contrario, None.
-            temp_850 = None
-            if windy_hourly_data:
-                for h in windy_hourly_data:
-                    if h.temp_850_c is not None:
-                        temp_850 = h.temp_850_c
-                        break
-
             snow_result = compute_cota_de_nieve(
                 temp_c=current.temp_c,
                 station_altitude_m=500.0,   # altitud genérica; mejorable con elevation API
-                temp_850_hpa=temp_850,
+                # Temperatura a 850 hPa de la hora en curso (Open-Meteo); sin dato, solo los otros métodos.
+                temp_850_hpa=current_temp_850(om_hourly_data, now),
             )
             snow_level_m = snow_result.average_m
     except Exception as exc:
         logger.warning("compute_cota_de_nieve falló en /dashboard: %s", exc)
 
     # =========================================================================
-    # RainForecastSchema — usa Windy hourly si disponible, OM como fallback
+    # RainForecastSchema — lluvia de las próximas 24 h desde Open-Meteo
     # =========================================================================
-    rain_today = build_rain_forecast(
-        windy_hourly=windy_hourly_data,
-        om_hourly=om_hourly_data,
-        current=current,
-    )
+    rain_today = build_rain_forecast(om_hourly=om_hourly_data, current=current, now=now)
 
     # =========================================================================
-    # HourlyConsensusSchema — Windy primary, OM fallback
+    # HourlyConsensusSchema — franjas de 3 h desde Open-Meteo
     # =========================================================================
-    hourly_schema = build_hourly_schema(
-        windy_hourly=windy_hourly_data,
-        om_hourly=om_hourly_data,
-        is_day_default=is_day_now,
-    )
+    hourly_schema = build_hourly_schema(om_hourly_data)
 
     # =========================================================================
-    # 7-day forecast — Windy daily para datos, Open-Meteo para weather_codes/snow
+    # 7-day forecast — todo Open-Meteo (el CAPE horario da el riesgo convectivo de cada día)
     # =========================================================================
     forecast_7d = build_7d_forecast(
         daily_multi=daily_multi,
-        windy_daily=windy_daily_data,
         snow_level_m=snow_level_m,
         selected_model=model,
+        om_hourly=om_hourly_data,
     )
 
     # =========================================================================
-    # sources / degraded — fuentes reales usadas hoy (Windy GFS + Open-Meteo).
-    # No hay WRF-SMN todavía (FRA-122 fase D) — no se fabrica ese campo.
+    # sources / degraded — Open-Meteo es la única fuente de pronóstico. `windy_gfs` sigue en la
+    # respuesta (available/used en False) para no romper a los clientes que ya la leen: no se
+    # consulta. No hay WRF-SMN todavía (FRA-122 fase D) — no se fabrica ese campo.
     # =========================================================================
-    windy_available = bool(windy_hourly_data or windy_daily_data)
-    open_meteo_available = not used_synthetic_daily
     sources = ForecastSources(
-        windy_gfs=SourceStatus(available=windy_available, used=windy_available),
-        open_meteo=SourceStatus(available=open_meteo_available, used=open_meteo_available),
+        windy_gfs=SourceStatus(available=False, used=False),
+        open_meteo=SourceStatus(available=True, used=True),
     )
-    degraded = (not windy_available) or used_synthetic_daily or current.meta.stale
+    degraded = current.meta.stale
 
     return WeatherDashboardResponse(
         location={"lat": lat, "lon": lon, "city": None},
@@ -410,7 +330,7 @@ async def get_dashboard(
         hourly=hourly_schema,
         forecast_7d=forecast_7d,
         fetched_at=now,
-        forecast_source=forecast_source,
+        forecast_source=SOURCE_OPENMETEO_FORECAST,
         sources=sources,
         degraded=degraded,
     )

@@ -3,6 +3,9 @@
 IT1 — precip_prob > 0 when OM has rain expected on a specific day
 IT2 — temp_max tracks OM native daily aggregate within ±1°C tolerance
 IT3 — NOT all 7 days have precip_prob==0 when OM reports rain on some days
+
+Todo sale de Open-Meteo: Windy ya no alimenta el dashboard (su key de plan Testing devuelve datos
+mezclados al azar).
 """
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from httpx import AsyncClient
 
 from app.schemas.weather import SourceMeta, StationMeta, WeatherCurrentResponse
 from app.services.openmeteo import DailyForecastDataExt, HourlyForecastExt, MultiModelDailyData
-from app.services.windy import WindyHourlyEntry
+from tests.hourly_fixtures import make_hourly
 
 
 # ---------------------------------------------------------------------------
@@ -98,42 +101,7 @@ def _multi_model(daily: DailyForecastDataExt) -> MultiModelDailyData:
 
 
 def _hourly() -> HourlyForecastExt:
-    n = 48
-    timestamps = [1716220800 + i * 3600 for i in range(n)]
-    return HourlyForecastExt(
-        timestamps=timestamps,
-        hour_labels=[f"{i % 24:02d}:00" for i in range(n)],
-        dates=["2026-05-20"] * 24 + ["2026-05-21"] * 24,
-        temps_c=[18.0] * n,
-        precipitations=[0.0] * n,
-        precip_probs=[5.0] * n,
-        wind_speeds=[12.0] * n,
-        weather_codes=[0] * n,
-        is_day=[True if 6 <= (i % 24) <= 20 else False for i in range(n)],
-    )
-
-
-def _windy_hourly_dry() -> list[WindyHourlyEntry]:
-    base_ts_ms = 1716220800 * 1000
-    return [
-        WindyHourlyEntry(
-            timestamp_ms=base_ts_ms + i * 3 * 3600 * 1000,
-            timestamp_s=(base_ts_ms + i * 3 * 3600 * 1000) // 1000,
-            date="2026-05-20" if i < 8 else "2026-05-21",
-            hour_label=f"{(i * 3) % 24:02d}:00",
-            temp_c=19.0,
-            humidity=58.0,
-            wind_speed_kmh=14.0,
-            wind_gust_kmh=22.0,
-            wind_dir_deg=180.0,
-            wind_dir_cardinal="S",
-            precip_3h_mm=0.0,
-            cloud_cover_pct=25.0,
-            dewpoint_c=11.0,
-            temp_850_c=5.0,
-        )
-        for i in range(16)
-    ]
+    return make_hourly(48)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +121,6 @@ async def test_dashboard_precip_prob_present_when_rain_expected(async_client: As
         patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_current()),
         patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_multi_model(daily)),
         patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_hourly()),
-        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_windy_hourly_dry()),
     ):
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
 
@@ -162,6 +129,8 @@ async def test_dashboard_precip_prob_present_when_rain_expected(async_client: As
     assert data["forecast_7d"][3]["precip_prob"] > 30, (
         f"Expected precip_prob > 30 for rainy day, got {data['forecast_7d'][3]['precip_prob']}"
     )
+    # la cantidad del mismo día también sale de Open-Meteo y coincide con la probabilidad
+    assert data["forecast_7d"][3]["precip_sum"] == pytest.approx(6.9)
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +140,7 @@ async def test_dashboard_precip_prob_present_when_rain_expected(async_client: As
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_dashboard_temp_max_within_tolerance_of_om(async_client: AsyncClient):
-    """temp_max in the response must track OM's temperature_2m_max within ±1°C.
-    Windy snapshots (19°C flat) should NOT override the true OM daily max."""
+    """temp_max in the response must track OM's temperature_2m_max within ±1°C."""
     om_temps = [24.0, 22.0, 19.5, 21.0, 23.5, 20.0, 18.0]
     daily = _daily_ext(temp_max=om_temps)
 
@@ -180,7 +148,6 @@ async def test_dashboard_temp_max_within_tolerance_of_om(async_client: AsyncClie
         patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_current()),
         patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_multi_model(daily)),
         patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_hourly()),
-        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_windy_hourly_dry()),
     ):
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
 
@@ -210,7 +177,6 @@ async def test_dashboard_no_zero_precip_prob_for_full_week_when_rain_expected(as
         patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=_current()),
         patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_multi_model(daily)),
         patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_hourly()),
-        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_windy_hourly_dry()),
     ):
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
 
@@ -242,7 +208,6 @@ async def test_dashboard_current_stale_flag_propagates(async_client: AsyncClient
         patch("app.routers.weather.aggregate_current", new_callable=AsyncMock, return_value=stale_current),
         patch("app.routers.weather.get_multi_model_daily", new_callable=AsyncMock, return_value=_multi_model(daily)),
         patch("app.routers.weather.get_hourly_forecast_ext", new_callable=AsyncMock, return_value=_hourly()),
-        patch("app.routers.weather.windy_get_hourly_forecast", new_callable=AsyncMock, return_value=_windy_hourly_dry()),
     ):
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
 

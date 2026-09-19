@@ -14,7 +14,7 @@ type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
 const MODEL_BADGE_KEY: Record<ForecastModel, ModelKey> = {
   consensus: 'consensus',
   gfs:       'gfs',
-  ecmwf:     'windy_ecmwf',
+  ecmwf:     'ecmwf',
 }
 
 interface Props {

@@ -28,13 +28,14 @@ type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
 interface Props { location: LocationState | null }
 
 /**
- * Badge de la página según las fuentes que realmente respondieron: la observación
- * (SMN o no) y el pronóstico (GFS vía Windy, o Open-Meteo como respaldo).
+ * Badge de la página según de dónde salen los datos: la observación (SMN o no) y el pronóstico.
+ * El pronóstico sale de Open-Meteo; "mixed" (GFS vía Windy) solo lo mandaba la versión anterior del
+ * backend, cuya key de Windy devolvía los datos mezclados al azar.
  */
 function pageModel(currentSource: string | undefined, forecastSource: string | undefined): ModelKey {
   const smn = currentSource === 'smn'
-  if (forecastSource === 'openmeteo') return smn ? 'smn_openmeteo' : 'openmeteo'
-  return smn ? 'mixed' : 'gfs'
+  if (forecastSource === 'mixed') return smn ? 'mixed' : 'gfs'
+  return smn ? 'smn_openmeteo' : 'openmeteo_forecast'
 }
 
 /** Mensaje para el usuario según el fallo: cold start, error de validación del backend, o cualquier otro. */

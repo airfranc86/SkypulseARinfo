@@ -1,7 +1,16 @@
 """Cliente async para la API Windy Point Forecast v2 (modelo GFS de NOAA).
 
-Este servicio es la fuente PRIMARIA de pronósticos en SkyPulse.
-Open-Meteo solo se usa como fallback cuando Windy no está configurado o falla.
+ADVERTENCIA — con la key actual no sirve para nada que vea el usuario. La key de producción es del
+plan "Testing" (gratis) que, según https://api.windy.com/point-forecast/pricing, "returns randomly
+shuffled and slightly modified data" ("development purpose only, not intended for production").
+Medido el 2026-09-19 contra Open-Meteo GFS en Buenos Aires: las 80 temperaturas horarias tienen la
+misma distribución pero ningún orden (autocorrelación a 1 franja de −0,10 contra 0,85), y la lluvia de
+una tormenta que GFS y ECMWF pronosticaban apareció en otra franja o no apareció. Además
+`past3hprecip-surface` llega en metros ("m") y acá se lee como milímetros.
+
+El dashboard de Previsión ya no lo usa: todo sale de Open-Meteo. Lo siguen usando las herramientas
+(tender-ropa, hacer-deporte, lavar-coche, cota de nieve e incendios) hasta migrarlas. Con un plan
+Professional (y la unidad corregida) volvería a ser una fuente válida.
 
 Exports principales:
     - get_laundry_forecast: 7 días agregados a partir de slots de 3h (uso: tender-ropa).

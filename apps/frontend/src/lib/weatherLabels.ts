@@ -49,23 +49,17 @@ export function formatClock(iso: string | undefined | null): string | null {
   })
 }
 
-type StatusInput = Pick<WeatherDashboardResponse, 'sources' | 'degraded'> & {
+type StatusInput = Pick<WeatherDashboardResponse, 'degraded'> & {
   current: Pick<WeatherDashboardResponse['current'], 'stale'>
 }
 
 /**
- * Avisos de estado de las fuentes del pronóstico, en hechos: qué fuente no respondió y qué
- * significa para lo que se muestra. Vacío cuando todo llegó completo.
+ * Avisos de estado de los datos, en hechos. Vacío cuando todo llegó completo. Ya no hay avisos por
+ * "GFS (Windy) no respondió": Open-Meteo es la única fuente del pronóstico y, si falla, no hay
+ * pronóstico (el backend responde 503) en vez de un pronóstico armado con otra fuente.
  */
 export function forecastNotes(data: StatusInput): string[] {
   const notes: string[] = []
-  const { sources } = data
-  if (sources && !sources.windy_gfs.available) {
-    notes.push('GFS (Windy) no respondió: el pronóstico usa solo Open-Meteo.')
-  }
-  if (sources && !sources.open_meteo.available) {
-    notes.push('Open-Meteo no respondió: el pronóstico diario se armó solo con GFS (Windy).')
-  }
   if (data.current.stale) {
     notes.push('La observación actual puede no estar al día.')
   }

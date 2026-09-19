@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { Info } from 'lucide-react'
 
-export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'windy_ecmwf' | 'openmeteo' | 'smn_openmeteo' | 'mixed' | 'segemar' | 'consensus'
+export type ModelKey = 'smn' | 'gfs' | 'usgs' | 'emsc' | 'ecmwf' | 'windy_ecmwf' | 'openmeteo' | 'openmeteo_forecast' | 'smn_openmeteo' | 'mixed' | 'segemar' | 'consensus'
 type Variant = 'pill' | 'inline' | 'header'
 
 interface ModelMeta {
@@ -27,9 +27,17 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     label: 'GFS',
     org: 'NOAA',
     color: '#c8a84b',
-    description: 'Modelo numérico global de NOAA, vía Windy.',
+    description: 'Modelo numérico global de NOAA.',
     reliability: '~85% a 3 días · ~70% a 7 días',
     updateFreq: '4 veces al día',
+  },
+  ecmwf: {
+    label: 'ECMWF',
+    org: 'Europa',
+    color: '#c8a84b',
+    description: 'Modelo europeo de pronóstico (ECMWF IFS), vía Open-Meteo.',
+    reliability: '~90% a 3 días',
+    updateFreq: '2 veces al día',
   },
   windy_ecmwf: {
     label: 'ECMWF',
@@ -63,12 +71,21 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     reliability: 'Variable',
     updateFreq: 'Cada hora',
   },
+  // Previsión: el pronóstico sale de Open-Meteo. Antes lo mostraban "de respaldo" (cuando Windy fallaba).
+  openmeteo_forecast: {
+    label: 'Open-Meteo',
+    org: 'Modelos',
+    color: '#c8a84b',
+    description: 'Observación y pronóstico de Open-Meteo, que combina modelos numéricos globales como GFS (NOAA) y ECMWF (Europa).',
+    reliability: '~85% a 3 días',
+    updateFreq: 'Cada hora',
+  },
   smn_openmeteo: {
     label: 'SMN + Open-Meteo',
-    org: 'Respaldo',
-    color: '#90aabb',
-    description: 'Observación real del SMN. El pronóstico viene de Open-Meteo porque GFS (Windy) no respondió: puede diferir de lo habitual.',
-    reliability: 'Actual: alta (SMN) · Pronóstico: variable',
+    org: 'Mixto',
+    color: '#c8a84b',
+    description: 'Esta página combina observación en tiempo real (SMN) y pronóstico de Open-Meteo, que usa modelos numéricos como GFS (NOAA) y ECMWF (Europa).',
+    reliability: 'Actual: alta (SMN) · Pronóstico: ~85% a 3d',
     updateFreq: 'SMN: 1h · Open-Meteo: cada hora',
   },
   segemar: {
