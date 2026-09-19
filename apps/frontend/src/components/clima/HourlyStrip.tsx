@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Wind } from 'lucide-react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { cn } from '@/lib/utils'
+import { arDateKey, dayLabel } from '@/lib/dates'
 import { describeWeatherIcon } from '@/lib/weatherLabels'
 import { GUST_KMH, entriesFromNow, formatMm, isRainy, rainWindowLabel } from '@/lib/weatherVerdict'
 import type { HourlyConsensus, HourlyEntry } from '@/lib/api'
@@ -23,26 +24,13 @@ function groupByDate(entries: HourlyEntry[]): Record<string, HourlyEntry[]> {
   }, {})
 }
 
-/** "2026-09-18" + 1 día = "2026-09-19", sin pasar por la zona horaria del navegador. */
-function nextDate(date: string): string {
-  const d = new Date(`${date}T12:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + 1)
-  return d.toISOString().slice(0, 10)
-}
-
-/** Short label for a date tab: "Hoy" es la fecha de la primera hora del pronóstico, no la primera pestaña. */
-function dateTabLabel(date: string, todayDate: string): string {
-  if (date === todayDate) return 'Hoy'
-  if (date === nextDate(todayDate)) return 'Mañana'
-  const d = new Date(date + 'T12:00:00')
-  return d.toLocaleDateString('es-AR', { weekday: 'short' })
-}
-
 export function HourlyStrip({ hourly, badge, nowMs }: Props) {
   const visible = useMemo(() => entriesFromNow(hourly.entries, nowMs), [hourly.entries, nowMs])
   const groups = useMemo(() => groupByDate(visible), [visible])
   const dates = Object.keys(groups)
-  const todayDate = hourly.entries[0]?.date ?? ''
+  // "Hoy" es el día argentino de la hora de referencia. La fecha de la primera franja no sirve: si el
+  // pronóstico arranca con horas de ayer, la primera pestaña (hoy) se rotulaba "Mañana".
+  const todayDate = Number.isFinite(nowMs) ? arDateKey(nowMs) : (hourly.entries[0]?.date ?? '')
   const [selectedDate, setSelectedDate] = useState(dates[0] ?? '')
   // Si el día elegido ya no está en los datos (p. ej. pasó la medianoche y el pronóstico se
   // refrescó), se vuelve al primero en vez de mostrar "Sin datos" con las pestañas visibles.
@@ -98,26 +86,31 @@ export function HourlyStrip({ hourly, badge, nowMs }: Props) {
           border: '1px solid var(--color-border)',
         }}
       >
-        {dates.map((date) => (
-          <button
-            key={date}
-            type="button"
-            onClick={() => setSelectedDate(date)}
-            aria-pressed={date === activeDate}
-            className={cn(
-              'shrink-0 px-3.5 py-2 min-h-[44px] rounded-lg text-sm font-medium transition-colors',
-              date === activeDate
-                ? 'text-[var(--color-primary-foreground)] font-semibold'
-                : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
-            )}
-            style={date === activeDate
-              ? { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
-              : { background: 'transparent' }
-            }
-          >
-            {dateTabLabel(date, todayDate)}
-          </button>
-        ))}
+        {dates.map((date) => {
+          const label = dayLabel(date, todayDate)
+          return (
+            <button
+              key={date}
+              type="button"
+              onClick={() => setSelectedDate(date)}
+              aria-pressed={date === activeDate}
+              className={cn(
+                'shrink-0 px-3.5 py-1.5 min-h-[44px] rounded-lg text-center leading-tight transition-colors',
+                date === activeDate
+                  ? 'text-[var(--color-primary-foreground)] font-semibold'
+                  : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]'
+              )}
+              style={date === activeDate
+                ? { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
+                : { background: 'transparent' }
+              }
+            >
+              {/* Con diez días "dom" y "lun" se repiten: la fecha es lo que los distingue */}
+              <span className="block text-sm font-medium">{label.title}</span>
+              <span className="block text-[11px] font-normal">{label.date}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Hourly cards — scroll-snap + right fade hint */}

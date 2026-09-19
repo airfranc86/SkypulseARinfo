@@ -1,4 +1,5 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { formatShortDate } from '@/lib/dates'
 import { describeWeatherIcon, precipKind } from '@/lib/weatherLabels'
 import { RainPill } from './RainPill'
 import { ConfidenceChip } from './ConfidenceChip'
@@ -38,8 +39,9 @@ export function NextDays({ days, rainWindows, showConfidence = false }: NextDays
             className="flex flex-col items-center gap-1.5 px-2 py-4 text-center"
             style={{ borderColor: 'var(--color-border)' }}
           >
-            <p className="text-xs font-medium capitalize" style={{ color: 'var(--color-muted-foreground)' }}>
-              {day.day_label}
+            <p className="text-center leading-tight" style={{ color: 'var(--color-muted-foreground)' }}>
+              <span className="block text-xs font-medium capitalize">{day.day_label}</span>
+              <span className="block text-[11px]">{formatShortDate(day.date)}</span>
             </p>
             <WeatherIcon code={day.icon} size={44} glow />
             {condition && <p className="sr-only">{condition}</p>}

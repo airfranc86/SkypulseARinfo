@@ -1,4 +1,5 @@
 import type { HourlyEntry } from '@/lib/api'
+import { arDateKey } from './dates.ts'
 
 /**
  * Lluvia = más de 0,1 mm en el tramo. Es el mismo umbral con el que el backend arma
@@ -29,9 +30,26 @@ const NBSP = String.fromCharCode(0xa0)
 export type VerdictTone = 'rain' | 'clear' | 'wind' | 'storm'
 export type RainIntensity = 'débil' | 'moderada' | 'fuerte'
 
+/** Un tramo de una línea del veredicto; `fact` marca los datos duros (hora, cantidad, velocidad). */
+export interface VerdictSegment {
+  text: string
+  fact?: boolean
+}
+
 export interface VerdictLine {
   tone: VerdictTone
+  /** Texto plano de la línea (lo que se anuncia): es la unión de `segments`. */
   text: string
+  segments: VerdictSegment[]
+}
+
+type LinePart = string | { fact: string }
+
+const fact = (text: string): LinePart => ({ fact: text })
+
+function line(tone: VerdictTone, ...parts: LinePart[]): VerdictLine {
+  const segments = parts.map((part): VerdictSegment => (typeof part === 'string' ? { text: part } : { text: part.fact, fact: true }))
+  return { tone, text: segments.map((segment) => segment.text).join(''), segments }
 }
 
 export interface RainRun {
@@ -155,10 +173,6 @@ function approxAmount(mm: number): string {
   return mm < 1 ? `menos de 1${NBSP}mm` : `≈${NBSP}${formatMm(mm)}`
 }
 
-function totalText(mm: number): string {
-  return `${approxAmount(mm)} en total`
-}
-
 /** Cuándo llueve un tramo, sin el verbo: "ahora, hasta las 15:00", "a las 16:00", "de 16:00 a 18:00". */
 function whenText(run: RainRun): string {
   if (run.startsNow) return run.from === run.to ? 'ahora' : `ahora, hasta las${NBSP}${run.to}`
@@ -184,49 +198,66 @@ export function buildVerdict(entries: HourlyEntry[], nowMs: number, drizzleHint:
   const ahead = entriesFromNow(entries, nowMs).filter((entry) => entry.timestamp * 1000 <= horizon)
   if (ahead.length === 0) return []
 
-  const baseDate = ahead[0].date
+  // "Mañana" se cuenta desde el día argentino de la hora de referencia. La fecha de la primera franja
+  // no sirve: a las 23:30, con franjas de 3 h, la próxima ya es la de las 00:00 del día siguiente.
+  const baseDate = Number.isFinite(nowMs) ? arDateKey(nowMs) : ahead[0].date
   const lines: VerdictLine[] = []
 
   const runs = rainRuns(ahead, nowMs)
   if (runs.length > 0) {
     const main = strongest(runs)
-    lines.push({
-      tone: 'rain',
-      text: `Lluvia ${main.intensity} prevista${dayPrefix(main.date, baseDate)} ${whenText(main)} · ${totalText(main.totalMm)}`,
-    })
+    lines.push(
+      line(
+        'rain',
+        `Lluvia ${main.intensity} prevista${dayPrefix(main.date, baseDate)} `,
+        fact(whenText(main)),
+        ' · ',
+        fact(approxAmount(main.totalMm)),
+        ' en total',
+      ),
+    )
 
     const others = runs.filter((run) => run !== main)
     if (others.length > 0) {
       const next = strongest(others)
       const when = runs.indexOf(next) < runs.indexOf(main) ? 'Antes' : 'Después'
-      lines.push({
-        tone: 'rain',
-        text: `${when}: lluvia ${next.intensity}${dayPrefix(next.date, baseDate)} ${whenText(next)} · ${approxAmount(next.totalMm)}`,
-      })
+      lines.push(
+        line(
+          'rain',
+          `${when}: lluvia ${next.intensity}${dayPrefix(next.date, baseDate)} `,
+          fact(whenText(next)),
+          ' · ',
+          fact(approxAmount(next.totalMm)),
+        ),
+      )
     }
   } else if (drizzleHint) {
-    lines.push({ tone: 'rain', text: 'Llovizna posible, sin lluvia medida en el pronóstico' })
+    lines.push(line('rain', 'Llovizna posible, sin lluvia medida en el pronóstico'))
   } else {
     const spanHours = (ahead[ahead.length - 1].timestamp * 1000 - nowMs) / HOUR_MS
-    const horizonText = spanHours >= AHEAD_HOURS - 1 ? 'en las próximas 24 h' : 'en las próximas horas'
-    lines.push({ tone: 'clear', text: `Sin lluvia prevista ${horizonText}` })
+    const horizonText = spanHours >= AHEAD_HOURS - 1 ? `en las próximas 24${NBSP}h` : 'en las próximas horas'
+    lines.push(line('clear', `Sin lluvia prevista ${horizonText}`))
   }
 
   const storm = ahead.find((entry) => entry.convective_risk === 'high' || entry.convective_risk === 'severe')
   if (storm) {
     const level = storm.convective_risk === 'severe' ? 'severo' : 'alto'
-    lines.push({
-      tone: 'storm',
-      text: `Riesgo ${level} de tormentas${dayPrefix(storm.date, baseDate)} a las${NBSP}${storm.hour_label}`,
-    })
+    lines.push(
+      line('storm', `Riesgo ${level} de tormentas${dayPrefix(storm.date, baseDate)} a las${NBSP}`, fact(storm.hour_label)),
+    )
   } else {
     const gusty = ahead.filter((entry) => (entry.wind_gusts_kmh ?? 0) > GUST_KMH)
     if (gusty.length > 0) {
       const top = gusty.reduce((a, b) => ((b.wind_gusts_kmh ?? 0) > (a.wind_gusts_kmh ?? 0) ? b : a))
-      lines.push({
-        tone: 'wind',
-        text: `Ráfagas de hasta ${Math.round(top.wind_gusts_kmh ?? 0)}${NBSP}km/h${dayPrefix(top.date, baseDate)} a las${NBSP}${top.hour_label}`,
-      })
+      lines.push(
+        line(
+          'wind',
+          'Ráfagas de hasta ',
+          fact(`${Math.round(top.wind_gusts_kmh ?? 0)}${NBSP}km/h`),
+          `${dayPrefix(top.date, baseDate)} a las${NBSP}`,
+          fact(top.hour_label),
+        ),
+      )
     }
   }
 

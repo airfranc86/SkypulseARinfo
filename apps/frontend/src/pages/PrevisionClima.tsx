@@ -6,6 +6,7 @@ import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
 import { forecastNotes, formatClock } from '@/lib/weatherLabels'
 import { buildVerdict, entriesFromNow, rainWindowsByDate } from '@/lib/weatherVerdict'
+import { criticalLevel } from '@/lib/smnAlertas'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
 import { NextDays } from '@/components/clima/NextDays'
@@ -13,7 +14,6 @@ import { SmnAlertasBlock } from '@/components/clima/SmnAlertasBlock'
 import { DayArc } from '@/components/clima/DayArc'
 import { HourlyStrip } from '@/components/clima/HourlyStrip'
 import { Forecast7d } from '@/components/clima/Forecast7d'
-import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 
@@ -86,6 +86,9 @@ export function PrevisionClima({ location }: Props) {
   const today = data?.forecast_7d.find((day) => day.day_label === 'Hoy')
   // Sin dato del SMN, "sin avisos" sería una afirmación que no podemos hacer.
   const alertasUnavailable = alertasError || alertasData?.available === false
+  // Solo naranja y rojo cambian el peso del héroe (borde y brillo del color del aviso).
+  const severity = alertasUnavailable ? null : criticalLevel(alertasData?.alertas ?? [])
+  const alertasNowMs = alertasData ? Date.parse(alertasData.fetched_at) : Number.NaN
 
   // Región viva: al cambiar de ciudad la pantalla se reemplaza y un lector de pantalla
   // no se entera de que cargó otra cosa.
@@ -105,12 +108,21 @@ export function PrevisionClima({ location }: Props) {
 
   return (
     <div>
-      <PageHeader
-        icon={<CloudSun size={32} style={{ color: '#c8a84b' }} />}
-        title="Previsión del clima"
-        subtitle={location ? (updatedAt ? `${location.label} · Actualizado ${updatedAt}` : location.label) : undefined}
-        modelBadge={data ? <ModelBadge model={badgeModel} variant="header" /> : undefined}
-      />
+      {/* Encabezado de una línea: la ciudad y la frescura del dato. El título de la página sigue
+          siendo el h1 (para lectores de pantalla); a la vista ya lo dice el chip activo del menú.
+          El badge de fuentes bajó al pie del héroe. */}
+      <header className="mb-4 flex items-center gap-2 min-h-7">
+        <CloudSun size={20} className="shrink-0" style={{ color: '#c8a84b' }} aria-hidden="true" />
+        <h1 className="sr-only">Previsión del clima</h1>
+        {location && (
+          <p className="text-base min-w-0">
+            <span className="font-medium" style={{ color: 'var(--color-foreground)' }}>{location.label}</span>
+            {updatedAt && (
+              <span style={{ color: 'var(--color-muted-foreground)' }}> · Actualizado {updatedAt}</span>
+            )}
+          </p>
+        )}
+      </header>
 
       <p role="status" className="sr-only">{liveMessage}</p>
 
@@ -134,9 +146,13 @@ export function PrevisionClima({ location }: Props) {
         // toggle sits below, collapsed by default.
         // FINISH: unreviewed and undocumented is unfinished.
         <FadeContent>
-          <div className="space-y-5">
-            {/* Avisos oficiales SMN — con alertas activas se listan; sin respuesta del SMN se avisa */}
-            <SmnAlertasBlock alertas={alertasData?.alertas ?? []} unavailable={alertasUnavailable} />
+          <div className="space-y-4">
+            {/* Avisos oficiales SMN — ordenados por gravedad; sin respuesta del SMN se avisa */}
+            <SmnAlertasBlock
+              alertas={alertasData?.alertas ?? []}
+              unavailable={alertasUnavailable}
+              nowMs={alertasNowMs}
+            />
 
             {notes.length > 0 && <SourceNotes notes={notes} />}
 
@@ -145,7 +161,13 @@ export function PrevisionClima({ location }: Props) {
                 tarjeta): sin él la página desborda en horizontal en mobile. Los -mx-3/px-3
                 dejan 12 px de brillo a cada lado dentro de la gutter de 16 px. */}
             <div className="-mx-3 px-3 overflow-x-clip">
-              <WeatherHero current={data.current} today={today} verdict={verdict} />
+              <WeatherHero
+                current={data.current}
+                today={today}
+                verdict={verdict}
+                severity={severity}
+                sources={<ModelBadge model={badgeModel} variant="header" />}
+              />
             </div>
 
             {/* Los próximos 3 días, sin abrir el detalle */}
