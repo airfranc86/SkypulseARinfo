@@ -251,9 +251,8 @@ async def test_dashboard_hourly_entries(async_client: AsyncClient):
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
 
     hourly = response.json()["hourly"]
-    assert "entries" in hourly
-    assert "rain_consensus_label" in hourly
-    assert "rain_probability_pct" in hourly
+    # La tira solo trae sus franjas: la etiqueta y la probabilidad de consenso ya no viajan
+    assert set(hourly) == {"entries"}
     assert len(hourly["entries"]) == 16
     entry = hourly["entries"][0]
     assert "timestamp" in entry
@@ -337,7 +336,6 @@ async def test_dashboard_200_when_hourly_unavailable(async_client: AsyncClient):
     assert response.status_code == 200
     data = response.json()
     assert data["hourly"]["entries"] == []
-    assert data["hourly"]["rain_consensus_label"] == "Sin datos"
     # Sin serie horaria no se afirma que no vaya a llover
     assert data["rain_today"]["status_text"] == "Sin datos de lluvia"
 

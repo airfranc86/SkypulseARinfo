@@ -45,12 +45,16 @@ def test_timestamps_and_dates_are_the_real_instants_of_each_slot():
     assert slot.timestamp == int(datetime(2026, 9, 19, 21, 0, tzinfo=timezone.utc).timestamp())
 
 
-def test_without_open_meteo_the_strip_is_empty_and_says_so():
+def test_without_open_meteo_the_strip_is_empty():
     schema = build_hourly_schema(None)
 
     assert schema.entries == []
-    assert schema.rain_consensus_label == "Sin datos"
-    assert schema.rain_probability_pct == 0.0
+
+
+def test_the_strip_carries_only_its_entries():
+    """Sin etiqueta ni probabilidad de consenso: ninguna pantalla las usaba."""
+    assert set(build_hourly_schema(_hourly()).model_dump()) == {"entries"}
+    assert set(build_hourly_schema(None).model_dump()) == {"entries"}
 
 
 # ---------------------------------------------------------------------------
@@ -90,20 +94,6 @@ def test_a_probability_can_coexist_with_no_measurable_rain():
 
     assert _slot(hourly, 15).precip_prob == pytest.approx(42.0)
     assert _slot(hourly, 15).precip_mm == pytest.approx(0.0)
-
-
-def test_rain_label_and_probability_come_from_the_real_probabilities():
-    schema = build_hourly_schema(_hourly(precip_probs={16: 97.0}))
-
-    assert schema.rain_probability_pct == pytest.approx(97.0)
-    assert schema.rain_consensus_label == "Alta probabilidad de lluvia"
-
-
-def test_dry_forecast_says_no_model_predicts_rain():
-    schema = build_hourly_schema(_hourly())
-
-    assert schema.rain_probability_pct == pytest.approx(0.0)
-    assert schema.rain_consensus_label == "Ningún modelo predice lluvia"
 
 
 # ---------------------------------------------------------------------------
