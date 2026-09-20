@@ -344,8 +344,6 @@ export interface CurrentDetailed {
 
 export interface HourlyConsensus {
   entries: HourlyEntry[]
-  rain_consensus_label: string
-  rain_probability_pct: number
 }
 
 export interface WeatherDashboardResponse {

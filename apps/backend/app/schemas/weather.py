@@ -209,8 +209,6 @@ class HourlyConsensusSchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     entries: list[HourlyEntrySchema]
-    rain_consensus_label: str
-    rain_probability_pct: float
 
 
 class WeatherDashboardResponse(BaseModel):

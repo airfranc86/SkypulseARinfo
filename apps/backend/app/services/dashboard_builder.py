@@ -49,7 +49,6 @@ _MONTHS_ES = [
 # "Lluvia esperada hoy" mira las próximas 24 h (8 franjas) y el riesgo de llovizna, las próximas 12 h (4).
 _RAIN_HORIZON_SLOTS = 8
 _DRIZZLE_SLOTS = 4
-_DAY_HOURS = 24
 
 
 # ---------------------------------------------------------------------------
@@ -195,14 +194,10 @@ def build_hourly_schema(om_hourly: HourlyForecastExt | None) -> HourlyConsensusS
     Cada franja trae los milímetros de las 3 h previas, la mayor probabilidad de lluvia, la mayor
     ráfaga, el mayor CAPE y el peor código de tiempo de esas 3 h, y la temperatura de la hora en
     punto. La probabilidad es la de Open-Meteo; ya no se fabrica un 0 o un 100 a partir de los
-    milímetros. Sin serie horaria la tira queda vacía ("Sin datos").
+    milímetros. Sin serie horaria la tira queda vacía.
     """
     if om_hourly is None or not om_hourly.timestamps:
-        return HourlyConsensusSchema(
-            entries=[],
-            rain_consensus_label="Sin datos",
-            rain_probability_pct=0.0,
-        )
+        return HourlyConsensusSchema(entries=[])
 
     entries = [
         HourlyEntrySchema(
@@ -222,25 +217,7 @@ def build_hourly_schema(om_hourly: HourlyForecastExt | None) -> HourlyConsensusS
         )
         for s in three_hour_slots(om_hourly)
     ]
-
-    # Probabilidad máxima de las primeras 24 h de la serie
-    next_24_probs = [p for p in om_hourly.precip_probs[:_DAY_HOURS] if p is not None]
-    max_prob = max(next_24_probs, default=0.0)
-    return HourlyConsensusSchema(
-        entries=entries,
-        rain_consensus_label=_rain_label(max_prob),
-        rain_probability_pct=round(max_prob, 1),
-    )
-
-
-def _rain_label(max_prob: float) -> str:
-    if max_prob < 10:
-        return "Ningún modelo predice lluvia"
-    if max_prob < 30:
-        return "Lluvia poco probable"
-    if max_prob < 60:
-        return "Lluvia posible"
-    return "Alta probabilidad de lluvia"
+    return HourlyConsensusSchema(entries=entries)
 
 
 # ---------------------------------------------------------------------------
