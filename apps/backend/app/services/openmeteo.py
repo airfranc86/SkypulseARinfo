@@ -41,11 +41,12 @@ _CURRENT_FIELDS = ",".join([
 def _cache_key(params: dict) -> str:
     """Canonical cache key from a request params dict.
 
-    Rounds lat/lon to 4 decimals to collapse floating-point drift; sorts all
+    Rounds lat/lon to 2 decimals (~1.1 km) to raise the cache hit rate for nearby
+    coordinates without meaningfully changing the weather returned; sorts all
     keys so insertion order never produces a different key for the same request.
     """
     normalized = {
-        k: (round(v, 4) if k in ("latitude", "longitude") and isinstance(v, float) else v)
+        k: (round(v, 2) if k in ("latitude", "longitude") and isinstance(v, float) else v)
         for k, v in params.items()
     }
     return json.dumps(normalized, sort_keys=True)
@@ -492,22 +493,37 @@ def _classify_visibility(v: float | None) -> tuple[int, str, str]:
     return     5, "Niebla",        "#e03535"
 
 
-async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | None:
+# get_visibility_forecast y get_fog_inference_forecast piden variables disjuntas
+# (visibility+weather_code "current" vs humedad/rocío/temp/viento/weather_code
+# "hourly") pero mismo forecast_days=1 y mismo bucket de caché — se unifican en
+# 1 solo request a Open-Meteo; cada función parsea su porción de la respuesta.
+_NIEBLA_HOURLY_FIELDS = ",".join([
+    "visibility",
+    "relative_humidity_2m",
+    "dew_point_2m",
+    "temperature_2m",
+    "wind_speed_10m",
+    "weather_code",
+])
+
+
+async def _fetch_niebla_combined(lat: float, lon: float) -> dict | None:
     """
-    Obtiene visibilidad actual y pronóstico 12h desde Open-Meteo.
-    Devuelve None ante cualquier error.
+    Único fetch a Open-Meteo compartido por get_visibility_forecast y
+    get_fog_inference_forecast (unión de sus variables current/hourly).
+    Devuelve el JSON crudo (o None ante error); cacheado en _CACHE_NOWCAST.
     """
     params = {
         "latitude": lat,
         "longitude": lon,
         "current": "visibility,weather_code",
-        "hourly": "visibility",
+        "hourly": _NIEBLA_HOURLY_FIELDS,
         "timezone": "America/Argentina/Buenos_Aires",
         "forecast_days": 1,
     }
     key = _cache_key(params)
 
-    async def _fetch() -> VisibilityData | None:
+    async def _fetch() -> dict | None:
         try:
             client = get_client()
             usage_counter.record("open_meteo")
@@ -516,46 +532,56 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
                 params=params,
                 timeout=settings.http_timeout_seconds,
             )
-            data = response.json()
+            return response.json()
         except Exception as exc:
-            logger.warning("Open-Meteo visibility fetch failed: %s", exc)
-            return None
-
-        try:
-            current = data["current"]
-            hourly = data["hourly"]
-
-            current_m = _cap_vis(parse_float(current.get("visibility")))
-            wc_raw = current.get("weather_code")
-            weather_code = int(wc_raw) if wc_raw is not None else None
-
-            level, label, color = _classify_visibility(current_m)
-
-            # Empezar desde la próxima hora AR redonda para consistencia con TAF/fog inference
-            all_times: list[str] = hourly.get("time", [])
-            all_vis: list = hourly.get("visibility", [])
-            start_idx = _next_ar_hour_idx(all_times)
-
-            time_list: list[str] = all_times[start_idx:start_idx + 12]
-            vis_list: list = all_vis[start_idx:start_idx + 12]
-
-            hourly_m: list[float | None] = [_cap_vis(parse_float(v)) for v in vis_list]
-            hourly_labels: list[str] = [t[11:16] for t in time_list]   # "14:00"
-
-            return VisibilityData(
-                current_m=current_m,
-                weather_code=weather_code,
-                fog_level=level,
-                fog_label=label,
-                fog_color=color,
-                hourly_m=hourly_m,
-                hourly_labels=hourly_labels,
-            )
-        except (KeyError, TypeError) as exc:
-            logger.warning("Open-Meteo visibility parse error: %s", exc)
+            logger.warning("Open-Meteo niebla combined fetch failed: %s", exc)
             return None
 
     return await _CACHE_NOWCAST.get_or_fetch(key, _fetch)
+
+
+async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | None:
+    """
+    Obtiene visibilidad actual y pronóstico 12h desde Open-Meteo.
+    Devuelve None ante cualquier error.
+    """
+    data = await _fetch_niebla_combined(lat, lon)
+    if data is None:
+        return None
+
+    try:
+        current = data["current"]
+        hourly = data["hourly"]
+
+        current_m = _cap_vis(parse_float(current.get("visibility")))
+        wc_raw = current.get("weather_code")
+        weather_code = int(wc_raw) if wc_raw is not None else None
+
+        level, label, color = _classify_visibility(current_m)
+
+        # Empezar desde la próxima hora AR redonda para consistencia con TAF/fog inference
+        all_times: list[str] = hourly.get("time", [])
+        all_vis: list = hourly.get("visibility", [])
+        start_idx = _next_ar_hour_idx(all_times)
+
+        time_list: list[str] = all_times[start_idx:start_idx + 12]
+        vis_list: list = all_vis[start_idx:start_idx + 12]
+
+        hourly_m: list[float | None] = [_cap_vis(parse_float(v)) for v in vis_list]
+        hourly_labels: list[str] = [t[11:16] for t in time_list]   # "14:00"
+
+        return VisibilityData(
+            current_m=current_m,
+            weather_code=weather_code,
+            fog_level=level,
+            fog_label=label,
+            fog_color=color,
+            hourly_m=hourly_m,
+            hourly_labels=hourly_labels,
+        )
+    except (KeyError, TypeError) as exc:
+        logger.warning("Open-Meteo visibility parse error: %s", exc)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -587,82 +613,58 @@ async def get_fog_inference_forecast(
       4. T - Td < 5°C + HR ≥ 80 %                     → reducida      (3000 m)
       5. Resto                                          → despejada     (10 000 m)
     """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": (
-            "relative_humidity_2m,dew_point_2m,temperature_2m,"
-            "wind_speed_10m,weather_code"
-        ),
-        "timezone": "America/Argentina/Buenos_Aires",
-        "forecast_days": 1,
-    }
-    key = _cache_key(params)
+    data = await _fetch_niebla_combined(lat, lon)
+    if data is None:
+        return None
 
-    async def _fetch() -> list[FogInferenceSlot] | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo fog inference fetch failed: %s", exc)
-            return None
+    try:
+        hourly = data["hourly"]
+        all_times = hourly.get("time", [])
+        si = _next_ar_hour_idx(all_times)   # start index: próxima hora AR redonda
 
-        try:
-            hourly = data["hourly"]
-            all_times = hourly.get("time", [])
-            si = _next_ar_hour_idx(all_times)   # start index: próxima hora AR redonda
+        time_list: list[str]   = all_times[si:si + hours]
+        rh_list                = hourly.get("relative_humidity_2m", [])[si:si + hours]
+        td_list                = hourly.get("dew_point_2m", [])[si:si + hours]
+        temp_list              = hourly.get("temperature_2m", [])[si:si + hours]
+        wind_list              = hourly.get("wind_speed_10m", [])[si:si + hours]
+        wcode_list             = hourly.get("weather_code", [])[si:si + hours]
 
-            time_list: list[str]   = all_times[si:si + hours]
-            rh_list                = hourly.get("relative_humidity_2m", [])[si:si + hours]
-            td_list                = hourly.get("dew_point_2m", [])[si:si + hours]
-            temp_list              = hourly.get("temperature_2m", [])[si:si + hours]
-            wind_list              = hourly.get("wind_speed_10m", [])[si:si + hours]
-            wcode_list             = hourly.get("weather_code", [])[si:si + hours]
+        slots: list[FogInferenceSlot] = []
+        for i, t in enumerate(time_list):
+            hour_label = t[11:16]   # "14:00"
 
-            slots: list[FogInferenceSlot] = []
-            for i, t in enumerate(time_list):
-                hour_label = t[11:16]   # "14:00"
+            rh    = parse_float(rh_list[i])    if i < len(rh_list)    else None
+            td    = parse_float(td_list[i])    if i < len(td_list)    else None
+            temp  = parse_float(temp_list[i])  if i < len(temp_list)  else None
+            wind  = parse_float(wind_list[i])  if i < len(wind_list)  else None
+            wc_r  = wcode_list[i]              if i < len(wcode_list) else None
+            wcode = int(wc_r) if wc_r is not None else None
 
-                rh    = parse_float(rh_list[i])    if i < len(rh_list)    else None
-                td    = parse_float(td_list[i])    if i < len(td_list)    else None
-                temp  = parse_float(temp_list[i])  if i < len(temp_list)  else None
-                wind  = parse_float(wind_list[i])  if i < len(wind_list)  else None
-                wc_r  = wcode_list[i]              if i < len(wcode_list) else None
-                wcode = int(wc_r) if wc_r is not None else None
+            vis_m: float | None = None
 
-                vis_m: float | None = None
+            if wcode in (45, 48):
+                # WMO fog / depositing rime fog — confirmado por código
+                vis_m = 300.0
+            elif (
+                rh is not None
+                and td is not None
+                and temp is not None
+                and wind is not None
+            ):
+                dep = temp - td   # depresión del punto de rocío
+                if dep < 2.0 and rh >= 95.0 and wind < 5.0:
+                    vis_m = 300.0      # niebla
+                elif dep < 3.0 and rh >= 90.0 and wind < 8.0:
+                    vis_m = 1_000.0    # neblina / bruma
+                elif dep < 5.0 and rh >= 80.0:
+                    vis_m = 3_000.0    # reducida
+                else:
+                    vis_m = 10_000.0   # despejada
 
-                if wcode in (45, 48):
-                    # WMO fog / depositing rime fog — confirmado por código
-                    vis_m = 300.0
-                elif (
-                    rh is not None
-                    and td is not None
-                    and temp is not None
-                    and wind is not None
-                ):
-                    dep = temp - td   # depresión del punto de rocío
-                    if dep < 2.0 and rh >= 95.0 and wind < 5.0:
-                        vis_m = 300.0      # niebla
-                    elif dep < 3.0 and rh >= 90.0 and wind < 8.0:
-                        vis_m = 1_000.0    # neblina / bruma
-                    elif dep < 5.0 and rh >= 80.0:
-                        vis_m = 3_000.0    # reducida
-                    else:
-                        vis_m = 10_000.0   # despejada
+            slots.append(FogInferenceSlot(hour_label=hour_label, visibility_m=vis_m))
 
-                slots.append(FogInferenceSlot(hour_label=hour_label, visibility_m=vis_m))
+        return slots if slots else None
 
-            return slots if slots else None
-
-        except (KeyError, TypeError, IndexError) as exc:
-            logger.warning("Open-Meteo fog inference parse error: %s", exc)
-            return None
-
-    return await _CACHE_NOWCAST.get_or_fetch(key, _fetch)
+    except (KeyError, TypeError, IndexError) as exc:
+        logger.warning("Open-Meteo fog inference parse error: %s", exc)
+        return None

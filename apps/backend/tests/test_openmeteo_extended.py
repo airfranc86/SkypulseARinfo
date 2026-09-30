@@ -7,9 +7,12 @@ Cubre:
 - get_hourly_forecast_ext
 - get_visibility_forecast
 - get_fog_inference_forecast
+- Fetch combinado de niebla (get_visibility_forecast + get_fog_inference_forecast
+  comparten 1 solo request a Open-Meteo)
 """
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -741,3 +744,101 @@ class TestGetFogInferenceForecast:
              patch("app.services.openmeteo._next_ar_hour_idx", return_value=0):
             result = await get_fog_inference_forecast(-34.6, -58.4, hours=6)
         assert len(result) == 6
+
+
+# ---------------------------------------------------------------------------
+# Niebla: fetch combinado — get_visibility_forecast + get_fog_inference_forecast
+# comparten 1 solo request a Open-Meteo (antes: 2 requests separados).
+# ---------------------------------------------------------------------------
+
+def _make_niebla_combined_payload(n: int = 14) -> dict:
+    """Payload único con todo lo que necesitan visibilidad (current + hourly.visibility)
+    y la inferencia de niebla (hourly: humedad, punto de rocío, temp, viento, weather_code)."""
+    times = [f"2026-05-20T{i:02d}:00" for i in range(n)]
+    return {
+        "current": {
+            "visibility": 8500.0,
+            "weather_code": 1,
+        },
+        "hourly": {
+            "time": times,
+            "visibility": [8500.0] * n,
+            "relative_humidity_2m": [55.0] * n,
+            "dew_point_2m": [10.0] * n,
+            "temperature_2m": [20.0] * n,
+            "wind_speed_10m": [15.0] * n,
+            "weather_code": [0] * n,
+        },
+    }
+
+
+class TestNieblaCombinedFetch:
+
+    @pytest.mark.asyncio
+    async def test_visibility_and_fog_inference_share_a_single_http_call(self):
+        """niebla.py awaits ambas funciones concurrentemente vía asyncio.gather —
+        deben pegarle a Open-Meteo 1 sola vez, no 2."""
+        payload = _make_niebla_combined_payload(n=14)
+        call_count = 0
+
+        async def counting_request(method, url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            await asyncio.sleep(0.01)   # fuerza interleaving real entre las 2 tasks
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json.return_value = payload
+            return mock_response
+
+        mock_client = MagicMock()
+        mock_client.request = counting_request
+
+        with patch("app.services.openmeteo.get_client", return_value=mock_client), \
+             patch("app.services.openmeteo._next_ar_hour_idx", return_value=0):
+            vis, fog = await asyncio.gather(
+                get_visibility_forecast(-34.6, -58.4),
+                get_fog_inference_forecast(-34.6, -58.4, hours=12),
+            )
+
+        assert call_count == 1, f"esperaba 1 sola llamada HTTP, se hicieron {call_count}"
+
+        assert isinstance(vis, VisibilityData)
+        assert vis.current_m == pytest.approx(8500.0)
+        assert vis.weather_code == 1
+        assert len(vis.hourly_m) == 12
+
+        assert isinstance(fog, list)
+        assert len(fog) == 12
+        assert all(isinstance(s, FogInferenceSlot) for s in fog)
+
+    @pytest.mark.asyncio
+    async def test_shared_fetch_failure_keeps_both_functions_returning_none(self):
+        """Si el único fetch compartido falla, ambas funciones siguen respetando
+        su contrato de devolver None (no propagan la excepción)."""
+        from httpx import TimeoutException
+
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(side_effect=TimeoutException("t"))
+
+        with patch("app.services.openmeteo.get_client", return_value=mock_client):
+            vis, fog = await asyncio.gather(
+                get_visibility_forecast(-34.6, -58.4),
+                get_fog_inference_forecast(-34.6, -58.4, hours=12),
+            )
+
+        assert vis is None
+        assert fog is None
+
+    @pytest.mark.asyncio
+    async def test_shared_fetch_malformed_payload_keeps_both_functions_returning_none(self):
+        """Un payload sin los campos esperados sigue devolviendo None desde cada
+        parser (KeyError/TypeError), no propaga ni rompe la otra función."""
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client({"unexpected": 1})):
+            vis, fog = await asyncio.gather(
+                get_visibility_forecast(-34.6, -58.4),
+                get_fog_inference_forecast(-34.6, -58.4, hours=12),
+            )
+
+        assert vis is None
+        assert fog is None

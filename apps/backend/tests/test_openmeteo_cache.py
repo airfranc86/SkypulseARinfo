@@ -4,7 +4,7 @@ Cubre:
 - Hit/miss por clave canónica.
 - Deduplicación: N coroutines concurrentes con la misma clave → 1 solo fetch.
 - Claves distintas por model/days/fields no colisionan.
-- _cache_key redondea lat/lon a 4 decimales.
+- _cache_key redondea lat/lon a 2 decimales (~1.1 km) para subir el hit-rate.
 - Fallo del fetcher: las N coroutines esperando reciben la misma excepción, no KeyError.
 """
 from __future__ import annotations
@@ -109,10 +109,26 @@ def test_cache_key_is_stable():
 
 
 def test_cache_key_rounds_latlon():
-    # Both values have noise only in the 5th+ decimal (< 5), so round to same 4-decimal value.
+    # Both values have noise only in the 5th+ decimal (< 5), so round to same 2-decimal value.
     p1 = {"latitude": -31.40001, "longitude": -64.20001}  # → -31.4, -64.2
     p2 = {"latitude": -31.40004, "longitude": -64.20004}  # → -31.4, -64.2
     assert _cache_key(p1) == _cache_key(p2)
+
+
+def test_cache_key_collapses_close_coords_at_2_decimals():
+    """Coordenadas que difieren solo en el 3er/4to decimal (~1 km) ahora colapsan
+    en la misma entrada de caché: _cache_key redondea a 2 decimales (antes 4)."""
+    p1 = {"latitude": -31.411, "longitude": -64.201}   # → -31.41, -64.2
+    p2 = {"latitude": -31.414, "longitude": -64.204}   # → -31.41, -64.2
+    assert _cache_key(p1) == _cache_key(p2)
+
+
+def test_cache_key_still_distinguishes_coords_1km_apart_or_more():
+    """El redondeo a 2 decimales no debe colapsar coordenadas genuinamente distintas
+    (diferencia >= ~1.1 km, es decir >= 0.01 en el 2do decimal)."""
+    p1 = {"latitude": -31.41, "longitude": -64.20}
+    p2 = {"latitude": -31.43, "longitude": -64.20}
+    assert _cache_key(p1) != _cache_key(p2)
 
 
 def test_cache_key_different_model():
