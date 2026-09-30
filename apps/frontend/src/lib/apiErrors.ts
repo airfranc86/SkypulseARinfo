@@ -52,3 +52,38 @@ export function isProviderSaturated(error: unknown): boolean {
 export function isClientError(error: unknown): boolean {
   return error instanceof ApiError && error.status >= 400 && error.status < 500
 }
+
+// ── Construcción de ApiError a partir de una Response fallida — usado por api.ts ──
+
+/**
+ * Extrae un mensaje legible del body de error del backend. El backend usa 3 formas
+ * distintas según el caso (ver docs/plans/auditoria-2026-08-28.md, Fase 3):
+ * - `{message: string}` en el top level (handler de outside_argentina/invalid_coordinates)
+ * - `{detail: string}` (HTTPException simple, ej. "current_unavailable")
+ * - `{detail: {message: string}}` (HTTPException con detail estructurado, ej. cuota METAR)
+ * - `{error: string}` (default de slowapi para 429)
+ * Sin esto, un `detail` objeto (no string) termina stringificado como "[object Object]".
+ * Devuelve null si el body no calza ninguna forma conocida — el caller decide el fallback
+ * y usa ese null para saber que el body no es "nuestro" (ver ApiError.hasDetail).
+ */
+export function extractErrorMessage(body: unknown): string | null {
+  const b = body as Record<string, unknown> | null
+  if (typeof b?.message === 'string') return b.message
+  if (typeof b?.detail === 'string') return b.detail
+  if (b?.detail && typeof b.detail === 'object') {
+    const nested = (b.detail as Record<string, unknown>).message
+    if (typeof nested === 'string') return nested
+  }
+  if (typeof b?.error === 'string') return b.error
+  return null
+}
+
+/** Arma el ApiError de una respuesta fallida ya parseada — separado de api.ts (que hace el
+ *  `res.json()` y lee el header) para poder testear la lógica sin `import.meta.env`. */
+export function buildApiError(body: unknown, status: number, retryAfterHeader: string | null): ApiError {
+  const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : null
+  const detail = extractErrorMessage(body)
+  let message = detail ?? `HTTP ${status}`
+  if (status === 429 && retryAfter) message += ` Reintentá en ${retryAfter}s.`
+  return new ApiError(message, status, Number.isFinite(retryAfter) ? retryAfter : null, detail !== null)
+}

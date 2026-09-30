@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/apiErrors'
+import { ApiError, buildApiError } from '@/lib/apiErrors'
 
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -6,39 +6,11 @@ if (import.meta.env.PROD && !BASE_URL) {
   throw new Error('[SkyPulse] VITE_API_BASE_URL is not set. Configure it in Vercel environment variables.')
 }
 
-export { ApiError, isColdStart, isProviderSaturated, isClientError } from '@/lib/apiErrors'
-
-/**
- * Extrae un mensaje legible del body de error del backend. El backend usa 3 formas
- * distintas según el caso (ver docs/plans/auditoria-2026-08-28.md, Fase 3):
- * - `{message: string}` en el top level (handler de outside_argentina/invalid_coordinates)
- * - `{detail: string}` (HTTPException simple, ej. "current_unavailable")
- * - `{detail: {message: string}}` (HTTPException con detail estructurado, ej. cuota METAR)
- * - `{error: string}` (default de slowapi para 429)
- * Sin esto, un `detail` objeto (no string) termina stringificado como "[object Object]".
- * Devuelve null si el body no calza ninguna forma conocida — el caller decide el fallback
- * y usa ese null para saber que el body no es "nuestro" (ver ApiError.hasDetail).
- */
-function extractErrorMessage(body: unknown): string | null {
-  const b = body as Record<string, unknown> | null
-  if (typeof b?.message === 'string') return b.message
-  if (typeof b?.detail === 'string') return b.detail
-  if (b?.detail && typeof b.detail === 'object') {
-    const nested = (b.detail as Record<string, unknown>).message
-    if (typeof nested === 'string') return nested
-  }
-  if (typeof b?.error === 'string') return b.error
-  return null
-}
+export { ApiError } from '@/lib/apiErrors'
 
 async function throwApiError(res: Response): Promise<never> {
   const body = await res.json().catch(() => null)
-  const retryAfterHeader = res.headers.get('Retry-After')
-  const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : null
-  const detail = extractErrorMessage(body)
-  let message = detail ?? `HTTP ${res.status}`
-  if (res.status === 429 && retryAfter) message += ` Reintentá en ${retryAfter}s.`
-  throw new ApiError(message, res.status, Number.isFinite(retryAfter) ? retryAfter : null, detail !== null)
+  throw buildApiError(body, res.status, res.headers.get('Retry-After'))
 }
 
 /** Sin tope, un backend que no responde deja la pantalla cargando para siempre. Con 30 s el
