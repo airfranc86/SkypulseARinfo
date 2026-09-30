@@ -1,22 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
+import { isColdStart, isProviderSaturated, isClientError } from '@/lib/apiErrors'
+
+// isColdStart/isProviderSaturated/isClientError viven en lib/apiErrors.ts (junto a ApiError,
+// del que dependen exclusivamente — ese módulo no toca `import.meta.env` y por eso es
+// testeable con `node --test` sin el alias `@/` de Vite). Se reexportan acá para no romper
+// a quienes ya las importan de este hook (PrevisionClima.tsx, App.tsx).
+export { isColdStart, isProviderSaturated, isClientError }
 
 const STALE = 10 * 60 * 1000
 const STALE_EARTHQUAKES = 5 * 60 * 1000  // 5 minutos — matches backend TTL
 const STALE_VOLCANES    = 2 * 60 * 60 * 1000  // 2 horas
-
-/** El backend (Render free-tier) hiberna tras ~15min de inactividad — el primer
- *  request tras hibernar puede tardar 20-30s en despertar y devuelve 503 mientras tanto. */
-export function isColdStart(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 503
-}
-
-/** Errores 4xx (validación, rate limit, ICAO inválido, etc.) son permanentes para
- *  el mismo request — reintentar no cambia el resultado (las coordenadas no cambian
- *  entre reintentos), solo agrega latencia antes de mostrar el error real. */
-export function isClientError(error: unknown): boolean {
-  return error instanceof ApiError && error.status >= 400 && error.status < 500
-}
 
 /** Reintenta más veces y con esperas más largas ante un 503 (cold start),
  *  dándole tiempo al backend a despertar antes de rendirse. Nunca reintenta 4xx. */

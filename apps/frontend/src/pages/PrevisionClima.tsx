@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CloudSun, ChevronDown } from 'lucide-react'
-import { useWeatherDashboard, useSmnAlertas, isColdStart, isClientError } from '@/hooks/useWeather'
+import { useWeatherDashboard, useSmnAlertas, isColdStart, isProviderSaturated, isClientError } from '@/hooks/useWeather'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
@@ -32,9 +32,11 @@ function pageModel(currentSource: string | undefined): ModelKey {
   return currentSource === 'smn' ? 'smn_openmeteo' : 'openmeteo_forecast'
 }
 
-/** Mensaje para el usuario según el fallo: cold start, error de validación del backend, o cualquier otro. */
+/** Mensaje para el usuario según el fallo: cold start, proveedor saturado, error de validación
+ *  del backend, o cualquier otro. */
 function dashboardErrorMessage(error: Error): string {
   if (isColdStart(error)) return 'El servicio tardó en responder al despertar.'
+  if (isProviderSaturated(error)) return 'El proveedor de clima está saturado — probá de nuevo en unos minutos.'
   if (isClientError(error)) return error.message
   return 'No pudimos cargar la previsión. Probá de nuevo en unos segundos.'
 }
