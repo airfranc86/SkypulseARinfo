@@ -36,7 +36,7 @@ function pageModel(currentSource: string | undefined): ModelKey {
  *  del backend, o cualquier otro. */
 function dashboardErrorMessage(error: Error): string {
   if (isColdStart(error)) return 'El servicio tardó en responder al despertar.'
-  if (isProviderSaturated(error)) return 'El proveedor de clima está saturado — probá de nuevo en unos minutos.'
+  if (isProviderSaturated(error)) return 'El proveedor de datos del clima no está respondiendo. Probá de nuevo más tarde.'
   if (isClientError(error)) return error.message
   return 'No pudimos cargar la previsión. Probá de nuevo en unos segundos.'
 }
@@ -128,13 +128,17 @@ export function PrevisionClima({ location }: Props) {
     else if (data) liveMessage = `Previsión de ${location.label} actualizada.`
   }
 
-  // El backend (Render free-tier) hiberna tras inactividad — el primer request del día
-  // puede tardar 20-30s en despertar y devolver 503 mientras tanto. Mostramos un aviso
-  // amigable mientras react-query reintenta, en vez del skeleton genérico o un error crudo.
-  // isFetching es clave acá: failureCount/failureReason NO se resetean cuando los
-  // reintentos se agotan (solo al tener éxito), así que sin este chequeo el aviso queda
-  // pegado para siempre tras el último 503, ocultando el ErrorMessage de abajo.
-  const isWakingUp = !data && isFetching && failureCount > 0 && isColdStart(failureReason)
+  // Dos causas muestran un aviso de "reintentando" en vez del skeleton genérico o un error
+  // crudo: el backend (Render free-tier) hibernando (primer request del día, 20-30s) o el
+  // proveedor de datos upstream sin responder (ver isProviderSaturated). isFetching es clave
+  // acá: failureCount/failureReason NO se resetean cuando los reintentos se agotan (solo al
+  // tener éxito), así que sin este chequeo el aviso queda pegado para siempre tras el último
+  // fallo, ocultando el ErrorMessage de abajo. Con cualquier otro error, mientras se reintenta
+  // sigue el skeleton: el aviso solo reemplaza al skeleton cuando hay aviso que mostrar.
+  const isRetrying = !data && isFetching && failureCount > 0
+  const isWakingUp = isRetrying && isColdStart(failureReason)
+  const isProviderRetrying = isRetrying && isProviderSaturated(failureReason)
+  const showRetryNotice = isWakingUp || isProviderRetrying
 
   return (
     <div>
@@ -166,9 +170,10 @@ export function PrevisionClima({ location }: Props) {
         pending={alertasPending}
       />
 
-      {isWakingUp && <WakingUpNotice />}
-      {(location === null || isLoading) && !isWakingUp && <PageSkeleton />}
-      {error && !isWakingUp && (
+      {isWakingUp && <RetryNotice text="Despertando el servidor — puede tardar unos segundos, es solo la primera vez del día." />}
+      {isProviderRetrying && <RetryNotice text="El proveedor de datos del clima no responde — reintentando…" />}
+      {(location === null || isLoading) && !showRetryNotice && <PageSkeleton />}
+      {error && !showRetryNotice && (
         <ErrorMessage message={dashboardErrorMessage(error as Error)} onRetry={() => { void refetch() }} />
       )}
 
@@ -279,8 +284,14 @@ export function PrevisionClima({ location }: Props) {
   )
 }
 
-/** Aviso mientras el backend (Render free-tier) sale de hibernación — primera carga del día. */
-function WakingUpNotice() {
+interface RetryNoticeProps {
+  /** Texto del aviso — varía según la causa del reintento (cold start vs. proveedor saturado). */
+  text: string
+}
+
+/** Aviso mientras react-query reintenta: backend (Render free-tier) despertando o
+ *  proveedor de datos upstream sin responder. */
+function RetryNotice({ text }: RetryNoticeProps) {
   return (
     <div
       className="rounded-xl px-4 py-3 mb-4 flex items-center gap-3 text-sm"
@@ -305,7 +316,7 @@ function WakingUpNotice() {
           <animateTransform attributeName="transform" type="rotate" values="360 12 12;0 12 12" dur="1.05s" repeatCount="indefinite" />
         </path>
       </svg>
-      Despertando el servidor — puede tardar unos segundos, es solo la primera vez del día.
+      {text}
     </div>
   )
 }

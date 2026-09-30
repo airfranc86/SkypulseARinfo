@@ -1,28 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { isColdStart, isProviderSaturated, isClientError } from '@/lib/apiErrors'
+import { DASHBOARD_RETRY } from '@/lib/retryPolicy'
 
 // isColdStart/isProviderSaturated/isClientError viven en lib/apiErrors.ts (junto a ApiError,
 // del que dependen exclusivamente — ese módulo no toca `import.meta.env` y por eso es
 // testeable con `node --test` sin el alias `@/` de Vite). Se reexportan acá para no romper
-// a quienes ya las importan de este hook (PrevisionClima.tsx, App.tsx).
+// a quienes ya las importan de este hook (PrevisionClima.tsx, App.tsx, useDensityAltitude.ts).
 export { isColdStart, isProviderSaturated, isClientError }
 
 const STALE = 10 * 60 * 1000
 const STALE_EARTHQUAKES = 5 * 60 * 1000  // 5 minutos — matches backend TTL
 const STALE_VOLCANES    = 2 * 60 * 60 * 1000  // 2 horas
-
-/** Reintenta más veces y con esperas más largas ante un 503 (cold start),
- *  dándole tiempo al backend a despertar antes de rendirse. Nunca reintenta 4xx. */
-const COLD_START_RETRY = {
-  retry: (failureCount: number, error: Error) => {
-    if (isColdStart(error)) return failureCount < 4
-    if (isClientError(error)) return false
-    return failureCount < 2
-  },
-  retryDelay: (attempt: number, error: Error) =>
-    isColdStart(error) ? Math.min(5000 * (attempt + 1), 20000) : Math.min(1000 * 2 ** attempt, 30000),
-}
 
 export function useWeatherCurrent(lat: number | null, lon: number | null) {
   return useQuery({
@@ -107,7 +96,7 @@ export function useWeatherDashboard(
     // Solo con las mismas coordenadas: con otra ciudad, mostrar el dato anterior sería mentir.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === lat && previousQuery?.queryKey[2] === lon ? previous : undefined,
-    ...COLD_START_RETRY,
+    ...DASHBOARD_RETRY,
   })
 }
 
