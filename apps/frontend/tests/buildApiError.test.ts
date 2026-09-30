@@ -81,3 +81,35 @@ test('buildApiError: sin header Retry-After → retryAfter null', () => {
   const error = buildApiError({ error: 'Rate limit exceeded' }, 429, null)
   assert.equal(error.retryAfter, null)
 })
+
+// Hallazgo de la revisión del PR #30 (review-reliability, R3-empty-detail-misclassification):
+// un `detail`/`message`/`error` vacío ("") pasaba el chequeo `typeof x === 'string'` y volvía
+// como mensaje real — un 503 sin diagnóstico real terminaba clasificado como proveedor saturado
+// (4 reintentos largos de cold start → 2 cortos) en vez de cold start. Las 4 formas del body
+// (ver extractErrorMessage) comparten el mismo bug, así que se cubren las 4.
+
+test('buildApiError: {detail: ""} (string vacío) → fallback HTTP 503, hasDetail false, cold start', () => {
+  const error = buildApiError({ detail: '' }, 503, null)
+  assert.equal(error.message, 'HTTP 503')
+  assert.equal(error.hasDetail, false)
+  assert.equal(isColdStart(error), true)
+  assert.equal(isProviderSaturated(error), false)
+})
+
+test('buildApiError: {message: ""} (string vacío) → fallback HTTP status, hasDetail false', () => {
+  const error = buildApiError({ message: '' }, 503, null)
+  assert.equal(error.message, 'HTTP 503')
+  assert.equal(error.hasDetail, false)
+})
+
+test('buildApiError: {error: ""} (string vacío) → fallback HTTP status, hasDetail false', () => {
+  const error = buildApiError({ error: '' }, 503, null)
+  assert.equal(error.message, 'HTTP 503')
+  assert.equal(error.hasDetail, false)
+})
+
+test('buildApiError: {detail: {message: ""}} (detail estructurado vacío) → fallback HTTP 503, hasDetail false', () => {
+  const error = buildApiError({ detail: { message: '' } }, 503, null)
+  assert.equal(error.message, 'HTTP 503')
+  assert.equal(error.hasDetail, false)
+})

@@ -65,16 +65,21 @@ export function isClientError(error: unknown): boolean {
  * Sin esto, un `detail` objeto (no string) termina stringificado como "[object Object]".
  * Devuelve null si el body no calza ninguna forma conocida — el caller decide el fallback
  * y usa ese null para saber que el body no es "nuestro" (ver ApiError.hasDetail).
+ *
+ * Un string vacío ("") no cuenta como mensaje real — no hay nada que mostrar, así que se
+ * trata igual que si el campo no estuviera (cae al fallback). Sin esto, un backend que
+ * responde `{"detail": ""}` en un 503 clasificaba como proveedor saturado en vez de cold
+ * start (hallazgo de la revisión del PR #30, R3-empty-detail-misclassification).
  */
 export function extractErrorMessage(body: unknown): string | null {
   const b = body as Record<string, unknown> | null
-  if (typeof b?.message === 'string') return b.message
-  if (typeof b?.detail === 'string') return b.detail
+  if (typeof b?.message === 'string' && b.message !== '') return b.message
+  if (typeof b?.detail === 'string' && b.detail !== '') return b.detail
   if (b?.detail && typeof b.detail === 'object') {
     const nested = (b.detail as Record<string, unknown>).message
-    if (typeof nested === 'string') return nested
+    if (typeof nested === 'string' && nested !== '') return nested
   }
-  if (typeof b?.error === 'string') return b.error
+  if (typeof b?.error === 'string' && b.error !== '') return b.error
   return null
 }
 
