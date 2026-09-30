@@ -32,8 +32,14 @@ _STORM_WMO_CODES = {95, 96, 99}
 
 # CAPE (J/kg) — indicador de riesgo convectivo que complementa al código WMO (el CAPE puede anticipar
 # tormentas que el weather_code todavía no marca). A partir de ~1000 J/kg el
-# potencial de tormenta moderada-severa (incl. granizo) ya es real; por
-# encima de 2500 J/kg se considera extremo. Fuente: umbrales NOAA SPC.
+# potencial de tormenta moderada-severa (incl. granizo) ya es real. Fuente:
+# umbrales NOAA SPC (spc.noaa.gov/misc/tables/capetext.htm) — corte "marginal
+# → moderadamente inestable". Recalibrado FRA-191 (2026-09-30): este mismo
+# corte de 1000 J/kg coincide con el umbral propio de Elkins & Hence 2024
+# (J. Applied Meteorology, estudio de radar específico de la región de
+# Córdoba) para separar tormentas de granizo dominadas por cizalladura vs.
+# dominadas por CAPE — es la evidencia regional más directa que hay a favor
+# de mantenerlo, así que no se toca.
 _CAPE_STORM_THRESHOLD_J_KG = 1000.0
 
 ConvectiveRisk = Literal["low", "moderate", "high", "severe"]
@@ -53,15 +59,30 @@ def compute_convective_risk(cape_j_kg: float | None) -> ConvectiveRisk:
     mismo par CAPE/CIN — metodológicamente inválido. Queda pendiente para cuando
     se migre a WRF-SMN (FRA-122 fase D), de donde saldrían ambas del mismo modelo.
 
-    Umbral "high" ajustado a 3000 J/kg (en vez de los ~2500 J/kg de umbrales
-    globales tipo NOAA SPC) porque la convección local con orografía de las
-    Sierras de Córdoba necesita CAPE más alto para disparar súper-células.
-    Hipótesis de arranque — recalibrar con eventos observados en la
-    temporada 2026-27.
+    Recalibrado FRA-191 (2026-09-30), sin datos propios de eventos (la
+    temporada 2026-27 recién arranca, no hay registro local todavía) — con
+    literatura meteorológica en su lugar. El umbral "high" volvió al 2500
+    J/kg global de NOAA SPC (corte "moderadamente inestable → muy inestable",
+    spc.noaa.gov/misc/tables/capetext.htm); antes estaba en 3000 J/kg porque
+    se asumía que la orografía de las Sierras de Córdoba necesita más CAPE
+    para disparar súper-células. Esa razón no tiene respaldo: Piscitelli
+    et al. 2022 (Atmospheric Research 277, radar de 9 años centro-este de
+    Argentina) encuentra que las supercélulas de esta región se forman con
+    MENOS CAPE que en las Great Plains de EE.UU., no más — y Bruick et al.
+    2019 (Monthly Weather Review 147) describe la convección acá como
+    forzada por el terreno, no frenada por él. Ningún estudio de la región
+    encontrado respalda subir el corte por orografía.
+
+    Caveat real, no resuelto por este recalibrado: la propia SPC no usa CAPE
+    solo para pronosticar granizo severo — su índice operativo (SHIP)
+    combina CAPE con humedad, lapse rate, cizalladura y temperatura media.
+    Sin CIN ni cizalladura (ver arriba), este veto es más propenso a falsos
+    positivos que un índice multivariable — limitación conocida, no
+    específica de esta región.
     """
     if cape_j_kg is None or cape_j_kg < 1000:
         return "low"
-    if cape_j_kg < 3000:
+    if cape_j_kg < 2500:
         return "moderate"
     if cape_j_kg < 4500:
         return "high"

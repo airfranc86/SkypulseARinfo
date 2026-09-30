@@ -527,9 +527,13 @@ class TestLavarCoche:
 
 class TestConvectiveRisk:
     """
-    compute_convective_risk (FRA-122 fase A) — 4 escalones solo con CAPE
-    (sin CIN, ver docstring de la función). Umbrales: <1000 low,
-    1000-3000 moderate, 3000-4500 high, >=4500 severe.
+    compute_convective_risk (FRA-122 fase A, recalibrado FRA-191) — 4 escalones
+    solo con CAPE (sin CIN, ver docstring de la función). Umbrales: <1000 low,
+    1000-2500 moderate, 2500-4500 high, >=4500 severe. El corte "high" volvió
+    al 2500 J/kg global de NOAA SPC — el 3000 J/kg anterior asumía que la
+    orografía de las Sierras de Córdoba necesita más CAPE para producir
+    supercélulas, algo que la literatura regional no respalda (Piscitelli
+    et al. 2022 encuentra lo contrario: menos CAPE que en EE.UU.).
     """
 
     def test_none_es_low(self):
@@ -547,11 +551,11 @@ class TestConvectiveRisk:
     def test_moderate_intermedio(self):
         assert compute_convective_risk(2000.0) == "moderate"
 
-    def test_justo_debajo_de_3000_es_moderate(self):
-        assert compute_convective_risk(2999.9) == "moderate"
+    def test_justo_debajo_de_2500_es_moderate(self):
+        assert compute_convective_risk(2499.9) == "moderate"
 
-    def test_3000_es_high(self):
-        assert compute_convective_risk(3000.0) == "high"
+    def test_2500_es_high(self):
+        assert compute_convective_risk(2500.0) == "high"
 
     def test_high_intermedio(self):
         assert compute_convective_risk(4000.0) == "high"
