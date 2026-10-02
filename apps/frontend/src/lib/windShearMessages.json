@@ -1,0 +1,17 @@
+{
+  "levels": {
+    "verde": "Cizalladura leve según los parámetros ingresados. No garantiza condiciones seguras: seguí monitoreando el viento.",
+    "amarillo": "Riesgo de pérdida repentina de sustentación en final. Mantené margen de altura.",
+    "naranja": "Riesgo alto de colapso del velamen y pérdida de control direccional. Evitá la aproximación si podés.",
+    "rojo": "Cizalladura extrema. No aterrizar en estas condiciones (No-Go)."
+  },
+  "drivers": {
+    "shear": "La cizalladura vertical del viento en la capa más fuerte explica este nivel.",
+    "gust_spread": "La diferencia entre la ráfaga y el viento sostenido en superficie explica este nivel."
+  },
+  "thermal": {
+    "inversion": "Inversión térmica en la capa baja: el viento en altura puede estar desacoplado del de superficie. Dato informativo: no modifica el nivel.",
+    "unstable": "Capa baja inestable: esperá turbulencia térmica y ráfagas. Dato informativo: no modifica el nivel.",
+    "neutral": "Gradiente térmico sin señal de inversión ni de inestabilidad. Dato informativo: no modifica el nivel."
+  }
+}
