@@ -1,9 +1,7 @@
-import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Forecast7dList } from './Forecast7dList'
-import { Forecast7dTable } from './Forecast7dTable'
 import { Forecast7dChart } from './Forecast7dChart'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import type { ModelKey } from '@/components/ui/ModelBadge'
@@ -31,14 +29,6 @@ interface Props {
   rainWindows?: Record<string, string>
 }
 
-/** Cómo se ve el detalle de "Avanzado": la lista de siete días ya está a la vista, esto es una alternativa. */
-type View = 'chart' | 'table'
-
-const VIEWS: { id: View; label: string }[] = [
-  { id: 'chart', label: 'Gráfico' },
-  { id: 'table', label: 'Tabla' },
-]
-
 const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
   { id: 'consensus', label: 'Consenso modelos' },
   { id: 'gfs',       label: 'GFS' },
@@ -49,10 +39,6 @@ const SEGMENT_BASE = 'px-3.5 py-2 min-h-[44px] rounded-md text-xs font-medium tr
 const SEGMENT_ACTIVE = { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
 
 export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChange, refreshing = false, rainWindows }: Props) {
-  const [view, setView] = useState<View>('chart')
-  // Controlado para montar el gráfico solo con el panel abierto: recharts mide su contenedor, y
-  // dentro de un <details> cerrado mide 0.
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const modelLabel = MODEL_OPTIONS.find(({ id }) => id === selectedModel)?.label ?? selectedModel
   const dimmed = { opacity: refreshing ? 0.55 : 1 }
 
@@ -86,13 +72,22 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
         <Forecast7dList days={days} rainWindows={rainWindows} showConfidence={shownModel === 'consensus'} />
       </div>
 
-      {/* Avanzado: lo que pocos necesitan en el celular. Si hay otro modelo elegido, el resumen lo dice. */}
-      <details
-        open={advancedOpen}
-        onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
-        className="group"
-        style={{ borderTop: '1px solid var(--color-border)' }}
+      {/* El gráfico va siempre a la vista, fuera del panel "Avanzado": recharts mide su contenedor y
+          dentro de un <details> cerrado mide 0. */}
+      <section
+        aria-labelledby="pronostico-grafico"
+        aria-busy={refreshing}
+        className="px-5 py-4"
+        style={{ ...dimmed, borderTop: '1px solid var(--color-border)' }}
       >
+        <h3 id="pronostico-grafico" className="sr-only">
+          Gráfico de los 7 días
+        </h3>
+        <Forecast7dChart days={days} />
+      </section>
+
+      {/* Avanzado: lo que pocos necesitan en el celular. Si hay otro modelo elegido, el resumen lo dice. */}
+      <details className="group" style={{ borderTop: '1px solid var(--color-border)' }}>
         <summary
           className="px-5 min-h-[44px] flex items-center justify-between gap-3 cursor-pointer select-none text-sm list-none [&::-webkit-details-marker]:hidden"
           style={{ color: 'var(--color-muted-foreground)' }}
@@ -100,7 +95,7 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
           <span>
             <span className="font-medium" style={{ color: 'var(--color-foreground)' }}>Avanzado</span>
             <span className="ml-2 text-xs">
-              {selectedModel === 'consensus' ? 'modelos, tabla y gráfico' : `modelo ${modelLabel}`}
+              {selectedModel === 'consensus' ? 'modelos' : `modelo ${modelLabel}`}
             </span>
           </span>
           <ChevronDown size={16} aria-hidden="true" className="shrink-0 transition-transform motion-reduce:transition-none group-open:rotate-180" />
@@ -129,19 +124,6 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
               selected={selectedModel}
               onSelect={onModelChange}
             />
-          </section>
-
-          <section aria-labelledby="pronostico-vista" className="space-y-3">
-            <h3 id="pronostico-vista" className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
-              Otra vista de los días
-            </h3>
-            <Segmented label="Vista del pronóstico" options={VIEWS} selected={view} onSelect={setView} />
-            {advancedOpen && (
-              <div aria-busy={refreshing} style={dimmed}>
-                {view === 'chart' && <Forecast7dChart days={days} />}
-                {view === 'table' && <Forecast7dTable days={days} />}
-              </div>
-            )}
           </section>
         </div>
       </details>
