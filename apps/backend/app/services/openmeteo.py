@@ -240,6 +240,11 @@ async def get_daily_forecast_ext(
 # Multi-model daily consensus
 # ---------------------------------------------------------------------------
 
+# Un modelo "vota lluvia" un día si su acumulado diario es ESTRICTAMENTE superior a este umbral.
+# Valor elegido por el criterio meteorológico del product owner (FRA-116): superior a 0,9 mm.
+RAIN_VOTE_THRESHOLD_MM: float = 0.9
+
+
 @dataclass(frozen=True)
 class MultiModelDailyData:
     models: dict[str, DailyForecastDataExt]   # key → model name
@@ -283,7 +288,7 @@ async def get_multi_model_daily(
         for i in range(num_days):
             votes_rain = sum(
                 1 for d in successful.values()
-                if i < len(d.precip_sum) and (d.precip_sum[i] or 0.0) > 0.5
+                if i < len(d.precip_sum) and (d.precip_sum[i] or 0.0) > RAIN_VOTE_THRESHOLD_MM
             )
             total = len(successful)
             pct_rain = (votes_rain / total) * 100

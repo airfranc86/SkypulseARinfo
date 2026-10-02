@@ -40,7 +40,7 @@ const VIEWS: { id: View; label: string }[] = [
 ]
 
 const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
-  { id: 'consensus', label: 'Consenso' },
+  { id: 'consensus', label: 'Consenso modelos' },
   { id: 'gfs',       label: 'GFS' },
   { id: 'ecmwf',     label: 'ECMWF' },
 ]
@@ -112,9 +112,17 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
             <h3 id="pronostico-modelo" className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
               Modelo
             </h3>
-            <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
-              El consenso combina GFS y ECMWF. Cuando no coinciden, ese día lleva "Confianza media" o "Confianza baja". Elegí uno solo para ver en qué difieren.
-            </p>
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-semibold" style={{ color: 'var(--color-foreground)' }}>
+                Consenso Modelos Predictivos
+              </h4>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+                El consenso combina GFS y ECMWF. Cuando no coinciden, ese día lleva "Confianza media" o "Confianza baja". Elegí uno solo para ver en qué difieren.
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+                ECMWF es el modelo europeo y, según la verificación del propio ECMWF en 101 estaciones de Argentina (2020–2024), es el que mejor acierta temperatura y viento en el país. GFS es el modelo de EE. UU.: acierta parecido en lluvia, pero tiende a exagerar el calor y el viento.
+              </p>
+            </div>
             <Segmented
               label="Modelo de pronóstico"
               options={MODEL_OPTIONS}
