@@ -3,6 +3,8 @@ export interface City {
   province: string
   lat: number
   lon: number
+  /** Solo en resultados de Georef AR (homónimos); la lista local no lo trae. */
+  department?: string
 }
 
 export const AR_CITIES: City[] = [
@@ -58,14 +60,15 @@ export const AR_CITIES: City[] = [
   { name: 'El Calafate', province: 'Santa Cruz', lat: -50.3375, lon: -72.2742 },
 ]
 
-function normalize(s: string): string {
+/** Minúsculas y sin tildes: comparación insensible a mayúsculas y acentos. */
+export function normalizeText(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
 export function searchCities(query: string): City[] {
-  const q = normalize(query.trim())
+  const q = normalizeText(query.trim())
   if (!q) return []
   return AR_CITIES.filter(
-    (c) => normalize(c.name).includes(q) || normalize(c.province).includes(q)
+    (c) => normalizeText(c.name).includes(q) || normalizeText(c.province).includes(q)
   ).slice(0, 8)
 }

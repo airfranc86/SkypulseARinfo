@@ -1,7 +1,18 @@
-import { useState, useRef, useMemo } from 'react'
-import { MapPin, Navigation, Search, X } from 'lucide-react'
-import { searchCities, type City } from '@/lib/cities-ar'
+import { useState, useRef } from 'react'
+import { Navigation, Search, X } from 'lucide-react'
+import { useCitySearch } from '@/hooks/useCitySearch'
+import type { City } from '@/lib/cities-ar'
+import { placeKey, searchHint, type SearchHint } from '@/lib/georef'
 import { cn } from '@/lib/utils'
+import { LocationOption } from './LocationOption'
+
+const HINT_TEXT: Record<SearchHint, string> = {
+  none: '',
+  searching: 'Buscando…',
+  not_found: 'No encontramos esa localidad',
+  unavailable:
+    'La búsqueda de localidades no está disponible ahora. Probá con una ciudad grande o reintentá en unos segundos.',
+}
 
 interface LocationPickerProps {
   label: string
@@ -24,14 +35,24 @@ export function LocationPicker({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
-  // T-06: synchronous search via useMemo avoids double render from useEffect+setState
-  const results = useMemo(
-    () => (query.length >= 2 ? searchCities(query) : []),
-    [query],
-  )
+  // Local results are synchronous (no double render); Georef results arrive after a debounce
+  const { results, isSearching, remoteFailed } = useCitySearch(query)
 
   // Dropdown is open when there are results AND user hasn't dismissed it
   const open = results.length > 0 && !dismissed
+
+  // Hint under the list: searching, 'not found' (only if Georef answered) or 'unavailable' (it failed)
+  const statusText =
+    HINT_TEXT[
+      searchHint({
+        dismissed,
+        isSearching,
+        remoteFailed,
+        queryLength: query.trim().length,
+        resultCount: results.length,
+      })
+    ]
+  const showPanel = open || statusText !== ''
 
   function handleQueryChange(value: string) {
     setQuery(value)
@@ -94,39 +115,33 @@ export function LocationPicker({
             <X className="size-4" />
           </button>
         )}
-        {open && (
-          <ul
-            ref={listRef}
-            role="listbox"
-            className={cn(
-              'absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border shadow-lg',
-              'bg-[var(--color-popover)] border-[var(--color-border)]'
-            )}
+        {/* Always mounted so the aria-live region exists before its text changes */}
+        <div
+          className={cn(
+            showPanel
+              ? 'absolute z-50 mt-1 w-full overflow-hidden rounded-lg border shadow-lg bg-[var(--color-popover)] border-[var(--color-border)]'
+              : 'sr-only'
+          )}
+        >
+          {open && (
+            <ul ref={listRef} role="listbox" className="max-h-60 overflow-y-auto">
+              {results.map((city) => (
+                <LocationOption
+                  key={placeKey(city)}
+                  city={city}
+                  onSelect={handleSelect}
+                  onEscape={() => setDismissed(true)}
+                />
+              ))}
+            </ul>
+          )}
+          <p
+            aria-live="polite"
+            className={cn(statusText && 'px-3 py-2 text-xs text-[var(--color-muted-foreground)]')}
           >
-            {results.map((city) => (
-              <li key={`${city.name}-${city.province}`} role="option" aria-selected={false}>
-                <button
-                  className={cn(
-                    'w-full flex items-center gap-2 px-3 py-2 text-sm text-left',
-                    'hover:bg-[var(--color-accent)] focus:bg-[var(--color-accent)]',
-                    'text-[var(--color-foreground)] focus:outline-none'
-                  )}
-                  onClick={() => handleSelect(city)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSelect(city)
-                    if (e.key === 'Escape') setDismissed(true)
-                  }}
-                >
-                  <MapPin className="size-3.5 shrink-0 text-[var(--color-primary)]" />
-                  <span className="font-medium">{city.name}</span>
-                  <span className="text-[var(--color-muted-foreground)] text-xs ml-auto">
-                    {city.province}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+            {statusText}
+          </p>
+        </div>
       </div>
 
       <button
