@@ -51,7 +51,7 @@ function chartSummary(days: DailyEntry[]): string {
         : 'Sin probabilidad de lluvia en los próximos días.',
     )
   }
-  parts.push('El detalle día por día está en la vista Tabla.')
+  parts.push('El detalle día por día está en la lista de días, arriba.')
   return parts.join(' ')
 }
 
@@ -76,7 +76,7 @@ export function Forecast7dChart({ days }: Props) {
         ))}
       </ul>
       {/* role="img": el SVG de recharts no es navegable con sentido, así que se anuncia el
-          resumen y la vista Tabla es la alternativa con el detalle. */}
+          resumen y la lista de días de arriba es la alternativa con el detalle. */}
       <div role="img" aria-label={chartSummary(days)} style={{ height: '280px' }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
