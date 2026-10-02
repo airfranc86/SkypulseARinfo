@@ -1,7 +1,10 @@
-import type { SmnAlerta } from '@/lib/api'
+import type { SmnAlerta, SmnAlertasResponse } from '@/lib/api'
 
 export type AlertLevel = 'rojo' | 'naranja' | 'amarillo' | 'verde' | 'otro'
 export type CriticalLevel = 'rojo' | 'naranja'
+
+/** Fuente oficial de los avisos: destino de todos los enlaces a smn.gob.ar. */
+export const SMN_URL = 'https://www.smn.gob.ar/'
 
 /** Orden de gravedad: menor número = más grave. "otro" (nivel que no reconocemos) va al final. */
 const RANK: Record<AlertLevel, number> = { rojo: 0, naranja: 1, amarillo: 2, verde: 3, otro: 4 }
@@ -47,6 +50,15 @@ export function criticalLevel(alertas: SmnAlerta[]): CriticalLevel | null {
   if (levels.includes('rojo')) return 'rojo'
   if (levels.includes('naranja')) return 'naranja'
   return null
+}
+
+/**
+ * El SMN no respondió: la consulta falló o el backend contestó que la fuente no está disponible.
+ * Sin dato todavía (cargando) no es una falla. Con falla "sin avisos" sería afirmar algo que no
+ * sabemos, así que no se muestran avisos y la página deja, al pie, un enlace a la fuente oficial.
+ */
+export function isSmnUnavailable(isError: boolean, data: Pick<SmnAlertasResponse, 'available'> | undefined): boolean {
+  return isError || data?.available === false
 }
 
 const AR_ZONE = 'America/Argentina/Buenos_Aires'

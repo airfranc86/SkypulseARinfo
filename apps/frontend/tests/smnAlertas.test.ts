@@ -5,6 +5,7 @@ import {
   alertSummary,
   criticalAlertas,
   criticalLevel,
+  isSmnUnavailable,
   sortAlertas,
   vigenciaText,
 } from '../src/lib/smnAlertas.ts'
@@ -95,4 +96,20 @@ test('vigenciaText: sin hora de referencia válida no dice nada (y no falla)', (
 
 test('vigenciaText: acepta el offset explícito', () => {
   assert.equal(vigenciaText(alerta('naranja', { hasta: '2026-09-18T21:00:00-03:00' }), NOW_MS), 'hasta las 21:00')
+})
+
+test('isSmnUnavailable: solo es falla la consulta caída o la fuente que dice "no disponible"', () => {
+  // Cargando todavía (sin dato y sin error) no es una falla: el enlace al pie no debe aparecer de golpe.
+  assert.equal(isSmnUnavailable(false, undefined), false)
+  // La consulta falló.
+  assert.equal(isSmnUnavailable(true, undefined), true)
+  // El backend respondió, pero la fuente no estaba disponible.
+  assert.equal(isSmnUnavailable(false, { available: false }), true)
+  // Respuesta normal: con o sin avisos no hay nada que reemplazar.
+  assert.equal(isSmnUnavailable(false, { available: true }), false)
+})
+
+test('isSmnUnavailable: un refetch caído con datos viejos también cuenta como falla', () => {
+  // "Sin avisos" sería afirmar algo que no sabemos: con la consulta en error no se muestran avisos viejos.
+  assert.equal(isSmnUnavailable(true, { available: true }), true)
 })

@@ -6,11 +6,12 @@ import type { LocationState } from '@/hooks/useLocation'
 import type { ModelKey } from '@/components/ui/ModelBadge'
 import { forecastNotes, formatClock } from '@/lib/weatherLabels'
 import { buildVerdict, entriesFromNow, rainWindowsByDate } from '@/lib/weatherVerdict'
-import { criticalLevel } from '@/lib/smnAlertas'
+import { criticalLevel, isSmnUnavailable } from '@/lib/smnAlertas'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
 import { NextDays } from '@/components/clima/NextDays'
 import { SmnAlertasBlock } from '@/components/clima/SmnAlertasBlock'
+import { SmnFallbackLink } from '@/components/clima/SmnFallbackLink'
 import { DayArc } from '@/components/clima/DayArc'
 import { HourlyStrip } from '@/components/clima/HourlyStrip'
 import { Forecast7d } from '@/components/clima/Forecast7d'
@@ -83,7 +84,7 @@ export function PrevisionClima({ location }: Props) {
   const updatedAt = formatClock(data?.fetched_at)
 
   // Sin dato del SMN, "sin avisos" sería una afirmación que no podemos hacer.
-  const alertasUnavailable = alertasError || alertasData?.available === false
+  const alertasUnavailable = isSmnUnavailable(alertasError, alertasData)
   const alertas = alertasUnavailable ? [] : (alertasData?.alertas ?? [])
   // Solo naranja y rojo cambian el peso del héroe (borde y brillo del color del aviso) y encabezan el veredicto.
   const severity = criticalLevel(alertas)
@@ -140,6 +141,10 @@ export function PrevisionClima({ location }: Props) {
   const isProviderRetrying = isRetrying && isProviderSaturated(failureReason)
   const showRetryNotice = isWakingUp || isProviderRetrying
 
+  // El enlace al SMN cierra la página: espera a que haya pronóstico o error final. Con el esqueleto o el
+  // aviso de reintento todavía en pantalla se correría hacia abajo cuando llegue el contenido.
+  const showSmnFallback = alertasUnavailable && (Boolean(data) || Boolean(error))
+
   return (
     <div>
       {/* Encabezado de una línea: la ciudad y la frescura del dato. El título de la página sigue
@@ -162,7 +167,8 @@ export function PrevisionClima({ location }: Props) {
 
       {/* Avisos oficiales del SMN — ordenados por gravedad y fuera de la rama de datos: son lo más
           urgente y no pueden depender de que el pronóstico cargue (con el pronóstico caído seguían
-          ocultos). Si el SMN no respondió se avisa; mientras llegan hay una línea reservada. */}
+          ocultos). Si el SMN no respondió no se pinta nada acá (queda un enlace discreto al pie de la
+          página); mientras llegan hay una línea reservada. */}
       <SmnAlertasBlock
         alertas={alertas}
         unavailable={alertasUnavailable}
@@ -280,6 +286,9 @@ export function PrevisionClima({ location }: Props) {
           </div>
         </FadeContent>
       )}
+
+      {/* Pie de la página: si el SMN no respondió, un enlace discreto a la fuente oficial. */}
+      {showSmnFallback && <SmnFallbackLink />}
     </div>
   )
 }

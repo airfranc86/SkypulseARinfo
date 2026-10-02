@@ -1,10 +1,10 @@
-import { AlertTriangle, CircleAlert, Info, OctagonAlert, TriangleAlert, type LucideIcon } from 'lucide-react'
-import { LEVEL_COLOR, alertLevel, alertSummary, sortAlertas, vigenciaText, type AlertLevel } from '@/lib/smnAlertas'
+import { CircleAlert, Info, OctagonAlert, TriangleAlert, type LucideIcon } from 'lucide-react'
+import { LEVEL_COLOR, SMN_URL, alertLevel, alertSummary, sortAlertas, vigenciaText, type AlertLevel } from '@/lib/smnAlertas'
 import type { SmnAlerta } from '@/lib/api'
 
 interface SmnAlertasBlockProps {
   alertas: SmnAlerta[]
-  /** El SMN no respondió: la ausencia de avisos no significa que no haya. */
+  /** El SMN no respondió: acá no se muestra nada (la página deja un enlace discreto al pie, ver SmnFallbackLink). */
   unavailable?: boolean
   /** Hora de referencia (ms) para la vigencia de cada aviso. */
   nowMs?: number
@@ -25,8 +25,6 @@ const STYLE: Record<AlertLevel, { Icon: LucideIcon; tint: string; border: string
   otro:     { Icon: Info,          tint: '14', border: '1px solid',   strong: false },
 }
 
-const SMN_URL = 'https://www.smn.gob.ar/'
-
 /** Avisos oficiales del SMN, mostrados tal cual vienen de la fuente — sin interpretación propia. */
 export function SmnAlertasBlock({ alertas, unavailable = false, nowMs = Number.NaN, pending = false }: SmnAlertasBlockProps) {
   if (pending && !unavailable && alertas.length === 0) {
@@ -41,35 +39,9 @@ export function SmnAlertasBlock({ alertas, unavailable = false, nowMs = Number.N
     )
   }
 
-  if (unavailable) {
-    return (
-      <p
-        className="mb-4 rounded-xl px-4 py-3 text-xs leading-relaxed flex items-start gap-2"
-        style={{
-          border: '1px solid var(--color-border)',
-          background: 'var(--color-secondary)',
-          color: 'var(--color-muted-foreground)',
-        }}
-      >
-        <AlertTriangle size={14} strokeWidth={2} className="mt-0.5 shrink-0" aria-hidden="true" />
-        <span>
-          No pudimos consultar los avisos del SMN, así que no sabemos si hay alguno vigente. Consultalos en{' '}
-          <a
-            href={SMN_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline"
-            style={{ color: 'var(--color-foreground)' }}
-          >
-            smn.gob.ar
-          </a>
-          .
-        </span>
-      </p>
-    )
-  }
-
-  if (alertas.length === 0) return null
+  // Sin avisos no hay nada que mostrar. Si el SMN no respondió tampoco se pinta nada acá: el enlace a
+  // la fuente oficial queda al pie de la página.
+  if (unavailable || alertas.length === 0) return null
 
   const summary = alertSummary(alertas, nowMs)
 
