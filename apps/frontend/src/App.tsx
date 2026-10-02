@@ -22,7 +22,7 @@ import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
 import {
   CloudSun, Activity, Shirt, Car, Waves, MountainSnow, Mountain, TreePine,
-  Cloud, Radio, CloudRain, Radar as RadarIcon, Eye, TriangleAlert, Gauge, type LucideIcon,
+  Cloud, Radio, CloudRain, Radar as RadarIcon, Eye, TriangleAlert, Gauge, WindArrowDown, type LucideIcon,
 } from 'lucide-react'
 import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 
@@ -49,6 +49,7 @@ const Incendios   = lazy(() => import('@/pages/Incendios').then(m => ({ default:
 const Niebla        = lazy(() => import('@/pages/Niebla').then(m => ({ default: m.Niebla })))
 const HacerDeporte  = lazy(() => import('@/pages/HacerDeporte').then(m => ({ default: m.HacerDeporte })))
 const AltitudDensidad = lazy(() => import('@/pages/AltitudDensidad').then(m => ({ default: m.AltitudDensidad })))
+const Cizalladura = lazy(() => import('@/pages/Cizalladura').then(m => ({ default: m.Cizalladura })))
 const Privacidad    = lazy(() => import('@/pages/Privacidad').then(m => ({ default: m.Privacidad })))
 const NotFound      = lazy(() => import('@/pages/NotFound').then(m => ({ default: m.NotFound })))
 
@@ -157,6 +158,7 @@ const NAV_CATALOG: NavRailItem[] = [
   { to: '/nubes',     label: 'Nubes',     emoji: N(Cloud, '#7ea8c4'),     color: '#7ea8c4' },
   { to: '/metar',     label: 'METAR',     emoji: N(Radio, '#8b9fc4'),     color: '#8b9fc4' },
   { to: '/altitud-de-densidad', label: 'Altitud de densidad', emoji: N(Gauge, '#8fc4a8'), color: '#8fc4a8' },
+  { to: '/cizalladura', label: 'Cizalladura / LLWS', emoji: N(WindArrowDown, '#c4b08f'), color: '#c4b08f' },
   { to: '/desastres', label: 'Desastres', emoji: N(TriangleAlert, '#c47e5a'), color: '#c47e5a' },
   { to: '/lluvias',   label: 'Lluvias',   emoji: N(CloudRain, '#7ab5c4'), color: '#7ab5c4' },
   { to: '/radar',     label: 'Radar',     emoji: N(RadarIcon, '#9a9ac4'),     color: '#9a9ac4' },
@@ -291,6 +293,7 @@ function RootLayout() {
               <Route path="/metar" element={<Metar />} />
               <Route path="/niebla" element={<Niebla location={location} />} />
               <Route path="/altitud-de-densidad" element={<AltitudDensidad />} />
+              <Route path="/cizalladura" element={<Cizalladura />} />
               <Route path="/privacidad" element={<Privacidad />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

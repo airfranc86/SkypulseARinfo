@@ -17,6 +17,7 @@ const TITLES: Record<string, string> = {
   '/metar':        'SkyPulse — METAR',
   '/niebla':       'SkyPulse — Niebla',
   '/altitud-de-densidad': 'SkyPulse — Altitud de densidad',
+  '/cizalladura':  'SkyPulse — Cizalladura / LLWS',
   '/privacidad':   'SkyPulse — Política de privacidad',
 }
 
