@@ -293,7 +293,7 @@ function RootLayout() {
               <Route path="/metar" element={<Metar />} />
               <Route path="/niebla" element={<Niebla location={location} />} />
               <Route path="/altitud-de-densidad" element={<AltitudDensidad />} />
-              <Route path="/cizalladura" element={<Cizalladura />} />
+              <Route path="/cizalladura" element={<Cizalladura location={location} />} />
               <Route path="/privacidad" element={<Privacidad />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

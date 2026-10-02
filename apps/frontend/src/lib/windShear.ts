@@ -8,12 +8,11 @@ import type {
   WindShearRiskCode,
   WindShearThermal,
 } from '@/lib/api'
-import { ApiError } from './apiErrors.ts'
 import { roundMeasure } from './windShearHelpers.ts'
 import messages from './windShearMessages.json' with { type: 'json' }
 
-// Se re-exporta desde acá: el formato de magnitudes vive junto al redondeo (windShearHelpers.ts).
-export { formatNearThreshold } from './windShearHelpers.ts'
+// Se re-exportan desde acá: el formato de magnitudes y el copy de errores viven en windShearHelpers.ts.
+export { describeServerError, formatNearThreshold } from './windShearHelpers.ts'
 
 /**
  * Cizalladura (LLWS) en aproximación: formulario, estimación local fail-open y copy. La estimación
@@ -150,10 +149,20 @@ type ParsedNumbers = Partial<Record<WindShearFieldKey, number>>
 
 const normalizeRaw = (raw: string): string => raw.trim().replace(',', '.')
 
-function validateFields(values: WindShearFormValues): { parsed: ParsedNumbers; errors: WindShearFieldErrors } {
+const NO_BAD_INPUT: ReadonlySet<WindShearFieldKey> = new Set()
+
+function validateFields(
+  values: WindShearFormValues,
+  badInput: ReadonlySet<WindShearFieldKey>,
+): { parsed: ParsedNumbers; errors: WindShearFieldErrors } {
   const parsed: ParsedNumbers = {}
   const errors: WindShearFieldErrors = {}
   for (const rule of FIELD_RULES) {
+    // El input numérico del navegador informa '' ante texto como "2e": no es un campo vacío.
+    if (badInput.has(rule.key)) {
+      errors[rule.key] = `${rule.label}: ingresá un número válido.`
+      continue
+    }
     const raw = normalizeRaw(values[rule.key])
     if (raw === '') {
       if (!rule.optional) errors[rule.key] = `${rule.label}: ingresá un número.`
@@ -185,8 +194,9 @@ function required(parsed: ParsedNumbers, key: WindShearFieldKey): number {
 
 export function parseWindShearForm(
   values: WindShearFormValues,
+  badInput: ReadonlySet<WindShearFieldKey> = NO_BAD_INPUT,
 ): { ok: true; request: WindShearRequest } | { ok: false; errors: WindShearFieldErrors } {
-  const { parsed, errors } = validateFields(values)
+  const { parsed, errors } = validateFields(values, badInput)
   validatePairs(values, errors)
 
   const { surface_gust_kt: gust, surface_wind_speed_kt: speed } = parsed
@@ -320,20 +330,6 @@ export function estimateWindShear(request: WindShearRequest): WindShearResponse 
     risk: { level, code: RISK_CODES[level], message: LEVEL_MESSAGES[level] },
     drivers: driversFor(level, maxLayer.shear_kt_per_100ft, gustSpread),
   }
-}
-
-// ── Errores del servidor ─────────────────────────────────────────────────────
-
-/** Copy del fallo de red en lenguaje del producto; nunca el "HTTP 502" crudo. */
-export function describeServerError(error: unknown): string {
-  if (error instanceof ApiError && error.status === 429) {
-    return error.retryAfter
-      ? `Demasiadas consultas seguidas. Reintentá en ${error.retryAfter} s.`
-      : 'Demasiadas consultas seguidas.'
-  }
-  if (error instanceof ApiError && error.status >= 500) return 'El servidor no respondió.'
-  if (error instanceof DOMException && error.name === 'AbortError') return 'El servidor tardó demasiado.'
-  return 'No pudimos contactar al servidor.'
 }
 
 // ── Precarga del viento de superficie desde el METAR ─────────────────────────

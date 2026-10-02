@@ -451,6 +451,15 @@ export interface MetarDecodedResponse {
   data?: MetarDecodedEntry[]
 }
 
+/** GET /api/metar/nearest: aeropuerto argentino más cercano y distancia real (lookup puro, sin cuota). */
+export interface NearestAirportResponse {
+  icao: string
+  name: string
+  lat: number
+  lon: number
+  distance_km: number
+}
+
 // ── Cizalladura / LLWS (POST /api/v1/aeronautica/wind-shear) ─────────────────
 
 export type WindShearLevel = 'verde' | 'amarillo' | 'naranja' | 'rojo'
@@ -555,6 +564,10 @@ export const api = {
   /** METAR decodificado — a demanda (cuota diaria de CheckWX: 198/200). */
   metarDecoded: (icao: string) =>
     request<MetarDecodedResponse>('/api/metar', { icao }),
+
+  /** Aeropuerto AR más cercano a un punto — no consume cuota (no llama a CheckWX). */
+  metarNearest: (lat: number, lon: number) =>
+    request<NearestAirportResponse>('/api/metar/nearest', { lat, lon }),
 
   /** TAF en código aeronáutico crudo — a demanda, para no consumir la cuota diaria de CheckWX (198/200 por día). */
   tafRaw: (icao: string) =>

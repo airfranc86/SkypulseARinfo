@@ -38,6 +38,8 @@ interface WindShearResultsProps {
 
 const INT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 const NUM = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 })
+/** Lo ingresado se muestra tal cual (5,5 no pasa a 6): hasta los decimales que el usuario pudo escribir. */
+const ENTERED = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 6 })
 const TIME = new Intl.DateTimeFormat('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
 /** La gravedad también escala en tamaño, icono y texto: el color solo no alcanza. */
@@ -151,7 +153,11 @@ function Banner({ result, local, reducedMotion }: { result: WindShearResponse; l
   const layer = `${INT.format(calc.max_layer.from_ft)}–${INT.format(calc.max_layer.to_ft)}`
 
   return (
-    <div role="status" aria-live="polite" className="px-4 py-3" style={{ background: meta.color, color: 'var(--color-primary-foreground)' }}>
+    <div className="px-4 py-3" style={{ background: meta.color, color: 'var(--color-primary-foreground)' }}>
+      {/* Único anuncio en vivo: una línea corta. Cuando el servidor reemplaza la estimación, el cambio se anuncia. */}
+      <p role="status" className="sr-only">
+        {meta.label}: {LEVEL_COPY[level].headline}. Cizalladura de {shear} kt por cada 100 ft.
+      </p>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 id="ws-result-title" className={`flex items-center gap-2 font-bold uppercase tracking-wide ${visual.titleClass}`}>
           <Icon size={20} aria-hidden="true" className="shrink-0" />
@@ -190,8 +196,8 @@ function Banner({ result, local, reducedMotion }: { result: WindShearResponse; l
 }
 
 function InputsLine({ request, computedAt }: { request: WindShearRequest; computedAt: Date }) {
-  const wind = (dir: number, speed: number) => `${INT.format(dir)}° / ${NUM.format(speed)} kt`
-  const gust = request.surface_gust_kt === null ? '' : ` ráf. ${NUM.format(request.surface_gust_kt)}`
+  const wind = (dir: number, speed: number) => `${ENTERED.format(dir)}° / ${ENTERED.format(speed)} kt`
+  const gust = request.surface_gust_kt === null ? '' : ` ráf. ${ENTERED.format(request.surface_gust_kt)}`
   const aloft =
     request.wind_1000ft_dir_deg !== null && request.wind_1000ft_speed_kt !== null
       ? ` · 1.000 ft ${wind(request.wind_1000ft_dir_deg, request.wind_1000ft_speed_kt)}`
@@ -305,8 +311,7 @@ export function WindShearResults({ precise, stale, onRecalculate, ...body }: Win
     <div className="space-y-3">
       {stale && <StaleNotice onRecalculate={onRecalculate} />}
 
-      <section
-        aria-labelledby="ws-result-title"
+      <div
         className="rounded-2xl overflow-hidden"
         style={{
           background: 'var(--color-card)',
@@ -319,7 +324,7 @@ export function WindShearResults({ precise, stale, onRecalculate, ...body }: Win
       >
         <Banner result={result} local={local} reducedMotion={reducedMotion} />
         <ResultBody result={result} local={local} {...body} />
-      </section>
+      </div>
     </div>
   )
 }

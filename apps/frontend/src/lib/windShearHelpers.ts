@@ -1,4 +1,5 @@
 import type { WindShearDriverCode, WindShearRequest } from '@/lib/api'
+import { ApiError } from './apiErrors.ts'
 
 /**
  * Helpers puros de la cizalladura (LLWS) que viven aparte de windShear.ts para no pasar el tope de
@@ -139,4 +140,20 @@ export function explanationLines(inputs: EvaluatedInputs, drivers: readonly Wind
   if (!hasGust) lines.push('No se evaluó la diferencia entre ráfaga y viento sostenido: no se informó ráfaga.')
   if (!hasUpperLayer) lines.push(`No se evaluó la capa ${LAYER_HIGH_LABEL}: no se informó viento a 1.000 ft.`)
   return lines
+}
+
+// ── Errores del servidor ─────────────────────────────────────────────────────
+
+/** Copy del fallo de red en lenguaje del producto; nunca el "HTTP 502" crudo. */
+export function describeServerError(error: unknown): string {
+  if (error instanceof ApiError && error.status === 429) {
+    return error.retryAfter
+      ? `Demasiadas consultas seguidas. Reintentá en ${error.retryAfter} s.`
+      : 'Demasiadas consultas seguidas.'
+  }
+  if (error instanceof ApiError && error.status >= 500) return 'El servidor no respondió.'
+  // Un 4xx (422…) es el servidor rechazando los datos: no es una falla de red.
+  if (error instanceof ApiError && error.status >= 400) return 'El servidor no aceptó los datos: revisá los valores.'
+  if (error instanceof DOMException && error.name === 'AbortError') return 'El servidor tardó demasiado.'
+  return 'No pudimos contactar al servidor.'
 }

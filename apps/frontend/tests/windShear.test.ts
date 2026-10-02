@@ -153,6 +153,24 @@ test('parse: texto, NaN e Infinito no son números', () => {
   }
 })
 
+test('parse: un campo con texto malformado (badInput) es error, obligatorio u opcional', () => {
+  const keys = ['surface_wind_speed_kt', 'surface_gust_kt', 'wind_1000ft_dir_deg', 'surface_temp_c'] as const
+  for (const key of keys) {
+    // <input type="number"> reporta '' para "2e" o "-": el formulario lo marca aparte.
+    const parsed = parseWindShearForm({ ...MIN_FORM, [key]: '' }, new Set([key]))
+    assert.equal(parsed.ok, false, key)
+    if (!parsed.ok) assert.match(parsed.errors[key] ?? '', /número válido/, key)
+  }
+  // Sin badInput, el mismo vacío en un opcional sigue siendo válido.
+  assert.equal(parseWindShearForm({ ...MIN_FORM, surface_gust_kt: '' }).ok, true)
+})
+
+test('parse: badInput en un campo de un par no suma un error de par duplicado', () => {
+  const parsed = parseWindShearForm({ ...MIN_FORM, wind_1000ft_speed_kt: '30' }, new Set(['wind_1000ft_dir_deg'] as const))
+  assert.equal(parsed.ok, false)
+  if (!parsed.ok) assert.match(parsed.errors.wind_1000ft_dir_deg ?? '', /número válido/)
+})
+
 test('parse: ráfaga menor que el sostenido se rechaza; igual es válida', () => {
   const below = parseWindShearForm({ ...MIN_FORM, surface_gust_kt: '9,9' })
   assert.equal(below.ok, false)
@@ -536,6 +554,15 @@ test('describeServerError: 429 con y sin Retry-After, 5xx, timeout y red', () =>
     'El servidor tardó demasiado.',
   )
   assert.equal(describeServerError(new TypeError('Failed to fetch')), 'No pudimos contactar al servidor.')
+})
+
+test('describeServerError: un 4xx (422, 400…) no se presenta como falla de red ni de servidor', () => {
+  for (const status of [400, 404, 422]) {
+    const text = describeServerError(new ApiError('x', status))
+    assert.equal(text, 'El servidor no aceptó los datos: revisá los valores.', String(status))
+    assert.notEqual(text, 'No pudimos contactar al servidor.')
+    assert.notEqual(text, 'El servidor no respondió.')
+  }
 })
 
 // ── METAR: viento de superficie ──────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { City } from '@/lib/cities-ar'
 import { AR_CITIES } from '@/lib/cities-ar'
+import { parseLocationSource, type LocationSource } from '@/lib/windShearPrefill'
 
 /** Returns the name of the nearest city within ~80 km, or 'Mi ubicación'. */
 function nearestCityLabel(lat: number, lon: number): string {
@@ -18,12 +19,15 @@ export interface LocationState {
   lat: number
   lon: number
   label: string
+  /** Cómo se obtuvo; ausente en entradas guardadas antes de este campo (origen desconocido). */
+  source?: LocationSource
 }
 
 const FALLBACK_LOCATION: LocationState = {
   lat: -34.6037,
   lon: -58.3816,
   label: 'Buenos Aires',
+  source: 'fallback',
 }
 
 const STORAGE_KEY = 'skypulse:location'
@@ -43,7 +47,9 @@ function loadStoredLocation(): LocationState | null {
       typeof (parsed as LocationState).lon === 'number' &&
       typeof (parsed as LocationState).label === 'string'
     ) {
-      return parsed as LocationState
+      const stored = parsed as LocationState
+      // `source` es opcional: las entradas viejas sin él siguen cargando (origen desconocido).
+      return { lat: stored.lat, lon: stored.lon, label: stored.label, source: parseLocationSource((parsed as { source?: unknown }).source) }
     }
     return null
   } catch {
@@ -69,7 +75,7 @@ export function useLocation() {
   const autoAttempted = useRef(false)
 
   const selectCity = useCallback((city: City) => {
-    const loc: LocationState = { lat: city.lat, lon: city.lon, label: city.name }
+    const loc: LocationState = { lat: city.lat, lon: city.lon, label: city.name, source: 'city' }
     setGeoError(null)
     setLocation(loc)
     setLocationResolved(true)
@@ -100,6 +106,7 @@ export function useLocation() {
           // so React bails out (no re-render) and TanStack Query sees no key change
           if (
             prev &&
+            prev.source === 'gps' &&
             Math.abs(prev.lat - newLat) < 0.001 &&
             Math.abs(prev.lon - newLon) < 0.001
           ) {
@@ -109,6 +116,7 @@ export function useLocation() {
             lat: newLat,
             lon: newLon,
             label: nearestCityLabel(newLat, newLon),
+            source: 'gps',
           }
           saveLocation(loc)
           return loc
