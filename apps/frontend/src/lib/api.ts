@@ -429,6 +429,81 @@ export interface DensityAltitudeResponse {
   roc: null
 }
 
+// ── METAR decodificado (GET /api/metar?icao=…) ───────────────────────────────
+
+/** Subconjunto del METAR decodificado de CheckWX: solo lo que usa la precarga del viento de superficie. */
+export interface MetarWindData {
+  degrees?: number | null
+  direction?: string | null
+  speed_kts?: number | null
+  gust_kts?: number | null
+}
+
+export interface MetarDecodedEntry {
+  icao?: string
+  raw_text?: string
+  wind?: MetarWindData | null
+  /** Hora de emisión del METAR (campo `observed` de CheckWX, ISO en UTC); la precarga la usa para avisar si es vieja. */
+  observed?: string | null
+}
+
+export interface MetarDecodedResponse {
+  data?: MetarDecodedEntry[]
+}
+
+// ── Cizalladura / LLWS (POST /api/v1/aeronautica/wind-shear) ─────────────────
+
+export type WindShearLevel = 'verde' | 'amarillo' | 'naranja' | 'rojo'
+export type WindShearRiskCode = 'SHEAR_LIGHT' | 'SHEAR_MODERATE' | 'SHEAR_SEVERE' | 'SHEAR_EXTREME'
+export type WindShearDriverCode = 'shear' | 'gust_spread'
+export type WindShearThermalCode = 'inversion' | 'unstable' | 'neutral'
+
+/** Dirección en grados meteorológicos (DESDE donde sopla), rapidez en kt, temperaturas en °C. */
+export interface WindShearRequest {
+  surface_wind_dir_deg: number
+  surface_wind_speed_kt: number
+  surface_gust_kt: number | null
+  wind_500ft_dir_deg: number
+  wind_500ft_speed_kt: number
+  /** El viento a 1.000 ft va completo (dirección + rapidez) o ninguno. */
+  wind_1000ft_dir_deg: number | null
+  wind_1000ft_speed_kt: number | null
+  /** Las dos temperaturas van juntas o ninguna. */
+  surface_temp_c: number | null
+  temp_1000ft_c: number | null
+}
+
+export interface WindShearLayer {
+  from_ft: number
+  to_ft: number
+  /** |V_top − V_bottom| (módulo vectorial) por cada 100 ft. */
+  shear_kt_per_100ft: number
+}
+
+export interface WindShearThermal {
+  code: WindShearThermalCode
+  /** Temperatura de superficie menos la de 1.000 ft (°C por 1.000 ft). */
+  lapse_c_per_1000ft: number
+}
+
+export interface WindShearCalculations {
+  layers: WindShearLayer[]
+  max_shear_kt_per_100ft: number
+  max_layer: { from_ft: number; to_ft: number }
+  /** Ráfaga menos viento sostenido en superficie; 0 sin ráfaga. */
+  gust_spread_kt: number
+  /** null si no se enviaron las dos temperaturas. Informativa: no modifica el nivel. */
+  thermal: WindShearThermal | null
+}
+
+export interface WindShearResponse {
+  inputs: WindShearRequest
+  calculations: WindShearCalculations
+  risk: { level: WindShearLevel; code: WindShearRiskCode; message: string }
+  /** Condiciones que alcanzan el umbral del nivel elegido; vacío en verde. */
+  drivers: WindShearDriverCode[]
+}
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -473,6 +548,13 @@ export const api = {
 
   densityAltitude: (body: DensityAltitudeRequest, signal?: AbortSignal) =>
     postJson<DensityAltitudeResponse>('/api/v1/aeronautica/density-altitude', body, signal),
+
+  windShear: (body: WindShearRequest, signal?: AbortSignal) =>
+    postJson<WindShearResponse>('/api/v1/aeronautica/wind-shear', body, signal),
+
+  /** METAR decodificado — a demanda (cuota diaria de CheckWX: 198/200). */
+  metarDecoded: (icao: string) =>
+    request<MetarDecodedResponse>('/api/metar', { icao }),
 
   /** TAF en código aeronáutico crudo — a demanda, para no consumir la cuota diaria de CheckWX (198/200 por día). */
   tafRaw: (icao: string) =>
