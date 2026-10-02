@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from app.core import usage_counter
-from app.core.cache import SingleFlightCache
+from app.core.cache import CacheOutcome, SingleFlightCache
 from app.core.config import settings
 from app.core.http_client import fetch_with_retry, get_client
 from app.utils.parsing import parse_float
@@ -69,13 +69,39 @@ class OpenMeteoCurrent:
     cloud_cover: float | None
     weather_code: int | None   # WMO code — el router lo mapea a descripción/ícono
     description: str | None    # siempre None aquí; el router usa describe_wmo(weather_code)
-    fetched_at: datetime
+    fetched_at: datetime       # cuándo LO TRAJIMOS nosotros (sobre esto se calcula `stale`)
+    observed_at: datetime | None = None  # `current.time` que reporta Open-Meteo, en UTC; None si falta
 
 
-async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
+def _parse_observation_time(raw: object) -> datetime | None:
+    """`current.time` → datetime UTC, o None si falta o no se puede interpretar.
+
+    Con `timezone` fijo en la request, Open-Meteo devuelve la hora local (UTC-3) sin sufijo;
+    si alguna vez trajera offset explícito, se respeta.
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.strip())
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_AR_TZ)
+    return parsed.astimezone(timezone.utc)
+
+
+async def get_current(
+    lat: float,
+    lon: float,
+    *,
+    cache_outcome: CacheOutcome | None = None,
+) -> OpenMeteoCurrent | None:
     """
     Obtiene las condiciones actuales de Open-Meteo para (lat, lon).
     Devuelve None ante timeout, error HTTP o payload inválido.
+
+    `cache_outcome` (opcional) recibe si el dato salió de la caché: el objeto cacheado es
+    compartido e inmutable, así que la procedencia no puede viajar dentro de él.
     """
     # No se especifica "models" → Open-Meteo usa best_match automáticamente.
     # ecmwf_ifs04 tiene delay de publicación y devuelve nulls para el slot actual.
@@ -120,12 +146,13 @@ async def get_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
                 weather_code=weather_code,
                 description=None,
                 fetched_at=datetime.now(timezone.utc),
+                observed_at=_parse_observation_time(current.get("time")),
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo payload parse error: %s", exc)
             return None
 
-    return await _CACHE_CURRENT.get_or_fetch(key, _fetch)
+    return await _CACHE_CURRENT.get_or_fetch(key, _fetch, outcome=cache_outcome)
 
 
 # ---------------------------------------------------------------------------

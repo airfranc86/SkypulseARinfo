@@ -11,6 +11,11 @@ from app.services.smn import SmnObservation
 from app.services.openmeteo import OpenMeteoCurrent
 from app.services.weather_aggregator import aggregate_current
 
+# Estos escenarios ejercitan el camino SMN-primero, que desde FRA-319 está apagado por defecto
+# (settings.smn_enabled=False): se enciende el flag para todo el módulo. El camino con el SMN
+# apagado está cubierto en test_weather_current_meta.py.
+pytestmark = pytest.mark.usefixtures("smn_enabled")
+
 
 def _make_smn_obs(
     distance_km: float = 20.0,

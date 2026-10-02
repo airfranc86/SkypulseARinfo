@@ -1,11 +1,15 @@
 """Tests para el cliente Open-Meteo."""
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import respx
 import httpx
 
 import app.services.openmeteo as om_module
+from app.core.cache import CacheOutcome
 from app.services.openmeteo import get_current
 from tests.conftest import OPENMETEO_SAMPLE_PAYLOAD
 
@@ -134,3 +138,125 @@ async def test_get_current_records_open_meteo_usage(monkeypatch):
         await get_current(-31.4, -64.2)
 
     mock_record.assert_called_once_with("open_meteo")
+
+
+# ---------------------------------------------------------------------------
+# observed_at — hora de observación que reporta Open-Meteo (FRA-319)
+# ---------------------------------------------------------------------------
+
+_OM_URL = "https://api.open-meteo.com/v1/forecast"
+
+
+def _payload_with_time(value: object) -> dict:
+    """Copia del payload de muestra con `current.time` reemplazado (o ausente si value es None)."""
+    current = {k: v for k, v in OPENMETEO_SAMPLE_PAYLOAD["current"].items() if k != "time"}
+    if value is not None:
+        current["time"] = value
+    return {**OPENMETEO_SAMPLE_PAYLOAD, "current": current}
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_get_current_parses_current_time_as_utc_observed_at():
+    """current.time viene en hora Argentina (UTC-3) sin sufijo: 14:00 local = 17:00 UTC."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(_OM_URL).mock(return_value=httpx.Response(200, json=OPENMETEO_SAMPLE_PAYLOAD))
+        result = await get_current(-31.4, -64.2)
+
+    assert result is not None
+    assert result.observed_at == datetime(2024, 1, 15, 17, 0, tzinfo=timezone.utc)
+    assert result.observed_at.utcoffset() == timedelta(0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_get_current_respects_an_explicit_offset_in_current_time():
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(_OM_URL).mock(
+            return_value=httpx.Response(200, json=_payload_with_time("2024-01-15T14:00:00+00:00"))
+        )
+        result = await get_current(-31.4, -64.2)
+
+    assert result is not None
+    assert result.observed_at == datetime(2024, 1, 15, 14, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.parametrize("bad_time", [None, "", "no-es-una-fecha", 12345])
+async def test_get_current_leaves_observed_at_none_when_time_is_unusable(bad_time: object):
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(_OM_URL).mock(return_value=httpx.Response(200, json=_payload_with_time(bad_time)))
+        result = await get_current(-31.4, -64.2)
+
+    assert result is not None
+    assert result.temp_c == pytest.approx(23.5)
+    assert result.observed_at is None
+
+
+# ---------------------------------------------------------------------------
+# cache_outcome — procedencia real del dato (FRA-319)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_cache_outcome_reports_miss_then_hit():
+    first_outcome, second_outcome = CacheOutcome(), CacheOutcome()
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(_OM_URL).mock(
+            return_value=httpx.Response(200, json=OPENMETEO_SAMPLE_PAYLOAD)
+        )
+        first = await get_current(-31.4, -64.2, cache_outcome=first_outcome)
+        second = await get_current(-31.4, -64.2, cache_outcome=second_outcome)
+
+    assert route.call_count == 1
+    assert first_outcome.hit is False
+    assert second_outcome.hit is True
+    assert second is first  # el objeto cacheado no se copia ni se muta
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_cache_outcome_counts_stale_while_error_as_a_hit():
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(_OM_URL).mock(return_value=httpx.Response(200, json=OPENMETEO_SAMPLE_PAYLOAD))
+        await get_current(-31.4, -64.2)
+
+    om_module._CACHE_CURRENT._cache.clear()  # vence el TTL fresco; queda la copia stale
+    outcome = CacheOutcome()
+
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(_OM_URL).mock(side_effect=httpx.ConnectError("rate limited"))
+        result = await get_current(-31.4, -64.2, cache_outcome=outcome)
+
+    assert result is not None
+    assert outcome.hit is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_cache_outcome_is_a_miss_for_concurrent_waiters_of_a_fresh_fetch():
+    """Quienes esperan el fetch en vuelo reciben un dato recién traído, no uno cacheado."""
+    outcomes = [CacheOutcome() for _ in range(3)]
+
+    with respx.mock(assert_all_called=False) as mock:
+        async def slow_handler(request: httpx.Request) -> httpx.Response:
+            await asyncio.sleep(0.05)
+            return httpx.Response(200, json=OPENMETEO_SAMPLE_PAYLOAD)
+
+        route = mock.get(_OM_URL).mock(side_effect=slow_handler)
+        await asyncio.gather(*[get_current(-31.4, -64.2, cache_outcome=o) for o in outcomes])
+
+    assert route.call_count == 1
+    assert [o.hit for o in outcomes] == [False, False, False]
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_cache_outcome_is_optional():
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get(_OM_URL).mock(return_value=httpx.Response(200, json=OPENMETEO_SAMPLE_PAYLOAD))
+        result = await get_current(-31.4, -64.2)
+
+    assert result is not None

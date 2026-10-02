@@ -6,6 +6,9 @@ _DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app,https://sk
 
 class Settings(BaseSettings):
     smn_weather_url: str = "https://ws.smn.gob.ar/map_items/weather"
+    # El feed `map_items/weather` está congelado desde 2022 (sin campo `date`): el "ahora" nunca podía
+    # usar el SMN. Apagado por defecto; activar con SMN_ENABLED=true si el feed vuelve a publicar.
+    smn_enabled: bool = False
     openmeteo_base_url: str = "https://api.open-meteo.com/v1/forecast"
     usgs_base_url: str = "https://earthquake.usgs.gov/fdsnws/event/1/query"
     smn_max_distance_km: float = 80.0
