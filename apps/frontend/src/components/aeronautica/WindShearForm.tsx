@@ -19,7 +19,11 @@ interface WindShearFormProps {
   errors: WindShearFieldErrors
   icao: string
   prefill: PrefillStatus
+  /** "METAR de SACO, a 12 km": qué estación y a qué distancia; null si no hay aeropuerto cercano que mostrar. */
+  nearestNote: string | null
   onChange: (next: WindShearFormValues) => void
+  /** Un campo numérico con texto malformado ("2e") reporta '' pero no está vacío: se avisa aparte. */
+  onBadInput: (key: WindShearFieldKey, bad: boolean) => void
   onIcaoChange: (raw: string) => void
   onPrefill: () => void
   onSubmit: () => void
@@ -103,6 +107,7 @@ function prefillMessage(prefill: PrefillStatus): string {
 interface MetarPrefillProps {
   icao: string
   prefill: PrefillStatus
+  nearestNote: string | null
   onIcaoChange: (raw: string) => void
   onPrefill: () => void
 }
@@ -135,7 +140,7 @@ function PrefillRow({ icao, loading, invalid, onIcaoChange, onPrefill }: Prefill
         onChange={e => onIcaoChange(e.target.value)}
         onKeyDown={handleKeyDown}
         aria-invalid={invalid ? true : undefined}
-        aria-describedby="ws-icao-note ws-icao-status"
+        aria-describedby="ws-icao-note ws-icao-nearest ws-icao-status"
         className={`rounded-lg px-3 text-base flex-1 min-w-28 uppercase tracking-widest ${FOCUS_RING}`}
         style={{ ...CONTROL_STYLE, fontFamily: 'var(--font-mono)' }}
       />
@@ -178,6 +183,9 @@ function MetarPrefill(props: MetarPrefillProps) {
       <p id="ws-icao-note" className="text-xs" style={MUTED}>
         El METAR solo informa el viento de superficie: los vientos a 500 ft y 1.000 ft y las temperaturas se cargan siempre a mano.
       </p>
+      <p id="ws-icao-nearest" className="text-xs" style={MUTED}>
+        {props.nearestNote}
+      </p>
       <p
         id="ws-icao-status"
         role="status"
@@ -196,7 +204,7 @@ interface NumericFieldProps {
   unit: string
   value: string
   error?: string
-  onChange: (key: WindShearFieldKey, value: string) => void
+  onChange: (key: WindShearFieldKey, value: string, badInput: boolean) => void
   onToggleSign: (key: WindShearFieldKey) => void
 }
 
@@ -214,7 +222,7 @@ function NumericField({ fieldKey, label, unit, value, error, onChange, onToggleS
           inputMode="decimal"
           step="any"
           value={value}
-          onChange={e => onChange(fieldKey, e.target.value)}
+          onChange={e => onChange(fieldKey, e.target.value, e.target.validity.badInput)}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
           className={`rounded-lg px-3 text-base w-full min-w-0 ${FOCUS_RING}`}
@@ -225,10 +233,10 @@ function NumericField({ fieldKey, label, unit, value, error, onChange, onToggleS
             type="button"
             onClick={() => onToggleSign(fieldKey)}
             aria-pressed={negative}
-            aria-disabled={empty || undefined}
+            disabled={empty}
             aria-label={`${FIELD_LABELS[fieldKey]} bajo cero`}
             title={empty ? 'Escribí el número y después cambiá el signo' : 'Cambiar el signo'}
-            className={`rounded-lg shrink-0 inline-flex items-center justify-center ${TRANSITION_COLORS} ${FOCUS_RING}`}
+            className={`rounded-lg shrink-0 inline-flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${TRANSITION_COLORS} ${FOCUS_RING}`}
             style={{
               width: '44px',
               minHeight: '44px',
@@ -260,8 +268,22 @@ function ErrorSummary({ keys }: { keys: readonly WindShearFieldKey[] }) {
   )
 }
 
-export function WindShearForm({ values, errors, icao, prefill, onChange, onIcaoChange, onPrefill, onSubmit }: WindShearFormProps) {
-  const set = (key: WindShearFieldKey, value: string) => onChange({ ...values, [key]: value })
+export function WindShearForm({
+  values,
+  errors,
+  icao,
+  prefill,
+  nearestNote,
+  onChange,
+  onBadInput,
+  onIcaoChange,
+  onPrefill,
+  onSubmit,
+}: WindShearFormProps) {
+  const set = (key: WindShearFieldKey, value: string, badInput = false) => {
+    onChange({ ...values, [key]: value })
+    onBadInput(key, badInput)
+  }
 
   const toggleSign = (key: WindShearFieldKey) => {
     const raw = values[key].trim()
@@ -298,7 +320,7 @@ export function WindShearForm({ values, errors, icao, prefill, onChange, onIcaoC
         Dirección: grados desde donde sopla el viento (0 a 360), como en el METAR. Velocidades en nudos.
       </p>
 
-      <MetarPrefill icao={icao} prefill={prefill} onIcaoChange={onIcaoChange} onPrefill={onPrefill} />
+      <MetarPrefill icao={icao} prefill={prefill} nearestNote={nearestNote} onIcaoChange={onIcaoChange} onPrefill={onPrefill} />
 
       <Group title="Superficie" columns="grid-cols-2 sm:grid-cols-3">
         {field('surface_wind_dir_deg', 'Dirección', '°')}

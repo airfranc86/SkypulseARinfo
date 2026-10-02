@@ -89,7 +89,7 @@ _FOG_WX_CODES: frozenset[str] = frozenset({"FG", "MIFG", "BCFG", "FZFG", "BR"})
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Distancia en km entre dos coordenadas (Haversine)."""
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
@@ -103,7 +103,13 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def nearest_airport(lat: float, lon: float) -> _Airport:
     """Retorna el aeropuerto argentino más cercano a (lat, lon)."""
-    return min(_AR_AIRPORTS, key=lambda a: _haversine_km(lat, lon, a.lat, a.lon))
+    return min(_AR_AIRPORTS, key=lambda a: haversine_km(lat, lon, a.lat, a.lon))
+
+
+def nearest_airport_with_distance(lat: float, lon: float) -> tuple[_Airport, float]:
+    """Aeropuerto argentino más cercano y la distancia real en km (lookup puro, sin red)."""
+    airport = nearest_airport(lat, lon)
+    return airport, haversine_km(lat, lon, airport.lat, airport.lon)
 
 
 def _parse_taf_visib_sm(visib: object) -> float | None:
@@ -215,7 +221,7 @@ async def get_nearest_metar_visibility(lat: float, lon: float) -> MetarVisibilit
     Siempre retorna un objeto; `visibility_m` puede ser None.
     """
     airport = nearest_airport(lat, lon)
-    dist_km = _haversine_km(lat, lon, airport.lat, airport.lon)
+    dist_km = haversine_km(lat, lon, airport.lat, airport.lon)
     vis_m = await get_metar_visibility(airport.icao)
 
     return MetarVisibility(

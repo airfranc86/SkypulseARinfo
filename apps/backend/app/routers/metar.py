@@ -2,6 +2,7 @@
 
 GET /api/metar?icao=SAEZ           → METAR decodificado
 GET /api/metar?icao=SAEZ&type=taf  → TAF raw
+GET /api/metar/nearest?lat=&lon=   → aeropuerto AR más cercano (lookup puro, sin red)
 
 ⚠ No llamar CheckWX directamente desde aquí — usar services/checkwx.py.
 """
@@ -15,8 +16,11 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.core.config import settings
 from app.core.counter import seconds_until_next_cycle
+from app.core.params import LatParam, LonParam
 from app.core.rate_limit import limiter
+from app.schemas.metar import NearestAirportResponse
 from app.services import checkwx as checkwx_svc
+from app.services.metar import nearest_airport_with_distance
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +34,24 @@ def _validate_icao(code: str) -> str:
     if not _ICAO_RE.match(upper):
         raise HTTPException(status_code=422, detail="invalid_icao")
     return upper
+
+
+@router.get("/nearest", summary="Aeropuerto argentino más cercano (para precargar METAR)")
+@limiter.limit("30/minute")
+async def get_nearest_airport(
+    request: Request,
+    lat: LatParam,
+    lon: LonParam,
+) -> NearestAirportResponse:
+    """Lookup puro sobre la lista local de aeropuertos: no llama a CheckWX, AWC ni Open-Meteo."""
+    airport, distance_km = nearest_airport_with_distance(lat, lon)
+    return NearestAirportResponse(
+        icao=airport.icao,
+        name=airport.name,
+        lat=airport.lat,
+        lon=airport.lon,
+        distance_km=round(distance_km, 1),
+    )
 
 
 @router.get("", summary="METAR y TAF via CheckWX")
