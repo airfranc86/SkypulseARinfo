@@ -12,6 +12,10 @@ de larga duración (``stale_ttl``) del último resultado exitoso por clave. Si
 un fetch falla (excepción o ``None``) y esa copia todavía es válida, se sirve
 en vez de ``None`` — evita un 503 cuando el proveedor upstream tiene un blip
 transitorio (rate limit, timeout) pero ya teníamos un dato bueno reciente.
+
+Procedencia: ``get_or_fetch`` acepta un ``CacheOutcome`` opcional que la caché completa con
+``hit=True`` cuando el valor salió de la caché (fresca o stale) y no de un fetch nuevo. El valor
+cacheado se devuelve siempre tal cual (mismo objeto): la procedencia viaja aparte, por llamada.
 """
 from __future__ import annotations
 
@@ -28,16 +32,35 @@ T = TypeVar("T")
 
 
 @dataclass
+class CacheOutcome:
+    """Receptor opcional de la procedencia de un ``get_or_fetch`` (una instancia por llamada).
+
+    ``hit`` queda en True si el valor se sirvió desde la caché —incluida la copia stale ante un
+    fetch fallido— y en False si lo trajo un fetch real (propio o compartido por single-flight).
+    """
+
+    hit: bool = False
+
+
+@dataclass
 class _InFlight(Generic[T]):
     """Resultado compartido de un fetch en vuelo.
 
     ``data`` o ``error`` se asignan ANTES de ``event.set()``, de modo que las
     coroutines que esperan leen un estado consistente al despertar.
+    ``from_cache`` indica si ``data`` fue servido desde la copia stale (fetch fallido).
     """
 
     event: asyncio.Event = field(default_factory=asyncio.Event)
     data: T | None = None
     error: Exception | None = None
+    from_cache: bool = False
+
+
+def _report(outcome: CacheOutcome | None, hit: bool) -> None:
+    """Anota la procedencia en el receptor, si el llamador pasó uno."""
+    if outcome is not None:
+        outcome.hit = hit
 
 
 class SingleFlightCache(Generic[T]):
@@ -80,12 +103,19 @@ class SingleFlightCache(Generic[T]):
             "hit_rate": self._hits / total if total > 0 else 0.0,
         }
 
-    async def get_or_fetch(self, key: str, fetch: Callable[[], Awaitable[T]]) -> T:
+    async def get_or_fetch(
+        self,
+        key: str,
+        fetch: Callable[[], Awaitable[T]],
+        *,
+        outcome: CacheOutcome | None = None,
+    ) -> T:
         """Devuelve el valor cacheado o ejecuta ``fetch`` una sola vez por clave.
 
         Args:
             key: clave canónica de la request.
             fetch: factoría de la coroutine que obtiene el dato ante un miss.
+            outcome: receptor opcional de la procedencia (hit de caché o fetch real).
 
         Raises:
             Exception: cualquier excepción que levante ``fetch`` se propaga a la
@@ -95,6 +125,7 @@ class SingleFlightCache(Generic[T]):
             if key in self._cache:
                 self._hits += 1
                 logger.debug("%s cache hit: %s", self._name, key)
+                _report(outcome, True)
                 return self._cache[key]
 
             if key in self._failure_cache:
@@ -102,6 +133,7 @@ class SingleFlightCache(Generic[T]):
                 stale = self._stale_cache.get(key)
                 if stale is not None:
                     logger.debug("%s failure-cache hit — sirviendo stale: %s", self._name, key)
+                    _report(outcome, True)
                     return stale
                 logger.debug("%s failure-cache hit (None): %s", self._name, key)
                 return None  # type: ignore[return-value]
@@ -121,6 +153,7 @@ class SingleFlightCache(Generic[T]):
             await waiter.event.wait()  # type: ignore[union-attr]
             if waiter.error is not None:  # type: ignore[union-attr]
                 raise waiter.error  # type: ignore[union-attr]
+            _report(outcome, waiter.from_cache)  # type: ignore[union-attr]
             return waiter.data  # type: ignore[union-attr,return-value]
 
         # --- Camino de la coroutine responsable del fetch ---
@@ -137,7 +170,9 @@ class SingleFlightCache(Generic[T]):
                     if stale is not None:
                         logger.warning("%s fetch devolvió None — sirviendo stale: %s", self._name, key)
                         result = stale
+                        responsible_slot.from_cache = True
             responsible_slot.data = result
+            _report(outcome, responsible_slot.from_cache)
             return result
         except Exception as exc:
             async with self._lock:
@@ -147,6 +182,8 @@ class SingleFlightCache(Generic[T]):
             if stale is not None:
                 logger.warning("%s fetch lanzó excepción — sirviendo stale: %s (%s)", self._name, key, exc)
                 responsible_slot.data = stale
+                responsible_slot.from_cache = True
+                _report(outcome, True)
                 return stale
             # El error se registra para que las coroutines que esperan lo
             # reciban en vez de un KeyError por cache vacía.

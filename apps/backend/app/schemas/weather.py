@@ -13,6 +13,7 @@ SourceReason = Literal[
     "smn_stale",
     "smn_unavailable",
     "smn_missing_fields",
+    "smn_disabled",
 ]
 
 
@@ -35,6 +36,9 @@ class SourceMeta(BaseModel):
     fetched_at: datetime
     cache_hit: bool = False
     stale: bool = False
+    # Instante (UTC) que la propia fuente reporta como momento de la observación. `fetched_at` mide
+    # cuándo lo trajimos nosotros; `stale` se calcula sobre ese dato, no sobre este.
+    observed_at: datetime | None = None
 
 
 class WeatherCurrentResponse(BaseModel):

@@ -72,6 +72,8 @@ export interface WeatherCurrentResponse {
     fetched_at: string
     cache_hit: boolean
     stale: boolean
+    /** Instante (UTC, ISO) que la propia fuente reporta como momento de la observación. */
+    observed_at?: string | null
   }
 }
 

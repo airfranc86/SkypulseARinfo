@@ -92,11 +92,20 @@ OPENMETEO_SAMPLE_PAYLOAD = {
 
 @pytest.fixture(autouse=True)
 def clear_smn_cache():
-    """Limpia el TTLCache global de SMN antes de cada test."""
+    """Limpia el TTLCache global de SMN y su caché negativo de fallos antes de cada test."""
     import app.services.smn as smn_module
     smn_module._station_cache.clear()
+    smn_module._failure_backoff_until = 0.0
     yield
     smn_module._station_cache.clear()
+    smn_module._failure_backoff_until = 0.0
+
+
+@pytest.fixture
+def smn_enabled(monkeypatch):
+    """Enciende `settings.smn_enabled` (apagado por defecto desde FRA-319) para tests del camino SMN."""
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "smn_enabled", True)
 
 
 @pytest.fixture(autouse=True)
