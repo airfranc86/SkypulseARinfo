@@ -364,7 +364,7 @@ class TestGetMultiModelDaily:
     @pytest.mark.asyncio
     async def test_all_agree_rain_when_precip_high(self):
         payload = _make_daily_ext_payload(n=2)
-        payload["daily"]["precipitation_sum"] = [10.0, 8.0]  # > 0.5mm both days
+        payload["daily"]["precipitation_sum"] = [10.0, 8.0]  # > 0.9mm both days
         with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
             result = await get_multi_model_daily(-34.6, -58.4, days=2)
         assert all(label == "all_agree_rain" for label in result.rain_consensus_per_day)
