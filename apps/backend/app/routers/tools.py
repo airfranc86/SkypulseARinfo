@@ -252,7 +252,7 @@ async def get_cota_de_nieve(
     """
     logger.info("GET /cota-de-nieve lat=%.2f lon=%.2f", lat, lon)
 
-    # 1. Temperatura actual desde la cadena SMN → Open-Meteo (aggregate_current)
+    # 1. Temperatura actual desde aggregate_current (hoy Open-Meteo; el SMN solo si smn_enabled)
     weather = await aggregate_current(lat, lon)
     if weather.temp_c is None:
         raise HTTPException(status_code=503, detail="weather_unavailable")

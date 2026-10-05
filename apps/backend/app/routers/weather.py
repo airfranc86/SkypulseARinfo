@@ -72,7 +72,9 @@ def _parse_ar_dt(s: str) -> datetime:
     summary="Condiciones meteorológicas actuales",
     description=(
         "Retorna las condiciones actuales para las coordenadas dadas. "
-        "Usa SMN como fuente primaria y Open-Meteo como fallback."
+        "Hoy sale de Open-Meteo (un análisis de modelo, no una observación). El SMN está "
+        "desactivado por defecto porque su feed está congelado desde 2022; se reactiva con "
+        "SMN_ENABLED y, si falla, se usa Open-Meteo. La respuesta indica la fuente en meta.source."
     ),
 )
 @limiter.limit("30/minute")
