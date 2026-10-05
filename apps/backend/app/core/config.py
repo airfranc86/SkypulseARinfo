@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     cache_ttl_metar_seconds: int = 1800  # 30 minutos — METAR
     cache_ttl_taf_seconds: int = 3600    # 1 hora — TAF
     metar_timeout_seconds: float = 10.0
+    # "Ahora" del dashboard (FRA-320): METAR de AWC como observación si el aeropuerto está cerca y
+    # el dato es reciente. Timeout corto: el dashboard no espera más que esto por el METAR.
+    metar_observation_timeout_seconds: float = 4.0
+    metar_max_distance_km: float = 30.0
+    metar_max_age_minutes: int = 90
     checkwx_daily_limit: int = 198     # Free tier: 200/día — 198 deja margen para el aviso Sentry
 
     upstash_redis_rest_url: str = ""

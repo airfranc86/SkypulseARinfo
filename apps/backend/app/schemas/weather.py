@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -189,6 +189,67 @@ class RainForecastSchema(BaseModel):
     drying_reason: str | None
 
 
+# --- "Ahora" del dashboard con METAR (FRA-320) ---
+
+# Por qué el `current` del dashboard usa (o no) el METAR del aeropuerto más cercano.
+MetarReason = Literal[
+    "metar_ok",
+    "metar_too_far",
+    "metar_unavailable",
+    "metar_stale",
+    "metar_missing_fields",
+]
+PossibleChangeReason = Literal["wind", "rain", "storm"]
+
+
+class CurrentStationSchema(BaseModel):
+    """Aeropuerto cuyo METAR alimenta el `current` del dashboard."""
+
+    model_config = ConfigDict(frozen=True)
+
+    icao: str
+    name: str
+    distance_km: float = Field(..., ge=0)
+
+
+class ModelTempDiffersNotice(BaseModel):
+    """El modelo estimaba una temperatura que difiere del METAR en el umbral o más."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: Literal["model_temp_differs"] = "model_temp_differs"
+    model_temp_c: float
+
+
+class PossibleChangeNotice(BaseModel):
+    """El METAR tiene más de 30 min y el modelo indica algo que el METAR no reporta."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: Literal["possible_change"] = "possible_change"
+    reasons: list[PossibleChangeReason]
+    model_wind_speed_kmh: float | None = None
+    model_wind_gust_kmh: float | None = None
+    model_precip_1h_mm: float | None = None
+    model_weather_code: int | None = None
+
+
+class ReportedPhenomenonNotice(BaseModel):
+    """El propio METAR reporta lluvia o tormenta (campo `wxString`)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    code: Literal["reported_phenomenon"] = "reported_phenomenon"
+    kind: Literal["rain", "storm"]
+    wx: str
+
+
+CurrentNotice = Annotated[
+    ModelTempDiffersNotice | PossibleChangeNotice | ReportedPhenomenonNotice,
+    Field(discriminator="code"),
+]
+
+
 class CurrentDetailedSchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -196,17 +257,24 @@ class CurrentDetailedSchema(BaseModel):
     feels_like_c: float | None
     humidity: float | None
     wind_speed_kmh: float | None
+    # None con viento variable (VRB) o calmo en el METAR.
     wind_dir_deg: float | None = None
     wind_dir_cardinal: str | None
     uv_index: float | None
     description: str
     icon: str
     is_day: bool
-    source: str = "unknown"  # "smn" | "openmeteo" | "unknown"
-    observed_at: datetime | None = None  # timestamp de la última observación SMN
+    source: str = "unknown"  # "metar" | "smn" | "openmeteo" | "unknown"
+    # Hora UTC real del dato: obsTime del METAR, `current.time` de Open-Meteo o la observación SMN.
+    observed_at: datetime | None = None
     wind_icon: str | None = None
     wind_intensity: str | None = None
     stale: bool = False
+    wind_gust_kmh: float | None = None
+    station: CurrentStationSchema | None = None   # solo con source="metar"
+    model_temp_c: float | None = None             # temperatura del modelo, solo con source="metar"
+    source_reason: MetarReason | None = None
+    notices: list[CurrentNotice] = Field(default_factory=list)
 
 
 class HourlyConsensusSchema(BaseModel):
