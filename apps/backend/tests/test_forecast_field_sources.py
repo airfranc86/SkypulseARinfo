@@ -5,17 +5,19 @@ al azar, y con la cantidad de lluvia de Windy y la probabilidad de Open-Meteo la
 podía decir "Lluvia 100 %" con 0,01 mm. Ahora la cantidad, la probabilidad, el ícono y las
 temperaturas salen del mismo lugar.
 
-T1  — precip_prob: el máximo entre los modelos
+T1  — precip_prob: el del ancla ECMWF (FRA-322; antes el máximo entre los modelos)
 T2  — precip_prob con un solo modelo
 T3  — precip_prob sin dato → None
-T4  — temp_max: promedio del consenso
+T4  — temp_max: media entera de los modelos
 T6  — temp_max sin dato → None, sin romper
-T7  — precip_sum: promedio del consenso, o el del modelo elegido
-T8  — wind_speed_max: promedio del consenso
-T9  — cantidad y probabilidad de un día salen de la misma fuente
-T10 — consenso promedia varios modelos
+T7  — precip_sum: el del ancla ECMWF, o el del modelo elegido (antes la media)
+T8  — wind_speed_max: el del ancla ECMWF (antes la media)
+T9  — cantidad y probabilidad de un día salen de la misma fuente (el ancla)
+T10 — la temperatura promedia GFS y ECMWF (otros modelos no cuentan)
 T11 — el modelo elegido filtra la lista
 T12 — riesgo convectivo diario desde el CAPE horario de Open-Meteo
+
+Las reglas de cada día están en test_daily_anchor.py; acá queda el cableado de build_7d_forecast.
 """
 from __future__ import annotations
 
@@ -83,10 +85,11 @@ def _first(daily_multi: MultiModelDailyData, **kwargs):
 # T1 / T2 / T3 — precip_prob
 # ---------------------------------------------------------------------------
 
-def test_precip_prob_is_the_maximum_across_models():
+def test_precip_prob_comes_from_the_ecmwf_anchor():
+    """FRA-322: ya no es el máximo entre modelos; ECMWF (primer modelo del fixture) es el ancla."""
     multi = _make_multi(_make_om(precip_prob_max=[30.0] * _N), _make_om(precip_prob_max=[60.0] * _N))
 
-    assert _first(multi).precip_prob == pytest.approx(60.0)
+    assert _first(multi).precip_prob == pytest.approx(30.0)
 
 
 def test_precip_prob_not_zero_when_om_has_rain_forecast():
@@ -121,11 +124,14 @@ def test_temp_max_both_none():
 # T7 / T8 — precip_sum y wind_speed_max: también de Open-Meteo
 # ---------------------------------------------------------------------------
 
-def test_precip_sum_is_the_consensus_mean_of_open_meteo():
-    """Mañana en el pronóstico real: GFS 16,8 mm y ECMWF 14 mm → 15,4 mm."""
+def test_precip_sum_is_the_ecmwf_amount():
+    """Mañana en el pronóstico real: GFS 16,8 mm y ECMWF 14 mm → la fila muestra los 14 mm del ancla
+    (FRA-322; antes la media, 15,4 mm). Los dos llueven: sin desacuerdo."""
     multi = _make_multi(_make_om(precip_sum=[14.0] * _N), _make_om(precip_sum=[16.8] * _N))
 
-    assert _first(multi).precip_sum == pytest.approx(15.4)
+    entry = _first(multi)
+    assert entry.precip_sum == pytest.approx(14.0)
+    assert entry.rain_disagreement is None
 
 
 def test_precip_sum_of_the_selected_model():
@@ -135,10 +141,11 @@ def test_precip_sum_of_the_selected_model():
     assert _first(multi, selected_model="ecmwf").precip_sum == pytest.approx(14.0)
 
 
-def test_wind_speed_max_is_the_consensus_mean_of_open_meteo():
+def test_wind_speed_max_is_the_ecmwf_wind():
+    """FRA-322: el viento es el del ancla ECMWF (antes la media de los modelos: 35)."""
     multi = _make_multi(_make_om(wind_speed_max=[30.0] * _N), _make_om(wind_speed_max=[40.0] * _N))
 
-    assert _first(multi).wind_speed_max == pytest.approx(35.0)
+    assert _first(multi).wind_speed_max == pytest.approx(30.0)
 
 
 # ---------------------------------------------------------------------------
@@ -154,8 +161,8 @@ def test_amount_and_probability_of_a_rainy_day_come_from_the_same_source():
     )
 
     entry = _first(multi)
-    assert entry.precip_prob == pytest.approx(100.0)
-    assert entry.precip_sum == pytest.approx(15.4)
+    assert entry.precip_prob == pytest.approx(97.0)    # ECMWF; antes el máximo (100)
+    assert entry.precip_sum == pytest.approx(14.0)     # ECMWF; antes la media (15,4)
     assert entry.precip_sum > 10  # una tormenta, no una traza
 
 
@@ -163,14 +170,16 @@ def test_amount_and_probability_of_a_rainy_day_come_from_the_same_source():
 # T10 / T11 — consenso y modelo elegido
 # ---------------------------------------------------------------------------
 
-def test_consensus_mode_averages_multiple_om_models():
+def test_consensus_mode_averages_gfs_and_ecmwf_only():
+    """FRA-322: la card son dos modelos. La temperatura es la media de GFS y ECMWF (21); el tercer
+    modelo del fixture (icon_seamless) no cuenta (antes la media de los tres, 22)."""
     multi = _make_multi(
         _make_om(temp_max=[20.0] * _N),
         _make_om(temp_max=[22.0] * _N),
         _make_om(temp_max=[24.0] * _N),
     )
 
-    assert _first(multi, selected_model="consensus").temp_max == pytest.approx(22.0)
+    assert _first(multi, selected_model="consensus").temp_max == 21
 
 
 def test_selected_model_filters_om_list():

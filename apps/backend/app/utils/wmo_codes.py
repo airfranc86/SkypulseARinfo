@@ -106,6 +106,8 @@ def resolve_daily_icon(
     precip_prob: float | None,
     is_day: bool = True,
     rain_threshold: float = 60.0,
+    *,
+    rain_confirmed: bool = True,
 ) -> str:
     """
     Ícono del pronóstico diario. weather_code y precip_prob son campos
@@ -114,8 +116,12 @@ def resolve_daily_icon(
 
     Por decisión de producto el override aplica SOLO al código 3; un día
     parcialmente nublado con prob alta conserva su ícono base.
+
+    `rain_confirmed=False` desactiva el override: el pronóstico diario lo pasa en False cuando el
+    modelo ancla (ECMWF) no da más de 0,9 mm (FRA-322), así una probabilidad alta sin milímetros
+    no pinta lluvia. El valor por defecto conserva el comportamiento anterior.
     """
     icon = describe_wmo(code, is_day)[1]
-    if code == 3 and precip_prob is not None and precip_prob >= rain_threshold:
+    if rain_confirmed and code == 3 and precip_prob is not None and precip_prob >= rain_threshold:
         return "rain"
     return icon

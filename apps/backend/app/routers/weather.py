@@ -30,6 +30,7 @@ from app.schemas.weather import (
     WeatherDashboardResponse,
 )
 from app.services.current_blend import blend_current
+from app.services.daily_anchor import available_model_names, select_models
 from app.services.dashboard_builder import (
     AR_TZ,
     build_7d_forecast,
@@ -108,7 +109,9 @@ async def get_current_weather(
         "Retorna condiciones actuales (SMN), pronóstico horario de 7 días en franjas de 3 h, "
         "pronóstico diario de 7 días, fase lunar, arco solar y pronóstico de lluvia. "
         "Todo el pronóstico sale de Open-Meteo. "
-        "El parámetro `model` permite seleccionar GFS, ECMWF o el consenso multi-modelo."
+        "El parámetro `model` permite seleccionar GFS, ECMWF o el consenso multi-modelo "
+        "(ECMWF ancla la lluvia, el viento y el ícono; la temperatura es la media entera). "
+        "`forecast_models` lista los modelos que aportaron."
     ),
 )
 @limiter.limit("30/minute")
@@ -156,8 +159,9 @@ async def get_dashboard(
         logger.error("get_multi_model_daily falló — sin datos para armar el dashboard: %s", daily_multi)
         raise HTTPException(status_code=503, detail="forecast_unavailable")
 
-    # Referencia: primer modelo Open-Meteo disponible (para sunrise/sunset/daylight)
-    ref_daily: DailyForecastDataExt = next(iter(daily_multi.models.values()))
+    # Referencia: el ancla ECMWF (GFS si falta), elegida por clave y no por posición, para
+    # sunrise/sunset/daylight y UV (FRA-322).
+    ref_daily: DailyForecastDataExt = select_models(daily_multi.models, "consensus").anchor
 
     # =========================================================================
     # Determinar is_day con sunrise/sunset del pronóstico
@@ -343,6 +347,7 @@ async def get_dashboard(
         rain_today=rain_today,
         hourly=hourly_schema,
         forecast_7d=forecast_7d,
+        forecast_models=available_model_names(daily_multi.models),
         fetched_at=now,
         forecast_source=SOURCE_OPENMETEO_FORECAST,
         degraded=degraded,
