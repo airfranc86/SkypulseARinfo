@@ -257,6 +257,28 @@ export interface HourlyEntry {
   wind_gusts_kmh?: number | null
 }
 
+/** The two models behind the 7-day card. */
+export type ForecastModelName = 'gfs' | 'ecmwf'
+
+/** Rain probability band of a trend day (days 5 to 7), in percent. */
+export type RainBand = '10-40' | '40-60' | '60-100'
+
+/** One model's numbers for one day (the detail table of a row). */
+export interface ModelDayDetail {
+  temp_max: number | null
+  temp_min: number | null
+  precip_sum: number | null
+  precip_prob: number | null
+  wind_speed_max: number | null
+  cloud_cover_mean: number | null
+}
+
+/** Only one of the two models predicts rain (above 0.9 mm). */
+export interface RainDisagreement {
+  gfs_mm: number
+  ecmwf_mm: number
+}
+
 export interface DailyEntry {
   date: string
   day_label: string
@@ -269,14 +291,19 @@ export interface DailyEntry {
   snow_level_m: number | null
   weather_code: number | null
   icon: string
-  confidence_pct: number
-  confidence_label: 'ALTA' | 'MEDIA' | 'BAJA'
   wind_dir_dominant_deg: number | null
   wind_dir_cardinal: string | null
   wind_icon: string | null
   wind_intensity: string | null
   wind_shift: boolean
   convective_risk?: ConvectiveRisk | null
+  rain_disagreement: RainDisagreement | null
+  /** Days 5 to 7: a trend that can change. */
+  is_trend: boolean
+  /** Probability band of a trend day; null below 10 % and outside the trend. */
+  rain_band: RainBand | null
+  /** Per-model numbers; each model is null when it did not answer. */
+  models: Record<ForecastModelName, ModelDayDetail | null> | null
 }
 
 export interface RainForecastInfo {
@@ -364,6 +391,8 @@ export interface WeatherDashboardResponse {
   rain_today: RainForecastInfo
   hourly: HourlyConsensus
   forecast_7d: DailyEntry[]
+  /** Models that contributed to `forecast_7d`; one entry when the other model did not answer. */
+  forecast_models: ForecastModelName[]
   fetched_at: string
   // Todo el pronóstico sale de Open-Meteo.
   forecast_source?: 'openmeteo'

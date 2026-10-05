@@ -5,7 +5,8 @@ import { Forecast7dList } from './Forecast7dList'
 import { Forecast7dChart } from './Forecast7dChart'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import type { ModelKey } from '@/components/ui/ModelBadge'
-import type { DailyEntry } from '@/lib/api'
+import { missingModelNotice } from '@/lib/forecastRow'
+import type { DailyEntry, ForecastModelName } from '@/lib/api'
 
 type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
 
@@ -27,6 +28,8 @@ interface Props {
   refreshing?: boolean
   /** Franja con lluvia prevista por fecha, cuando hay horas para calcularla. */
   rainWindows?: Record<string, string>
+  /** Modelos que aportaron datos a los días; con uno solo se avisa que el otro no respondió. */
+  forecastModels?: ForecastModelName[]
 }
 
 const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
@@ -38,9 +41,10 @@ const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
 const SEGMENT_BASE = 'px-3.5 py-2 min-h-[44px] rounded-md text-xs font-medium transition-colors'
 const SEGMENT_ACTIVE = { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
 
-export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChange, refreshing = false, rainWindows }: Props) {
+export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChange, refreshing = false, rainWindows, forecastModels }: Props) {
   const modelLabel = MODEL_OPTIONS.find(({ id }) => id === selectedModel)?.label ?? selectedModel
   const dimmed = { opacity: refreshing ? 0.55 : 1 }
+  const modelNotice = missingModelNotice(forecastModels)
 
   return (
     <div
@@ -68,8 +72,14 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
         {refreshing ? 'Actualizando…' : ''}
       </p>
 
+      {modelNotice && (
+        <p className="px-5 pt-2 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+          {modelNotice}
+        </p>
+      )}
+
       <div aria-busy={refreshing} style={dimmed}>
-        <Forecast7dList days={days} rainWindows={rainWindows} showConfidence={shownModel === 'consensus'} />
+        <Forecast7dList days={days} rainWindows={rainWindows} shownModel={shownModel} />
       </div>
 
       {/* El gráfico va siempre a la vista, fuera del panel "Avanzado": recharts mide su contenedor y
@@ -112,10 +122,10 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
                 Consenso Modelos Predictivos
               </h4>
               <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
-                El consenso combina GFS y ECMWF. Cuando no coinciden, ese día lleva "Confianza media" o "Confianza baja". Elegí uno solo para ver en qué difieren.
+                El consenso toma la temperatura del promedio de GFS y ECMWF; la lluvia, el viento y el ícono siguen a ECMWF. Si solo uno de los dos modelos pronostica lluvia, el día muestra la cantidad de cada uno. Los días 5 a 7 son una tendencia: la lluvia se muestra en franjas y puede cambiar. Tocá un día para ver los números de cada modelo.
               </p>
               <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
-                ECMWF es el modelo europeo y, según la verificación del propio ECMWF en 101 estaciones de Argentina (2020–2024), es el que mejor acierta temperatura y viento en el país. GFS es el modelo de EE. UU.: acierta parecido en lluvia, pero tiende a exagerar el calor y el viento.
+                ECMWF es el modelo europeo y, según la verificación del propio ECMWF en 101 estaciones de Argentina (2020–2024), es el que mejor acierta temperatura y viento en el país. En una medición propia de SkyPulse (14 estaciones, un año), el promedio de los dos modelos acertó mejor la temperatura máxima que ECMWF solo; por eso la temperatura es el promedio. GFS es el modelo de EE. UU. y acierta parecido en lluvia.
               </p>
             </div>
             <Segmented
