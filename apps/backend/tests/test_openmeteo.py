@@ -103,6 +103,39 @@ async def test_get_current_sends_wind_speed_in_kmh():
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+async def test_get_current_requests_and_parses_wind_gusts():
+    """FRA-320: `wind_gusts_10m` se pide en `current` y llega como `wind_gust_kmh`."""
+    import copy
+    payload = copy.deepcopy(OPENMETEO_SAMPLE_PAYLOAD)
+    payload["current"]["wind_gusts_10m"] = 31.7
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get("https://api.open-meteo.com/v1/forecast").mock(
+            return_value=httpx.Response(200, json=payload)
+        )
+        result = await get_current(-31.4, -64.2)
+
+    assert "wind_gusts_10m" in route.calls.last.request.url.params["current"].split(",")
+    assert result is not None
+    assert result.wind_gust_kmh == pytest.approx(31.7)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_get_current_leaves_wind_gust_none_when_missing():
+    """Sin `wind_gusts_10m` en la respuesta (caché vieja, otro modelo) la ráfaga queda en None."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://api.open-meteo.com/v1/forecast").mock(
+            return_value=httpx.Response(200, json=OPENMETEO_SAMPLE_PAYLOAD)
+        )
+        result = await get_current(-31.4, -64.2)
+
+    assert result is not None
+    assert result.wind_gust_kmh is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
 async def test_get_current_normalizes_wind_dir_360_to_0():
     """Regresión: Open-Meteo devuelve 360.0 (Norte) que el schema rechazaba con lt=360.
     Debe normalizarse a 0.0 antes de llegar al schema."""

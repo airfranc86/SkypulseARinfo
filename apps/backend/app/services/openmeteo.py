@@ -28,6 +28,8 @@ _CURRENT_FIELDS = ",".join([
     "surface_pressure",
     "wind_speed_10m",
     "wind_direction_10m",
+    "wind_gusts_10m",
+    # Suma del intervalo de `current` (900 s = 15 min, ver `current.interval`), NO de la hora previa.
     "precipitation",
     "cloud_cover",
     "weather_code",
@@ -71,6 +73,7 @@ class OpenMeteoCurrent:
     description: str | None    # siempre None aquí; el router usa describe_wmo(weather_code)
     fetched_at: datetime       # cuándo LO TRAJIMOS nosotros (sobre esto se calcula `stale`)
     observed_at: datetime | None = None  # `current.time` que reporta Open-Meteo, en UTC; None si falta
+    wind_gust_kmh: float | None = None   # `wind_gusts_10m` (máximo del intervalo de `current`)
 
 
 def _parse_observation_time(raw: object) -> datetime | None:
@@ -147,6 +150,7 @@ async def get_current(
                 description=None,
                 fetched_at=datetime.now(timezone.utc),
                 observed_at=_parse_observation_time(current.get("time")),
+                wind_gust_kmh=parse_float(current.get("wind_gusts_10m")),
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo payload parse error: %s", exc)

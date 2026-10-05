@@ -2,6 +2,9 @@
 
 Fuentes del dashboard:
     1. SMN — observación actual (vía `aggregate_current`).
+    1b. METAR del aeropuerto más cercano (AWC) — el `current` del dashboard lo usa como observación si
+       el aeropuerto está a ≤ 30 km y el dato tiene ≤ 90 min; si no, queda Open-Meteo con el motivo
+       (FRA-320, ver services/current_blend.py). Si el METAR o la mezcla fallan, se sirve el modelo.
     2. Open-Meteo — todo el pronóstico: diario multi-modelo (GFS + ECMWF) y horario (lluvia,
        probabilidad, ráfagas, CAPE, 850 hPa, weather_code, uv, sunrise/sunset).
     Windy ya no es fuente de nada: la key del plan Testing devolvía los datos mezclados al azar (ver
@@ -26,15 +29,21 @@ from app.schemas.weather import (
     WeatherCurrentResponse,
     WeatherDashboardResponse,
 )
+from app.services.current_blend import blend_current
 from app.services.dashboard_builder import (
     AR_TZ,
     build_7d_forecast,
     build_hourly_schema,
     build_rain_forecast,
+    current_observed_at,
+    model_current_gust,
+    model_precip_current_hour,
 )
+from app.services.metar_observation import MetarSelection, get_nearest_metar_observation
 from app.services.hourly_slots import current_temp_850
 from app.services.weather_aggregator import aggregate_current
 from app.services.openmeteo import (
+    get_current as get_openmeteo_current,
     get_multi_model_daily,
     get_hourly_forecast_ext,
     DailyForecastDataExt,
@@ -118,12 +127,17 @@ async def get_dashboard(
     #   - multi-model Open-Meteo diario: bloqueante — provee el pronóstico, weather_code, uv,
     #     sunrise y sunset.
     #   - Open-Meteo horario: best-effort — sin él la tira horaria queda vacía.
+    #   - METAR del aeropuerto más cercano: best-effort, timeout corto (FRA-320).
+    #   - Open-Meteo `current` (solo la ráfaga): best-effort; comparte la caché single-flight con
+    #     `aggregate_current`, así que no suma un request a Open-Meteo.
     current_task = aggregate_current(lat, lon)
     om_daily_task = get_multi_model_daily(lat, lon, days=7)
     om_hourly_task = get_hourly_forecast_ext(lat, lon, days=7)
+    metar_task = get_nearest_metar_observation(lat, lon)
+    om_current_task = get_openmeteo_current(lat, lon)
 
-    (current, daily_multi, om_hourly) = await asyncio.gather(
-        current_task, om_daily_task, om_hourly_task,
+    (current, daily_multi, om_hourly, metar, om_current) = await asyncio.gather(
+        current_task, om_daily_task, om_hourly_task, metar_task, om_current_task,
         return_exceptions=True,
     )
 
@@ -190,10 +204,16 @@ async def get_dashboard(
         icon=icon,
         is_day=is_day_now,
         source=current.meta.source,
-        observed_at=current.meta.station.observed_at if current.meta.station else None,
+        observed_at=current_observed_at(current),
         wind_icon=wind_icon_code(current.wind_speed_kmh),
         wind_intensity=wind_intensity_tier(current.wind_speed_kmh),
         stale=current.meta.stale,
+        wind_gust_kmh=model_current_gust(current, om_current),
+    )
+    current_detailed = _blend_with_metar(
+        current_detailed, current, metar,
+        model_precip_1h_mm=model_precip_current_hour(om_hourly_data, now),
+        now=now,
     )
 
     # =========================================================================
@@ -336,3 +356,32 @@ async def get_dashboard(
 def _get_weather_code_from_current(current: WeatherCurrentResponse) -> int | None:
     """SMN no provee weather_code; retorna None para que describe_wmo use fallback."""
     return getattr(current, "weather_code", None)
+
+
+def _blend_with_metar(
+    base: CurrentDetailedSchema,
+    current: WeatherCurrentResponse,
+    metar: object,
+    *,
+    model_precip_1h_mm: float | None,
+    now: datetime,
+) -> CurrentDetailedSchema:
+    """Mezcla el METAR cercano con el `current` del modelo (FRA-320). Nunca rompe el dashboard.
+
+    Una observación SMN (si se reactiva) se respeta tal cual: el METAR solo reemplaza al modelo.
+    """
+    if current.meta.source != "openmeteo":
+        return base
+    if not isinstance(metar, MetarSelection):
+        logger.warning("METAR del aeropuerto cercano falló en /dashboard: %r", metar)
+        return base.model_copy(update={"source_reason": "metar_unavailable"})
+    try:
+        return blend_current(
+            base, metar,
+            model_precip_1h_mm=model_precip_1h_mm,
+            model_weather_code=_get_weather_code_from_current(current),
+            now=now,
+        )
+    except Exception as exc:
+        logger.error("blend_current falló en /dashboard — se sirve el modelo: %r", exc)
+        return base

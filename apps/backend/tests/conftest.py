@@ -121,6 +121,47 @@ def clear_openmeteo_caches():
     om_module._CACHE_NOWCAST.clear()
 
 
+@pytest.fixture(autouse=True)
+def clear_metar_observation_cache():
+    """Limpia la caché del METAR del "ahora" del dashboard (FRA-320) antes y después de cada test."""
+    import app.services.metar_observation as metar_obs_module
+    metar_obs_module._CACHE.clear()
+    yield
+    metar_obs_module._CACHE.clear()
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        "live_current_observation: el dashboard pide de verdad el METAR (respx) y el Open-Meteo "
+        "current en vez de los dobles por defecto",
+    )
+
+
+@pytest.fixture(autouse=True)
+def stub_dashboard_current_observation(request: pytest.FixtureRequest, monkeypatch):
+    """Dobles por defecto para las dos llamadas nuevas del dashboard (FRA-320).
+
+    Los tests del dashboard parchean `aggregate_current` y el pronóstico, pero no sabían de la
+    observación METAR ni de la ráfaga de Open-Meteo `current`: sin este doble saldrían a la red de
+    verdad. Los tests marcados `live_current_observation` los ejercitan (con respx o parches propios).
+    """
+    if request.node.get_closest_marker("live_current_observation") is not None:
+        return
+    from unittest.mock import AsyncMock
+
+    from app.services.metar_observation import MetarSelection
+
+    unavailable = MetarSelection(
+        reason="metar_unavailable", icao="", name="", distance_km=0.0, observation=None
+    )
+    monkeypatch.setattr(
+        "app.routers.weather.get_nearest_metar_observation",
+        AsyncMock(return_value=unavailable),
+    )
+    monkeypatch.setattr("app.routers.weather.get_openmeteo_current", AsyncMock(return_value=None))
+
+
 # ---------------------------------------------------------------------------
 # Caché de EMSC entre tests
 # ---------------------------------------------------------------------------

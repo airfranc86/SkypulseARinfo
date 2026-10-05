@@ -24,10 +24,11 @@ from app.schemas.weather import (
 )
 from app.services.calculators import compute_convective_risk
 from app.services.forecast_merge import merge_daily_fields
-from app.services.hourly_slots import three_hour_slots, upcoming_slots
+from app.services.hourly_slots import at, next_hour_index, three_hour_slots, upcoming_slots
 from app.services.openmeteo import (
     HourlyForecastExt,
     MultiModelDailyData,
+    OpenMeteoCurrent,
     _DAY_LABELS_ES,
 )
 from app.utils.geo import degrees_to_cardinal
@@ -49,6 +50,39 @@ _MONTHS_ES = [
 # "Lluvia esperada hoy" mira las próximas 24 h (8 franjas) y el riesgo de llovizna, las próximas 12 h (4).
 _RAIN_HORIZON_SLOTS = 8
 _DRIZZLE_SLOTS = 4
+
+
+# ---------------------------------------------------------------------------
+# "Ahora" del dashboard (FRA-320): insumos del modelo para la mezcla con el METAR
+# ---------------------------------------------------------------------------
+
+def current_observed_at(current: WeatherCurrentResponse) -> datetime | None:
+    """Hora real del dato: la de la estación SMN o la `current.time` de Open-Meteo."""
+    if current.meta.station is not None:
+        return current.meta.station.observed_at
+    return current.meta.observed_at
+
+
+def model_current_gust(current: WeatherCurrentResponse, om_current: object) -> float | None:
+    """Ráfaga de Open-Meteo `current`, solo si el `current` también es de Open-Meteo.
+
+    `om_current` es lo que devolvió el gather del router: puede ser None o una excepción.
+    """
+    if current.meta.source != "openmeteo" or not isinstance(om_current, OpenMeteoCurrent):
+        return None
+    return om_current.wind_gust_kmh
+
+
+def model_precip_current_hour(om_hourly: HourlyForecastExt | None, now: datetime) -> float | None:
+    """Lluvia del modelo (mm) de la hora en curso: la franja horaria que cierra después de `now`.
+
+    No sale de Open-Meteo `current.precipitation` porque esa es la suma de 15 min (`current.interval`
+    = 900 s), no de una hora; la serie horaria trae la suma de la hora previa a cada marca.
+    """
+    if om_hourly is None:
+        return None
+    index = next_hour_index(om_hourly, now)
+    return None if index is None else at(om_hourly.precipitations, index)
 
 
 # ---------------------------------------------------------------------------
