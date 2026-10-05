@@ -1,0 +1,12 @@
+# Downloaded data, caches and generated results are never versioned.
+cache/
+resultados/
+archivo_datohorario/
+__pycache__/
+.pytest_cache/
+*.zip
+*.txt
+
+# README.md, *.py and tests/ are versioned (nothing above matches them);
+# only text fixtures inside tests/ are re-included.
+!tests/**/*.txt
