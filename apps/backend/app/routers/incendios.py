@@ -62,8 +62,9 @@ def _build_response(
 
     # El slot "actual" sale del pronóstico, que puede divergir de la temperatura real (reportado en
     # vivo con la serie de Windy: 10°C mostrados con 26°C reales) — reemplazamos temp/humedad/viento
-    # del slot actual por la observación real (SMN/Open-Meteo, la misma fuente que usa el resto de la
-    # app para "ahora") cuando está disponible, y recalculamos el puntaje con esos valores: mostrar
+    # del slot actual por el "ahora" de aggregate_current (hoy Open-Meteo, un análisis de modelo; el
+    # SMN solo si smn_enabled; la misma fuente que usa el resto de la app) cuando está disponible, y
+    # recalculamos el puntaje con esos valores: mostrar
     # una temperatura real junto a un puntaje calculado con datos de pronóstico distintos sería más
     # confuso, no menos. Si aggregate_current falla, seguimos con los valores del pronóstico sin más
     # (fail-open, mismo criterio que el resto del proyecto).
@@ -125,8 +126,8 @@ async def get_incendios(
     """
     logger.info("GET /api/incendios lat=%.2f lon=%.2f", lat, lon)
 
-    # aggregate_current (SMN/Open-Meteo) en paralelo al fetch del pronóstico — solo se usa para
-    # reemplazar temp/humedad/viento del slot "actual" por la observación real; si falla, no debe
+    # aggregate_current (hoy Open-Meteo) en paralelo al fetch del pronóstico — solo se usa para
+    # reemplazar temp/humedad/viento del slot "actual" por el "ahora"; si falla, no debe
     # tumbar el endpoint (el pronóstico solo ya alcanza para responder, aunque con una temperatura
     # menos precisa).
     fire_result, current_result = await asyncio.gather(
