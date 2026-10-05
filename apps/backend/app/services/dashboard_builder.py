@@ -14,6 +14,7 @@ la tira y el veredicto del héroe no cambien.
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta, date as _Date
+from typing import Literal
 
 from app.schemas.weather import (
     DailyEntrySchema,
@@ -23,7 +24,7 @@ from app.schemas.weather import (
     WeatherCurrentResponse,
 )
 from app.services.calculators import compute_convective_risk
-from app.services.forecast_merge import merge_daily_fields
+from app.services.daily_anchor import compute_day, select_models
 from app.services.hourly_slots import at, next_hour_index, three_hour_slots, upcoming_slots
 from app.services.openmeteo import (
     HourlyForecastExt,
@@ -33,7 +34,7 @@ from app.services.openmeteo import (
 )
 from app.utils.geo import degrees_to_cardinal
 from app.utils.wind import detect_wind_shift, wind_icon_code, wind_intensity_tier
-from app.utils.wmo_codes import describe_wmo, resolve_daily_icon
+from app.utils.wmo_codes import describe_wmo
 
 # Zona horaria Argentina = UTC-3. Pública porque routers/weather.py también la
 # necesita (_parse_ar_dt) — evita que el router importe de vuelta símbolos
@@ -50,6 +51,10 @@ _MONTHS_ES = [
 # "Lluvia esperada hoy" mira las próximas 24 h (8 franjas) y el riesgo de llovizna, las próximas 12 h (4).
 _RAIN_HORIZON_SLOTS = 8
 _DRIZZLE_SLOTS = 4
+
+# Confianza obsoleta (FRA-322): el schema todavía la trae, constante, hasta que el frontend deje de leerla.
+_DEPRECATED_CONFIDENCE_PCT = 100.0
+_DEPRECATED_CONFIDENCE_LABEL: Literal["ALTA"] = "ALTA"
 
 
 # ---------------------------------------------------------------------------
@@ -275,31 +280,19 @@ def build_7d_forecast(
     selected_model: str = 'consensus',
     om_hourly: HourlyForecastExt | None = None,
 ) -> list[DailyEntrySchema]:
-    """Arma los 7 días desde Open-Meteo (ver services/forecast_merge.py).
+    """Arma los 7 días desde Open-Meteo con las reglas de services/daily_anchor.py (FRA-322).
 
-    `om_hourly` solo aporta el riesgo convectivo de cada día (el CAPE máximo de la serie horaria).
+    ECMWF es el ancla (lluvia, viento, código e ícono), la temperatura es la media entera de los
+    modelos disponibles y cada día lleva el detalle por modelo. `om_hourly` solo aporta el riesgo
+    convectivo de cada día (el CAPE máximo de la serie horaria).
     """
-    ref = next(iter(daily_multi.models.values()))
+    selection = select_models(daily_multi.models, selected_model)
     today = datetime.now(AR_TZ).date()
-
-    models_list = list(daily_multi.models.values())
-    _MODEL_KEY: dict[str, str] = {'gfs': 'gfs_seamless', 'ecmwf': 'ecmwf_ifs025'}
-    if selected_model in _MODEL_KEY:
-        _mk = _MODEL_KEY[selected_model]
-        if _mk in daily_multi.models:
-            models_list = [daily_multi.models[_mk]]
-
     cape_by_date = _max_cape_by_date(om_hourly)
     entries: list[DailyEntrySchema] = []
 
-    for i, date_str in enumerate(ref.dates):
-        merged = merge_daily_fields(day_index=i, om_models=models_list)
-
-        codes: list[int] = [
-            m.weather_codes[i]
-            for m in models_list
-            if i < len(m.weather_codes) and m.weather_codes[i] is not None
-        ]  # type: ignore[misc]
+    for i, date_str in enumerate(selection.anchor.dates):
+        day = compute_day(selection, date_str, i)
 
         date_obj = _Date.fromisoformat(date_str)
         days_ahead = (date_obj - today).days
@@ -314,22 +307,7 @@ def build_7d_forecast(
         month_name = _MONTHS_ES[date_obj.month - 1]
         day_label_long = f"{weekday_full}, {date_obj.day} de {month_name}"
 
-        if len(models_list) == 1 or selected_model != 'consensus':
-            confidence_pct = 100.0
-            conf_label: str = 'ALTA'
-        else:
-            confidence_pct = (
-                daily_multi.consensus_pct_per_day[i]
-                if i < len(daily_multi.consensus_pct_per_day)
-                else 50.0
-            )
-            conf_label = 'ALTA' if confidence_pct >= 75 else ('MEDIA' if confidence_pct >= 50 else 'BAJA')
-
-        most_common_code: int | None = max(set(codes), key=codes.count) if codes else None
-        icon = resolve_daily_icon(most_common_code, merged["precip_prob"], is_day=True)
-
-        wsm = merged["wind_speed_max"]
-        wdd = ref.wind_dir_dominant[i] if i < len(ref.wind_dir_dominant) else None
+        wdd = day.wind_dir_deg
         w_card = degrees_to_cardinal(wdd) if wdd is not None else None
 
         # Sin serie horaria para esa fecha no hay CAPE — dejar convective_risk en None en
@@ -344,21 +322,27 @@ def build_7d_forecast(
                 date=date_str,
                 day_label=day_label,
                 day_label_long=day_label_long,
-                temp_max=merged["temp_max"],
-                temp_min=merged["temp_min"],
-                precip_sum=merged["precip_sum"],
-                precip_prob=merged["precip_prob"],
-                wind_speed_max=wsm,
+                temp_max=day.temp_max,
+                temp_min=day.temp_min,
+                precip_sum=day.precip_sum,
+                precip_prob=day.precip_prob,
+                wind_speed_max=day.wind_speed_max,
                 snow_level_m=snow_level_m,
-                weather_code=most_common_code,
-                icon=icon,
-                confidence_pct=confidence_pct,
-                confidence_label=conf_label,  # type: ignore[arg-type]
+                weather_code=day.weather_code,
+                icon=day.icon,
+                # DEPRECATED: constantes para que el chip del frontend actual quede oculto; se
+                # eliminan en el PR de frontend.
+                confidence_pct=_DEPRECATED_CONFIDENCE_PCT,
+                confidence_label=_DEPRECATED_CONFIDENCE_LABEL,
                 wind_dir_dominant_deg=wdd,
                 wind_dir_cardinal=w_card,
-                wind_icon=wind_icon_code(wsm),
-                wind_intensity=wind_intensity_tier(wsm),
+                wind_icon=wind_icon_code(day.wind_speed_max),
+                wind_intensity=wind_intensity_tier(day.wind_speed_max),
                 convective_risk=day_convective_risk,
+                rain_disagreement=day.rain_disagreement,
+                is_trend=day.is_trend,
+                rain_band=day.rain_band,
+                models=day.models,
             )
         )
 

@@ -842,3 +842,40 @@ class TestNieblaCombinedFetch:
 
         assert vis is None
         assert fog is None
+
+
+# ---------------------------------------------------------------------------
+# cloud_cover_mean diaria (FRA-322): nubosidad media del día por modelo, para el ícono sin lluvia
+# ---------------------------------------------------------------------------
+
+class TestDailyCloudCoverMean:
+
+    @pytest.mark.asyncio
+    async def test_cloud_cover_mean_is_requested_and_parsed(self):
+        payload = _make_daily_ext_payload(n=2)
+        payload["daily"]["cloud_cover_mean"] = [66, None]
+        captured = {}
+
+        async def capture_request(method, url, **kwargs):
+            captured["params"] = kwargs.get("params", {})
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.raise_for_status = MagicMock()
+            mock_response.json.return_value = payload
+            return mock_response
+
+        mock_client = MagicMock()
+        mock_client.request = capture_request
+        with patch("app.services.openmeteo.get_client", return_value=mock_client):
+            result = await get_daily_forecast_ext(-34.6, -58.4, model="ecmwf_ifs025")
+
+        assert "cloud_cover_mean" in captured["params"]["daily"].split(",")
+        assert result.cloud_cover_mean == [66.0, None]
+
+    @pytest.mark.asyncio
+    async def test_missing_cloud_cover_mean_is_tolerated(self):
+        payload = _make_daily_ext_payload(n=2)   # the payload has no cloud_cover_mean
+        with patch("app.services.openmeteo.get_client", return_value=_mock_http_client(payload)):
+            result = await get_daily_forecast_ext(-34.6, -58.4)
+        assert result is not None
+        assert result.cloud_cover_mean == []

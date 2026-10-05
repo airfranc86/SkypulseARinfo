@@ -180,6 +180,8 @@ class DailyForecastDataExt:
     sunset: list[str]
     daylight_seconds: list[float | None]
     wind_dir_dominant: list[float | None] = field(default_factory=list)
+    # % de nubosidad media del día (por modelo). Vacía si la respuesta no la trae (caché vieja).
+    cloud_cover_mean: list[float | None] = field(default_factory=list)
 
 
 async def get_daily_forecast_ext(
@@ -200,7 +202,7 @@ async def get_daily_forecast_ext(
             "precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,"
             "wind_direction_10m_dominant,"
             "relative_humidity_2m_mean,uv_index_max,weather_code,"
-            "sunrise,sunset,daylight_duration"
+            "sunrise,sunset,daylight_duration,cloud_cover_mean"
         ),
         "forecast_days": days,
         "timezone": "America/Argentina/Buenos_Aires",
@@ -259,6 +261,7 @@ async def get_daily_forecast_ext(
                 sunrise=list(daily.get("sunrise", [])),
                 sunset=list(daily.get("sunset", [])),
                 daylight_seconds=daylight_seconds,
+                cloud_cover_mean=[parse_float(v) for v in daily.get("cloud_cover_mean", [])],
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo daily_ext parse error (model=%s): %s", model, exc)

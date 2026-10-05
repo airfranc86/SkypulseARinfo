@@ -150,20 +150,57 @@ class HourlyEntrySchema(BaseModel):
     wind_gusts_kmh: float | None = None
 
 
+ForecastModelName = Literal["gfs", "ecmwf"]
+RainBand = Literal["10-40", "40-60", "60-100"]
+
+
+class RainDisagreementSchema(BaseModel):
+    """Los dos modelos discrepan en llueve / no llueve (uno supera 0,9 mm y el otro no)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    gfs_mm: float           # 1 decimal
+    ecmwf_mm: float         # 1 decimal
+
+
+class ModelDayDetailSchema(BaseModel):
+    """Los números de un modelo para un día (detalle del acordeón)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    temp_max: int | None = None           # entero, mitad hacia arriba
+    temp_min: int | None = None
+    precip_sum: float | None = None       # mm, 1 decimal
+    precip_prob: float | None = None      # %
+    wind_speed_max: float | None = None   # km/h
+    cloud_cover_mean: float | None = None  # % medio del día
+
+
+class ModelsDetailSchema(BaseModel):
+    """Detalle por modelo de un día; None si ese modelo no aportó datos."""
+
+    model_config = ConfigDict(frozen=True)
+
+    gfs: ModelDayDetailSchema | None = None
+    ecmwf: ModelDayDetailSchema | None = None
+
+
 class DailyEntrySchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     date: str               # "2026-05-20"
     day_label: str          # "Hoy" / "Mañana" / "mar"
     day_label_long: str     # "martes, 19 de mayo"
-    temp_max: float | None
-    temp_min: float | None
+    temp_max: int | None    # entero (mitad hacia arriba): media de los modelos disponibles
+    temp_min: int | None
     precip_sum: float | None
     precip_prob: float | None
     wind_speed_max: float | None
     snow_level_m: float | None
     weather_code: int | None
     icon: str
+    # DEPRECATED (FRA-322): constantes 100 / "ALTA" para que el chip del frontend actual quede oculto.
+    # Se eliminan en el PR de frontend; no se calculan más.
     confidence_pct: float
     confidence_label: Literal["ALTA", "MEDIA", "BAJA"]
     wind_dir_dominant_deg: float | None = None
@@ -172,6 +209,13 @@ class DailyEntrySchema(BaseModel):
     wind_intensity: str | None = None
     wind_shift: bool = False
     convective_risk: ConvectiveRisk | None = None
+    # Los modelos discrepan en llueve / no llueve; None si coinciden o si falta alguno.
+    rain_disagreement: RainDisagreementSchema | None = None
+    # Días 5 a 7: tendencia. `rain_band` es la franja de probabilidad (None con < 10 % y fuera de
+    # tendencia).
+    is_trend: bool = False
+    rain_band: RainBand | None = None
+    models: ModelsDetailSchema | None = None
 
 
 class RainForecastSchema(BaseModel):
@@ -294,6 +338,9 @@ class WeatherDashboardResponse(BaseModel):
     rain_today: RainForecastSchema
     hourly: HourlyConsensusSchema
     forecast_7d: list[DailyEntrySchema]
+    # Modelos con datos en `forecast_7d` ("gfs", "ecmwf"). Si falta uno (falla parcial de Open-Meteo)
+    # la interfaz puede avisarlo. Vive acá y no en cada día porque aplica a toda la semana.
+    forecast_models: list[ForecastModelName] = Field(default_factory=list)
     fetched_at: datetime
     # Origen del pronóstico principal. El dashboard siempre responde "openmeteo".
     forecast_source: str = "unknown"

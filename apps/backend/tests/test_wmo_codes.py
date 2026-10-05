@@ -309,3 +309,20 @@ def test_resolve_daily_icon_clear_unchanged():
 def test_resolve_daily_icon_none_code_no_override():
     # code != 3 ⇒ sin override, cae al fallback de describe_wmo.
     assert resolve_daily_icon(None, 80.0, is_day=True) == "clear-day"
+
+
+# ---------------------------------------------------------------------------
+# resolve_daily_icon with `rain_confirmed` (FRA-322): the overcast override needs the anchor model to
+# give more than 0.9 mm. The default (True) keeps the behaviour above for any other caller.
+# ---------------------------------------------------------------------------
+
+def test_resolve_daily_icon_overcast_override_skipped_when_rain_not_confirmed():
+    assert resolve_daily_icon(3, 100.0, is_day=True, rain_confirmed=False) == "overcast"
+
+
+def test_resolve_daily_icon_overcast_override_applies_when_rain_confirmed():
+    assert resolve_daily_icon(3, 60.0, is_day=True, rain_confirmed=True) == "rain"
+
+
+def test_resolve_daily_icon_rain_confirmed_does_not_touch_other_codes():
+    assert resolve_daily_icon(61, 90.0, is_day=True, rain_confirmed=False) == "partly-cloudy-day-rain"
