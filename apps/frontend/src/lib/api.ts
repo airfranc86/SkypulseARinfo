@@ -292,22 +292,63 @@ export interface RainForecastInfo {
   drying_reason: string | null
 }
 
+/** Where the dashboard "now" comes from: the nearest airport METAR, an SMN station or the model. */
+export type CurrentSource = 'metar' | 'smn' | 'openmeteo' | 'unknown'
+
+/** Why the dashboard "now" uses (or not) the nearest airport METAR (FRA-320). */
+export type CurrentSourceReason =
+  | 'metar_ok'
+  | 'metar_too_far'
+  | 'metar_unavailable'
+  | 'metar_stale'
+  | 'metar_missing_fields'
+
+export type PossibleChangeReason = 'wind' | 'rain' | 'storm'
+
+/** Airport whose METAR feeds the dashboard "now" (only with source "metar"). */
+export interface CurrentStation {
+  icao: string
+  name: string
+  distance_km: number
+}
+
+/** Notices about the "now": codes and values only, the frontend writes the text. */
+export type CurrentNotice =
+  | { code: 'model_temp_differs'; model_temp_c: number }
+  | {
+      code: 'possible_change'
+      reasons: PossibleChangeReason[]
+      model_wind_speed_kmh: number | null
+      model_wind_gust_kmh: number | null
+      model_precip_1h_mm: number | null
+      model_weather_code: number | null
+    }
+  | { code: 'reported_phenomenon'; kind: 'rain' | 'storm'; wx: string }
+
 export interface CurrentDetailed {
   temp_c: number | null
   feels_like_c: number | null
   humidity: number | null
   wind_speed_kmh: number | null
+  /** null with variable (VRB) or calm wind in the METAR. */
   wind_dir_deg: number | null
   wind_dir_cardinal: string | null
   uv_index: number | null
   description: string
   icon: string
   is_day: boolean
-  source?: string  // "smn" | "openmeteo" | "unknown"
-  observed_at?: string  // ISO datetime of the SMN observation
+  source?: CurrentSource
+  /** Real UTC time of the data: METAR obsTime, Open-Meteo current.time or the SMN observation. */
+  observed_at?: string | null
   wind_icon: string | null
   wind_intensity: string | null
   stale?: boolean
+  wind_gust_kmh?: number | null
+  station?: CurrentStation | null
+  /** Model temperature, only with source "metar". */
+  model_temp_c?: number | null
+  source_reason?: CurrentSourceReason | null
+  notices?: CurrentNotice[]
 }
 
 export interface HourlyConsensus {
