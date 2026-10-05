@@ -81,11 +81,10 @@ const MODELS: Record<ModelKey, ModelMeta> = {
     updateFreq: 'Caché 2h',
   },
   consensus: {
-    label: 'Consenso',
+    label: 'Consenso modelos',
     org: 'GFS + ECMWF',
     color: '#c8a84b',
-    description: 'Promedia GFS (NOAA) y ECMWF (Europa). Mayor coincidencia entre modelos indica mayor confianza en el pronóstico.',
-    reliability: '~90% a 3 días · ~75% a 7 días',
+    description: 'La temperatura es el promedio de GFS (NOAA) y ECMWF (Europa); la lluvia, el viento y el ícono siguen a ECMWF, el modelo con mejor desempeño sobre Argentina según la verificación del propio ECMWF.',
     updateFreq: 'GFS: 4x/día · ECMWF: 2x/día',
   },
 }
@@ -264,16 +263,18 @@ function ModelPopover({
         {meta.description}
       </p>
 
-      {/* Fiabilidad */}
-      {meta.reliability && (
+      {/* Fiabilidad y frecuencia: cada dato se muestra solo si el modelo lo tiene */}
+      {(meta.reliability || meta.updateFreq) && (
         <div
           className="mt-2 pt-2 space-y-0.5"
           style={{ borderTop: `1px solid ${meta.color}22` }}
         >
-          <p>
-            <span style={{ color: 'var(--color-muted-foreground)' }}>Fiabilidad: </span>
-            {meta.reliability}
-          </p>
+          {meta.reliability && (
+            <p>
+              <span style={{ color: 'var(--color-muted-foreground)' }}>Fiabilidad: </span>
+              {meta.reliability}
+            </p>
+          )}
           {meta.updateFreq && (
             <p>
               <span style={{ color: 'var(--color-muted-foreground)' }}>Actualiza: </span>

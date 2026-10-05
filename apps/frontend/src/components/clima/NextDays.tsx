@@ -1,8 +1,8 @@
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { formatShortDate } from '@/lib/dates'
-import { describeWeatherIcon, precipKind } from '@/lib/weatherLabels'
+import { describeWeatherIcon } from '@/lib/weatherLabels'
+import { describeRain } from '@/lib/forecastRow'
 import { RainPill } from './RainPill'
-import { ConfidenceChip } from './ConfidenceChip'
 import type { DailyEntry } from '@/lib/api'
 
 interface NextDaysProps {
@@ -10,16 +10,12 @@ interface NextDaysProps {
   days: DailyEntry[]
   /** Franja con lluvia prevista por fecha, cuando hay horas para calcularla. */
   rainWindows: Record<string, string>
-  /** Solo el consenso mide desacuerdo entre modelos (ver ConfidenceChip). */
-  showConfidence?: boolean
   /** Se eligió un día: lleva a sus horas o, si no las tiene, a su fila en el pronóstico de 7 días. */
   onSelectDay: (date: string) => void
 }
 
-const PILL_MIN_PROB = 15
-
 /** Los próximos días de un vistazo, sin abrir el detalle: un solo panel, una columna por día que se toca. */
-export function NextDays({ days, rainWindows, showConfidence = false, onSelectDay }: NextDaysProps) {
+export function NextDays({ days, rainWindows, onSelectDay }: NextDaysProps) {
   if (days.length === 0) return null
 
   return (
@@ -31,7 +27,7 @@ export function NextDays({ days, rainWindows, showConfidence = false, onSelectDa
       <ul className="grid divide-x" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
         {days.map((day) => {
           const condition = describeWeatherIcon(day.icon)
-          const showRain = (day.precip_prob ?? 0) > PILL_MIN_PROB
+          const rain = describeRain(day)
           return (
             <li key={day.date} className="p-1 min-w-0" style={{ borderColor: 'var(--color-border)' }}>
               <button
@@ -56,14 +52,14 @@ export function NextDays({ days, rainWindows, showConfidence = false, onSelectDa
                     {day.temp_min !== null ? `${Math.round(day.temp_min)}°` : '—'}
                   </span>
                 </span>
-                {showRain && (
-                  <RainPill
-                    kind={precipKind(day.icon) ?? 'Lluvia'}
-                    pct={day.precip_prob ?? 0}
-                    window={rainWindows[day.date]}
-                  />
+                {rain.pill !== null && (
+                  <RainPill label={rain.pill} window={rain.showWindow ? rainWindows[day.date] : undefined} />
                 )}
-                {showConfidence && <ConfidenceChip label={day.confidence_label} />}
+                {rain.disagreement !== null && (
+                  <span className="text-[11px] leading-tight" style={{ color: 'var(--color-info)' }}>
+                    {rain.disagreement}
+                  </span>
+                )}
               </button>
             </li>
           )

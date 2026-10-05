@@ -218,7 +218,6 @@ export function PrevisionClima({ location }: Props) {
             <NextDays
               days={data.forecast_7d.slice(1, 4)}
               rainWindows={rainWindows}
-              showConfidence={shownModel === 'consensus'}
               onSelectDay={openDay}
             />
 
@@ -279,6 +278,7 @@ export function PrevisionClima({ location }: Props) {
                     onModelChange={setForecastModel}
                     refreshing={isPlaceholderData}
                     rainWindows={rainWindows}
+                    forecastModels={data.forecast_models}
                   />
                 </div>
               </div>
