@@ -374,14 +374,9 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
 interface InfiniteNavRailProps {
   tools: NavRailItem[]
   catalog: NavRailItem[]
-  /**
-   * Hide the catalog row below the `sm` breakpoint (the landing uses it so the "now" fits the first
-   * viewport on phones). `display: none` also takes its links out of the tab order.
-   */
-  hideCatalogOnMobile?: boolean
 }
 
-export function InfiniteNavRail({ tools, catalog, hideCatalogOnMobile = false }: InfiniteNavRailProps) {
+export function InfiniteNavRail({ tools, catalog }: InfiniteNavRailProps) {
   return (
     <nav
       aria-label="Navegación principal"
@@ -391,9 +386,7 @@ export function InfiniteNavRail({ tools, catalog, hideCatalogOnMobile = false }:
       <MarqueeStrip items={tools} ariaLabel="Herramientas en tiempo real" />
 
       {/* Row 2 — catalog pages, auto-scrolls right for visual contrast */}
-      <div className={hideCatalogOnMobile ? 'hidden sm:block' : undefined}>
-        <MarqueeStrip items={catalog} reverse ariaLabel="Catálogo informativo" />
-      </div>
+      <MarqueeStrip items={catalog} reverse ariaLabel="Catálogo informativo" />
     </nav>
   )
 }
