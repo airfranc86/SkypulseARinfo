@@ -989,7 +989,7 @@ class TestGetSmnAlertas:
         with respx.mock(assert_all_called=False) as mock:
             mock.get(_FEED_URL).mock(return_value=_feed_response(ZONDA))
             _doc_route(mock, ZONDA, secret)
-            with caplog.at_level(logging.WARNING, logger="app.services.smn_alertas"):
+            with caplog.at_level(logging.INFO, logger="app.services.smn_alertas"):
                 await get_smn_alertas()
 
         assert ZONDA in caplog.text
@@ -1038,3 +1038,274 @@ class TestGetSmnAlertas:
             assert agent.startswith("SkyPulse/")
             assert not agent.startswith("Mozilla")
         assert "rss" in feed.calls.last.request.headers["accept"]
+
+
+# ---------------------------------------------------------------------------
+# Quarantine: a document that downloads fine but is permanently unusable
+# ---------------------------------------------------------------------------
+
+BAD_DOC = "CAP_20261006090946_Bad_Document_alertas_alertas_1.xml"
+_THRESHOLD = 3
+
+
+def _without_polygon() -> bytes:
+    xml = _load(ZONDA).decode("utf-8")
+    return re.sub(r"<polygon>.*?</polygon>", "", xml).encode("utf-8")
+
+
+# (label, body) — every one downloads with HTTP 200 but cannot be used.
+_UNUSABLE_BODIES = [
+    ("no-polygon", _without_polygon()),
+    (
+        "unreadable-date",
+        _variant(
+            ZONDA,
+            (
+                "<expires>2026-10-07T08:59:59-03:00</expires>",
+                "<expires>mañana</expires>",
+            ),
+        ),
+    ),
+    ("missing-status", _variant(ZONDA, ("<status>Actual</status>", ""))),
+    ("broken-xml", _load(ZONDA)[:300]),
+    ("over-the-byte-cap", _load(ZONDA) + b"<!--" + b"x" * 70000 + b"-->"),
+    ("dtd", b'<!DOCTYPE a [<!ENTITY x "y">]>' + _load(ZONDA)),
+    ("not-utf-8", _load(ZONDA).decode("utf-8").encode("utf-16")),
+]
+
+
+async def _read_three_times(clock: _Clock) -> list:
+    """Three refreshes in a row, each as soon as the backoff allows (0 s, 61 s, 182 s)."""
+    results = [await get_smn_alertas()]
+    clock.advance(61)  # after the first failure the retry is due in 60 s
+    results.append(await get_smn_alertas())
+    clock.advance(121)  # after the second, in 120 s
+    results.append(await get_smn_alertas())
+    return results
+
+
+@pytest.mark.integration
+class TestQuarantine:
+    @pytest.mark.parametrize(
+        "body", [b for _, b in _UNUSABLE_BODIES], ids=[i for i, _ in _UNUSABLE_BODIES]
+    )
+    async def test_a_permanently_unusable_document_is_quarantined_on_the_third_refresh(
+        self, clock: _Clock, caplog: pytest.LogCaptureFixture, body: bytes
+    ):
+        with respx.mock(assert_all_called=False) as mock:
+            feed = mock.get(_FEED_URL).mock(
+                return_value=_feed_response(STORM_SEVERE, SNOW_SEVERE, BAD_DOC)
+            )
+            _doc_route(mock, STORM_SEVERE)
+            _doc_route(mock, SNOW_SEVERE)
+            bad = mock.get(_url(BAD_DOC)).mock(
+                return_value=httpx.Response(200, content=body)
+            )
+            with caplog.at_level(logging.INFO, logger="app.services.smn_alertas"):
+                first, second, third = await _read_three_times(clock)
+                downloads_after_three = bad.call_count
+                clock.advance(settings.cache_ttl_smn_alertas_seconds + 1)
+                fourth = await get_smn_alertas()
+
+        # Two refreshes inside the short window where the file may be half written.
+        assert first.available is False and second.available is False
+        # The third quarantines it: the feature is back with the good alerts.
+        assert third.available is True
+        assert [a.tipo for a in third.alertas] == ["Tormentas", "Nevadas"]
+        # Never downloaded again while it stays listed.
+        assert downloads_after_three == _THRESHOLD
+        assert fourth.available is True and len(fourth.alertas) == 2
+        assert bad.call_count == _THRESHOLD
+        assert feed.call_count == 4
+        # One warning when it enters quarantine, with the short guid and the attempts.
+        entering = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING
+            and "CAP_20261006090946_Bad" in r.getMessage()
+        ]
+        assert len(entering) == 1
+        assert "quarantined after 3 content failures" in entering[0].getMessage()
+
+    async def test_the_refresh_summary_reports_the_quarantine_count(
+        self, clock: _Clock, caplog: pytest.LogCaptureFixture
+    ):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(_FEED_URL).mock(return_value=_feed_response(ZONDA, BAD_DOC))
+            _doc_route(mock, ZONDA)
+            mock.get(_url(BAD_DOC)).mock(
+                return_value=httpx.Response(200, content=b"nope")
+            )
+            with caplog.at_level(logging.INFO, logger="app.services.smn_alertas"):
+                await _read_three_times(clock)
+
+        summaries = [
+            r.getMessage() for r in caplog.records if "refresh " in r.getMessage()
+        ]
+        assert "1 quarantined" in summaries[-1] and "refresh complete" in summaries[-1]
+        assert "0 quarantined" in summaries[0] and "refresh incomplete" in summaries[0]
+
+    async def test_the_quarantine_never_logs_the_document_body(
+        self, clock: _Clock, caplog: pytest.LogCaptureFixture
+    ):
+        secret = (
+            b"<alert xmlns='urn:oasis:names:tc:emergency:cap:1.2'>" + b"SECRET " * 50
+        )
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(_FEED_URL).mock(return_value=_feed_response(ZONDA))
+            _doc_route(mock, ZONDA, secret)
+            with caplog.at_level(logging.DEBUG, logger="app.services.smn_alertas"):
+                await _read_three_times(clock)
+
+        assert "SECRET" not in caplog.text
+
+    async def test_the_threshold_is_configurable(
+        self, clock: _Clock, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr(settings, "smn_cap_content_failures_before_skip", 1)
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(_FEED_URL).mock(return_value=_feed_response(ZONDA, BAD_DOC))
+            _doc_route(mock, ZONDA)
+            mock.get(_url(BAD_DOC)).mock(
+                return_value=httpx.Response(200, content=b"nope")
+            )
+            result = await get_smn_alertas()
+
+        assert result.available is True and len(result.alertas) == 1
+
+    async def test_a_document_that_gets_fixed_before_the_threshold_comes_back(
+        self, clock: _Clock
+    ):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(_FEED_URL).mock(return_value=_feed_response(STORM_SEVERE, BAD_DOC))
+            _doc_route(mock, STORM_SEVERE)
+            bad = mock.get(_url(BAD_DOC)).mock(
+                side_effect=[
+                    httpx.Response(200, content=b"half written"),
+                    httpx.Response(200, content=b"half written"),
+                    httpx.Response(200, content=_load(SNOW_SEVERE)),
+                ]
+            )
+            first, second, third = await _read_three_times(clock)
+
+        assert first.available is False and second.available is False
+        assert third.available is True
+        assert [a.tipo for a in third.alertas] == ["Tormentas", "Nevadas"]
+        assert bad.call_count == 3
+        assert mod._state.content_failures == {}  # success resets the counter
+
+    async def test_a_guid_that_leaves_the_feed_is_forgotten_and_starts_from_zero(
+        self, clock: _Clock
+    ):
+        with respx.mock(assert_all_called=False) as mock:
+            feed = mock.get(_FEED_URL).mock(
+                return_value=_feed_response(STORM_SEVERE, BAD_DOC)
+            )
+            _doc_route(mock, STORM_SEVERE)
+            bad = mock.get(_url(BAD_DOC)).mock(
+                return_value=httpx.Response(200, content=b"nope")
+            )
+            await _read_three_times(clock)
+            assert list(mod._state.content_failures.values()) == [_THRESHOLD]
+
+            feed.mock(return_value=_feed_response(STORM_SEVERE))
+            clock.advance(settings.cache_ttl_smn_alertas_seconds + 1)
+            await get_smn_alertas()
+            forgotten = dict(mod._state.content_failures)
+
+            feed.mock(return_value=_feed_response(STORM_SEVERE, BAD_DOC))
+            clock.advance(settings.cache_ttl_smn_alertas_seconds + 1)
+            back = await get_smn_alertas()
+
+        assert forgotten == {}
+        # Back in the feed it is a new alert: downloaded again, one failure, not quarantined.
+        assert bad.call_count == _THRESHOLD + 1
+        assert list(mod._state.content_failures.values()) == [1]
+        assert back.available is False
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            lambda: httpx.Response(500),
+            lambda: httpx.Response(404),
+            lambda: httpx.Response(429),
+            lambda: httpx.Response(204),
+            lambda: httpx.TimeoutException("timeout"),
+            lambda: httpx.ConnectError("refused"),
+        ],
+        ids=["500", "404", "429", "204", "timeout", "connect-error"],
+    )
+    async def test_a_transient_failure_never_enters_quarantine(
+        self, clock: _Clock, failure
+    ):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(_FEED_URL).mock(return_value=_feed_response(ZONDA, BAD_DOC))
+            _doc_route(mock, ZONDA)
+            bad = mock.get(_url(BAD_DOC))
+            _mock_outcome(bad, failure())
+            results = []
+            for _ in range(2 * _THRESHOLD):
+                results.append(await get_smn_alertas())
+                clock.advance(601)  # past any backoff, including the 429 window
+            requested_while_failing = bad.call_count
+
+            _mock_outcome(bad, httpx.Response(200, content=_load(SNOW_SEVERE)))
+            recovered = await get_smn_alertas()
+
+        assert all(r.available is False for r in results)
+        assert requested_while_failing == 2 * _THRESHOLD  # retried every time
+        assert mod._state.content_failures == {}
+        assert recovered.available is True
+        assert [a.tipo for a in recovered.alertas] == ["Viento Zonda", "Nevadas"]
+
+    async def test_a_transient_failure_neither_counts_nor_resets_content_failures(
+        self, clock: _Clock
+    ):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(_FEED_URL).mock(return_value=_feed_response(ZONDA))
+            bad = mock.get(_url(ZONDA)).mock(
+                side_effect=[
+                    httpx.Response(200, content=b"half written"),
+                    httpx.Response(500),
+                    httpx.Response(200, content=b"half written"),
+                    httpx.Response(200, content=b"half written"),
+                ]
+            )
+            seen = []
+            for _ in range(3):
+                await get_smn_alertas()
+                seen.append(dict(mod._state.content_failures))
+                clock.advance(601)
+            last = await get_smn_alertas()
+
+        assert [list(s.values()) for s in seen] == [[1], [1], [2]]
+        assert bad.call_count == 4
+        assert (
+            last.available is True and last.alertas == []
+        )  # quarantined: nothing to show
+
+    async def test_a_quarantine_does_not_hide_another_transient_failure(
+        self, clock: _Clock
+    ):
+        with respx.mock(assert_all_called=False) as mock:
+            mock.get(_FEED_URL).mock(
+                return_value=_feed_response(STORM_SEVERE, BAD_DOC, SNOW_SEVERE)
+            )
+            _doc_route(mock, STORM_SEVERE)
+            bad = mock.get(_url(BAD_DOC)).mock(
+                return_value=httpx.Response(200, content=b"nope")
+            )
+            snow = mock.get(_url(SNOW_SEVERE)).mock(return_value=httpx.Response(500))
+            _, _, third = await _read_three_times(clock)
+            # BAD_DOC is quarantined by now, but the snow document is still failing.
+            quarantined = list(mod._state.content_failures.values())
+
+            snow.mock(return_value=httpx.Response(200, content=_load(SNOW_SEVERE)))
+            clock.advance(241)  # the backoff after three failures
+            fixed = await get_smn_alertas()
+
+        assert third.available is False and third.alertas == []
+        assert quarantined == [_THRESHOLD]
+        assert fixed.available is True
+        assert [a.tipo for a in fixed.alertas] == ["Tormentas", "Nevadas"]
+        assert bad.call_count == _THRESHOLD  # not requested again

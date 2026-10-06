@@ -19,9 +19,19 @@ Design:
     downloaded again on every refresh) and are filtered out of every response.
   - ``available=False`` means "we do not know", never "no alerts". It is returned when the
     RSS cannot be read and the cached copy is older than ``smn_cap_stale_max_seconds``,
-    or when any CAP document of the last read failed to download or parse (the failed
-    guids are retried on the next refresh; the successful ones stay cached). In that case
-    the alert list is empty. The public function never raises.
+    or when any CAP document of the last read could not be resolved yet: a transient
+    failure (network, timeout, 429, HTTP status other than 200, time budget) or a content
+    failure still below the quarantine threshold (the guids are retried on the next
+    refresh; the successful ones stay cached). In that case the alert list is empty. The
+    public function never raises.
+  - Quarantine: a document that downloads with HTTP 200 but is unusable (malformed XML, no
+    polygon, unreadable date, missing status, DTD, over the byte cap) fails by content.
+    After ``smn_cap_content_failures_before_skip`` consecutive content failures (default 3;
+    the file may be half written at first) its guid is quarantined: it is never in a
+    response, it is not downloaded again while it stays listed in the RSS, and it counts
+    as resolved, so one permanently broken document does not blank the feature. A guid
+    that leaves the RSS is forgotten (when it comes back it is a new alert); a successful
+    parse resets its counter. Transient failures never count towards quarantine.
   - The CAP parser uses the stdlib ``xml.etree.ElementTree`` (no new dependency). Hardening:
     a streamed byte cap per document, DTDs and non-UTF-8 (NUL-bearing) content are
     rejected before parsing, only same-origin guid URLs are fetched (no SSRF through a
@@ -46,6 +56,8 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Final
 from urllib.parse import urlsplit
+
+from pydantic import ValidationError
 
 from app.core import usage_counter
 from app.core.config import settings
@@ -104,6 +116,10 @@ class RateLimitedError(Exception):
     """The SMN answered HTTP 429 (Too Many Requests)."""
 
 
+class UnexpectedStatusError(Exception):
+    """A 2xx other than 200 (for example 204): no document to read, a transient failure."""
+
+
 @dataclass(frozen=True, slots=True)
 class CapAlert:
     """A parsed CAP alert: what we return plus what we need to filter it."""
@@ -126,6 +142,9 @@ class _FeedState:
     last_feed_ok: float | None = None  # monotonic seconds of the last good RSS read
     complete: bool = False  # every item of the last good RSS read is in `entries`
     failures: int = 0  # consecutive refreshes that were not clean
+    # guid -> consecutive content failures (downloaded with HTTP 200 but unusable); a count
+    # at or above the threshold means the guid is quarantined.
+    content_failures: Mapping[str, int] = field(default_factory=dict)
 
 
 _state: _FeedState = _FeedState()
@@ -284,15 +303,22 @@ def parse_cap_alert(xml: bytes) -> CapAlert:
         raise CapParseError("no <polygon>")
 
     severity = _text(info, "severity")
-    alerta = SmnAlerta(
-        nivel=severity_to_nivel(severity),
-        tipo=event,
-        fecha_desde=_parse_datetime(_text(info, "onset"), "onset"),
-        fecha_hasta=_parse_datetime(_text(info, "expires"), "expires"),
-        descripcion=_text(info, "description") or _text(info, "headline") or event,
-        severidad=severity,
-        instruccion=_text(info, "instruction"),
-    )
+    onset = _parse_datetime(_text(info, "onset"), "onset")
+    expires = _parse_datetime(_text(info, "expires"), "expires")
+    try:
+        alerta = SmnAlerta(
+            nivel=severity_to_nivel(severity),
+            tipo=event,
+            fecha_desde=onset,
+            fecha_hasta=expires,
+            descripcion=_text(info, "description") or _text(info, "headline") or event,
+            severidad=severity,
+            instruccion=_text(info, "instruction"),
+        )
+    except ValidationError as exc:
+        raise CapParseError(
+            f"unusable alert fields: {exc.error_count()} errors"
+        ) from exc
     return CapAlert(alerta=alerta, status=status, polygons=polygons)
 
 
@@ -345,6 +371,8 @@ async def _get_bytes(url: str, max_bytes: int) -> bytes:
         if response.status_code == 429:
             raise RateLimitedError("the SMN answered 429 Too Many Requests")
         response.raise_for_status()
+        if response.status_code != 200:
+            raise UnexpectedStatusError(f"HTTP {response.status_code}")
         declared = response.headers.get("content-length", "")
         if declared.isdigit() and int(declared) > max_bytes:
             raise CapParseError(f"response larger than {max_bytes} bytes")
@@ -358,16 +386,26 @@ async def _get_bytes(url: str, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-async def _fetch_documents(guids: list[str]) -> tuple[dict[str, CapAlert], bool]:
+@dataclass(frozen=True, slots=True)
+class _Downloads:
+    fetched: Mapping[str, CapAlert]
+    # guid -> reason: downloaded with HTTP 200 but unusable. Any other failure (network,
+    # timeout, 429, HTTP status, time budget) is transient and appears in neither mapping.
+    content_failures: Mapping[str, str]
+    rate_limited: bool
+
+
+async def _fetch_documents(guids: list[str]) -> _Downloads:
     """Download and parse the given CAP documents.
 
-    Returns the ones that worked (the failed ones are left out) and whether the SMN
-    rate-limited us. After a 429 the documents not requested yet are skipped: they would be
+    Documents that failed are left out of `fetched`; see `_Downloads` for the two classes
+    of failure. After a 429 the documents not requested yet are skipped: they would be
     refused too and every request counts against the SMN window. Stops waiting after
-    `_DOCUMENTS_BUDGET_SECONDS`: what finished is kept and the rest counts as failed.
+    `_DOCUMENTS_BUDGET_SECONDS`: what finished is kept and the rest counts as transient.
     """
     semaphore = asyncio.Semaphore(_MAX_CONCURRENT_DOCUMENTS)
     fetched: dict[str, CapAlert] = {}
+    content_failures: dict[str, str] = {}
     rate_limited = False
 
     async def one(guid: str) -> None:
@@ -380,7 +418,9 @@ async def _fetch_documents(guids: list[str]) -> tuple[dict[str, CapAlert], bool]
                 fetched[guid] = parse_cap_alert(data)
             except RateLimitedError:
                 rate_limited = True
-            except Exception as exc:  # network, HTTP status, size cap, malformed CAP
+            except CapParseError as exc:  # size cap, DTD/NUL, malformed or unusable CAP
+                content_failures[guid] = f"{type(exc).__name__}: {str(exc)[:200]}"
+            except Exception as exc:  # network, timeout, HTTP status
                 logger.warning(
                     "smn_alertas: CAP document %s failed: %s: %s",
                     _short(guid),
@@ -396,10 +436,10 @@ async def _fetch_documents(guids: list[str]) -> tuple[dict[str, CapAlert], bool]
     except asyncio.TimeoutError:
         logger.warning(
             "smn_alertas: document downloads over budget (%d of %d finished)",
-            len(fetched),
+            len(fetched) + len(content_failures),
             len(guids),
         )
-    return dict(fetched), rate_limited
+    return _Downloads(dict(fetched), dict(content_failures), rate_limited)
 
 
 def _retry_delay(failures: int, rate_limited: bool) -> float:
@@ -424,30 +464,72 @@ async def _refresh(previous: _FeedState) -> _FeedState:
         delay = _retry_delay(failures, isinstance(exc, RateLimitedError))
         return replace(previous, next_attempt_at=attempt + delay, failures=failures)
 
+    threshold = max(1, settings.smn_cap_content_failures_before_skip)
+    listed = set(feed.guids)
+    counts = {g: n for g, n in previous.content_failures.items() if g in listed}
+    quarantined = {g for g, n in counts.items() if n >= threshold}
     cached = {g: previous.entries[g] for g in feed.guids if g in previous.entries}
-    fetched, rate_limited = await _fetch_documents(
-        [g for g in feed.guids if g not in cached]
+    to_fetch = [g for g in feed.guids if g not in cached and g not in quarantined]
+    downloads = await _fetch_documents(to_fetch)
+
+    for guid in downloads.fetched:
+        counts.pop(guid, None)
+    for guid, reason in downloads.content_failures.items():
+        counts[guid] = counts.get(guid, 0) + 1
+        if counts[guid] >= threshold:
+            logger.warning(
+                "smn_alertas: CAP document %s quarantined after %d content failures (%s)",
+                _short(guid),
+                counts[guid],
+                reason,
+            )
+        else:
+            logger.info(
+                "smn_alertas: CAP document %s unusable (attempt %d of %d): %s",
+                _short(guid),
+                counts[guid],
+                threshold,
+                reason,
+            )
+
+    merged = {**cached, **downloads.fetched}
+    transient = [
+        g
+        for g in to_fetch
+        if g not in downloads.fetched and g not in downloads.content_failures
+    ]
+    undecided = [g for g, n in counts.items() if n < threshold]
+    quarantined_count = sum(1 for n in counts.values() if n >= threshold)
+    complete = feed.skipped == 0 and not transient and not undecided
+    summary = (
+        "smn_alertas: refresh %s: %d documents listed, %d usable, %d downloaded, "
+        "%d quarantined, %d transient failures, %d content failures pending, "
+        "%d feed items skipped, rate limited: %s"
     )
-    merged = {**cached, **fetched}
-    complete = feed.skipped == 0 and len(merged) == len(feed.guids)
+    log_args = (
+        "complete" if complete else "incomplete",
+        len(feed.guids),
+        len(merged),
+        len(to_fetch),
+        quarantined_count,
+        len(transient),
+        len(undecided),
+        feed.skipped,
+        downloads.rate_limited,
+    )
     if complete:
+        logger.info(summary, *log_args)
         next_attempt_at, failures = attempt + settings.cache_ttl_smn_alertas_seconds, 0
     else:
-        logger.warning(
-            "smn_alertas: incomplete read (%d of %d documents, %d feed items skipped, "
-            "rate limited: %s)",
-            len(merged),
-            len(feed.guids),
-            feed.skipped,
-            rate_limited,
-        )
-        next_attempt_at = attempt + _retry_delay(failures, rate_limited)
+        logger.warning(summary, *log_args)
+        next_attempt_at = attempt + _retry_delay(failures, downloads.rate_limited)
     return _FeedState(
         entries={g: merged[g] for g in feed.guids if g in merged},
         next_attempt_at=next_attempt_at,
         last_feed_ok=attempt,
         complete=complete,
         failures=failures,
+        content_failures=counts,
     )
 
 
