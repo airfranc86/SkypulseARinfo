@@ -7,13 +7,14 @@ from pydantic import BaseModel
 class VisibilityHourlySlot(BaseModel):
     hour_label: str
     visibility_m: float | None
-    fog_level: int
+    fog_level: int          # same scale as NieblaResponse.fog_level (0–3)
     fog_label: str
     fog_color: str
 
 
 class NieblaResponse(BaseModel):
     visibility_m: float | None
+    # 0=despejada, 1=buena, 2=neblina o bruma, 3=niebla (escala oficial METAR/SMN)
     fog_level: int
     fog_label: str
     fog_color: str

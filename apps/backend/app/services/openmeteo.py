@@ -505,7 +505,7 @@ def _next_ar_hour_idx(time_list: list[str]) -> int:
 class VisibilityData:
     current_m: float | None
     weather_code: int | None
-    fog_level: int          # 0=despejada … 5=niebla densa
+    fog_level: int          # 0=despejada, 1=buena, 2=neblina o bruma, 3=niebla
     fog_label: str
     fog_color: str          # hex
     hourly_m: list[float | None]   # 12 slots, 1h cadence
@@ -524,20 +524,23 @@ def _cap_vis(raw: float | None) -> float | None:
 
 
 def _classify_visibility(v: float | None) -> tuple[int, str, str]:
-    """Returns (level, label, color) from visibility in meters."""
+    """Returns (level, label, color) from visibility in meters.
+
+    Official METAR/SMN scale (4 levels, no separate dry-haze category):
+      Niebla (FG)          < 1 km
+      Neblina o bruma (BR) 1 km to < 5 km  (in Argentina neblina == bruma)
+      Buena                5 km to < 10 km
+      Despejada            >= 10 km
+    """
     if v is None:
         return 0, "Sin datos", "#90aabb"
     if v >= 10_000:
-        return 0, "Despejada",     "#3ecf7a"
+        return 0, "Despejada",       "#3ecf7a"
     if v >= 5_000:
-        return 1, "Buena",         "#5aaad8"
-    if v >= 2_000:
-        return 2, "Reducida",      "#c8a84b"
+        return 1, "Buena",           "#5aaad8"
     if v >= 1_000:
-        return 3, "Bruma",         "#f0a030"
-    if v >= 500:
-        return 4, "Neblina",       "#c84c10"
-    return     5, "Niebla",        "#e03535"
+        return 2, "Neblina o bruma", "#f0a020"
+    return     3, "Niebla",          "#e03535"
 
 
 # get_visibility_forecast y get_fog_inference_forecast piden variables disjuntas
@@ -661,10 +664,13 @@ async def get_fog_inference_forecast(
 
     Algoritmo (prioridad):
       1. WMO code 45/48 (niebla confirmada) → 300 m
-      2. T - Td < 2°C + HR ≥ 95 % + viento < 5 km/h  → niebla    (300 m)
-      3. T - Td < 3°C + HR ≥ 90 % + viento < 8 km/h  → neblina   (1000 m)
-      4. T - Td < 5°C + HR ≥ 80 %                     → reducida      (3000 m)
-      5. Resto                                          → despejada     (10 000 m)
+      2. T - Td < 2°C + HR ≥ 95 % + viento < 5 km/h  → niebla           (300 m)
+      3. T - Td < 3°C + HR ≥ 90 % + viento < 8 km/h  → neblina o bruma  (1000 m)
+      4. T - Td < 5°C + HR ≥ 80 %                     → neblina o bruma  (3000 m)
+      5. Resto                                          → despejada        (10 000 m)
+
+    Los valores se clasifican con la escala oficial METAR/SMN (_classify_visibility):
+    niebla < 1 km, neblina o bruma 1–5 km.
     """
     data = await _fetch_niebla_combined(lat, lon)
     if data is None:
@@ -708,9 +714,9 @@ async def get_fog_inference_forecast(
                 if dep < 2.0 and rh >= 95.0 and wind < 5.0:
                     vis_m = 300.0      # niebla
                 elif dep < 3.0 and rh >= 90.0 and wind < 8.0:
-                    vis_m = 1_000.0    # neblina / bruma
+                    vis_m = 1_000.0    # neblina o bruma (1 km)
                 elif dep < 5.0 and rh >= 80.0:
-                    vis_m = 3_000.0    # reducida
+                    vis_m = 3_000.0    # neblina o bruma (1–5 km)
                 else:
                     vis_m = 10_000.0   # despejada
 

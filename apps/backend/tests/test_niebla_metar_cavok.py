@@ -27,13 +27,13 @@ def fresh_state():
 
 @pytest.fixture(autouse=True)
 def stub_other_sources(monkeypatch):
-    """Open-Meteo "ahora" distinguible del METAR (3 km → "Reducida"); TAF e inferencia apagados."""
+    """Open-Meteo "ahora" distinguible del METAR (3 km → "Neblina o bruma"); TAF e inferencia apagados."""
     open_meteo = VisibilityData(
         current_m=3_000.0,
         weather_code=1,
         fog_level=2,
-        fog_label="Reducida",
-        fog_color="#c8a84b",
+        fog_label="Neblina o bruma",
+        fog_color="#f0a020",
         hourly_m=[3_000.0] * 12,
         hourly_labels=[f"{h:02d}:00" for h in range(12)],
     )

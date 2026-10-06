@@ -4,6 +4,7 @@ import { FadeContent } from '@/components/animated/FadeContent'
 import { useNiebla } from '@/hooks/useWeather'
 import { api } from '@/lib/api'
 import type { NieblaResponse } from '@/lib/api'
+import { FOG_SCALE, normalizeFogColor } from '@/lib/fogScale'
 import type { LocationState } from '@/hooks/useLocation'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
@@ -66,14 +67,14 @@ const FOG_TYPES: FogType[] = [
   },
   {
     id: 'sea',
-    name: 'Bruma marina',
-    subtitle: 'Partículas suspendidas + agua · solo en costas',
+    name: 'Neblina costera',
+    subtitle: 'Gotas de agua en suspensión · sobre todo en costas',
     when: 'Primavera y verano, vientos del E-SE',
     where: 'Buenos Aires, Montevideo, costa rioplatense',
     danger: 'medium',
-    dangerLabel: 'Visibilidad 1–2 km',
-    description: 'A diferencia de la neblina (solo gotas de agua), la bruma contiene sales marinas, polvo y contaminantes en suspensión. Se forma principalmente en zonas costeras y sobre el Río de la Plata. Visibilidad superior a 1 km pero el aire aparece opaco o blanquecino. La neblina pura, en cambio, es agua condensada a ras del suelo y puede formarse en cualquier región con humedad relativa superior al 70–80 %.',
-    tip: 'En costa: si el horizonte marino se ve blanquecino sin nubes, es bruma. Si no podés ver a 1 km, ya es neblina.',
+    dangerLabel: 'Visibilidad 1–5 km',
+    description: 'En Argentina neblina y bruma son lo mismo (BR en los METAR): visibilidad de 1 a 5 km por gotitas de agua en suspensión. Se forma sobre todo en zonas costeras y sobre el Río de la Plata, y el aire aparece opaco o blanquecino. No la confundas con la bruma seca (HZ en los METAR), que la causan polvo, humo o contaminación con aire seco: ahí el aire está seco y no hay gotitas.',
+    tip: 'En costa: si el horizonte marino se ve blanquecino sin nubes, es neblina. Si no podés ver a 1 km, ya es niebla.',
     Icon: Waves,
   },
   {
@@ -121,34 +122,8 @@ const DANGER_COLORS = {
 }
 
 // ---------------------------------------------------------------------------
-// Visibility scale — 6 levels with perceptually distinct colors
+// Visibility scale — official METAR/SMN, 4 levels: see src/lib/fogScale.ts
 // ---------------------------------------------------------------------------
-
-const VISIBILITY_SCALE = [
-  { label: 'Niebla',    range: '< 500 m',      color: '#e03535', note: 'Solo gotas de agua'         },
-  { label: 'Neblina',   range: '500 m – 1 km', color: '#c84c10', note: 'Gotas · humedad > 70 %'      },
-  { label: 'Bruma',     range: '1 – 2 km',     color: '#f0a020', note: 'Costera · sales + partículas' },
-  { label: 'Reducida',  range: '2 – 5 km',     color: '#a8c820', note: '' },
-  { label: 'Buena',     range: '5 – 10 km',    color: '#5aaad8', note: '' },
-  { label: 'Despejada', range: '> 10 km',       color: '#3ecf7a', note: '' },
-] as const
-
-/**
- * Normaliza colores heredados del backend a la paleta de 6 niveles con
- * mayor contraste perceptual. Mapeo defensivo: si el backend envía un color
- * que no está en la tabla, lo pasa tal cual.
- */
-const FOG_COLOR_OVERRIDE: Record<string, string> = {
-  '#e05545': '#e03535',  // Niebla  — rojo más puro
-  '#e07030': '#c84c10',  // Neblina — siena quemada (antes demasiado similar al ámbar)
-  '#f0a030': '#f0a020',  // Bruma   — ámbar (mínima corrección)
-  '#c8a84b': '#a8c820',  // Reducida — lima/chartreuse (antes confundible con ámbar)
-}
-
-function normalizeFogColor(c: string | null | undefined): string {
-  if (!c) return '#3ecf7a'
-  return FOG_COLOR_OVERRIDE[c] ?? FOG_COLOR_OVERRIDE[c.toLowerCase()] ?? c
-}
 
 // ---------------------------------------------------------------------------
 // Visibility utils
@@ -465,11 +440,10 @@ function VisibilityMeter({
 }
 
 /** Abreviaturas para las etiquetas que no entran en el ancho angosto de cada
- *  barra horaria — evita el corte a mitad de palabra ("Reducida" → "Reducı"). */
+ *  barra horaria — evita el corte a mitad de palabra. */
 const COMPACT_FOG_LABEL: Record<string, string> = {
-  Neblina:   'Nebl.',
-  Reducida:  'Reduc.',
-  Despejada: 'Despej.',
+  'Neblina o bruma': 'Nebl.',
+  Despejada:         'Despej.',
 }
 
 // Human-readable labels for hourly data sources
@@ -842,9 +816,9 @@ export function Niebla({ location }: Props) {
 
         {/* ── Header ────────────────────────────────────────────────────── */}
         <PageHeader
-          titleNode={<FogText text="Niebla, Bruma y Neblina" fontSize="1.5rem" />}
+          titleNode={<FogText text="Niebla y neblina" fontSize="1.5rem" />}
           icon={<Eye size={32} style={{ color: '#90aabb' }} />}
-          title="Niebla, Bruma y Neblina"
+          title="Niebla y neblina"
           subtitle={location.label}
           accentColor="#90aabb"
         />
@@ -876,7 +850,7 @@ export function Niebla({ location }: Props) {
 
           {/* Segmented bar — colores en contexto, el ojo distingue mejor con adyacentes */}
           <div style={{ display: 'flex', gap: '3px', marginBottom: '8px' }}>
-            {VISIBILITY_SCALE.map(({ label, color }) => (
+            {FOG_SCALE.map(({ label, color }) => (
               <div
                 key={label}
                 title={label}
@@ -892,7 +866,7 @@ export function Niebla({ location }: Props) {
 
           {/* Column labels — nombre + rango debajo de cada segmento */}
           <div style={{ display: 'flex', gap: '3px' }}>
-            {VISIBILITY_SCALE.map(({ label, range, color, note }) => (
+            {FOG_SCALE.map(({ label, range, color, note }) => (
               <div
                 key={label}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}
