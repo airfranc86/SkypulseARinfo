@@ -6,6 +6,9 @@ Hierarchy (FRA-326): 1) wind alert, 2) storm, 3) rain (probability, amount, crit
 - ``Alerta`` (red): what makes the plate an alert: gusts of 50 km/h or more, a storm, rain above 15 mm.
 - ``Atención`` (amber): rain that does not reach the alert, shown on an alert plate.
 
+The night notice reuses the ``Alerta`` plate with the header tag ``Aviso nocturno`` and one more block
+at the end of the hierarchy: dense fog ("Niebla densa posible", always qualified as possible).
+
 Numbers follow the caption (same rounding) and the rain text is decided once for both
 (`lluvia_texto.rain_summary`), so plate and caption never disagree.
 """
@@ -19,14 +22,17 @@ from caption import CREDIT, format_mm
 from fechas import format_long_date
 from lluvia_texto import DRY, SMALL_AMOUNT, rain_summary
 from reglas import (
+    FOG_TEXT,
     STORM_TEXT,
     VARIANT_LABEL,
     Assessment,
+    Fog,
     RainInfo,
     Variante,
     Window,
     WindAlert,
     assess,
+    format_fog_hours,
     format_window,
     gust_window,
     rain_window,
@@ -36,13 +42,20 @@ from reglas import (
 from tipos import ReportData, TempPoint
 
 Level = Literal["alerta", "atencion"]
-BlockKind = Literal["wind", "storm", "rain"]
+BlockKind = Literal["wind", "storm", "rain", "fog"]
 
 LEVEL_LABEL: dict[str, str] = {"alerta": "Alerta", "atencion": "Atención"}
 PLATE_LEGEND = "Pronóstico de SkyPulse · no es un aviso oficial · smn.gob.ar"
+REPORT_TAG = "Pronóstico"  # header tag of the 19:00 report (upper-cased by the template)
+NIGHT_TAG = "Aviso nocturno"  # header tag of the 22:00 night notice
+FOG_FIGURE_CAPTION = "visibilidad mínima"
+FOG_WINDOW_LABEL = "Horario"
 MINUS = "−"
 # Sky texts that only restate a phenomenon that already has its own block.
 _RAIN_SKIES = frozenset({"Lluvia", "Lluvia leve", "Llovizna", "Lluvia helada"})
+_FOG_SKY = "Niebla"
+# Blocks with a big figure and a critical window: two of them together need the compact layout.
+_TALL_BLOCKS = frozenset({"wind", "rain", "fog"})
 
 
 @dataclass(frozen=True)
@@ -99,7 +112,7 @@ class PlateContent:
     date_label: str
     alerts: tuple[AlertBlock, ...]
     dense: bool  # three alert blocks: the tightest layout
-    compact: bool  # wind and rain blocks together: the two tallest blocks need a tighter layout
+    compact: bool  # two tall blocks together (wind, rain, fog): they need a tighter layout
     temp_max: str | None
     temp_min: str | None
     sky: str | None
@@ -109,6 +122,8 @@ class PlateContent:
     curve: tuple[TempPoint, ...]
     credit: str
     legend: str
+    tag: str = REPORT_TAG
+    crowded: bool = False  # four alert blocks (night notice): tighter than dense
 
 
 def _time_window(window: Window | None, label: str) -> TimeWindow | None:
@@ -154,7 +169,26 @@ def _rain_block(rain: RainInfo, data: ReportData, qualifier: str | None) -> Aler
     )
 
 
-def _alert_blocks(data: ReportData, result: Assessment) -> tuple[AlertBlock, ...]:
+def _fog_block(fog: Fog) -> AlertBlock:
+    """Dense fog: the minimum visibility and the foggy hours, on the ruler from the first to the end of the last."""
+    end_hour = fog.last_hour + 1
+    window = TimeWindow(
+        label=FOG_WINDOW_LABEL,
+        text=format_fog_hours(fog),
+        start_pct=fog.first_hour / 24 * 100,
+        width_pct=(end_hour - fog.first_hour) / 24 * 100,
+    )
+    return AlertBlock(
+        kind="fog",
+        badge=Badge("alerta", FOG_TEXT),
+        figures=(Figure(str(fog.min_visibility_m), "m", FOG_FIGURE_CAPTION),),
+        lead=None,
+        trail=None,
+        window=window,
+    )
+
+
+def _alert_blocks(data: ReportData, result: Assessment, fog: Fog | None) -> tuple[AlertBlock, ...]:
     blocks: list[AlertBlock] = []
     if result.wind is not None:
         blocks.append(_wind_block(result.wind, data))
@@ -163,6 +197,8 @@ def _alert_blocks(data: ReportData, result: Assessment) -> tuple[AlertBlock, ...
     if result.rain is not None:
         summary = rain_summary(data, result)
         blocks.append(_rain_block(result.rain, data, None if summary is None else summary.qualifier))
+    if fog is not None:
+        blocks.append(_fog_block(fog))
     return tuple(blocks)
 
 
@@ -189,11 +225,13 @@ def _wind_row(data: ReportData) -> Row | None:
     return Row("Viento", speed if origin is None else f"{speed} {origin}", gust)
 
 
-def _sky(result: Assessment, has_blocks: bool) -> str | None:
-    if result.sky is None or not has_blocks:
+def _sky(result: Assessment, covered: set[str]) -> str | None:
+    if result.sky is None or not covered:
         return result.sky
-    redundant = (result.storm and result.sky == "Tormenta") or (
-        result.rain is not None and result.sky in _RAIN_SKIES
+    redundant = (
+        (result.storm and result.sky == "Tormenta")
+        or (result.rain is not None and result.sky in _RAIN_SKIES)
+        or ("fog" in covered and result.sky == _FOG_SKY)
     )
     return None if redundant else result.sky
 
@@ -205,12 +243,17 @@ def _degrees(value: int | None) -> str | None:
     return f"{MINUS}{abs(value)}°" if value < 0 else f"{value}°"
 
 
-def build_content(data: ReportData, variante: Variante) -> PlateContent:
-    """Every text of one plate. The alert blocks only exist on the ``Alerta`` variant."""
+def build_content(
+    data: ReportData, variante: Variante, *, fog: Fog | None = None, tag: str = REPORT_TAG
+) -> PlateContent:
+    """Every text of one plate. The alert blocks only exist on the ``Alerta`` variant.
+
+    `fog` (night notice only) adds the dense-fog block last; `tag` is the header tag.
+    """
     if variante not in VARIANT_LABEL:
         raise ValueError(f"unknown variant {variante!r}: expected one of {sorted(VARIANT_LABEL)}")
     result = assess(data)
-    alerts = _alert_blocks(data, result) if variante == "Alerta" else ()
+    alerts = _alert_blocks(data, result, fog) if variante == "Alerta" else ()
     covered = {block.kind for block in alerts}
     long_date = format_long_date(data.date)
     return PlateContent(
@@ -219,14 +262,16 @@ def build_content(data: ReportData, variante: Variante) -> PlateContent:
         date_label=long_date[:1].upper() + long_date[1:],
         alerts=alerts,
         dense=len(alerts) >= 3,
-        compact=len(alerts) < 3 and {"wind", "rain"} <= covered,
+        compact=len(alerts) == 2 and covered <= _TALL_BLOCKS,
         temp_max=_degrees(data.temp_max),
         temp_min=_degrees(data.temp_min),
-        sky=_sky(result, bool(alerts)),
+        sky=_sky(result, covered),
         sky_icon=data.icon or None,
         rain=None if "rain" in covered else _rain_row(data, result),
         wind=None if "wind" in covered else _wind_row(data),
         curve=data.temp_curve,
         credit=CREDIT,
         legend=PLATE_LEGEND,
+        tag=tag,
+        crowded=len(alerts) >= 4,
     )

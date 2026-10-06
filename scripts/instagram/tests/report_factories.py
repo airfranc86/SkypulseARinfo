@@ -197,6 +197,29 @@ def make_ecmwf_rain(
     return EcmwfHourlyRain(times=tuple(times), precip_mm=tuple(values))
 
 
+def make_visibility(
+    days: int = 7,
+    first_day: date = FIRST_DAY,
+    values: dict[tuple[int, int], float | None] | None = None,
+    base: float = 20000.0,
+) -> Any:
+    """Hourly visibility in metres (clear by default, 20 km); keys are (day index, hour).
+
+    Visibility is instantaneous: the value at ``H`` is the one AT that hour. ``None`` is a missing hour.
+    """
+    from fuente_visibilidad import HourlyVisibility  # lazy: only the night-notice tests need it
+
+    values = values or {}
+    times: list[str] = []
+    metres: list[float | None] = []
+    for day_index in range(days):
+        day = first_day + timedelta(days=day_index)
+        for hour in range(24):
+            times.append(f"{day.isoformat()}T{hour:02d}:00")
+            metres.append(values.get((day_index, hour), base))
+    return HourlyVisibility(times=tuple(times), visibility_m=tuple(metres))
+
+
 def make_raw(
     ecmwf_at: dict[int, dict[str, Any]] | None = None,
     hourly: HourlyForecastExt | None = None,

@@ -10,6 +10,8 @@ Product decisions (FRA-326, confirmed by the product owner):
 - Variant: ``Alerta`` when any of the three holds, ``Estandar`` otherwise.
 - Hierarchy on the plate: wind alert, storm, rain (probability, mm, critical window), then the
   temperatures and the sky.
+- Dense fog (night notice only): visibility strictly under 500 m in some hour of the day. It is a
+  model datum, so it is always worded as possible ("Niebla densa posible").
 """
 
 from __future__ import annotations
@@ -36,6 +38,9 @@ RAIN_THRESHOLD_MM = 0.9
 STORM_CODES = range(95, 100)  # WMO thunderstorm codes 95-99
 STORM_RISKS = frozenset({"high", "severe"})
 STORM_TEXT = "Tormenta fuerte posible, según el modelo"
+# Dense fog of the night notice: an hour with visibility strictly under this (metres).
+FOG_VISIBILITY_M = 500.0
+FOG_TEXT = "Niebla densa posible"
 
 # Critical windows: contiguous 3 h slots around the peak whose value is at least this fraction of it.
 RAIN_WINDOW_MIN_PEAK_MM = 0.1
@@ -180,6 +185,41 @@ def format_window(window: Window) -> str:
     """``07:00 a 10:00 hs``; the end at midnight is written ``00:00``."""
     start, end = window
     return f"{start:02d}:00 a {end % 24:02d}:00 hs"
+
+
+# ---------------------------------------------------------------------------
+# Dense fog (night notice)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Fog:
+    """Hours of the day with visibility under ``FOG_VISIBILITY_M``: the first, the last and the minimum."""
+
+    first_hour: int  # 0-23, local time
+    last_hour: int
+    min_visibility_m: int
+
+
+def dense_fog(hours: Sequence[tuple[int, float]]) -> Fog | None:
+    """Dense fog of a day given ``(hour, visibility in metres)`` pairs; None when no hour is under 500 m.
+
+    The range goes from the first to the last foggy hour (a clear hour in between does not split it).
+    """
+    foggy = sorted((hour, metres) for hour, metres in hours if metres < FOG_VISIBILITY_M)
+    if not foggy:
+        return None
+    return Fog(
+        first_hour=foggy[0][0],
+        last_hour=foggy[-1][0],
+        min_visibility_m=round_half_up(min(metres for _, metres in foggy)),
+    )
+
+
+def format_fog_hours(fog: Fog) -> str:
+    """``04:00 a 09:00 hs``; a single foggy hour is ``06:00 hs``."""
+    if fog.first_hour == fog.last_hour:
+        return f"{fog.first_hour:02d}:00 hs"
+    return f"{fog.first_hour:02d}:00 a {fog.last_hour:02d}:00 hs"
 
 
 # ---------------------------------------------------------------------------

@@ -60,7 +60,7 @@ def header(content: PlateContent, logo_uri: str) -> str:
         f'<div class="brand" {key("brand")}>'
         f'<img class="brand-logo" src="{esc(logo_uri)}" alt="">'
         '<span class="brand-name">SkyPulse</span>'
-        '<span class="brand-tag">Pronóstico</span>'
+        f'<span class="brand-tag">{esc(content.tag)}</span>'
         "</div>"
         f'<h1 class="city" {key("city")} data-fit="city">{esc(content.city)}</h1>'
         f'<p class="date" {key("date")} data-fit="date">{esc(content.date_label)}</p>'
@@ -135,7 +135,7 @@ def _block_body(block: AlertBlock) -> str:
     if block.kind == "storm":
         return f'<p class="alert-message">{esc(block.lead or "")}</p>'
     figures = "".join(figure(item) for item in block.figures)
-    return f'<p class="alert-figures" data-fit="rain-figures">{figures}</p>'
+    return f'<p class="alert-figures" data-fit="{block.kind}-figures">{figures}</p>'
 
 
 def alert_block(block: AlertBlock, *, primary: bool, with_ruler: bool) -> str:
