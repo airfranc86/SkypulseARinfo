@@ -166,12 +166,18 @@ def _is_nan_or_inf(value: object) -> bool:
     return False
 
 
+# Rutas que reciben `icao` (no lat/lon). Son rutas exactas, no prefijos: `/api/metar/nearest`
+# recibe lat/lon y conserva los mensajes de coordenadas.
+_ICAO_PATHS = frozenset({"/api/metar", "/api/taf"})
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     safe = _safe_errors(exc)
-    # Los endpoints de aeronáutica reciben un body JSON, no lat/lon: el mensaje
-    # de "coordenadas inválidas" no aplica.
-    if request.url.path.startswith("/api/v1/aeronautica"):
+    # Los endpoints de aeronáutica reciben un body JSON, y METAR/TAF reciben `icao`:
+    # el mensaje de "coordenadas inválidas" no aplica.
+    path = request.url.path
+    if path.startswith("/api/v1/aeronautica") or path.rstrip("/") in _ICAO_PATHS:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
