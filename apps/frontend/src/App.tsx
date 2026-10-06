@@ -341,10 +341,10 @@ function RootLayout() {
       </main>
 
       {/* FRA-347: no model names here — the credit and the page that explains the sources instead. */}
-      <footer className="border-t border-[var(--color-border)] px-4 py-3 text-center text-xs text-[var(--color-muted-foreground)]">
+      <footer className="border-t border-[var(--color-border)] px-4 pt-3 pb-24 sm:pb-3 text-center text-xs text-[var(--color-muted-foreground)]">
         <p className="flex flex-wrap items-center justify-center gap-x-2">
           <span>Datos: SkyPulse</span>
-          <span aria-hidden="true">·</span>
+          <span aria-hidden="true" className="hidden sm:inline">·</span>
           <span className="inline-flex items-center">
             Datos del tiempo:&nbsp;
             <a
@@ -356,14 +356,14 @@ function RootLayout() {
               Open-Meteo.com
             </a>
           </span>
-          <span aria-hidden="true">·</span>
+          <span aria-hidden="true" className="hidden sm:inline">·</span>
           <Link to={DATA_PAGE_PATH} className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80">
             De dónde salen los datos
           </Link>
         </p>
         <p className="flex flex-wrap items-center justify-center gap-x-2">
           <CafecitoButton />
-          <span aria-hidden="true">·</span>
+          <span aria-hidden="true" className="hidden sm:inline">·</span>
           <Link to="/privacidad" className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80">
             Política de privacidad
           </Link>

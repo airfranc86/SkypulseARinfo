@@ -98,8 +98,8 @@ function RiskScaleBar({ score, currentLabel, currentColor }: { score: number; cu
         />
         <div
           aria-hidden="true"
-          className="motion-safe:[transition:transform_0.6s_cubic-bezier(0.16,1,0.3,1)]"
-          style={{ position: 'absolute', left: 0, top: '-3.5px', width: '100%', transform: `translateX(${pct}%)` }}
+          className="motion-safe:[transition:left_0.6s_cubic-bezier(0.16,1,0.3,1)]"
+          style={{ position: 'absolute', left: `${pct}%`, top: '-3.5px', width: 0 }}
         >
           <div
             className="rounded-full motion-safe:[transition:background-color_0.6s_ease]"

@@ -33,7 +33,7 @@ test('FOG_SCALE: exactamente 4 niveles, de peor a mejor', () => {
   )
   assert.deepEqual(
     FOG_SCALE.map(l => l.range),
-    ['< 1 km', '1 – 5 km', '5 – 10 km', '> 10 km'],
+    ['< 1 km', '1 – 5 km', '5 – 10 km', '≥ 10 km'],
   )
 })
 
