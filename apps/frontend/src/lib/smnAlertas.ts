@@ -118,6 +118,15 @@ export function isSmnUnavailable(isError: boolean, data: Pick<SmnAlertasResponse
   return isError || data?.available === false
 }
 
+/**
+ * El enlace a la fuente oficial (smn.gob.ar) cierra la página de Previsión **siempre**, haya o no avisos
+ * y haya respondido o no el SMN. Espera a que haya pronóstico o error final: con el esqueleto o el aviso de
+ * reintento todavía en pantalla se correría hacia abajo cuando llegue el contenido.
+ */
+export function showSmnSourceLink(hasForecast: boolean, hasFinalError: boolean): boolean {
+  return hasForecast || hasFinalError
+}
+
 const AR_ZONE = 'America/Argentina/Buenos_Aires'
 
 const parts = new Intl.DateTimeFormat('es-AR', {

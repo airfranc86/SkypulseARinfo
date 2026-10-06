@@ -11,6 +11,7 @@ import {
   smnAlertasQueryKey,
   sortAlertas,
   vigenciaText,
+  showSmnSourceLink,
 } from '../src/lib/smnAlertas.ts'
 
 // Hora de referencia: 14:47 hora argentina (UTC-3) del viernes 18/09/2026.
@@ -172,4 +173,12 @@ test('headlineAlertas: sin vencidos ni posteriores al horizonte, del más grave 
       'amarillo@2026-09-19T08:00:00-03:00',
     ],
   )
+})
+
+test('showSmnSourceLink: el enlace al SMN cierra la página con pronóstico o con error final, con o sin avisos', () => {
+  assert.equal(showSmnSourceLink(true, false), true)
+  assert.equal(showSmnSourceLink(false, true), true)
+  assert.equal(showSmnSourceLink(true, true), true)
+  // Todavía cargando (esqueleto o reintento): no se monta, para no correrse hacia abajo después.
+  assert.equal(showSmnSourceLink(false, false), false)
 })

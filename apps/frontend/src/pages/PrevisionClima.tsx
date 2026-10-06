@@ -5,7 +5,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion'
 import type { LocationState } from '@/hooks/useLocation'
 import { forecastNotes, formatClock } from '@/lib/weatherLabels'
 import { buildVerdict, entriesFromNow, rainWindowsByDate } from '@/lib/weatherVerdict'
-import { criticalLevel, isSmnUnavailable } from '@/lib/smnAlertas'
+import { criticalLevel, isSmnUnavailable, showSmnSourceLink } from '@/lib/smnAlertas'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { WeatherHero } from '@/components/clima/WeatherHero'
 import { NextDays } from '@/components/clima/NextDays'
@@ -130,9 +130,8 @@ export function PrevisionClima({ location }: Props) {
   const isProviderRetrying = isRetrying && isProviderSaturated(failureReason)
   const showRetryNotice = isWakingUp || isProviderRetrying
 
-  // El enlace al SMN cierra la página: espera a que haya pronóstico o error final. Con el esqueleto o el
-  // aviso de reintento todavía en pantalla se correría hacia abajo cuando llegue el contenido.
-  const showSmnFallback = alertasUnavailable && (Boolean(data) || Boolean(error))
+  // El enlace a la fuente oficial cierra la página siempre (no solo cuando el SMN no responde).
+  const showSmnLink = showSmnSourceLink(Boolean(data), Boolean(error))
 
   return (
     <div>
@@ -278,8 +277,8 @@ export function PrevisionClima({ location }: Props) {
         </FadeContent>
       )}
 
-      {/* Pie de la página: si el SMN no respondió, un enlace discreto a la fuente oficial. */}
-      {showSmnFallback && <SmnFallbackLink />}
+      {/* Pie de la página: un enlace discreto a la fuente oficial, con o sin avisos. */}
+      {showSmnLink && <SmnFallbackLink />}
     </div>
   )
 }
