@@ -2,7 +2,7 @@ import {
   lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation as useRouterLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Analytics } from '@vercel/analytics/react'
@@ -193,8 +193,6 @@ function skipToContent(event: ReactMouseEvent<HTMLAnchorElement>) {
 function RootLayout() {
   const { location, isFallback, geoLoading, geoError, selectCity, detectLocation } =
     useLocationState()
-  // On the landing the "now" goes first: on phones the catalog row of the menu steps aside.
-  const isLanding = useRouterLocation().pathname === '/'
 
   const showThreads = useShowThreads()
   const { data: volcanesData } = useVolcanes()
@@ -302,7 +300,7 @@ function RootLayout() {
             <p className="-mt-1 pb-2 text-xs text-[var(--color-destructive)]">{geoError}</p>
           )}
         </div>
-        <InfiniteNavRail tools={navTools} catalog={NAV_CATALOG} hideCatalogOnMobile={isLanding} />
+        <InfiniteNavRail tools={navTools} catalog={NAV_CATALOG} />
       </header>
 
       <main
