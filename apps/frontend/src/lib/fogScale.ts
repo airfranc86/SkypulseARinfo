@@ -25,7 +25,7 @@ export const FOG_SCALE: readonly FogLevel[] = [
   { level: 3, label: 'Niebla',          range: '< 1 km',   color: '#e03535', note: 'Gotas de agua (FG)' },
   { level: 2, label: 'Neblina o bruma', range: '1 – 5 km', color: '#f0a020', note: 'Gotas de agua (BR)' },
   { level: 1, label: 'Buena',           range: '5 – 10 km', color: '#5aaad8', note: '' },
-  { level: 0, label: 'Despejada',       range: '> 10 km',  color: '#3ecf7a', note: '' },
+  { level: 0, label: 'Despejada',       range: '≥ 10 km',  color: '#3ecf7a', note: '' },
 ]
 
 const FOG_BY_LEVEL: Record<FogLevel['level'], FogLevel> = {

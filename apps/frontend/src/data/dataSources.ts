@@ -43,7 +43,7 @@ export const DATA_SOURCES: readonly DataSource[] = [
     id: 'avisos',
     title: 'Avisos oficiales',
     summary:
-      'Cuando el Servicio Meteorológico Nacional publica avisos, SkyPulse los muestra tal cual vienen de la fuente, sin interpretación propia y ordenados por gravedad.',
+      'Cuando el Servicio Meteorológico Nacional publica avisos que alcanzan tu ubicación, SkyPulse los muestra tal cual vienen de la fuente, sin interpretación propia y ordenados por gravedad.',
     providers: ['Servicio Meteorológico Nacional (SMN)'],
   },
   {
