@@ -6,7 +6,13 @@
  * A drag of >5px suppresses the NavLink click to avoid accidental navigation.
  *
  * Auto-scroll is JS-driven (requestAnimationFrame) so drag and auto-scroll
- * share the same transform — no CSS animation conflicts.
+ * share the same transform — no CSS animation conflicts. It never starts with
+ * `prefers-reduced-motion: reduce` (the rows can still be dragged), and it
+ * pauses while a link has keyboard focus.
+ *
+ * Each row is a list of links. The copy that makes the loop seamless is
+ * aria-hidden and out of the tab order, so every destination is announced and
+ * tabbable once. Keyboard focus slides the row to bring the focused pill into view.
  *
  * Edge blur: two overlay divs with pointer-events:none and a gradient from
  * var(--color-background) → transparent. More compatible than maskImage
@@ -19,15 +25,19 @@ import {
   useState,
   type ReactNode,
   type CSSProperties,
+  type FocusEvent as ReactFocusEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { revealPosition, shouldAutoScroll } from '@/lib/motionPreference'
+import { PILL_TINT_ALPHA, pillLabelColor, type PillColors } from '@/lib/navContrast'
 
 export interface NavRailItem {
   to: string
   label: string
   emoji: ReactNode
-  color: string
+  colors: PillColors
   badge?: ReactNode
 }
 
@@ -50,13 +60,14 @@ const PILL_BASE: CSSProperties = {
   transition: 'border-color 0.18s, background 0.18s, color 0.18s',
 }
 
-function pillStyle(color: string, isActive: boolean): CSSProperties {
+function pillStyle(colors: PillColors, isActive: boolean): CSSProperties {
+  const state = isActive ? 'active' : 'idle'
   return {
     ...PILL_BASE,
     fontWeight: isActive ? 600 : 400,
-    border: `1px solid ${isActive ? color : `${color}2a`}`,
-    background: isActive ? `${color}18` : `${color}0d`,
-    color: isActive ? color : `${color}b3`,
+    border: `1px solid ${isActive ? colors.accent : `${colors.accent}2a`}`,
+    background: `${colors.accent}${PILL_TINT_ALPHA[state]}`,
+    color: pillLabelColor(colors, state),
   }
 }
 
@@ -95,12 +106,31 @@ function edgeOverlayStyle(side: 'left' | 'right'): CSSProperties {
   }
 }
 
-function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) {
-  // Items are doubled for the seamless wrap-around loop
-  const doubled = [...items, ...items]
+/** One destination. `hidden` marks the loop copy: invisible to assistive tech and not tabbable. */
+function NavPill({ item, hidden }: { item: NavRailItem; hidden: boolean }) {
+  return (
+    <li aria-hidden={hidden ? true : undefined} className="flex shrink-0">
+      <NavLink
+        to={item.to}
+        aria-label={item.label}
+        tabIndex={hidden ? -1 : undefined}
+        draggable={false}
+        className="rounded-full"
+        style={({ isActive }) => pillStyle(item.colors, isActive)}
+      >
+        <span aria-hidden="true">{item.emoji}</span>
+        <span style={{ position: 'relative' }}>
+          {item.label}
+          {item.badge}
+        </span>
+      </NavLink>
+    </li>
+  )
+}
 
+function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const trackRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLUListElement>(null)
 
   // JS-driven position (negative = scrolled left)
   const posRef = useRef(0)
@@ -112,15 +142,16 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
   const dragStartX = useRef(0)
   const dragStartPos = useRef(0)
   const totalDragDelta = useRef(0) // used to suppress NavLink click on real drags
-
-  const rafRef = useRef<number>(0)
-  // Stable ref to the latest animate — avoids stale-closure self-reference
-  const animateRef = useRef<() => void>(() => {})
+  // A link inside the row has keyboard focus: the row holds still
+  const hasKeyboardFocus = useRef(false)
 
   // Cursor state — only this needs a re-render
   const [cursor, setCursor] = useState<'grab' | 'grabbing'>('grab')
 
   const navigate = useNavigate()
+
+  const reducedMotion = useReducedMotion()
+  const autoScroll = shouldAutoScroll({ reducedMotion })
 
   // Speed: negative = leftward (default), positive = rightward (reverse rows)
   const speed = reverse ? AUTO_SCROLL_SPEED : -AUTO_SCROLL_SPEED
@@ -157,31 +188,25 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
   }, [])
 
   /**
-   * RAF callback.
-   * Guard: if halfWidth hasn't been measured yet (first frame after mount),
-   * we skip the tick and retry via setTimeout so we never start from a broken
-   * position that could cause a visible jump on the first wrap.
+   * Auto-scroll loop. Not started at all with reduced motion; the effect re-runs when
+   * the preference changes, so toggling it takes effect without a reload.
+   * Until halfWidth has been measured (first frame after mount) ticks only reschedule,
+   * so the track never starts from a broken position that could jump on the first wrap.
    */
-  const animate = useCallback(() => {
-    if (!halfWidthRef.current) {
-      rafRef.current = requestAnimationFrame(animateRef.current)
-      return
-    }
-    if (!isDragging.current) {
-      posRef.current += speed
-      wrapPosition()
-      applyTransform()
-    }
-    rafRef.current = requestAnimationFrame(animateRef.current)
-  }, [speed, wrapPosition, applyTransform])
-
-  // Keep animateRef pointing to the latest version (avoids stale closure)
-  animateRef.current = animate
-
   useEffect(() => {
-    rafRef.current = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [animate])
+    if (!autoScroll) return
+    let frame = 0
+    const tick = () => {
+      if (halfWidthRef.current && !isDragging.current && !hasKeyboardFocus.current) {
+        posRef.current += speed
+        wrapPosition()
+        applyTransform()
+      }
+      frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [autoScroll, speed, wrapPosition, applyTransform])
 
   // ── Pointer handlers ──────────────────────────────────────────────────────
 
@@ -240,11 +265,43 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
     [navigate],
   )
 
+  // ── Keyboard focus ────────────────────────────────────────────────────────
+
+  /**
+   * Tabbing to a pill that is out of view (or under a faded edge) slides the row to show it
+   * and holds the auto-scroll. Mouse and touch focus (not :focus-visible) are left alone, so
+   * tapping a pill near an edge never makes the row jump.
+   * The row is moved with transform only, so any scroll the browser applied to this clipped
+   * box to reveal the link is undone first.
+   */
+  const onFocus = useCallback(
+    (e: ReactFocusEvent<HTMLDivElement>) => {
+      const link = e.target
+      const container = containerRef.current
+      const track = trackRef.current
+      if (!container || !track || !link.matches(':focus-visible')) return
+      hasKeyboardFocus.current = true
+      container.scrollLeft = 0
+      posRef.current = revealPosition({
+        position: posRef.current,
+        itemLeft: link.getBoundingClientRect().left - track.getBoundingClientRect().left,
+        itemWidth: link.offsetWidth,
+        viewportWidth: container.clientWidth,
+        inset: EDGE_BLUR_WIDTH,
+        minPosition: container.clientWidth - 2 * halfWidthRef.current,
+      })
+      applyTransform()
+    },
+    [applyTransform],
+  )
+
+  const onBlur = useCallback((e: ReactFocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) hasKeyboardFocus.current = false
+  }, [])
+
   return (
     <div
       ref={containerRef}
-      role="list"
-      aria-label={ariaLabel}
       className="relative overflow-hidden"
       style={{ cursor, touchAction: 'pan-y' }}
       onPointerDown={onPointerDown}
@@ -253,33 +310,28 @@ function MarqueeStrip({ items, reverse = false, ariaLabel }: MarqueeStripProps) 
       onPointerLeave={onPointerUp}
       onPointerCancel={onPointerUp}
       onClick={onContainerClick}
+      onFocus={onFocus}
+      onBlur={onBlur}
     >
       {/* Frosted-glass left edge — pointer-events:none so drag still works */}
       <div style={edgeOverlayStyle('left')} aria-hidden="true" />
 
-      <div
+      {/* role="list" keeps the list semantics in Safari, which drops them with list-style:none */}
+      <ul
         ref={trackRef}
+        role="list"
+        aria-label={ariaLabel}
         className="flex gap-2 w-max py-1"
         style={{ willChange: 'transform', userSelect: 'none' }}
       >
-        {doubled.map((item, i) => (
-          <NavLink
-            key={`${item.to}-${i}`}
-            to={item.to}
-            role="listitem"
-            aria-label={item.label}
-            draggable={false}
-            className="rounded-full"
-            style={({ isActive }) => pillStyle(item.color, isActive)}
-          >
-            <span aria-hidden="true">{item.emoji}</span>
-            <span style={{ position: 'relative' }}>
-              {item.label}
-              {item.badge}
-            </span>
-          </NavLink>
+        {items.map((item) => (
+          <NavPill key={item.to} item={item} hidden={false} />
         ))}
-      </div>
+        {/* Second copy for the seamless wrap-around loop */}
+        {items.map((item) => (
+          <NavPill key={`${item.to}-loop`} item={item} hidden />
+        ))}
+      </ul>
 
       {/* Frosted-glass right edge — pointer-events:none so drag still works */}
       <div style={edgeOverlayStyle('right')} aria-hidden="true" />

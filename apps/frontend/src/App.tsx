@@ -1,4 +1,7 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import {
+  lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
@@ -10,6 +13,8 @@ import { useGTMPageView } from '@/hooks/useGTMPageView'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { LocationPicker } from '@/components/LocationPicker'
 import { getConsent, setConsent, loadGTM, type ConsentStatus } from '@/lib/consent'
+import { DESKTOP_MEDIA_QUERY, shouldShowThreads } from '@/lib/motionPreference'
+import { NAV_PILL_COLORS, type NavRoute } from '@/lib/navContrast'
 import { CookieConsentBanner } from '@/components/ui/CookieConsentBanner'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import {
@@ -128,42 +133,74 @@ const queryClient = new QueryClient({
 
 // ── Motion & capability preferences ──────────────────────────────────────────
 
-/**
- * Detects motion preference.
- * - enableAnimations: Threads shader — off when prefers-reduced-motion: reduce (reactive to live preference changes)
- */
-function useMotionPreferences() {
-  const reducedMotion = useReducedMotion()
-  return { enableAnimations: !reducedMotion }
+function subscribeDesktop(onChange: () => void) {
+  const query = window.matchMedia(DESKTOP_MEDIA_QUERY)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
 }
+
+const getIsDesktop = () => window.matchMedia(DESKTOP_MEDIA_QUERY).matches
+
+/**
+ * Whether the decorative Threads shader may run: desktop width and no
+ * prefers-reduced-motion, both reactive to live changes.
+ */
+function useShowThreads(): boolean {
+  const reducedMotion = useReducedMotion()
+  const isDesktop = useSyncExternalStore(subscribeDesktop, getIsDesktop)
+  return shouldShowThreads({ reducedMotion, isDesktop })
+}
+
+/**
+ * Threads restarts its WebGL context whenever `color` changes identity, so the
+ * array lives at module level instead of being rebuilt on every render.
+ */
+const THREADS_COLOR: [number, number, number] = [0.753, 0.612, 0.169]
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
-const N = (NavIcon: LucideIcon, color: string) => <NavIcon size={15} style={{ color }} />
+/** Colors come from `NAV_PILL_COLORS` (contrast-checked); the icon shares the pill's accent. */
+const navItem = (to: NavRoute, label: string, NavIcon: LucideIcon): Omit<NavRailItem, 'badge'> => {
+  const colors = NAV_PILL_COLORS[to]
+  return { to, label, emoji: <NavIcon size={15} style={{ color: colors.accent }} />, colors }
+}
 
 /** Live-data tools — require location + backend (Row 1, scrolls ←) */
 const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
-  { to: '/prevision',      label: 'Previsión',       emoji: N(CloudSun, '#c8a84b'),       color: '#c8a84b' },
-  { to: '/hacer-deporte', label: 'Hacer deporte',   emoji: N(Activity, '#3fb8c4'),       color: '#3fb8c4' },
-  { to: '/tender-ropa',   label: 'Secado de ropa',  emoji: N(Shirt, '#3ecf7a'),          color: '#3ecf7a' },
-  { to: '/lavar-auto',    label: 'Lavar el auto',   emoji: N(Car, '#5aaad8'),            color: '#5aaad8' },
-  { to: '/terremotos',    label: 'Terremotos',      emoji: N(Waves, '#e05545'),          color: '#e05545' },
-  { to: '/cota-de-nieve', label: 'Cota de nieve',   emoji: N(MountainSnow, '#90aabb'),   color: '#90aabb' },
-  { to: '/volcanes',      label: 'Volcanes',        emoji: N(Mountain, '#e05545'),       color: '#e05545' },
-  { to: '/incendios',     label: 'Incendios',       emoji: N(TreePine, '#f0a030'),       color: '#f0a030' },
+  navItem('/prevision',     'Previsión',      CloudSun),
+  navItem('/hacer-deporte', 'Hacer deporte',  Activity),
+  navItem('/tender-ropa',   'Secado de ropa', Shirt),
+  navItem('/lavar-auto',    'Lavar el auto',  Car),
+  navItem('/terremotos',    'Terremotos',     Waves),
+  navItem('/cota-de-nieve', 'Cota de nieve',  MountainSnow),
+  navItem('/volcanes',      'Volcanes',       Mountain),
+  navItem('/incendios',     'Incendios',      TreePine),
 ]
 
 /** Technical/catalog pages (Row 2, scrolls →). Altitud de densidad calcula en el backend pero tiene fallback local. */
 const NAV_CATALOG: NavRailItem[] = [
-  { to: '/nubes',     label: 'Nubes',     emoji: N(Cloud, '#7ea8c4'),     color: '#7ea8c4' },
-  { to: '/metar',     label: 'METAR',     emoji: N(Radio, '#8b9fc4'),     color: '#8b9fc4' },
-  { to: '/altitud-de-densidad', label: 'Altitud de densidad', emoji: N(Gauge, '#8fc4a8'), color: '#8fc4a8' },
-  { to: '/cizalladura', label: 'Cizalladura / LLWS', emoji: N(WindArrowDown, '#c4b08f'), color: '#c4b08f' },
-  { to: '/desastres', label: 'Desastres', emoji: N(TriangleAlert, '#c47e5a'), color: '#c47e5a' },
-  { to: '/lluvias',   label: 'Lluvias',   emoji: N(CloudRain, '#7ab5c4'), color: '#7ab5c4' },
-  { to: '/radar',     label: 'Radar',     emoji: N(RadarIcon, '#9a9ac4'),     color: '#9a9ac4' },
-  { to: '/niebla',    label: 'Niebla',    emoji: N(Eye, '#90aabb'),       color: '#90aabb' },
+  navItem('/nubes',                'Nubes',               Cloud),
+  navItem('/metar',                'METAR',               Radio),
+  navItem('/altitud-de-densidad',  'Altitud de densidad', Gauge),
+  navItem('/cizalladura',          'Cizalladura / LLWS',  WindArrowDown),
+  navItem('/desastres',            'Desastres',           TriangleAlert),
+  navItem('/lluvias',              'Lluvias',             CloudRain),
+  navItem('/radar',                'Radar',               RadarIcon),
+  navItem('/niebla',               'Niebla',              Eye),
 ]
+
+// ── Skip link ─────────────────────────────────────────────────────────────────
+
+const MAIN_ID = 'contenido-principal'
+
+/**
+ * Moves focus to <main> by hand instead of letting the browser follow the hash:
+ * the URL stays clean and no extra page view reaches the router or analytics.
+ */
+function skipToContent(event: ReactMouseEvent<HTMLAnchorElement>) {
+  event.preventDefault()
+  document.getElementById(MAIN_ID)?.focus()
+}
 
 // ── RootLayout — wired to the ModelStatusProvider ─────────────────────────────
 
@@ -171,7 +208,7 @@ function RootLayout() {
   const { location, geoLoading, geoError, selectCity, detectLocation } =
     useLocationState()
 
-  const { enableAnimations } = useMotionPreferences()
+  const showThreads = useShowThreads()
   const { data: volcanesData } = useVolcanes()
 
   // T-11: memoize to avoid new array/element references on every location update
@@ -221,8 +258,12 @@ function RootLayout() {
 
   return (
     <div className="flex flex-col min-h-svh bg-[var(--color-background)]">
-      {/* Threads — only on desktop + no prefers-reduced-motion */}
-      {enableAnimations && (
+      <a href={`#${MAIN_ID}`} className="skip-link" onClick={skipToContent}>
+        Saltar al contenido
+      </a>
+
+      {/* Threads — only on desktop (min-width: 1024px) + no prefers-reduced-motion */}
+      {showThreads && (
         <div
           aria-hidden="true"
           style={{
@@ -233,7 +274,7 @@ function RootLayout() {
         >
           <Suspense fallback={null}>
             <Threads
-              color={[0.753, 0.612, 0.169]}
+              color={THREADS_COLOR}
               amplitude={2}
               distance={0.3}
               enableMouseInteraction={false}
@@ -264,14 +305,24 @@ function RootLayout() {
               onSelectCity={selectCity}
               onDetectLocation={detectLocation}
               geoLoading={geoLoading}
-              geoError={geoError}
             />
           </div>
+        </div>
+        {/* Location error: in the header flow, so it pushes the nav down instead of covering it.
+            The status region is always mounted so screen readers announce the text when it appears. */}
+        <div role="status" className="max-w-5xl mx-auto px-4">
+          {geoError && (
+            <p className="-mt-1 pb-2 text-xs text-[var(--color-destructive)]">{geoError}</p>
+          )}
         </div>
         <InfiniteNavRail tools={navTools} catalog={NAV_CATALOG} />
       </header>
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
+      <main
+        id={MAIN_ID}
+        tabIndex={-1}
+        className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 focus:outline-none"
+      >
         <ErrorBoundary fallbackMessage="Algo falló al mostrar esta página.">
           <Suspense fallback={<div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">Cargando…</div>}>
             <Routes>
