@@ -355,6 +355,7 @@ function RootLayout() {
       </main>
 
       <footer className="border-t border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-muted-foreground)] space-y-2">
+        <p>Datos: SkyPulse</p>
         <ModelStatusBar />
         <Link to="/privacidad" className="block underline hover:opacity-80">
           Política de privacidad

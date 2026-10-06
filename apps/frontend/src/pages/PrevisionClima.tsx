@@ -3,7 +3,6 @@ import { CloudSun, ChevronDown } from 'lucide-react'
 import { useWeatherDashboard, useSmnAlertas, isColdStart, isProviderSaturated, isClientError } from '@/hooks/useWeather'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import type { LocationState } from '@/hooks/useLocation'
-import type { ModelKey } from '@/components/ui/ModelBadge'
 import { forecastNotes, formatClock } from '@/lib/weatherLabels'
 import { buildVerdict, entriesFromNow, rainWindowsByDate } from '@/lib/weatherVerdict'
 import { criticalLevel, isSmnUnavailable } from '@/lib/smnAlertas'
@@ -17,7 +16,6 @@ import { HourlyStrip } from '@/components/clima/HourlyStrip'
 import { Forecast7d } from '@/components/clima/Forecast7d'
 import { HOURLY_ANCHOR_ID, dayRowId } from '@/components/clima/anchors'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
-import { ModelBadge } from '@/components/ui/ModelBadge'
 
 const DETAIL_EXPANDED_KEY = 'skypulse:prevision-detail-expanded'
 
@@ -27,11 +25,6 @@ const DETAIL_TRANSITION_MS = 520
 type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
 
 interface Props { location: LocationState | null }
-
-/** Badge de la página según de dónde sale la observación: SMN o Open-Meteo. El pronóstico siempre sale de Open-Meteo. */
-function pageModel(currentSource: string | undefined): ModelKey {
-  return currentSource === 'smn' ? 'smn_openmeteo' : 'openmeteo_forecast'
-}
 
 /** Mensaje para el usuario según el fallo: cold start, proveedor saturado, error de validación
  *  del backend, o cualquier otro. */
@@ -45,11 +38,6 @@ function dashboardErrorMessage(error: Error): string {
 export function PrevisionClima({ location }: Props) {
   const [forecastModel, setForecastModel] = useState<ForecastModel>('consensus')
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
-  // Modelo de los datos que hay en pantalla. Mientras llega el pedido nuevo (`isPlaceholderData`)
-  // siguen los días del modelo anterior: el badge y la confianza deben nombrar ese, no el que se
-  // acaba de tocar. Se actualiza al llegar el dato (derivado durante el render, sin efecto).
-  const [shownModel, setShownModel] = useState<ForecastModel>(forecastModel)
-  if (data && !isPlaceholderData && shownModel !== forecastModel) setShownModel(forecastModel)
   const { data: alertasData, isError: alertasError, isPending: alertasPending } = useSmnAlertas()
   const reducedMotion = useReducedMotion()
 
@@ -79,7 +67,6 @@ export function PrevisionClima({ location }: Props) {
   const scrollTimer = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(scrollTimer.current), [])
 
-  const badgeModel = pageModel(data?.current?.source)
   const notes = data ? forecastNotes(data) : []
   const updatedAt = formatClock(data?.fetched_at)
 
@@ -149,7 +136,8 @@ export function PrevisionClima({ location }: Props) {
     <div>
       {/* Encabezado de una línea: la ciudad y la frescura del dato. El título de la página sigue
           siendo el h1 (para lectores de pantalla); a la vista ya lo dice el chip activo del menú.
-          El badge de fuentes bajó al pie del héroe. */}
+          Sin badge de modelos: el usuario final no ve nombres de modelos (FRA-341); el crédito
+          visible es "Datos: SkyPulse" en el pie de la app. */}
       <header className="mb-4 flex items-center gap-2 min-h-7">
         <CloudSun size={20} className="shrink-0" style={{ color: '#c8a84b' }} aria-hidden="true" />
         <h1 className="sr-only">Previsión del clima</h1>
@@ -210,7 +198,6 @@ export function PrevisionClima({ location }: Props) {
                 today={today}
                 verdict={verdict}
                 severity={severity}
-                sources={<ModelBadge model={badgeModel} variant="header" />}
               />
             </div>
 
@@ -277,7 +264,6 @@ export function PrevisionClima({ location }: Props) {
                   <Forecast7d
                     days={data.forecast_7d}
                     selectedModel={forecastModel}
-                    shownModel={shownModel}
                     onModelChange={setForecastModel}
                     refreshing={isPlaceholderData}
                     rainWindows={rainWindows}
