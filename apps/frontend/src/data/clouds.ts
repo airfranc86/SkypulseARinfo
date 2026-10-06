@@ -1,6 +1,6 @@
 /**
- * Cloud catalog for the Nubes page: the cards read from here, so a height or a phrase is written once.
- * Pure data (no React).
+ * Cloud catalog for the Nubes page: the cards and the altitude diagram read from here, so a height
+ * or a phrase is written once. Pure data (no React): `src/lib/cloudSky.ts` and its tests import it under Node.
  */
 import type { DangerLevel } from '@/components/ui/DangerScale'
 
@@ -22,6 +22,32 @@ export type CloudId =
   | 'mammatus'
   | 'niebla'
 
+/**
+ * How a cloud is drawn in the altitude diagram:
+ * - `layer`: sits inside the floor that holds its base.
+ * - `column`: a vertical strip of its own that crosses floors.
+ * - `tower`: the cumulonimbus, from the ground to the top of the scale.
+ * - `accessory`: hangs from another cloud (mammatus under the anvil).
+ * - `ground`: rests on the ground line (fog).
+ */
+export type CloudShape = 'layer' | 'column' | 'tower' | 'accessory' | 'ground'
+
+/** Altitude the drawing covers (km above the ground), or the cloud it hangs from. */
+export type CloudBand = { baseKm: number; topKm: number } | { hangsUnderAnvilOf: CloudId }
+
+export interface CloudSky {
+  shape: CloudShape
+  band: CloudBand
+  /** Height of the cloud in the diagram; the same text it uses for crossing clouds. */
+  rangeLabel: string
+  /** Colour of the cloud's drawing and its name in the diagram. */
+  accent: string
+  /** Name drawn in the diagram when it differs from `name`: a short name or soft hyphens for narrow lanes. */
+  label?: string
+  /** Line under the name in the diagram, when the default (range for crossing clouds) does not fit. */
+  note?: string
+}
+
 export interface CloudItem {
   id: CloudId
   family: CloudFamily
@@ -39,7 +65,11 @@ export interface CloudItem {
   observeTip: string
   aeroText: string
   curiosity: string
+  sky: CloudSky
 }
+
+/** Soft hyphen: lets a long name break inside a narrow diagram lane, invisible otherwise. */
+const SHY = '­'
 
 // ---------------------------------------------------------------------------
 // Clouds
@@ -63,6 +93,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'luz lateral del amanecer o el atardecer — resaltan en dorado',
     aeroText: 'Indican corrientes de chorro cercanas y posibles zonas de CAT en crucero. Preceden frentes que afectarán rutas en las próximas 12–24 hs. Si se espesan hacia el horizonte: el deterioro se acerca.',
     curiosity: 'Cirrus en latín significa "mechón de pelo o bucle". El nombre describe exactamente su aspecto — mirá bien la próxima vez.',
+    sky: { shape: 'layer', band: { baseKm: 6, topKm: 12 }, rangeLabel: '6–12 km', accent: '#c8a84b' },
   },
   {
     id: 'cirrostratos',
@@ -81,6 +112,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'a plena luz del día con sol — el halo es el indicador más claro',
     aeroText: 'Preceden frentes cálidos. Cuanto más bajo y denso el velo, más cercana la lluvia. En ruta, marcan el inicio del deterioro progresivo hacia condiciones IFR.',
     curiosity: 'El halo de 22° ocurre por refracción de la luz en cristales de hielo hexagonales orientados al azar — física perfecta, resultado visual mágico.',
+    sky: { shape: 'layer', band: { baseKm: 6, topKm: 12 }, rangeLabel: '6–12 km', accent: '#c8a84b', label: `Cirro${SHY}stratos` },
   },
   {
     id: 'cirrocumulos',
@@ -99,6 +131,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'cuando el cielo está mayormente despejado — duran muy poco, aprovechá el momento',
     aeroText: 'Pueden indicar inestabilidad en altitud y turbulencia en aire claro (CAT) a niveles de vuelo. Su corta duración los hace difíciles de anticipar en pronósticos.',
     curiosity: 'Son tan efímeras que raramente duran más de minutos antes de transformarse en cirros o cirrostratos. Si las ves, sacá foto rápido.',
+    sky: { shape: 'layer', band: { baseKm: 6, topKm: 12 }, rangeLabel: '6–12 km', accent: '#c8a84b', label: `Cirro${SHY}cúmulos` },
   },
   {
     id: 'altocumulos',
@@ -117,6 +150,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'mañanas de verano — los castellanus son más visibles antes de que el sol caliente el suelo',
     aeroText: 'Los Ac castellanus matinales son indicador de inestabilidad convectiva: alta probabilidad de Cb en horas cálidas. Los despachos los toman como señal de alerta para rutas de tarde.',
     curiosity: 'Regla de campo: Ac castellanus por la mañana = tormenta vespertina casi garantizada en días calurosos con humedad.',
+    sky: { shape: 'layer', band: { baseKm: 2, topKm: 6 }, rangeLabel: '2–6 km', accent: '#5aaad8', label: `Alto${SHY}cúmulos` },
   },
   {
     id: 'altostratos',
@@ -135,6 +169,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'al mediodía — la diferencia entre "sol difuso" y "sin sol" marca el cambio de capa',
     aeroText: 'Condiciones IFR en aproximación. Reduce el techo progresivamente. Precede al Nimboestrato que puede cerrar completamente la visibilidad en destino. Verificar alternados.',
     curiosity: 'Diferencia práctica: el Altostrato deja pasar algo de luz. Cuando esa poca luz desaparece del todo, ya cambió a Nimboestrato.',
+    sky: { shape: 'layer', band: { baseKm: 2, topKm: 6 }, rangeLabel: '2–6 km', accent: '#5aaad8', label: `Alto${SHY}stratos` },
   },
   {
     id: 'estrato',
@@ -153,6 +188,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'temprano a la mañana en invierno o días fríos — tienden a levantarse con el calor del sol',
     aeroText: 'Techo bajo que puede limitar operaciones VFR. En aeródromos de montaña o valles puede cerrar completamente el acceso visual. Siempre verificar METAR actualizado antes de salir.',
     curiosity: 'La niebla es técnicamente un Estrato que toca el suelo. Cuando sube y deja de estar a nivel de la calle, se convierte en Estrato bajo.',
+    sky: { shape: 'layer', band: { baseKm: 0, topKm: 2 }, rangeLabel: '0–2 km', accent: '#90aabb' },
   },
   {
     id: 'estratocumulos',
@@ -171,6 +207,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'desde un avión mirando hacia abajo — los ves como un campo de algodón con huecos irregulares',
     aeroText: 'Generalmente permiten VFR con precaución. El peligro surge cuando el techo baja a menos de 1.500 ft AGL. Atención a variaciones rápidas de base en zonas costeras.',
     curiosity: 'Cubren más del 20% de la superficie oceánica en cualquier momento dado. Son las nubes más frecuentes y las más ignoradas de la Tierra.',
+    sky: { shape: 'layer', band: { baseKm: 0, topKm: 2 }, rangeLabel: '0–2 km', accent: '#90aabb', label: `Estrato${SHY}cúmulos` },
   },
   {
     id: 'nimboestrato',
@@ -189,6 +226,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'no hay forma definida ni claros — solo un techo oscuro y uniforme que lo cubre todo',
     aeroText: 'Condiciones IFR severas. Alto riesgo de engelamiento (icing) dentro de la nube. Operaciones solo con IFR aprobado y alternado disponible.',
     curiosity: 'Nimbus en latín: lluvia. Cualquier nube con "nimbo" en el nombre está lloviendo activamente ahora mismo.',
+    sky: { shape: 'column', band: { baseKm: 0, topKm: 3 }, rangeLabel: '0–3 km', accent: '#90aabb', label: `Nimbo${SHY}estrato` },
   },
   {
     id: 'cumulo',
@@ -207,6 +245,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'tardes soleadas — se forman cuando el sol calienta el suelo y el aire sube',
     aeroText: 'Humilis (pequeños): VFR óptimo. Mediocris: corrientes ascendentes, turbulencia leve bajo ellos. Congestus (grandes con torres): precursor directo de Cb — monitorear con atención.',
     curiosity: 'La base plana marca exactamente la altura donde el aire ascendente se enfría hasta condensarse. Todos los cúmulos del mismo día tienen la base a la misma altitud.',
+    sky: { shape: 'column', band: { baseKm: 0.6, topKm: 3 }, rangeLabel: 'base 600–2.000 m · cima hasta ~3 km', accent: '#3ecf7a' },
   },
   {
     id: 'cumulonimbo',
@@ -225,6 +264,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'la cima en forma de yunque aplastado es inconfundible — indica que tocó la tropopausa',
     aeroText: 'Prohibido penetrar en cualquier condición. Rodear por 20 NM mínimo. Genera windshear, granizo a nivel de crucero, turbulencia severa, engelamiento intenso y rayos. Reportado en SIGMET. Es la principal amenaza meteorológica para la aviación.',
     curiosity: 'Un solo Cb puede contener la energía equivalente a decenas de bombas atómicas en calor latente. El yunque confirma que la columna tocó la tropopausa y se expandió horizontalmente.',
+    sky: { shape: 'tower', band: { baseKm: 0, topKm: 15 }, rangeLabel: 'hasta 15 km', accent: '#ff6b6b', label: `Cumulo${SHY}nimbo` },
   },
   {
     id: 'lenticular',
@@ -243,6 +283,7 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'desde valles con vistas a la cordillera — la forma de plato volador es inconfundible',
     aeroText: 'Indican ondas orográficas y turbulencia severa en el sotavento. Las mountain waves pueden extenderse cientos de km. Evitar zonas de rotor bajo las lenticulares.',
     curiosity: 'Son "estacionarias" porque se forman siempre en el mismo punto de la onda: el aire entra frío, se condensa, y se evapora del otro lado — como una nube en loop permanente.',
+    sky: { shape: 'layer', band: { baseKm: 2, topKm: 8 }, rangeLabel: '2–8 km', accent: '#f0a030', label: `Lenti${SHY}cular` },
   },
   {
     id: 'mammatus',
@@ -261,6 +302,14 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'siempre están debajo de otra nube — mirá hacia arriba desde un espacio seguro cubierto',
     aeroText: 'Mammatus = Cb activo garantizado. Turbulencia severa, windshear y granizo son altamente probables. No aproximarse. Desviar ruta con margen generoso.',
     curiosity: 'Se forman por corrientes descendentes de aire frío dentro del yunque del Cb — exactamente lo opuesto a cómo se forman la mayoría de las nubes.',
+    sky: {
+      shape: 'accessory',
+      band: { hangsUnderAnvilOf: 'cumulonimbo' },
+      rangeLabel: 'bajo el yunque del Cb',
+      accent: '#ff6b6b',
+      label: `Mamma${SHY}tus`,
+      note: 'bajo el yunque',
+    },
   },
   {
     id: 'niebla',
@@ -279,6 +328,8 @@ export const CLOUDS: readonly CloudItem[] = [
     observeTip: 'desde una colina alta mirando un valle al amanecer — el contraste es espectacular',
     aeroText: 'Principal causa de cancelaciones y desvíos. Puede aparecer súbitamente (radiation fog nocturna). METAR reporta FG cuando visibilidad < 1000 m. Requiere mínimas IFR muy bajas (CAT II/III).',
     curiosity: 'FG en METAR = niebla (<1 km). BR = neblina o bruma (1–5 km). Misma física, distintas implicancias operativas.',
+    // topKm only sizes the drawing: a layer a few hundred metres thick, resting on the ground.
+    sky: { shape: 'ground', band: { baseKm: 0, topKm: 0.3 }, rangeLabel: '0 m — toca el suelo', accent: '#90aabb', note: 'visibilidad menor a 1 km' },
   },
 ]
 
