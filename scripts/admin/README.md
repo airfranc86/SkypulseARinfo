@@ -40,6 +40,8 @@ $PY scripts/admin/monitor.py --env-file RUTA/AL/ARCHIVO.env
 | `--sin-fuentes` | Omite la sección 3. |
 | `--no-modelos` | Omite la sección 4. |
 | `--json` | Misma información en JSON, sin colores. |
+| `--web` | En vez de imprimir, sirve la misma información en una página en `localhost` (ver abajo). |
+| `--puerto N` | Puerto de `--web` (por defecto 8765; entre 1024 y 65535). Solo se usa con `--web`. |
 
 Las credenciales se cargan **en tiempo de ejecución** con un parser propio de `CLAVE=valor`
 (acepta comentarios, comillas, `export` y UTF-8 o UTF-16) y no se imprimen nunca, ni en la
@@ -48,6 +50,32 @@ los valores. Colores ANSI solo en una terminal; se apagan con `NO_COLOR=1`.
 
 Las variables de Upstash viven en Render. Si tu `.env` local del backend no las tiene,
 pasá con `--env-file` un archivo que sí las tenga.
+
+## Página local (`--web`)
+
+La misma información de la terminal, con barras de uso, estados con color y la tabla de
+modelos, en el navegador:
+
+```
+$PY scripts/admin/monitor.py --web --env-file RUTA/AL/ARCHIVO.env
+```
+
+Abrí `http://localhost:8765/` (la consola lo imprime). Se detiene con Ctrl+C.
+
+- **Solo en tu PC.** Escucha únicamente en `127.0.0.1` y rechaza cualquier pedido cuyo `Host`
+  no sea `localhost:PUERTO` o `127.0.0.1:PUERTO` (protege contra DNS rebinding). No tiene
+  JavaScript ni carga nada de afuera, y manda una CSP estricta.
+- **La primera visita dispara la primera corrida.** Tarda de segundos a minutos (13 pedidos en
+  serie; Render puede estar despertando). Mientras corre, la página dice «Actualizando…» y se
+  refresca sola cada 3 s. La corrida va en un hilo aparte, así que la página siempre responde.
+- **Los datos no se actualizan solos.** El botón **Actualizar** (un `POST` a `/actualizar`, solo
+  de la misma página) vuelve a correr todo, con un mínimo de 60 s entre corridas, porque cada
+  una gasta del cupo de Open-Meteo de la IP de tu PC. Entre corridas, la página muestra la
+  última y cuánto falta para poder actualizar. Si una corrida falla, muestra un aviso con el
+  tipo de error (sin el texto de la excepción) y conserva el último resultado.
+- **Las credenciales no salen en la página.** El HTML final pasa por la misma redacción de
+  secretos que la terminal, y todo texto que viene de una respuesta externa se escapa.
+- Con `--web` no se puede usar `--json`. Si el puerto está ocupado, falla con código 3.
 
 ## Códigos de salida
 
@@ -60,7 +88,7 @@ pasá con `--env-file` un archivo que sí las tenga.
 
 ## Costo en llamadas
 
-Una corrida completa hace 13 pedidos: 4 a Upstash, 5 a producción (3 ciudades, niebla y
+Una corrida completa (en la terminal, o cada actualización de la página local) hace 13 pedidos: 4 a Upstash, 5 a producción (3 ciudades, niebla y
 avisos) y 4 a fuentes externas. Cada `dashboard` puede hacer que el backend consulte Open-Meteo
 desde la IP de Render si no está en su caché, así que no lo corras en bucle.
 

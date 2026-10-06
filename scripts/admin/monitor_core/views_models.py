@@ -14,21 +14,21 @@ from monitor_core.render import Painter, fmt_num, render_table
 HEADERS = ["Día", "Fila °C", "GFS °C", "ECMWF °C", "GFS mm", "ECMWF mm", "Lluvia"]
 
 
-def _temps(tmax: float | None, tmin: float | None) -> str:
+def temps_text(tmax: float | None, tmin: float | None) -> str:
     if tmax is None and tmin is None:
         return "s/d"
     return f"{fmt_num(tmax, 0)}/{fmt_num(tmin, 0)}"
 
 
-def _model_temps(model: ModelNumbers | None) -> str:
-    return "s/d" if model is None else _temps(model.temp_max, model.temp_min)
+def model_temps_text(model: ModelNumbers | None) -> str:
+    return "s/d" if model is None else temps_text(model.temp_max, model.temp_min)
 
 
-def _model_mm(model: ModelNumbers | None) -> str:
+def model_mm_text(model: ModelNumbers | None) -> str:
     return "s/d" if model is None else fmt_num(model.precip_sum)
 
 
-def _who_rains(day: DayComparison) -> str:
+def who_rains(day: DayComparison) -> str:
     gfs = rain_votes(day.gfs.precip_sum if day.gfs else None)
     ecmwf = rain_votes(day.ecmwf.precip_sum if day.ecmwf else None)
     if gfs and not ecmwf:
@@ -38,7 +38,7 @@ def _who_rains(day: DayComparison) -> str:
     return "por redondeo"
 
 
-def _day_label(day: DayComparison) -> str:
+def day_label_text(day: DayComparison) -> str:
     short = f"{day.date[8:10]}/{day.date[5:7]}" if len(day.date) >= 10 else day.date
     return f"{day.day_label} {short}".strip()
 
@@ -46,14 +46,14 @@ def _day_label(day: DayComparison) -> str:
 def _day_row(painter: Painter, day: DayComparison) -> list[str]:
     verdict = "—"
     if day.rain_disagreement:
-        verdict = painter.paint(f"DESACUERDO ({_who_rains(day)})", "warn")
+        verdict = painter.paint(f"DESACUERDO ({who_rains(day)})", "warn")
     return [
-        _day_label(day),
-        _temps(day.row_temp_max, day.row_temp_min),
-        _model_temps(day.gfs),
-        _model_temps(day.ecmwf),
-        _model_mm(day.gfs),
-        _model_mm(day.ecmwf),
+        day_label_text(day),
+        temps_text(day.row_temp_max, day.row_temp_min),
+        model_temps_text(day.gfs),
+        model_temps_text(day.ecmwf),
+        model_mm_text(day.gfs),
+        model_mm_text(day.ecmwf),
         verdict,
     ]
 
