@@ -1,0 +1,137 @@
+/* Standard variant: deep night blue, gold accent, the temperature curve as the centrepiece. */
+
+/* ---- Hero: maximum, minimum and the sky ---- */
+
+.hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.temps {
+  display: flex;
+  align-items: flex-end;
+  gap: 44px;
+}
+
+.temp--max .temp-value { font-size: var(--temp-size, 230px); }
+
+.temp--min .temp-value {
+  font-size: calc(var(--temp-size, 230px) * 0.62);
+  color: var(--text-soft);
+}
+
+.temp--max .temp-label { color: var(--gold-soft); }
+
+.sky {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 300px;
+  text-align: center;
+}
+
+.sky-icon {
+  width: 240px;
+  height: 240px;
+  margin: -30px 0 -18px;
+}
+
+.sky-text {
+  font-size: 44px;
+  line-height: 1.1;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ---- Temperature chart ---- */
+
+.chart {
+  margin-bottom: 4px;
+  padding: 22px 0 12px;
+  border-top: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+}
+
+.chart .section-title { margin-bottom: 4px; }
+
+.curve { display: block; width: 936px; height: 250px; overflow: visible; }
+
+.curve-tick { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 10; }
+
+.curve-area { fill: url(#curve-fill); }
+
+.curve-line {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.curve-dot { fill: var(--gold-soft); stroke: var(--navy-900); stroke-width: 5; }
+
+.curve-dot--cool { fill: var(--text-soft); }
+
+.curve-label {
+  font-family: var(--font-figure);
+  font-variant-numeric: lining-nums;
+  font-size: 46px;
+  font-weight: 600;
+  fill: #ffffff;
+}
+
+.curve-label--cool { fill: var(--text-soft); }
+
+.curve-hours {
+  position: relative;
+  height: 42px;
+  margin-top: 0;
+}
+
+.curve-hours span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.curve-hours .curve-hours-unit { display: none; }
+
+/* Without hourly data: a simple bar from the minimum to the maximum, centred in the free space. */
+.chart--minmax {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.minmax {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-top: 26px;
+}
+
+.minmax-end {
+  font-family: var(--font-figure);
+  font-variant-numeric: lining-nums;
+  font-size: 72px;
+  font-weight: 600;
+}
+
+.minmax-bar {
+  flex: 1 1 auto;
+  height: 22px;
+  border-radius: 11px;
+  background: linear-gradient(90deg, #5aaad8 0%, var(--gold) 100%);
+}
+
+/* ---- Rows sit at the bottom of the safe area ---- */
+
+.rows { margin-top: auto; }

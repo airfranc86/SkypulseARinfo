@@ -1,0 +1,344 @@
+/* Alert variant: high contrast, written severity (Alerta in red, Atención in amber), the gust and
+   the critical window up front. Colour always repeats what the words already say. */
+
+.plate {
+  background: linear-gradient(180deg, #1a1626 0%, #0c1426 38%, var(--navy-950) 100%);
+}
+
+.backdrop {
+  background:
+    radial-gradient(ellipse 85% 26% at 50% 0%, rgba(224, 85, 69, 0.30) 0%, transparent 72%),
+    radial-gradient(2px 2px at 12% 5%, rgba(255, 255, 255, 0.28) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 38% 9%, rgba(255, 255, 255, 0.22) 0%, transparent 100%),
+    radial-gradient(2px 2px at 66% 4%, rgba(255, 255, 255, 0.26) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 90% 8%, rgba(255, 255, 255, 0.24) 0%, transparent 100%);
+}
+
+.backdrop::after { display: none; }
+
+.head { border-bottom-color: rgba(224, 85, 69, 0.55); }
+
+/* ---- Alert blocks ---- */
+
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.alert {
+  position: relative;
+  padding: 22px 30px 24px 38px;
+  border-radius: 18px;
+  background: rgba(13, 30, 56, 0.78);
+  border: 2px solid var(--line-strong);
+}
+
+.alert::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  border-radius: 18px 0 0 18px;
+}
+
+.alert--alerta { border-color: rgba(224, 85, 69, 0.60); }
+.alert--alerta::before { background: var(--red); }
+.alert--atencion { border-color: rgba(240, 160, 48, 0.55); }
+.alert--atencion::before { background: var(--amber); }
+
+.alert--primary.alert--alerta {
+  background: linear-gradient(180deg, rgba(120, 28, 24, 0.55) 0%, rgba(13, 30, 56, 0.85) 100%);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 28px 10px 20px;
+  border-radius: 999px;
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.15;
+}
+
+.badge .ico { width: 44px; height: 44px; }
+.badge-sep { opacity: 0.7; }
+.badge--alerta { background: var(--red-strong); color: #ffffff; }
+.badge--atencion { background: var(--amber); color: var(--navy-950); }
+
+.alert-lead {
+  margin-top: 20px;
+  font-size: 54px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.alert-message {
+  text-wrap: balance;
+  margin-top: 18px;
+  font-size: 64px;
+  line-height: 1.06;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+}
+
+.alert-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  column-gap: 56px;
+  row-gap: 8px;
+  margin-top: 18px;
+}
+
+.alert-figures--inline { column-gap: 26px; margin-top: 0; }
+
+.figure { display: flex; flex-direction: column; }
+
+.figure-number { white-space: nowrap; }
+
+.figure-value {
+  font-family: var(--font-figure);
+  font-variant-numeric: lining-nums;
+  font-size: 132px;
+  line-height: 0.9;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.figure-unit {
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+/* "hasta" before a bound: as quiet as the unit, so the number keeps the weight */
+.figure-prefix {
+  margin-right: 0.25em;
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+.figure-caption {
+  margin-top: 2px;
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.alert--wind .figure-value { font-size: var(--figure-size, 240px); line-height: 0.86; }
+.alert--wind .figure-unit { font-size: 72px; }
+
+.alert-trail {
+  padding-bottom: 14px;
+  font-size: 64px;
+  font-weight: 800;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* ---- Critical window: the time in large type and a 24 h ruler ---- */
+
+.window { margin-top: 18px; }
+
+.window-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 18px;
+}
+
+.window-label {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.window-time {
+  font-size: 56px;
+  font-weight: 800;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.alert--alerta .window-label { color: var(--red-text); }
+.alert--atencion .window-label { color: var(--amber); }
+
+.ruler { margin-top: 14px; }
+
+.ruler-track {
+  position: relative;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--navy-700);
+}
+
+.ruler-span {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  min-width: 18px;
+  border-radius: 10px;
+}
+
+.alert--alerta .ruler-span { background: var(--red); box-shadow: 0 0 24px rgba(224, 85, 69, 0.55); }
+.alert--atencion .ruler-span { background: var(--amber); box-shadow: 0 0 24px rgba(240, 160, 48, 0.45); }
+
+.ruler-hours {
+  position: relative;
+  height: 42px;
+  margin: 6px 14px 0;
+}
+
+.ruler-hours span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---- Summary at the bottom: sky, maximum, minimum, then rain and wind lines ---- */
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 2px solid var(--line);
+  overflow: clip; /* the icon's transparent margin must not spill out of the safe area */
+}
+
+.summary-icon { flex: none; width: 132px; height: 132px; margin: -14px -8px -14px -12px; }
+
+.summary-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 30px;
+}
+
+.summary-temps { display: flex; align-items: baseline; gap: 30px; }
+
+.summary .temp { flex-direction: row; align-items: baseline; gap: 12px; }
+.summary .temp-value { font-size: 84px; }
+.summary .temp--min .temp-value { color: var(--text-soft); }
+
+.summary-sky {
+  font-size: 42px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.summary-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  font-size: 38px;
+  line-height: 1.25;
+  color: var(--text-soft);
+}
+
+.summary-ico { width: 38px; height: 38px; align-self: center; color: var(--gold); }
+
+.summary-label {
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.summary-value { font-weight: 700; color: var(--text); }
+
+.summary-note { flex: 1 0 100%; padding-left: 50px; color: var(--text-soft); }
+
+/* ---- Single alert: the block grows into the free space and its figures get bigger ---- */
+
+.plate--single .alerts { flex: 1 1 auto; }
+
+.plate--single .alert {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.plate--single .badge { align-self: flex-start; }
+.plate--single .alert-figures { margin-top: 30px; column-gap: 72px; }
+.plate--single .alert-figures--inline { margin-top: 0; column-gap: 26px; }
+.plate--single .figure-value { font-size: 190px; }
+.plate--single .figure-unit { font-size: 70px; }
+.plate--single .figure-caption { margin-top: 8px; }
+.plate--single .window { margin-top: 44px; }
+.plate--single .window-time { font-size: 68px; }
+.plate--single .alert-message { margin-top: 34px; font-size: 84px; }
+.plate--single .summary { margin-top: 24px; }
+
+/* ---- Compact: wind and rain alerts together ---- */
+
+.plate--compact .city,
+.plate--dense .city { font-size: min(var(--city-size, 128px), 112px); }
+.plate--compact .head { padding-bottom: 20px; margin-bottom: 22px; }
+.plate--compact .brand { margin-bottom: 16px; }
+.plate--compact .alert-lead { margin-top: 10px; font-size: 46px; }
+.plate--compact .alert--wind .figure-value { font-size: calc(var(--figure-size, 240px) * 0.78); }
+.plate--compact .alert--wind .figure-unit { font-size: 62px; }
+.plate--compact .alert-trail { font-size: 58px; padding-bottom: 10px; }
+.plate--compact .alert-figures { margin-top: 10px; }
+.plate--compact .figure-value { font-size: 120px; }
+.plate--compact .figure-unit { font-size: 50px; }
+.plate--compact .window { margin-top: 14px; }
+.plate--compact .window-time { font-size: 52px; }
+.plate--compact .alerts { gap: 16px; }
+.plate--compact .alert { padding: 18px 30px 20px 38px; }
+.plate--compact .summary { padding-top: 12px; }
+.plate--compact .summary-icon { width: 116px; height: 116px; }
+.plate--compact .summary .temp-value { font-size: 76px; }
+
+/* ---- Dense: three alerts on one plate (no ruler: the time in large type carries the window) ---- */
+
+.plate--dense .head { padding-bottom: 18px; margin-bottom: 18px; }
+.plate--dense .brand { margin-bottom: 14px; }
+.plate--dense .brand-logo { width: 64px; height: 64px; }
+.plate--dense .date { margin-top: 6px; font-size: 44px; }
+.plate--dense .alerts { gap: 14px; }
+.plate--dense .alert { padding: 16px 26px 18px 34px; }
+.plate--dense .badge { font-size: 32px; padding: 6px 22px 6px 16px; }
+.plate--dense .badge .ico { width: 36px; height: 36px; }
+.plate--dense .alert-lead { margin-top: 8px; font-size: 42px; }
+.plate--dense .alert--wind .figure-value { font-size: calc(var(--figure-size, 240px) * 0.66); }
+.plate--dense .alert--wind .figure-unit { font-size: 56px; }
+.plate--dense .alert-trail { font-size: 52px; padding-bottom: 8px; }
+.plate--dense .alert-message { margin-top: 10px; font-size: 50px; }
+.plate--dense .alert-figures { margin-top: 8px; }
+.plate--dense .figure-value { font-size: 120px; }
+.plate--dense .figure-unit { font-size: 48px; }
+.plate--dense .figure-caption { margin-top: 0; }
+.plate--dense .window { margin-top: 10px; }
+.plate--dense .window-time { font-size: 48px; }
+.plate--dense .summary { padding-top: 12px; }
+.plate--dense .summary-icon { width: 100px; height: 100px; }
+.plate--dense .summary .temp-value { font-size: 68px; }
