@@ -6,7 +6,7 @@ import { TafDecodedCard } from '@/components/aeronautica/TafDecodedCard'
 import { api } from '@/lib/api'
 import { ApiError } from '@/lib/apiErrors'
 import { LOAD_RETRY } from '@/lib/loadError'
-import { FLIGHT_CATEGORY_STYLES, tafStatusMessage, type TafDecoded } from '@/lib/taf'
+import { FLIGHT_CATEGORY_STYLES, TAF_GROUP_NOTES, tafStatusMessage, type TafDecoded } from '@/lib/taf'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -920,10 +920,11 @@ const GLOSARIO = [
   { code: 'NOSIG',    color: '#90aabb', note: 'No significant change expected — sin cambios en 2 horas' },
   { code: 'WS',       color: '#f0a030', note: 'Wind shear — cizalladura reportada en aproximación o despegue' },
   { code: 'CB / TCU', color: '#e05545', note: 'Cumulonimbus / Towering Cumulus — siempre crítico' },
-  { code: 'TEMPO',    color: '#f0a030', note: 'Cambio temporal de <1 hora, durante <mitad del período' },
-  { code: 'BECMG',    color: '#f0a030', note: 'Becoming — cambio gradual y permanente hacia nuevas condiciones' },
-  { code: 'FM',       color: '#f0a030', note: 'From — cambio rápido y permanente a partir de la hora indicada (FM060900 = desde las 09:00 UTC del día 06)' },
-  { code: 'PROB30 / PROB40', color: '#f0a030', note: 'Probabilidad de 30 % o 40 % de que ocurra lo que sigue; solo o junto con TEMPO' },
+  { code: 'TEMPO',    color: '#f0a030', note: TAF_GROUP_NOTES.TEMPO },
+  { code: 'BECMG',    color: '#f0a030', note: TAF_GROUP_NOTES.BECMG },
+  { code: 'FM',       color: '#f0a030', note: TAF_GROUP_NOTES.FM },
+  { code: 'PROB30',   color: '#f0a030', note: TAF_GROUP_NOTES.PROB30 },
+  { code: 'PROB40',   color: '#f0a030', note: TAF_GROUP_NOTES.PROB40 },
   { code: 'TX / TN',  color: '#ff9966', note: 'Temperatura máxima / mínima prevista, con su hora UTC (TX28/0719Z)' },
   { code: 'VRB',      color: '#f0a030', note: 'Variable — viento sin dirección definida (VRB03KT)' },
   { code: 'NSW',      color: '#3ecf7a', note: 'No significant weather — termina un fenómeno que había antes' },
@@ -1160,8 +1161,8 @@ export function Metar() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
               <FieldCard label="Período de validez" color={C.time} value="0212/0318" note="Día 02 a las 12Z hasta día 03 a las 18Z. El TAF siempre indica desde/hasta en UTC." />
-              <FieldCard label="TEMPO" color="#e05545" value="TEMPO 0215/0220" note="Cambio temporal de menos de 1 hora, durante menos de la mitad del período indicado." />
-              <FieldCard label="BECMG" color={C.wind} value="BECMG 0300/0302" note="Cambio gradual y permanente hacia nuevas condiciones dentro del período indicado." />
+              <FieldCard label="TEMPO" color="#e05545" value="TEMPO 0215/0220" note={TAF_GROUP_NOTES.TEMPO} />
+              <FieldCard label="BECMG" color={C.wind} value="BECMG 0300/0302" note={TAF_GROUP_NOTES.BECMG} />
               <FieldCard label="CB en nubes" color="#e05545" value="BKN015CB" note="La sufija CB después de la altura indica Cumulonimbus — la alerta más crítica en cualquier METAR o TAF." />
             </div>
           </section>

@@ -39,9 +39,20 @@ test('the TAF block credits the Aviation Weather Center and the page keeps credi
 test('the glossary explains the TAF groups the decoded block uses', () => {
   const start = metar.indexOf('const GLOSARIO')
   const glossary = metar.slice(start, metar.indexOf('function GlosarioSection', start))
-  for (const code of ["'FM'", "'PROB30 / PROB40'", "'TX / TN'", "'VRB'", "'NSW'", "'NSC'"]) {
+  for (const code of ["'FM'", "'PROB30'", "'PROB40'", "'TX / TN'", "'VRB'", "'NSW'", "'NSC'"]) {
     assert.ok(glossary.includes(`code: ${code}`), `glossary is missing ${code}`)
   }
+})
+
+test('the glossary and the TAF card use the same words for BECMG, TEMPO, FM and PROB', () => {
+  const start = metar.indexOf('const GLOSARIO')
+  const glossary = metar.slice(start, metar.indexOf('function GlosarioSection', start))
+  for (const key of ['BECMG', 'TEMPO', 'FM', 'PROB30', 'PROB40']) {
+    assert.ok(glossary.includes(`TAF_GROUP_NOTES.${key}`), `the glossary does not use TAF_GROUP_NOTES.${key}`)
+  }
+  assert.ok(!/Becoming — cambio gradual y permanente/.test(metar), 'an old BECMG text is still in the page')
+  const card = read('../src/components/aeronautica/TafDecodedCard.tsx')
+  assert.ok(card.includes('changeExplanation('), 'the card does not show the explanation of the change group')
 })
 
 test('/datos says the TAF of the METAR page comes from the Aviation Weather Center', () => {

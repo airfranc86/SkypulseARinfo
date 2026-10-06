@@ -200,21 +200,79 @@ export function isCavok(period: TafPeriod): boolean {
   )
 }
 
+/**
+ * Qué significa cada grupo de cambio, en las mismas palabras para la tarjeta del TAF y para el
+ * glosario de la página (un test comprueba que el glosario usa estas constantes). Según el
+ * Anexo 3 de la OACI: PROB solo admite 30 y 40; una probabilidad mayor a 40 % se escribe como
+ * pronóstico principal y una menor a 30 % no se informa; va solo o junto con TEMPO.
+ */
+export const TAF_GROUP_NOTES = {
+  FM: 'Cambio rápido y definitivo: desde esa hora rige esta condición y reemplaza a la anterior.',
+  BECMG:
+    'El cambio que se viene: las condiciones pasan de forma gradual a las de este grupo y siguen así después del cambio.',
+  TEMPO:
+    'Fluctuaciones pasajeras: cada una dura menos de 1 hora y, en total, menos de la mitad del lapso. Después vuelve lo anterior.',
+  PROB30: 'Probabilidad baja: 30 % de que se den estas condiciones durante el lapso indicado.',
+  PROB40:
+    'Probabilidad alta dentro del TAF: 40 %, la máxima que admite (arriba de eso se escribe como pronóstico principal). Aun así, es menos probable que ocurra a que no.',
+  PROB30_TEMPO:
+    'Con 30 % de probabilidad (baja), pueden darse de forma pasajera estas condiciones durante el lapso indicado.',
+  PROB40_TEMPO:
+    'Con 40 % de probabilidad (la máxima que admite el TAF), pueden darse de forma pasajera estas condiciones durante el lapso indicado; sigue siendo menos probable que ocurra a que no.',
+} as const
+
+function probabilityWord(probability: number): string {
+  if (probability === 30) return 'baja'
+  if (probability === 40) return 'alta'
+  return ''
+}
+
+/** "baja (30 %)", "alta (40 %)" o "50 %" si el valor no es de los que admite el código. */
+function probabilityText(probability: number): string {
+  const word = probabilityWord(probability)
+  return word ? `probabilidad ${word} (${probability} %)` : `${probability} % de probabilidad`
+}
+
 export function changeLabel(period: TafPeriod): string {
-  const chance = period.probability ? `${period.probability} % de probabilidad` : null
+  const p = period.probability
+  const chance = p ? probabilityText(p) : null
+  const code = p ? `PROB${p}` : null
   switch (period.change) {
     case 'initial':
       return 'Condición base'
     case 'from':
-      return 'A partir de entonces'
+      return 'A partir de entonces · FM'
     case 'becoming':
-      return 'Cambio gradual'
+      return 'Cambio gradual · BECMG'
     case 'tempo':
-      return chance ? `Temporalmente · ${chance}` : 'Temporalmente'
+      return chance ? `Temporalmente, ${chance} · ${code} TEMPO` : 'Temporalmente · TEMPO'
     case 'prob':
-      return chance ?? 'Probable'
+      return chance ? `${chance.charAt(0).toUpperCase()}${chance.slice(1)} · ${code}` : 'Probable'
     default:
       return period.change
+  }
+}
+
+/** Una línea que explica qué significa el grupo. `null` en la condición base: no hay nada que aclarar. */
+export function changeExplanation(period: TafPeriod): string | null {
+  const p = period.probability
+  switch (period.change) {
+    case 'initial':
+      return null
+    case 'from':
+      return TAF_GROUP_NOTES.FM
+    case 'becoming':
+      return TAF_GROUP_NOTES.BECMG
+    case 'tempo':
+      if (p === 30) return TAF_GROUP_NOTES.PROB30_TEMPO
+      if (p === 40) return TAF_GROUP_NOTES.PROB40_TEMPO
+      return p ? `Con ${p} % de probabilidad, pueden darse de forma pasajera estas condiciones durante el lapso indicado.` : TAF_GROUP_NOTES.TEMPO
+    case 'prob':
+      if (p === 30) return TAF_GROUP_NOTES.PROB30
+      if (p === 40) return TAF_GROUP_NOTES.PROB40
+      return p ? `Probabilidad de ${p} % de que se den estas condiciones durante el lapso indicado.` : null
+    default:
+      return null
   }
 }
 
