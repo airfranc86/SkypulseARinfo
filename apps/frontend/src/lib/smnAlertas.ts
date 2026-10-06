@@ -6,6 +6,33 @@ export type CriticalLevel = 'rojo' | 'naranja'
 /** Fuente oficial de los avisos: destino de todos los enlaces a smn.gob.ar. */
 export const SMN_URL = 'https://www.smn.gob.ar/'
 
+export interface SmnAlertasLocation {
+  lat: number
+  lon: number
+}
+
+/**
+ * Decimales de las coordenadas que se mandan al backend: 2 son ~1 km, tan fino como los polígonos del
+ * SMN (sus vértices están en una grilla de 0,02°). Redondear evita una consulta nueva por cada
+ * variación del GPS y deja la misma clave de caché para el mismo lugar.
+ */
+const COORD_DECIMALS = 2
+
+/**
+ * Punto (redondeado) por el que se piden los avisos, o null mientras no hay ubicación: la consulta
+ * queda apagada en vez de pedir los avisos de todo el país.
+ */
+export function smnAlertasLocation(lat: number | null | undefined, lon: number | null | undefined): SmnAlertasLocation | null {
+  if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) return null
+  const factor = 10 ** COORD_DECIMALS
+  return { lat: Math.round(lat * factor) / factor, lon: Math.round(lon * factor) / factor }
+}
+
+/** Clave de caché de los avisos: una entrada por zona, así que cambiar de ciudad nunca muestra los de otra. */
+export function smnAlertasQueryKey(location: SmnAlertasLocation | null) {
+  return ['smn-alertas', location?.lat ?? null, location?.lon ?? null] as const
+}
+
 /** Orden de gravedad: menor número = más grave. "otro" (nivel que no reconocemos) va al final. */
 const RANK: Record<AlertLevel, number> = { rojo: 0, naranja: 1, amarillo: 2, verde: 3, otro: 4 }
 

@@ -217,6 +217,10 @@ export interface SmnAlerta {
   fecha_desde: string | null
   fecha_hasta: string | null
   descripcion: string
+  /** Severidad CAP tal cual (Extreme, Severe, Moderate…). Opcional: un backend anterior no la envía. */
+  severidad?: string | null
+  /** Qué hacer, según el SMN; el feed puede omitirlo. Opcional: un backend anterior no lo envía. */
+  instruccion?: string | null
 }
 
 export interface SmnAlertasResponse {
@@ -623,8 +627,9 @@ export const api = {
   volcanes: () =>
     request<VolcanesResponse>('/api/volcanes'),
 
-  alertasSmn: () =>
-    request<SmnAlertasResponse>('/api/alertas-smn'),
+  /** Con coordenadas, solo los avisos cuya área contiene ese punto; sin ellas, todos los del país. */
+  alertasSmn: (lat?: number, lon?: number) =>
+    request<SmnAlertasResponse>('/api/alertas-smn', lat !== undefined && lon !== undefined ? { lat, lon } : undefined),
 
   fireDanger: (lat: number, lon: number) =>
     request<FireDangerResponse>('/api/incendios', { lat, lon }),

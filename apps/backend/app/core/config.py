@@ -17,8 +17,12 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 600           # 10 minutos — clima SMN
     cache_ttl_earthquakes_seconds: int = 300    # 5 minutos — USGS sismos (era 6h, causaba datos obsoletos)
     cache_ttl_volcanes_seconds: int = 7200      # 2 horas — OAVV volcanes
-    smn_alerts_base_url: str = "https://ws.smn.gob.ar/alerts"
-    cache_ttl_smn_alertas_seconds: int = 1800   # 30 minutos — alertas SMN (endpoint no oficial)
+    # Avisos oficiales del SMN: feed CAP abierto (RSS + un XML CAP por aviso), licencia CC BY 4.0.
+    smn_cap_feed_url: str = "https://ssl.smn.gob.ar/CAP/AR.php"
+    cache_ttl_smn_alertas_seconds: int = 1800   # 30 minutos — cada cuánto se relee el RSS del feed CAP
+    smn_cap_stale_max_seconds: int = 3600       # 1 hora — hasta cuándo se sirve el último feed leído si el SMN no responde
+    smn_cap_document_max_bytes: int = 65536     # 64 KB — tope por XML CAP (los reales pesan 2-5 KB)
+    smn_cap_content_failures_before_skip: int = 3  # fallas de contenido seguidas de un XML CAP antes de ponerlo en cuarentena
     log_level: str = "INFO"
     cors_origins: list[str] | str = _DEFAULT_CORS
 

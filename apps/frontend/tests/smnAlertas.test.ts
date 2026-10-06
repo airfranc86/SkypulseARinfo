@@ -6,6 +6,8 @@ import {
   criticalAlertas,
   criticalLevel,
   isSmnUnavailable,
+  smnAlertasLocation,
+  smnAlertasQueryKey,
   sortAlertas,
   vigenciaText,
 } from '../src/lib/smnAlertas.ts'
@@ -112,4 +114,36 @@ test('isSmnUnavailable: solo es falla la consulta caída o la fuente que dice "n
 test('isSmnUnavailable: un refetch caído con datos viejos también cuenta como falla', () => {
   // "Sin avisos" sería afirmar algo que no sabemos: con la consulta en error no se muestran avisos viejos.
   assert.equal(isSmnUnavailable(true, { available: true }), true)
+})
+
+test('smnAlertasLocation: redondea a 2 decimales (~1 km), la grilla de los polígonos del SMN', () => {
+  assert.deepEqual(smnAlertasLocation(-33.1235, -64.3493), { lat: -33.12, lon: -64.35 })
+  assert.deepEqual(smnAlertasLocation(-31.4135, -64.181), { lat: -31.41, lon: -64.18 })
+  assert.deepEqual(smnAlertasLocation(-34.6, -58.38), { lat: -34.6, lon: -58.38 })
+})
+
+test('smnAlertasLocation: sin ubicación (o con una inválida) la consulta queda apagada', () => {
+  assert.equal(smnAlertasLocation(null, null), null)
+  assert.equal(smnAlertasLocation(-33.1, null), null)
+  assert.equal(smnAlertasLocation(null, -64.3), null)
+  assert.equal(smnAlertasLocation(undefined, undefined), null)
+  assert.equal(smnAlertasLocation(Number.NaN, -64.3), null)
+  assert.equal(smnAlertasLocation(-33.1, Number.POSITIVE_INFINITY), null)
+})
+
+test('smnAlertasLocation: el cero es una coordenada válida, no "sin ubicación"', () => {
+  assert.deepEqual(smnAlertasLocation(0, 0), { lat: 0, lon: 0 })
+})
+
+test('smnAlertasQueryKey: una entrada por zona; la variación del GPS comparte clave', () => {
+  const rioCuarto = smnAlertasQueryKey(smnAlertasLocation(-33.1235, -64.3493))
+  assert.deepEqual(rioCuarto, ['smn-alertas', -33.12, -64.35])
+  // Unos metros más allá es el mismo lugar: no hay consulta nueva.
+  assert.deepEqual(smnAlertasQueryKey(smnAlertasLocation(-33.1241, -64.3487)), rioCuarto)
+  // Otra ciudad, otra clave: nunca se muestran los avisos de otra zona.
+  assert.notDeepEqual(smnAlertasQueryKey(smnAlertasLocation(-31.4135, -64.181)), rioCuarto)
+})
+
+test('smnAlertasQueryKey: sin ubicación la clave es estable', () => {
+  assert.deepEqual(smnAlertasQueryKey(null), ['smn-alertas', null, null])
 })

@@ -38,7 +38,9 @@ function dashboardErrorMessage(error: Error): string {
 export function PrevisionClima({ location }: Props) {
   const [forecastModel, setForecastModel] = useState<ForecastModel>('consensus')
   const { data, isLoading, isFetching, isPlaceholderData, error, refetch, failureCount, failureReason } = useWeatherDashboard(location?.lat ?? null, location?.lon ?? null, forecastModel)
-  const { data: alertasData, isError: alertasError, isPending: alertasPending } = useSmnAlertas()
+  // `isLoading` y no `isPending`: sin ubicación la consulta está apagada y `isPending` seguiría en true
+  // para siempre, con la línea "Consultando avisos del SMN…" colgada.
+  const { data: alertasData, isError: alertasError, isLoading: alertasLoading } = useSmnAlertas(location?.lat ?? null, location?.lon ?? null)
   const reducedMotion = useReducedMotion()
 
   // Colapsado en la primera visita — el hero de "ahora" es el viewport que
@@ -161,7 +163,7 @@ export function PrevisionClima({ location }: Props) {
         alertas={alertas}
         unavailable={alertasUnavailable}
         nowMs={alertasNowMs}
-        pending={alertasPending}
+        pending={alertasLoading}
       />
 
       {isWakingUp && <RetryNotice text="Despertando el servidor — puede tardar unos segundos, es solo la primera vez del día." />}
