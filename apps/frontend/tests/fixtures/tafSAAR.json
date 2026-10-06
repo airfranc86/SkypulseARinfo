@@ -1,0 +1,152 @@
+{
+ "icao": "SAAR",
+ "name": "Rosario Intl",
+ "issued_at": "2026-10-06T17:00:00Z",
+ "valid_from": "2026-10-06T18:00:00Z",
+ "valid_to": "2026-10-07T18:00:00Z",
+ "raw": "TAF SAAR 061700Z 0618/0718 08010KT CAVOK TX25/0618Z TN16/0710Z TEMPO 0618/0623 08010G20KT TEMPO 0709/0713 4000 TSRA SCT020 FEW040CB BKN060 BECMG 0713/0715 18015KT 3000 TSRA BKN008 FEW040CB OVC045",
+ "periods": [
+  {
+   "change": "initial",
+   "probability": null,
+   "valid_from": "2026-10-06T18:00:00Z",
+   "valid_to": "2026-10-07T13:00:00Z",
+   "becoming_by": null,
+   "wind": {
+    "direction_deg": 80,
+    "variable": false,
+    "speed_kt": 10,
+    "gust_kt": null
+   },
+   "visibility_m": 10000,
+   "visibility_over": true,
+   "clouds": [
+    {
+     "cover": "NSC",
+     "base_ft": null,
+     "kind": null
+    }
+   ],
+   "weather": [],
+   "flight_category": "VFR",
+   "inherited": []
+  },
+  {
+   "change": "tempo",
+   "probability": null,
+   "valid_from": "2026-10-06T18:00:00Z",
+   "valid_to": "2026-10-06T23:00:00Z",
+   "becoming_by": null,
+   "wind": {
+    "direction_deg": 80,
+    "variable": false,
+    "speed_kt": 10,
+    "gust_kt": 20
+   },
+   "visibility_m": 10000,
+   "visibility_over": true,
+   "clouds": [
+    {
+     "cover": "NSC",
+     "base_ft": null,
+     "kind": null
+    }
+   ],
+   "weather": [],
+   "flight_category": "VFR",
+   "inherited": [
+    "visibility",
+    "clouds"
+   ]
+  },
+  {
+   "change": "tempo",
+   "probability": null,
+   "valid_from": "2026-10-07T09:00:00Z",
+   "valid_to": "2026-10-07T13:00:00Z",
+   "becoming_by": null,
+   "wind": {
+    "direction_deg": 80,
+    "variable": false,
+    "speed_kt": 10,
+    "gust_kt": null
+   },
+   "visibility_m": 4000,
+   "visibility_over": false,
+   "clouds": [
+    {
+     "cover": "SCT",
+     "base_ft": 2000,
+     "kind": null
+    },
+    {
+     "cover": "FEW",
+     "base_ft": 4000,
+     "kind": "CB"
+    },
+    {
+     "cover": "BKN",
+     "base_ft": 6000,
+     "kind": null
+    }
+   ],
+   "weather": [
+    "TSRA"
+   ],
+   "flight_category": "IFR",
+   "inherited": [
+    "wind"
+   ]
+  },
+  {
+   "change": "becoming",
+   "probability": null,
+   "valid_from": "2026-10-07T13:00:00Z",
+   "valid_to": "2026-10-07T18:00:00Z",
+   "becoming_by": "2026-10-07T15:00:00Z",
+   "wind": {
+    "direction_deg": 180,
+    "variable": false,
+    "speed_kt": 15,
+    "gust_kt": null
+   },
+   "visibility_m": 3000,
+   "visibility_over": false,
+   "clouds": [
+    {
+     "cover": "BKN",
+     "base_ft": 800,
+     "kind": null
+    },
+    {
+     "cover": "FEW",
+     "base_ft": 4000,
+     "kind": "CB"
+    },
+    {
+     "cover": "OVC",
+     "base_ft": 4500,
+     "kind": null
+    }
+   ],
+   "weather": [
+    "TSRA"
+   ],
+   "flight_category": "IFR",
+   "inherited": []
+  }
+ ],
+ "temperatures": [
+  {
+   "kind": "max",
+   "celsius": 25.0,
+   "valid_at": "2026-10-06T18:00:00Z"
+  },
+  {
+   "kind": "min",
+   "celsius": 16.0,
+   "valid_at": "2026-10-07T10:00:00Z"
+  }
+ ],
+ "source": "aviationweather.gov (NOAA)"
+}

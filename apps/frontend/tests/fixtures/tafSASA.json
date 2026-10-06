@@ -1,0 +1,157 @@
+{
+ "icao": "SASA",
+ "name": "Salta/Guemes Arpt",
+ "issued_at": "2026-10-06T17:00:00Z",
+ "valid_from": "2026-10-06T18:00:00Z",
+ "valid_to": "2026-10-07T18:00:00Z",
+ "raw": "TAF SASA 061700Z 0618/0718 05010KT CAVOK TX28/0718Z TN13/0710Z TEMPO 0619/0622 05015KT 9999 SCT035 BECMG 0700/0703 VRB03KT 7000 BKN025 PROB40 TEMPO 0709/0712 2000 BR OVC010 BECMG 0713/0716 05010KT 9999 SCT035 FEW040TCU",
+ "periods": [
+  {
+   "change": "initial",
+   "probability": null,
+   "valid_from": "2026-10-06T18:00:00Z",
+   "valid_to": "2026-10-07T00:00:00Z",
+   "becoming_by": null,
+   "wind": {
+    "direction_deg": 50,
+    "variable": false,
+    "speed_kt": 10,
+    "gust_kt": null
+   },
+   "visibility_m": 10000,
+   "visibility_over": true,
+   "clouds": [
+    {
+     "cover": "NSC",
+     "base_ft": null,
+     "kind": null
+    }
+   ],
+   "weather": [],
+   "flight_category": "VFR",
+   "inherited": []
+  },
+  {
+   "change": "tempo",
+   "probability": null,
+   "valid_from": "2026-10-06T19:00:00Z",
+   "valid_to": "2026-10-06T22:00:00Z",
+   "becoming_by": null,
+   "wind": {
+    "direction_deg": 50,
+    "variable": false,
+    "speed_kt": 15,
+    "gust_kt": null
+   },
+   "visibility_m": 10000,
+   "visibility_over": true,
+   "clouds": [
+    {
+     "cover": "SCT",
+     "base_ft": 3500,
+     "kind": null
+    }
+   ],
+   "weather": [],
+   "flight_category": "VFR",
+   "inherited": []
+  },
+  {
+   "change": "becoming",
+   "probability": null,
+   "valid_from": "2026-10-07T00:00:00Z",
+   "valid_to": "2026-10-07T13:00:00Z",
+   "becoming_by": "2026-10-07T03:00:00Z",
+   "wind": {
+    "direction_deg": null,
+    "variable": true,
+    "speed_kt": 3,
+    "gust_kt": null
+   },
+   "visibility_m": 7000,
+   "visibility_over": false,
+   "clouds": [
+    {
+     "cover": "BKN",
+     "base_ft": 2500,
+     "kind": null
+    }
+   ],
+   "weather": [],
+   "flight_category": "MVFR",
+   "inherited": []
+  },
+  {
+   "change": "tempo",
+   "probability": 40,
+   "valid_from": "2026-10-07T09:00:00Z",
+   "valid_to": "2026-10-07T12:00:00Z",
+   "becoming_by": null,
+   "wind": {
+    "direction_deg": null,
+    "variable": true,
+    "speed_kt": 3,
+    "gust_kt": null
+   },
+   "visibility_m": 2000,
+   "visibility_over": false,
+   "clouds": [
+    {
+     "cover": "OVC",
+     "base_ft": 1000,
+     "kind": null
+    }
+   ],
+   "weather": [
+    "BR"
+   ],
+   "flight_category": "IFR",
+   "inherited": [
+    "wind"
+   ]
+  },
+  {
+   "change": "becoming",
+   "probability": null,
+   "valid_from": "2026-10-07T13:00:00Z",
+   "valid_to": "2026-10-07T18:00:00Z",
+   "becoming_by": "2026-10-07T16:00:00Z",
+   "wind": {
+    "direction_deg": 50,
+    "variable": false,
+    "speed_kt": 10,
+    "gust_kt": null
+   },
+   "visibility_m": 10000,
+   "visibility_over": true,
+   "clouds": [
+    {
+     "cover": "SCT",
+     "base_ft": 3500,
+     "kind": null
+    },
+    {
+     "cover": "FEW",
+     "base_ft": 4000,
+     "kind": "TCU"
+    }
+   ],
+   "weather": [],
+   "flight_category": "VFR",
+   "inherited": []
+  }
+ ],
+ "temperatures": [
+  {
+   "kind": "max",
+   "celsius": 28.0,
+   "valid_at": "2026-10-06T18:00:00Z"
+  },
+  {
+   "kind": "min",
+   "celsius": 13.0,
+   "valid_at": "2026-10-07T10:00:00Z"
+  }
+ ],
+ "source": "aviationweather.gov (NOAA)"
+}

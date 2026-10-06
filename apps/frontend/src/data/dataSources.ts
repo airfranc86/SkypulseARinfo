@@ -71,7 +71,7 @@ export const DATA_SOURCES: readonly DataSource[] = [
     id: 'metar',
     title: 'METAR y TAF',
     summary:
-      'La página de METAR y TAF consulta los reportes y pronósticos aeronáuticos a través de CheckWX. Niebla y el "ahora" de Previsión usan los del Aviation Weather Center (aviationweather.gov).',
+      'La página de METAR y TAF consulta el METAR a través de CheckWX y muestra el TAF decodificado por período a partir de los datos del Aviation Weather Center (aviationweather.gov). Niebla y el "ahora" de Previsión también usan los del Aviation Weather Center.',
     providers: ['CheckWX', 'Aviation Weather Center (NOAA)'],
   },
   {
