@@ -3,6 +3,10 @@ import { useHacerDeporte } from '@/hooks/useWeather'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
 import { LABEL_COLOR, scoreToLabel } from '@/lib/qualityScale'
+import { CircleCheck, Clock, Footprints, TriangleAlert } from 'lucide-react'
+import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { SPORT_FACTOR_ICON_CODES, sunIconCode } from '@/lib/toolIcons'
+import type { WeatherIconCode } from '@/lib/weatherIconCodes'
 
 interface SportBlockProps {
   lat: number | null
@@ -18,7 +22,7 @@ interface SportBlockProps {
 const STORM_WMO_CODES = [95, 96, 99]
 
 interface Indicator {
-  emoji: string
+  icon: WeatherIconCode
   text: string
   severity: 'warning' | 'danger'
 }
@@ -44,7 +48,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
   const isDay = current?.is_day ?? true
 
   // Sun context chip
-  const sunIcon = !isDay ? '🌙' : (uvIndex !== null && uvIndex >= 6) ? '☀️' : (uvIndex !== null && uvIndex >= 3) ? '🔆' : '🌤️'
+  const sunIcon = sunIconCode(isDay, uvIndex)
   const sunLabel = !isDay ? 'Sin sol' : (uvIndex !== null && uvIndex >= 6) ? `UV ${Math.round(uvIndex)} — alto` : (uvIndex !== null && uvIndex >= 3) ? 'Sol directo' : 'Sol moderado'
 
   // Rain in next 2 hours
@@ -58,7 +62,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
 
   if (humidity !== null && humidity > 80) {
     indicators.push({
-      emoji: '💧',
+      icon: SPORT_FACTOR_ICON_CODES.humidity,
       text: `Humedad ${Math.round(humidity)}% — dificulta la transpiración`,
       severity: humidity > 90 ? 'danger' : 'warning',
     })
@@ -66,7 +70,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
 
   if (uvIndex !== null && uvIndex > 7) {
     indicators.push({
-      emoji: '☀️',
+      icon: SPORT_FACTOR_ICON_CODES.uv,
       text: `UV ${Math.round(uvIndex)} — protector solar obligatorio`,
       severity: uvIndex > 9 ? 'danger' : 'warning',
     })
@@ -74,7 +78,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
 
   if (windSpeed !== null && windSpeed > 35) {
     indicators.push({
-      emoji: '💨',
+      icon: SPORT_FACTOR_ICON_CODES.wind,
       text: `Viento ${Math.round(windSpeed)} km/h${windDir ? ` del ${windDir}` : ''} — mayor esfuerzo`,
       severity: windSpeed > 50 ? 'danger' : 'warning',
     })
@@ -82,13 +86,13 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
 
   if (feelsLike !== null && feelsLike < 0) {
     indicators.push({
-      emoji: '🥶',
+      icon: SPORT_FACTOR_ICON_CODES.cold,
       text: `Sensación de ${Math.round(feelsLike)}°C — riesgo de hipotermia`,
       severity: 'danger',
     })
   } else if (feelsLike !== null && feelsLike > 38) {
     indicators.push({
-      emoji: '🥵',
+      icon: SPORT_FACTOR_ICON_CODES.heat,
       text: `Sensación de ${Math.round(feelsLike)}°C — riesgo de golpe de calor`,
       severity: 'danger',
     })
@@ -96,7 +100,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
 
   if (rainIn2h) {
     indicators.push({
-      emoji: '🌧️',
+      icon: SPORT_FACTOR_ICON_CODES.rain,
       text: 'Lluvia posible en las próximas 2h — salida corta',
       severity: 'warning',
     })
@@ -116,7 +120,13 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-lg" role="img" aria-label="Hacer deporte">🏃</span>
+          <Footprints
+            size={20}
+            strokeWidth={2}
+            aria-hidden="true"
+            className="shrink-0"
+            style={{ color: '#3fb8c4' }}
+          />
           <span className="text-sm font-medium" style={{ color: 'var(--color-foreground)' }}>
             Hacer deporte
           </span>
@@ -138,7 +148,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
           className="rounded-lg px-3 py-2 flex items-center gap-2"
           style={{ background: 'rgba(224,85,69,0.08)', border: '1px solid rgba(224,85,69,0.25)' }}
         >
-          <span className="text-base">⛈️</span>
+          <WeatherIcon code={SPORT_FACTOR_ICON_CODES.storm} size={28} className="-my-1" />
           <p className="text-xs font-medium" style={{ color: 'var(--color-warn)' }}>
             Tormentas previstas en las próximas horas — no salir
           </p>
@@ -168,7 +178,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
                 className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 flex-1 min-w-0"
                 style={{ background: 'rgba(200,168,75,0.05)', border: '1px solid rgba(200,168,75,0.12)' }}
               >
-                <span className="text-sm shrink-0">💨</span>
+                <WeatherIcon code={SPORT_FACTOR_ICON_CODES.wind} size={24} className="-my-1" />
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-muted-foreground)' }}>Viento</p>
                   <p className="text-xs font-medium truncate" style={{ color: 'var(--color-foreground)' }}>
@@ -181,7 +191,7 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 flex-1 min-w-0"
               style={{ background: 'rgba(200,168,75,0.05)', border: '1px solid rgba(200,168,75,0.12)' }}
             >
-              <span className="text-sm shrink-0">{sunIcon}</span>
+              <WeatherIcon code={sunIcon} size={24} className="-my-1" />
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-muted-foreground)' }}>Sol</p>
                 <p className="text-xs font-medium truncate" style={{ color: 'var(--color-foreground)' }}>{sunLabel}</p>
@@ -194,7 +204,13 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
             <div className="space-y-1.5">
               {data.best_window && (
                 <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-                  🕒 Mejor momento:{' '}
+                  <Clock
+                    size={14}
+                    strokeWidth={2.25}
+                    aria-hidden="true"
+                    className="inline-block align-[-2px] mr-1"
+                  />
+                  Mejor momento:{' '}
                   <span style={{ color: 'var(--color-foreground)', fontWeight: 500 }}>
                     {data.best_window}
                   </span>
@@ -236,14 +252,20 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
             // Si el backend dice No apto/Regular → mostrar su razón (no contradecir)
             data.color === 'red' || data.label === 'No apto' || data.label === 'Regular' ? (
               <div className="flex items-start gap-2">
-                <span className="text-xs mt-px">⚠️</span>
+                <TriangleAlert
+                  size={14}
+                  strokeWidth={2.25}
+                  aria-hidden="true"
+                  className="mt-px shrink-0"
+                  style={{ color: 'var(--color-watch)' }}
+                />
                 <span className="text-xs leading-snug" style={{ color: 'var(--color-muted-foreground)' }}>
                   {data.reason}
                 </span>
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <span className="text-xs">✅</span>
+                <CircleCheck size={14} strokeWidth={2.25} aria-hidden="true" style={{ color: '#3ecf7a' }} />
                 <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
                   Condiciones favorables
                 </span>
@@ -253,9 +275,15 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
             <div className="space-y-1">
               {indicators.map((ind) => (
                 <div key={ind.text} className="flex items-start gap-2">
-                  <span className="text-xs mt-px">⚠️</span>
+                  <TriangleAlert
+                    size={14}
+                    strokeWidth={2.25}
+                    aria-hidden="true"
+                    className="mt-px shrink-0"
+                    style={{ color: ind.severity === 'danger' ? '#e05545' : 'var(--color-watch)' }}
+                  />
                   <span
-                    className="text-xs leading-snug"
+                    className="flex items-start gap-1 text-xs leading-snug"
                     style={{
                       color:
                         ind.severity === 'danger'
@@ -263,7 +291,8 @@ export function SportBlock({ lat, lon, current, hourlyEntries }: SportBlockProps
                           : 'var(--color-muted-foreground)',
                     }}
                   >
-                    {ind.emoji} {ind.text}
+                    <WeatherIcon code={ind.icon} size={20} className="-my-0.5" />
+                    <span>{ind.text}</span>
                   </span>
                 </div>
               ))}

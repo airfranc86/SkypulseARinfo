@@ -1,4 +1,4 @@
-import { TreePine } from 'lucide-react'
+import { ChartNoAxesColumn, TriangleAlert } from 'lucide-react'
 import type { FireDangerSlot } from '@/lib/api'
 import { useFireDanger } from '@/hooks/useWeather'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
@@ -7,6 +7,8 @@ import { HourlyAccessibleList } from '@/components/ui/HourlyAccessibleList'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { BurnText } from '@/components/animated/BurnText'
+import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { TOOL_HEADER_ICON_CODES, TOOL_HEADER_ICON_SIZE, fireConditionIconCode } from '@/lib/toolIcons'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,14 +50,6 @@ function isCriticalCondition(label: string, value: string | number | null): bool
   if (label === 'Viento' && n > 60) return true
   if (label === 'Temperatura' && n > 38) return true
   return false
-}
-
-// Emoji icons for each condition chip
-const CONDITION_ICONS: Record<string, string> = {
-  'Temperatura':   '🌡️',
-  'Humedad':       '💧',
-  'Viento':        '💨',
-  'Precipitación': '🌧️',
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +163,7 @@ function ConditionChip({
     ? `${value}${unit ? ` ${unit}` : ''}`
     : '—'
   const critical = isCriticalCondition(label, value)
-  const icon = CONDITION_ICONS[label] ?? '📊'
+  const iconCode = fireConditionIconCode(label)
 
   return (
     <div
@@ -184,14 +178,19 @@ function ConditionChip({
     >
       <div className="flex items-center justify-between gap-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm leading-none" aria-hidden="true">{icon}</span>
+          {iconCode ? (
+            <WeatherIcon code={iconCode} size={24} className="-my-1" />
+          ) : (
+            <ChartNoAxesColumn size={18} strokeWidth={2} aria-hidden="true" className="shrink-0" />
+          )}
           <span className="text-[.6rem] uppercase tracking-widest" style={{ color: 'var(--color-muted-foreground)' }}>
             {label}
           </span>
         </div>
         {critical && (
-          <span className="text-[.5rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: 'var(--color-warn)', background: 'rgba(224,85,69,0.12)' }}>
-            ⚠ crítico
+          <span className="inline-flex items-center gap-1 text-[.5rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: 'var(--color-warn)', background: 'rgba(224,85,69,0.12)' }}>
+            <TriangleAlert size={10} strokeWidth={2.5} aria-hidden="true" />
+            crítico
           </span>
         )}
       </div>
@@ -361,7 +360,7 @@ export function Incendios({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<TreePine size={32} style={{ color: '#e05545' }} />}
+        icon={<WeatherIcon code={TOOL_HEADER_ICON_CODES.incendios} size={TOOL_HEADER_ICON_SIZE} />}
         title="Incendios"
         titleNode={<BurnText text="Incendios" fontSize="1.5rem" />}
         subtitle="Riesgo de incendio forestal por ubicación"

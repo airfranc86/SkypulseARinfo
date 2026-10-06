@@ -1,4 +1,4 @@
-import { MountainSnow } from 'lucide-react'
+import { CircleCheck, MountainSnow, TriangleAlert } from 'lucide-react'
 import { useCotaDeNieve } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { StatCard } from '@/components/ui/StatCard'
@@ -9,6 +9,13 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { FrostText } from '@/components/animated/FrostText'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
 import { isWaitingForColdStart } from '@/lib/loadError'
+import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import {
+  SNOW_STATUS_ICONS,
+  TOOL_HEADER_ICON_CODES,
+  TOOL_HEADER_ICON_SIZE,
+  type SnowStatusIcon,
+} from '@/lib/toolIcons'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -21,24 +28,24 @@ const SNOW_SCALE = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function snowStatus(avg: number): { emoji: string; label: string; msg: string; color: string; bg: string } {
+function snowStatus(avg: number): { icon: SnowStatusIcon; label: string; msg: string; color: string; bg: string } {
   if (avg >= 2500) return {
-    emoji: '✅', label: 'Condiciones excelentes', color: '#3ecf7a',
+    icon: SNOW_STATUS_ICONS.excellent, label: 'Condiciones excelentes', color: '#3ecf7a',
     bg: 'rgba(62,207,122,0.07)',
     msg: 'Nieve abundante en altura. Ideal para centros de esquí.',
   }
   if (avg >= 1800) return {
-    emoji: '⛷️', label: 'Buenas condiciones', color: '#5aaad8',
+    icon: SNOW_STATUS_ICONS.good, label: 'Buenas condiciones', color: '#5aaad8',
     bg: 'rgba(90,170,216,0.07)',
     msg: 'Cota favorable. La mayoría de los centros de esquí están activos.',
   }
   if (avg >= 1000) return {
-    emoji: '⚠️', label: 'Condiciones moderadas', color: '#f0a030',
+    icon: SNOW_STATUS_ICONS.moderate, label: 'Condiciones moderadas', color: '#f0a030',
     bg: 'rgba(240,160,48,0.07)',
     msg: 'Cota media-baja. Nieve posible solo en alta montaña.',
   }
   return {
-    emoji: '🌧️', label: 'Cota baja', color: '#e05545',
+    icon: SNOW_STATUS_ICONS.low, label: 'Cota baja', color: '#e05545',
     bg: 'rgba(224,85,69,0.07)',
     msg: 'Posibles precipitaciones como lluvia hasta en zonas altas.',
   }
@@ -57,6 +64,15 @@ function precisionLabel(
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+/** Status icon of the traffic-light card: a Meteocon, or a lucide icon for signals with no weather icon. */
+function SnowStatusGlyph({ icon, color }: { icon: SnowStatusIcon; color: string }) {
+  if (icon.kind === 'weather') {
+    return <WeatherIcon code={icon.code} size={32} className="mt-0.5" />
+  }
+  const Glyph = icon.name === 'ok' ? CircleCheck : icon.name === 'ski' ? MountainSnow : TriangleAlert
+  return <Glyph size={24} strokeWidth={2.25} aria-hidden="true" className="mt-0.5 shrink-0" style={{ color }} />
+}
 
 function SnowLevelBar({ avg }: { avg: number }) {
   const currentLabel =
@@ -123,7 +139,7 @@ export function CotaDeNieve({ location }: Props) {
     <div>
       <PageHeader
         titleNode={<FrostText text="Cota de nieve" fontSize="1.5rem" />}
-        icon={<MountainSnow size={32} style={{ color: '#90aabb' }} />}
+        icon={<WeatherIcon code={TOOL_HEADER_ICON_CODES.cotaDeNieve} size={TOOL_HEADER_ICON_SIZE} />}
         title="Cota de nieve"
         subtitle={location.label}
         accentColor="#90aabb"
@@ -160,7 +176,7 @@ export function CotaDeNieve({ location }: Props) {
                       />
                     </div>
                   ) : (
-                    <span className="text-xl mt-0.5">{status.emoji}</span>
+                    <SnowStatusGlyph icon={status.icon} color={status.color} />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold" style={{ color: status.color }}>
