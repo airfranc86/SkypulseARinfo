@@ -2,12 +2,16 @@ import { useState, useId } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { DriftText } from '@/components/animated/DriftText'
+import { CloudSkyDiagram } from '@/components/nubes/CloudSkyDiagram'
 import { StatusBadge } from '@/components/nubes/StatusBadge'
+import { revealBelowHeader } from '@/components/nubes/revealBelowHeader'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
 import {
   CLOUDS,
   CLOUD_FAMILY_SECTIONS,
   type BadgeVariant,
   type CloudFamily,
+  type CloudId,
   type CloudItem,
 } from '@/data/clouds'
 import { type DangerLevel, DangerScale } from '../components/ui/DangerScale'
@@ -146,12 +150,16 @@ const PILL_STYLES: Record<PillVariant, { color: string; bg: string; border: stri
 // Sub-components
 // ---------------------------------------------------------------------------
 
+/** DOM id of a cloud's catalog card: a cloud in the altitude diagram jumps here. */
+const cloudCardId = (id: CloudId) => `nube-${id}`
+
 function CloudCardItem({ cloud }: { cloud: CloudItem }) {
   const [aeroOpen, setAeroOpen] = useState(false)
   const aeroContentId = useId()
 
   return (
     <article
+      id={cloudCardId(cloud.id)}
       className="border-b py-8 sm:py-10"
       style={{
         borderColor: 'var(--color-border)',
@@ -186,7 +194,8 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
         <div className="flex flex-col gap-3 justify-center sm:pl-8 pt-5 sm:pt-0">
           <div>
             <h3
-              className="text-[1.85rem] font-normal leading-tight"
+              tabIndex={-1}
+              className="text-[1.85rem] font-normal leading-tight outline-none"
               style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
             >
               {cloud.name}
@@ -380,6 +389,16 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
 // ---------------------------------------------------------------------------
 
 export function Nubes() {
+  const reducedMotion = useReducedMotion()
+
+  /** From the altitude diagram to the cloud's full card. */
+  function openCard(id: CloudId) {
+    const card = document.getElementById(cloudCardId(id))
+    if (!card) return
+    revealBelowHeader(card, { align: 'start', smooth: !reducedMotion })
+    card.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true })
+  }
+
   return (
     <div className="relative">
       <Dither opacity={0.03} />
@@ -403,6 +422,7 @@ export function Nubes() {
             Nubes, fenómenos y señales invisibles. Todo lo que pasa allá arriba tiene nombre — y algo que contarte sobre lo que viene.
           </p>
 
+          <CloudSkyDiagram onOpenCard={openCard} />
         </div>
 
         {/* Cloud sections */}
