@@ -1,19 +1,13 @@
-import { useState, useRef, useEffect, useId } from 'react'
-import { flushSync } from 'react-dom'
+import { useState, useId } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { DriftText } from '@/components/animated/DriftText'
-import { CloudSkyDiagram } from '@/components/nubes/CloudSkyDiagram'
 import { StatusBadge } from '@/components/nubes/StatusBadge'
-import { revealBelowHeader } from '@/components/nubes/revealBelowHeader'
-import { useReducedMotion } from '@/hooks/useReducedMotion'
 import {
   CLOUDS,
   CLOUD_FAMILY_SECTIONS,
-  QUICK_ID_GUIDE,
   type BadgeVariant,
   type CloudFamily,
-  type CloudId,
   type CloudItem,
 } from '@/data/clouds'
 import { type DangerLevel, DangerScale } from '../components/ui/DangerScale'
@@ -22,7 +16,6 @@ import { type DangerLevel, DangerScale } from '../components/ui/DangerScale'
 // Types
 // ---------------------------------------------------------------------------
 
-type Family = 'all' | CloudFamily | 'aero'
 type PillVariant = 'danger' | 'caution' | 'note'
 
 interface AeroItem {
@@ -153,16 +146,12 @@ const PILL_STYLES: Record<PillVariant, { color: string; bg: string; border: stri
 // Sub-components
 // ---------------------------------------------------------------------------
 
-/** DOM id of a cloud's catalog card: the altitude diagram's "Ver la ficha completa" jumps here. */
-const cloudCardId = (id: CloudId) => `nube-${id}`
-
 function CloudCardItem({ cloud }: { cloud: CloudItem }) {
   const [aeroOpen, setAeroOpen] = useState(false)
   const aeroContentId = useId()
 
   return (
     <article
-      id={cloudCardId(cloud.id)}
       className="border-b py-8 sm:py-10"
       style={{
         borderColor: 'var(--color-border)',
@@ -197,8 +186,7 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
         <div className="flex flex-col gap-3 justify-center sm:pl-8 pt-5 sm:pt-0">
           <div>
             <h3
-              tabIndex={-1}
-              className="text-[1.85rem] font-normal leading-tight outline-none"
+              className="text-[1.85rem] font-normal leading-tight"
               style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
             >
               {cloud.name}
@@ -357,172 +345,12 @@ function AeroCardItem({ item }: { item: AeroItem }) {
 }
 
 // ---------------------------------------------------------------------------
-// Quick ID Guide (collapsible)
-// ---------------------------------------------------------------------------
-
-function QuickIdGuide() {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <div className="mt-6">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="text-[.72rem] font-medium border rounded-sm px-4 py-1.5 transition-colors cursor-pointer"
-        style={{ color: '#c8a84b', borderColor: 'rgba(200,168,75,.35)', background: 'transparent' }}
-        aria-expanded={open}
-        aria-controls="nubes-quick-id-guide"
-      >
-        🔍 ¿Qué nube estoy viendo? — Guía rápida de identificación {open ? '▴' : '▾'}
-      </button>
-
-      {open && (
-        <div
-          id="nubes-quick-id-guide"
-          className="max-w-2xl mx-auto mt-4 rounded p-6 text-left"
-          style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
-        >
-          <p className="text-[.78rem] mb-4 italic" style={{ color: 'var(--color-muted-foreground)' }}>
-            Respondé estas preguntas en orden:
-          </p>
-          <div className="space-y-3">
-            {QUICK_ID_GUIDE.map(section => (
-              <div key={section.q} className="pl-4" style={{ borderLeft: `2px solid ${section.color}` }}>
-                <p className="text-[.8rem] font-medium" style={{ color: 'var(--color-foreground)' }}>
-                  {section.q}
-                </p>
-                {section.answers.map(a => (
-                  <p key={a.cloudId} className="text-[.75rem] mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
-                    {a.hint} →{' '}
-                    <span style={{ color: a.nameColor }}>{a.name}</span>
-                  </p>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Filter bar
-// ---------------------------------------------------------------------------
-
-const NUBES_SUBMENU: Array<{ family: Exclude<Family, 'all' | 'aero'>; label: string }> = [
-  { family: 'alta',     label: 'Nubes altas' },
-  { family: 'media',    label: 'Nubes medias' },
-  { family: 'baja',     label: 'Nubes bajas' },
-  { family: 'vertical', label: 'Verticales' },
-  { family: 'especial', label: 'Especiales' },
-]
-
-function FilterBar({
-  active,
-  onChange,
-}: {
-  active: Family
-  onChange: (f: Family) => void
-}) {
-  const [ddOpen, setDdOpen] = useState(false)
-  const ddRef = useRef<HTMLDivElement>(null)
-  // Derived, not stored: the filter can also change from outside (the diagram's "Ver la ficha completa").
-  const activeSubmenu = NUBES_SUBMENU.find(item => item.family === active)
-  const nubesLabel = activeSubmenu ? `☁ ${activeSubmenu.label} ▾` : '☁ Nubes ▾'
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ddRef.current && !ddRef.current.contains(e.target as Node)) {
-        setDdOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  const isNubesActive = ['alta', 'media', 'baja', 'vertical', 'especial'].includes(active)
-
-  function pillStyle(isActive: boolean): React.CSSProperties {
-    return {
-      padding: '6px 14px',
-      fontSize: '0.72rem',
-      fontWeight: isActive ? 600 : 400,
-      border: `1px solid ${isActive ? '#c8a84b' : 'rgba(200,168,75,.25)'}`,
-      background: isActive ? 'rgba(200,168,75,.12)' : 'transparent',
-      color: isActive ? '#c8a84b' : 'var(--color-muted-foreground)',
-      cursor: 'pointer',
-      transition: 'all 0.2s ease',
-      minHeight: '44px',
-      display: 'inline-flex',
-      alignItems: 'center',
-    }
-  }
-
-  return (
-    <div
-      className="flex flex-wrap gap-2 items-center py-3 rounded-xl px-4 mb-6"
-      style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
-    >
-      <button
-        className="rounded-full"
-        style={pillStyle(active === 'all')}
-        onClick={() => onChange('all')}
-      >
-        Todo
-      </button>
-
-      {/* Nubes dropdown */}
-      <div ref={ddRef} className="relative">
-        <button
-          className="rounded-full"
-          style={pillStyle(isNubesActive)}
-          onClick={() => setDdOpen(v => !v)}
-          aria-expanded={ddOpen}
-          aria-controls="nubes-family-dropdown"
-        >
-          {nubesLabel}
-        </button>
-        {ddOpen && (
-          <div
-            id="nubes-family-dropdown"
-            className="absolute top-full left-0 mt-1.5 z-50 min-w-[148px] rounded-xl overflow-hidden shadow-2xl"
-            style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
-          >
-            {NUBES_SUBMENU.map(item => (
-              <button
-                key={item.family}
-                className="block w-full text-left px-4 py-2 text-[.72rem] transition-colors"
-                style={{ color: active === item.family ? '#c8a84b' : 'var(--color-muted-foreground)' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(200,168,75,.06)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                onClick={() => {
-                  onChange(item.family)
-                  setDdOpen(false)
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <button
-        className="rounded-full"
-        style={pillStyle(active === 'aero')}
-        onClick={() => onChange('aero')}
-      >
-        ✈️ Aeronáutico
-      </button>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Section header
 // ---------------------------------------------------------------------------
 
 // Cloud family headings live with the catalog (CLOUD_FAMILY_SECTIONS); this is the extra one.
+const CLOUD_FAMILY_ORDER: readonly CloudFamily[] = ['alta', 'media', 'baja', 'vertical', 'especial']
+
 const AERO_SECTION = {
   title: 'Fenómenos aeronáuticos',
   subtitle: 'Lo que no se ve a simple vista pero define la seguridad en vuelo',
@@ -552,29 +380,6 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
 // ---------------------------------------------------------------------------
 
 export function Nubes() {
-  const [filter, setFilter] = useState<Family>('all')
-  const reducedMotion = useReducedMotion()
-
-  /** From the altitude diagram to the full card; a filter that hides the card is cleared first. */
-  function openCard(id: CloudId) {
-    if (!document.getElementById(cloudCardId(id))) flushSync(() => setFilter('all'))
-    const card = document.getElementById(cloudCardId(id))
-    if (!card) return
-    revealBelowHeader(card, { align: 'start', smooth: !reducedMotion })
-    card.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true })
-  }
-
-  const filteredClouds = filter === 'all' || filter === 'aero'
-    ? (filter === 'aero' ? [] : CLOUDS)
-    : CLOUDS.filter(c => c.family === filter)
-
-  const showAero = filter === 'all' || filter === 'aero'
-  const cloudFamiliesVisible = filter === 'all'
-    ? (['alta', 'media', 'baja', 'vertical', 'especial'] as const)
-    : filter === 'aero'
-    ? []
-    : [filter as Exclude<Family, 'all' | 'aero'>]
-
   return (
     <div className="relative">
       <Dither opacity={0.03} />
@@ -598,38 +403,11 @@ export function Nubes() {
             Nubes, fenómenos y señales invisibles. Todo lo que pasa allá arriba tiene nombre — y algo que contarte sobre lo que viene.
           </p>
 
-          <CloudSkyDiagram onOpenCard={openCard} />
-          <QuickIdGuide />
         </div>
-
-        {/* Filter bar */}
-        <div className="mt-8">
-          <FilterBar active={filter} onChange={setFilter} />
-        </div>
-
-        {/* Hero callout — nubes de peligro extremo */}
-        {(filteredClouds.some(c => c.dangerLevel === 5) ||
-          (showAero && AERO.some(a => a.dangerLevel === 5))) && (
-          <div
-            className="flex items-center gap-3 rounded-xl px-5 py-4 mt-6"
-            style={{
-              background: 'rgba(255,51,51,.06)',
-              border: '1px solid rgba(255,51,51,.25)',
-            }}
-          >
-            <span className="relative flex size-2 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: 'var(--color-crit)' }} />
-              <span className="relative inline-flex size-2 rounded-full" style={{ background: 'var(--color-crit)' }} />
-            </span>
-            <span className="text-[.8rem] font-medium" style={{ color: 'var(--color-crit-soft)' }}>
-              Esta vista incluye nubes de peligro extremo — revisá los indicadores antes de volar o salir.
-            </span>
-          </div>
-        )}
 
         {/* Cloud sections */}
-        {cloudFamiliesVisible.map(family => {
-          const sectionClouds = filteredClouds.filter(c => c.family === family)
+        {CLOUD_FAMILY_ORDER.map(family => {
+          const sectionClouds = CLOUDS.filter(c => c.family === family)
           if (sectionClouds.length === 0) return null
           const sec = CLOUD_FAMILY_SECTIONS[family]
           return (
@@ -643,24 +421,12 @@ export function Nubes() {
         })}
 
         {/* Aero section */}
-        {showAero && (
-          <div>
-            <SectionHeader title={AERO_SECTION.title} subtitle={AERO_SECTION.subtitle} />
-            {AERO.map(item => (
-              <AeroCardItem key={item.id} item={item} />
-            ))}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {filteredClouds.length === 0 && !showAero && (
-          <p
-            className="text-center py-20 text-lg italic"
-            style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-muted-foreground)' }}
-          >
-            No hay elementos de esa categoría.
-          </p>
-        )}
+        <div>
+          <SectionHeader title={AERO_SECTION.title} subtitle={AERO_SECTION.subtitle} />
+          {AERO.map(item => (
+            <AeroCardItem key={item.id} item={item} />
+          ))}
+        </div>
 
         {/* Footer note */}
         <div
