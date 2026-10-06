@@ -34,7 +34,7 @@ from .core.http_client import create_client, close_client
 from .core.rate_limit import limiter
 from .core.upstash import UpstashRedis
 from .core import usage_counter
-from .routers import aeronautica, earthquakes, incendios, metar, niebla, smn_alertas, tools, volcanes, weather
+from .routers import aeronautica, earthquakes, incendios, metar, niebla, smn_alertas, taf, tools, volcanes, weather
 from .services import checkwx as checkwx_svc
 
 
@@ -226,5 +226,6 @@ app.include_router(volcanes.router,   prefix="/api/volcanes",   tags=["volcanes"
 app.include_router(incendios.router,  prefix="/api/incendios",  tags=["incendios"])
 app.include_router(niebla.router,    prefix="/api/niebla",    tags=["niebla"])
 app.include_router(metar.router,     prefix="/api/metar",     tags=["metar"])
+app.include_router(taf.router,       prefix="/api/taf",       tags=["taf"])
 app.include_router(smn_alertas.router, prefix="/api/alertas-smn", tags=["alertas-smn"])
 app.include_router(aeronautica.router, prefix="/api/v1/aeronautica", tags=["aeronautica"])
