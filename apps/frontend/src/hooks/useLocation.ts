@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import type { City } from '@/lib/cities-ar'
 import { AR_CITIES } from '@/lib/cities-ar'
 import { parseLocationSource, type LocationSource } from '@/lib/windShearPrefill'
+import { isFallbackLocation, locationAfterGeoFailure } from '@/lib/landingNow'
 
 /** Returns the name of the nearest city within ~80 km, or 'Mi ubicación'. */
 function nearestCityLabel(lat: number, lon: number): string {
@@ -21,13 +22,6 @@ export interface LocationState {
   label: string
   /** Cómo se obtuvo; ausente en entradas guardadas antes de este campo (origen desconocido). */
   source?: LocationSource
-}
-
-const FALLBACK_LOCATION: LocationState = {
-  lat: -34.6037,
-  lon: -58.3816,
-  label: 'Buenos Aires',
-  source: 'fallback',
 }
 
 const STORAGE_KEY = 'skypulse:location'
@@ -86,7 +80,7 @@ export function useLocation() {
     if (!navigator.geolocation) {
       setGeoError('Tu navegador no soporta geolocalización.')
       setLocation(prev => {
-        const fallback = prev ?? FALLBACK_LOCATION
+        const fallback = locationAfterGeoFailure(prev)
         saveLocation(fallback)
         return fallback
       })
@@ -133,7 +127,7 @@ export function useLocation() {
         )
         // Fall back to stored location or Buenos Aires
         setLocation(prev => {
-          const fallback = prev ?? FALLBACK_LOCATION
+          const fallback = locationAfterGeoFailure(prev)
           if (!prev) saveLocation(fallback)
           return fallback
         })
@@ -151,5 +145,9 @@ export function useLocation() {
     detectLocation()
   }, [detectLocation])
 
-  return { location, locationResolved, geoLoading, geoError, selectCity, detectLocation }
+  // Additive: true only while the Buenos Aires fallback is on screen (no saved city, location denied
+  // or unavailable). The other routes ignore it.
+  const isFallback = isFallbackLocation(location)
+
+  return { location, locationResolved, isFallback, geoLoading, geoError, selectCity, detectLocation }
 }
