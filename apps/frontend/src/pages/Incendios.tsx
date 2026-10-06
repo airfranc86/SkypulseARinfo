@@ -6,7 +6,6 @@ import { isWaitingForColdStart } from '@/lib/loadError'
 import { HourlyAccessibleList } from '@/components/ui/HourlyAccessibleList'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { ModelBadge } from '@/components/ui/ModelBadge'
 import { BurnText } from '@/components/animated/BurnText'
 
 // ---------------------------------------------------------------------------
@@ -367,7 +366,6 @@ export function Incendios({ location }: Props) {
         titleNode={<BurnText text="Incendios" fontSize="1.5rem" />}
         subtitle="Riesgo de incendio forestal por ubicación"
         accentColor="#e05545"
-        modelBadge={data ? <ModelBadge model="openmeteo_forecast" variant="header" /> : undefined}
       />
 
       {showSkeleton && <PageSkeleton />}

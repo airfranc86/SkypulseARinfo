@@ -164,7 +164,7 @@ interface SourcePillProps {
   distanceKm?: number | null
 }
 
-/** Source indicator showing METAR station or Open-Meteo depending on data source. */
+/** Source indicator showing the METAR station or the SkyPulse numerical estimate depending on data source. */
 function SourcePill({ status, source, stationName, distanceKm }: SourcePillProps) {
   const color =
     status === 'ok'    ? '#3ecf7a' :
@@ -174,11 +174,11 @@ function SourcePill({ status, source, stationName, distanceKm }: SourcePillProps
   const isMetar = source === 'metar'
   const label = isMetar
     ? `METAR · ${stationName ?? ''}${distanceKm != null ? ` · ${Math.round(distanceKm)} km` : ''}`
-    : 'Open-Meteo'
+    : 'Estimación de SkyPulse'
 
   return (
     <span
-      title={isMetar ? 'Visibilidad medida en aeropuerto más cercano (dato real)' : 'Estimación numérica Open-Meteo'}
+      title={isMetar ? 'Visibilidad medida en aeropuerto más cercano (dato real)' : 'Estimación numérica de SkyPulse'}
       className="rounded-full"
       style={{
         display: 'inline-flex',
@@ -449,8 +449,8 @@ const COMPACT_FOG_LABEL: Record<string, string> = {
 // Human-readable labels for hourly data sources
 const HOURLY_SOURCE_LABEL: Record<string, string> = {
   taf:                  'TAF · Aviación',
-  openmeteo_inference:  'Inferencia OM',
-  openmeteo:            'Open-Meteo',
+  openmeteo_inference:  'Estimación',
+  openmeteo:            'Pronóstico numérico',
 }
 
 /** 12-hour visibility timeline bars */
@@ -490,8 +490,8 @@ function VisibilityTimeline({
               hourlySource === 'taf'
                 ? 'Pronóstico emitido por meteorólogos de aviación (TAF)'
                 : hourlySource === 'openmeteo_inference'
-                ? 'Estimado a partir de humedad, rocío y viento (Open-Meteo)'
-                : 'Pronóstico numérico Open-Meteo'
+                ? 'Estimado a partir de humedad, rocío y viento'
+                : 'Pronóstico numérico'
             }
             className="rounded-[20px]"
             style={{

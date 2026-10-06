@@ -19,6 +19,7 @@ const TITLES: Record<string, string> = {
   '/altitud-de-densidad': 'SkyPulse — Altitud de densidad',
   '/cizalladura':  'SkyPulse — Cizalladura / LLWS',
   '/privacidad':   'SkyPulse — Política de privacidad',
+  '/datos':        'SkyPulse — De dónde salen los datos',
 }
 
 /** Toda ruta real debe estar en TITLES: lo que no figura acá cae en el 404. */
