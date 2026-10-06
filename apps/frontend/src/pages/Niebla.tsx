@@ -7,6 +7,8 @@ import type { NieblaResponse } from '@/lib/api'
 import type { LocationState } from '@/hooks/useLocation'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
+import { isWaitingForColdStart } from '@/lib/loadError'
 import { HourlyAccessibleList } from '@/components/ui/HourlyAccessibleList'
 import { FogText } from '@/components/animated/FogText'
 
@@ -619,7 +621,13 @@ function VisibilityTimeline({
 
 /** Live visibility block — shown only when location is available */
 function VisibilityBlock({ location }: { location: { lat: number; lon: number } }) {
-  const { data, isLoading, error } = useNiebla(location.lat, location.lon)
+  const { data, isFetching, error, refetch, failureCount, failureReason } = useNiebla(location.lat, location.lon)
+  // While the cold-start retries run there is a waiting notice instead of an error; during
+  // any other load (first one or a manual "Reintentar") the skeleton, and the error only
+  // once the query stopped fetching (FRA-340).
+  const waitingColdStart = isWaitingForColdStart({ hasData: Boolean(data), isFetching, failureCount, failureReason })
+  const showSkeleton = !data && isFetching && !waitingColdStart
+  const showError = Boolean(error) && !isFetching
 
   return (
     <section
@@ -647,7 +655,7 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
             Visibilidad actual
           </h2>
           <SourcePill
-            status={error ? 'error' : isLoading ? 'loading' : 'ok'}
+            status={showError ? 'error' : data ? 'ok' : 'loading'}
             source={data?.source}
             stationName={data?.metar_station_name}
             distanceKm={data?.metar_distance_km}
@@ -655,7 +663,7 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
         </div>
       </div>
 
-      {isLoading && (
+      {showSkeleton && (
         <div
           className="rounded-[10px]"
           style={{
@@ -666,11 +674,11 @@ function VisibilityBlock({ location }: { location: { lat: number; lon: number } 
         />
       )}
 
-      {error && (
-        <ErrorMessage message={error instanceof Error ? error.message : 'No se pudo obtener la visibilidad en este momento.'} />
-      )}
+      {waitingColdStart && <ColdStartNotice />}
 
-      {data && !isLoading && (
+      {showError && <LoadError error={error} onRetry={() => { void refetch() }} />}
+
+      {data && (
         <>
           <VisibilityMeter
             visibilityM={data.visibility_m}

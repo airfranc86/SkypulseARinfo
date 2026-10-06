@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
-import { ErrorMessage } from '@/components/ui/ErrorMessage'
-import { BASE_URL } from '@/lib/api'
+import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
+import { api, BASE_URL } from '@/lib/api'
+import { ApiError } from '@/lib/apiErrors'
+import { LOAD_RETRY } from '@/lib/loadError'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -622,9 +624,15 @@ function MetarWidget() {
   const [metar, setMetar]     = useState<MetarData | null>(null)
   const [taf, setTaf]         = useState<string | null>(null)
   const [tafError, setTafError] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [error, setError]     = useState<unknown>(null)
+  const [waking, setWaking]   = useState(false)
+  const [queried, setQueried] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const openModalBtnRef = useRef<HTMLButtonElement>(null)
+  // Each query gets an id: a newer query (or leaving the page) stops the cold-start wait of
+  // the previous one, so it never writes stale state nor keeps calling the backend.
+  const requestIdRef = useRef(0)
+  useEffect(() => () => { requestIdRef.current++ }, [])
 
   const closeModal = useCallback(() => {
     setModalOpen(false)
@@ -647,23 +655,38 @@ function MetarWidget() {
   const doFetch = useCallback(async (code: string) => {
     const clean = code.trim().toUpperCase()
     if (clean.length < 4) return
+    const requestId = ++requestIdRef.current
+    const isCurrent = () => requestId === requestIdRef.current
     setLoading(true)
     setMetar(null)
     setTaf(null)
     setTafError(false)
     setError(null)
-    try {
-      const res = await fetch(`${BASE_URL}/api/metar?icao=${encodeURIComponent(clean)}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      if (!data.data || data.data.length === 0) throw new Error(`ICAO ${clean} no encontrado`)
-      setMetar(data.data[0])
-      fetchTAF(clean)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido')
-    } finally {
-      setLoading(false)
+    setWaking(false)
+    setQueried(clean)
+    // Only a cold start retries on its own (bounded, same schedule as Previsión); any other
+    // failure is shown at once with a manual "Reintentar" (FRA-340).
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const entry = (await api.metarDecoded(clean)).data?.[0]
+        if (!isCurrent()) return
+        if (!entry) throw new ApiError('icao_not_found', 404, null, true)
+        setMetar(entry as MetarData)
+        fetchTAF(clean)
+        break
+      } catch (err) {
+        if (!isCurrent()) return
+        if (!(err instanceof Error) || !LOAD_RETRY.retry(attempt, err)) {
+          setError(err)
+          break
+        }
+        setWaking(true)
+        await new Promise(resolve => setTimeout(resolve, LOAD_RETRY.retryDelay(attempt, err)))
+        if (!isCurrent()) return
+      }
     }
+    setWaking(false)
+    setLoading(false)
   }, [fetchTAF])
 
   function handleSelect(code: string) {
@@ -744,9 +767,19 @@ function MetarWidget() {
       </div>
 
       {/* Results */}
-      {error && (
+      {waking && (
         <div className="mt-6">
-          <ErrorMessage message={`No se pudo obtener el METAR. ${error} Verificá el código ICAO o revisá la conexión.`} />
+          <ColdStartNotice />
+        </div>
+      )}
+
+      {error !== null && (
+        <div className="mt-6">
+          <LoadError
+            error={error}
+            onRetry={() => { void doFetch(queried) }}
+            messages={{ invalid: `No encontramos el METAR de ${queried}. Revisá que el código ICAO sea correcto.` }}
+          />
         </div>
       )}
 

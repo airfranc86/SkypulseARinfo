@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { isColdStart, isProviderSaturated, isClientError } from '@/lib/apiErrors'
 import { DASHBOARD_RETRY } from '@/lib/retryPolicy'
+import { LOAD_RETRY } from '@/lib/loadError'
 
 // isColdStart/isProviderSaturated/isClientError viven en lib/apiErrors.ts (junto a ApiError,
 // del que dependen exclusivamente — ese módulo no toca `import.meta.env` y por eso es
@@ -140,5 +141,8 @@ export function useNiebla(lat: number | null, lon: number | null) {
     queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.niebla(lat, lon) },
     enabled: lat !== null && lon !== null,
     staleTime: 5 * 60 * 1000,  // 5 minutos
+    // Solo el cold start reintenta solo (hasta ~50 s, como Previsión); el resto espera el
+    // botón "Reintentar" de LoadError (FRA-340).
+    ...LOAD_RETRY,
   })
 }
