@@ -48,7 +48,8 @@ async def get_niebla(
     """
     Visibilidad actual (metros) desde el METAR del aeropuerto argentino más cercano.
     Pronóstico horario 12h: TAF → inferencia OM → Open-Meteo campo visibility.
-    Clasificación: Despejada / Buena / Reducida / Bruma / Neblina / Niebla.
+    Clasificación oficial METAR/SMN: Despejada (>= 10 km) / Buena (5–10 km) /
+    Neblina o bruma (1–5 km) / Niebla (< 1 km).
     """
     logger.info("GET /api/niebla lat=%.4f lon=%.4f", lat, lon)
 

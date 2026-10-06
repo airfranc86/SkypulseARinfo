@@ -168,30 +168,50 @@ class TestClassifyVisibility:
         assert level == 1
         assert label == "Buena"
 
-    def test_2000_to_4999_is_reducida(self):
+    def test_1000_to_4999_is_neblina_o_bruma(self):
         level, label, _ = _classify_visibility(3_000.0)
         assert level == 2
-        assert label == "Reducida"
+        assert label == "Neblina o bruma"
 
-    def test_1000_to_1999_is_bruma(self):
-        level, label, _ = _classify_visibility(1_500.0)
-        assert level == 3
-        assert label == "Bruma"
-
-    def test_500_to_999_is_neblina(self):
-        level, label, _ = _classify_visibility(700.0)
-        assert level == 4
-        assert label == "Neblina"
-
-    def test_below_500_is_niebla(self):
+    def test_below_1000_is_niebla(self):
         level, label, _ = _classify_visibility(200.0)
-        assert level == 5
+        assert level == 3
         assert label == "Niebla"
 
     def test_returns_hex_color(self):
         _, _, color = _classify_visibility(8000.0)
         assert color.startswith("#")
         assert len(color) == 7
+
+    @pytest.mark.parametrize(
+        ("meters", "level", "label"),
+        [
+            (0.0, 3, "Niebla"),
+            (999.0, 3, "Niebla"),
+            (1_000.0, 2, "Neblina o bruma"),
+            (4_999.0, 2, "Neblina o bruma"),
+            (5_000.0, 1, "Buena"),
+            (9_999.0, 1, "Buena"),
+            (10_000.0, 0, "Despejada"),
+            (50_000.0, 0, "Despejada"),
+        ],
+    )
+    def test_official_boundaries(self, meters, level, label):
+        got_level, got_label, _ = _classify_visibility(meters)
+        assert (got_level, got_label) == (level, label)
+
+    def test_scale_has_exactly_four_levels_and_no_legacy_labels(self):
+        samples = [100.0, 3_000.0, 7_000.0, 12_000.0]
+        results = [_classify_visibility(m) for m in samples]
+        assert [r[0] for r in results] == [3, 2, 1, 0]
+        assert {r[1] for r in results} == {"Niebla", "Neblina o bruma", "Buena", "Despejada"}
+        assert len({r[2] for r in results}) == 4
+
+    def test_palette(self):
+        assert _classify_visibility(100.0)[2] == "#e03535"
+        assert _classify_visibility(3_000.0)[2] == "#f0a020"
+        assert _classify_visibility(7_000.0)[2] == "#5aaad8"
+        assert _classify_visibility(12_000.0)[2] == "#3ecf7a"
 
 
 # ---------------------------------------------------------------------------
@@ -687,7 +707,7 @@ class TestGetFogInferenceForecast:
 
     @pytest.mark.asyncio
     async def test_fog_conditions_return_1000m(self):
-        """dep<3 + rh>=90 + wind<8 (but not dense) → niebla → 1000 m."""
+        """dep<3 + rh>=90 + wind<8 (but not dense) → neblina o bruma → 1000 m."""
         payload = _make_fog_inference_payload(n=14)
         payload["hourly"]["temperature_2m"] = [15.0] * 14
         payload["hourly"]["dew_point_2m"] = [12.5] * 14   # dep=2.5 < 3
