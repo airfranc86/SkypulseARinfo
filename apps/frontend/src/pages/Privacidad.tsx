@@ -13,7 +13,7 @@ const SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: 'Servicios externos que consultamos',
-    body: 'Los datos meteorológicos y sísmicos que mostramos vienen de fuentes públicas: SMN, USGS, EMSC y Open-Meteo. Consultamos esas APIs con las coordenadas que elegiste, pero no les enviamos ningún otro dato tuyo.',
+    body: 'Los datos meteorológicos y sísmicos que mostramos vienen de fuentes públicas: SMN, USGS, EMSC y Open-Meteo. Consultamos esas APIs con las coordenadas que elegiste, pero no les enviamos ningún otro dato tuyo. El botón de contribución de Cafecito se carga desde su servidor (cdn.cafecito.app), por lo que ese servicio recibe tu dirección IP cuando se muestra la página.',
   },
   {
     title: 'Tus opciones',

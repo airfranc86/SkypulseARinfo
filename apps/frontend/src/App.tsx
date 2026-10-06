@@ -23,7 +23,8 @@ import {
   type ModelStatusAction,
 } from '@/contexts/ModelStatusContext'
 import { useModelStatusDispatch } from '@/hooks/useModelStatus'
-import { CAFECITO_URL, DATA_PAGE_PATH, OPEN_METEO_URL } from '@/lib/siteLinks'
+import { DATA_PAGE_PATH, OPEN_METEO_URL } from '@/lib/siteLinks'
+import { CafecitoButton } from '@/components/ui/CafecitoButton'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
 import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 
@@ -361,14 +362,7 @@ function RootLayout() {
           </Link>
         </p>
         <p className="flex flex-wrap items-center justify-center gap-x-2">
-          <a
-            href={CAFECITO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80"
-          >
-            Contribuir en Cafecito
-          </a>
+          <CafecitoButton />
           <span aria-hidden="true">·</span>
           <Link to="/privacidad" className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80">
             Política de privacidad

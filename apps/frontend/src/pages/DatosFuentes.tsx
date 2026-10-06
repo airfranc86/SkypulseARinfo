@@ -1,5 +1,6 @@
 import { DATA_SOURCES } from '@/data/dataSources'
-import { CAFECITO_URL, OPEN_METEO_LICENCE_URL, OPEN_METEO_URL } from '@/lib/siteLinks'
+import { CafecitoButton } from '@/components/ui/CafecitoButton'
+import { OPEN_METEO_LICENCE_URL, OPEN_METEO_URL } from '@/lib/siteLinks'
 
 const LINK_CLASS = 'inline-flex min-h-[44px] items-center underline hover:opacity-80'
 
@@ -61,9 +62,7 @@ export function DatosFuentes() {
         <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
           Si SkyPulse te sirve, podés contribuir con un cafecito. Es voluntario y no desbloquea nada: todas las funciones son iguales para todos.
         </p>
-        <a href={CAFECITO_URL} target="_blank" rel="noopener noreferrer" className={LINK_CLASS} style={{ color: 'var(--color-muted-foreground)' }}>
-          Contribuir en Cafecito
-        </a>
+        <CafecitoButton />
       </section>
     </div>
   )
