@@ -4,25 +4,15 @@ import { cn } from '@/lib/utils'
 import { missingAnchorNotice } from '@/lib/forecastRow'
 import { Forecast7dList } from './Forecast7dList'
 import { Forecast7dChart } from './Forecast7dChart'
-import { ModelBadge } from '@/components/ui/ModelBadge'
-import type { ModelKey } from '@/components/ui/ModelBadge'
 import type { DailyEntry, ForecastModelName } from '@/lib/api'
 
 type ForecastModel = 'gfs' | 'ecmwf' | 'consensus'
-
-const MODEL_BADGE_KEY: Record<ForecastModel, ModelKey> = {
-  consensus: 'consensus',
-  gfs:       'gfs',
-  ecmwf:     'ecmwf',
-}
 
 interface Props {
   days: DailyEntry[]
   badge?: ReactNode
   /** El modelo elegido en el selector (responde al instante al clic). */
   selectedModel: ForecastModel
-  /** El modelo de los días que hay en pantalla: difiere de `selectedModel` mientras llega el nuevo. */
-  shownModel: ForecastModel
   onModelChange: (m: ForecastModel) => void
   /** Llegó otro modelo y todavía se muestran los días del anterior. */
   refreshing?: boolean
@@ -44,7 +34,7 @@ const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
 const SEGMENT_BASE = 'px-3.5 py-2 min-h-[44px] rounded-md text-xs font-medium transition-colors'
 const SEGMENT_ACTIVE = { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
 
-export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChange, refreshing = false, rainWindows, forecastModels }: Props) {
+export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshing = false, rainWindows, forecastModels }: Props) {
   const modelLabel = MODEL_OPTIONS.find(({ id }) => id === selectedModel)?.label ?? selectedModel
   const dimmed = { opacity: refreshing ? 0.55 : 1 }
   const partialNotice = missingAnchorNotice(forecastModels)
@@ -54,7 +44,7 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
       className="rounded-2xl overflow-hidden"
       style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
     >
-      {/* Los días primero: el encabezado es solo el título y de dónde sale el dato */}
+      {/* Los días primero: el encabezado es solo el título, sin nombres de modelos (FRA-341) */}
       <div
         className="px-5 py-4 flex items-center gap-2 min-w-0 flex-wrap"
         style={{ borderBottom: '1px solid var(--color-border)' }}
@@ -65,8 +55,6 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
         >
           Pronóstico 7 días
         </h2>
-        {/* El badge nombra de dónde salen los días que se ven, no lo que se acaba de tocar */}
-        <ModelBadge model={MODEL_BADGE_KEY[shownModel]} variant="header" />
         {badge}
       </div>
 
