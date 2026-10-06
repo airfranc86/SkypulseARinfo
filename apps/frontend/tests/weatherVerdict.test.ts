@@ -59,7 +59,7 @@ const verdict = (entries: TestEntry[], drizzle = false) =>
   norm(buildVerdict(entries as never, NOW_MS, drizzle))
 
 test('sin lluvia: lo dice con el horizonte real', () => {
-  assert.deepEqual(verdict(hourly()), ['Sin lluvia prevista en las próximas 24 h'])
+  assert.deepEqual(verdict(hourly()), ['Sin lluvia prevista hoy ni mañana'])
 })
 
 test('una franja: intensidad, horas y total', () => {
@@ -124,7 +124,7 @@ test('riesgo de tormentas reemplaza a las ráfagas y encabeza', () => {
 
 test('ráfagas fuertes se avisan con hora', () => {
   const lines = verdict(hourly({}, { gust: { 3: 55 } }))
-  assert.deepEqual(lines, ['Sin lluvia prevista en las próximas 24 h', 'Ráfagas de hasta 55 km/h a las 17:00'])
+  assert.deepEqual(lines, ['Sin lluvia prevista hoy ni mañana', 'Ráfagas de hasta 55 km/h a las 17:00'])
 })
 
 const NBSP = String.fromCharCode(0xa0)
@@ -162,11 +162,11 @@ test('con aviso crítico se conservan las ráfagas y el riesgo de tormentas del 
   ])
 })
 
-test('un aviso amarillo o de nivel desconocido no cambia el veredicto', () => {
+test('un aviso de nivel desconocido o verde no cambia el veredicto', () => {
   const rain = hourly({ 2: 1.2, 3: 2.0, 4: 0.6 })
   const base = plain(buildVerdict(rain as never, NOW_MS, false))
-  assert.deepEqual(plain(withAlerts(rain, [alerta('amarillo', 'Lluvias')])), base)
   assert.deepEqual(plain(withAlerts(rain, [alerta('sin especificar', 'X')])), base)
+  assert.deepEqual(plain(withAlerts(rain, [alerta('verde', 'X')])), base)
 })
 
 test('varios avisos críticos: titular el más grave y se cuenta el resto', () => {
@@ -228,9 +228,8 @@ test('ráfagas y tormentas: velocidad y hora son hechos', () => {
   assert.deepEqual(storm[0].segments.filter((s) => s.fact).map((s) => s.text), ['18:00'])
 })
 
-test('"24 h" no se parte entre renglones', () => {
-  const [line] = buildVerdict(hourly() as never, NOW_MS, false)
-  assert.ok(line.text.includes(`24${NBSP}h`))
+test('sin lluvia con franjas que no llegan al fin de mañana: "en las próximas horas"', () => {
+  assert.deepEqual(verdict(hourly().slice(0, 10)), ['Sin lluvia prevista en las próximas horas'])
 })
 
 test('"mañana" se cuenta desde el día argentino de la hora de referencia, no desde la primera franja', () => {
@@ -267,4 +266,180 @@ test('slotHours infiere el paso entre franjas', () => {
   assert.equal(slotHours(hourly({}, { stepHours: 3 }) as never, 4), 3)
   assert.equal(slotHours(hourly({}, { stepHours: 3 }) as never, 15), 3) // la última usa el paso anterior
   assert.equal(slotHours(hourly().slice(0, 1) as never, 0), 1) // sin vecinos: 1 h
+})
+
+// ── FRA-362: manda nuestro pronóstico; el amarillo es contexto y solo naranja/rojo encabezan ──────────
+
+const ZONED = (date: string, time: string) => `${date}T${time}:00-03:00`
+const alertaEntre = (nivel: string, tipo: string, desde: string | null, hasta: string | null) => ({
+  nivel, tipo, fecha_desde: desde, fecha_hasta: hasta, descripcion: '',
+})
+// Hora de referencia de los casos: 14:47 AR del 18/09/2026; el horizonte llega hasta las 00:00 del 20/09.
+const AMARILLO = alertaEntre('amarillo', 'Tormentas', ZONED('2026-09-19', '09:00'), ZONED('2026-09-19', '20:59'))
+const AMARILLO_LINE = 'Aviso amarillo del SMN: Tormentas · desde el sáb 09:00 hasta el sáb 20:59'
+const RAIN_16_18 = 'Lluvia débil prevista de 16:00 a 18:00 · ≈ 4 mm en total'
+
+test('un aviso amarillo no oculta el pronóstico: la lluvia va primero y el aviso al final', () => {
+  const lines = withAlerts(hourly({ 2: 1.2, 3: 2.0, 4: 0.6 }), [AMARILLO])
+  assert.deepEqual(plain(lines), [RAIN_16_18, AMARILLO_LINE])
+  const last = lines[lines.length - 1]
+  assert.equal(last.tone, 'alert')
+  assert.equal(last.level, 'amarillo')
+})
+
+test('un aviso amarillo sin lluvia prevista: el "sin lluvia" y las ráfagas van antes que el aviso', () => {
+  assert.deepEqual(plain(withAlerts(hourly({}, { gust: { 3: 55 } }), [AMARILLO])), [
+    'Sin lluvia prevista hoy ni mañana',
+    'Ráfagas de hasta 55 km/h a las 17:00',
+    AMARILLO_LINE,
+  ])
+})
+
+test('un aviso amarillo conserva la segunda línea de lluvia y el riesgo de tormentas del modelo', () => {
+  assert.deepEqual(plain(withAlerts(hourly({ 1: 0.2, 7: 8.0, 8: 9.0 }), [AMARILLO])), [
+    'Lluvia fuerte prevista de 21:00 a 22:00 · ≈ 17 mm en total',
+    'Antes: lluvia débil a las 15:00 · menos de 1 mm',
+    AMARILLO_LINE,
+  ])
+  assert.deepEqual(plain(withAlerts(hourly({}, { convective: { 4: 'high' } }), [AMARILLO])), [
+    'Riesgo alto de tormentas a las 18:00',
+    AMARILLO_LINE,
+  ])
+})
+
+test('amarillo + naranja: solo el naranja, sin repetir el amarillo ni contarlo', () => {
+  assert.deepEqual(plain(withAlerts(hourly({ 2: 1.2 }), [AMARILLO, NARANJA])), [
+    'Aviso naranja del SMN: Viento · hasta el sáb 23:00',
+  ])
+})
+
+test('varios críticos: el más grave y, a igual nivel, el que empieza antes', () => {
+  const tarde = alertaEntre('naranja', 'Nevadas', ZONED('2026-09-19', '15:00'), ZONED('2026-09-19', '20:00'))
+  const temprano = alertaEntre('naranja', 'Viento', ZONED('2026-09-19', '06:00'), ZONED('2026-09-19', '20:00'))
+  assert.deepEqual(plain(withAlerts(hourly(), [tarde, temprano])), [
+    'Aviso naranja del SMN: Viento · desde el sáb 06:00 hasta el sáb 20:00 · +1 aviso más',
+  ])
+})
+
+test('dos amarillos: una sola línea, la que empieza antes, con "+1 aviso más"; tres, "+2 avisos más"', () => {
+  const tarde = alertaEntre('amarillo', 'Viento', ZONED('2026-09-19', '15:00'), ZONED('2026-09-19', '20:00'))
+  const otra = alertaEntre('amarillo', 'Lluvias', ZONED('2026-09-19', '18:00'), ZONED('2026-09-19', '22:00'))
+  assert.deepEqual(plain(withAlerts(hourly({}, {}), [tarde, AMARILLO])), [
+    'Sin lluvia prevista hoy ni mañana',
+    `${AMARILLO_LINE} · +1 aviso más`,
+  ])
+  assert.deepEqual(plain(withAlerts(hourly({}, {}), [tarde, otra, AMARILLO])), [
+    'Sin lluvia prevista hoy ni mañana',
+    `${AMARILLO_LINE} · +2 avisos más`,
+  ])
+})
+
+test('un amarillo en curso va antes que uno futuro', () => {
+  const enCurso = alertaEntre('amarillo', 'Viento', ZONED('2026-09-18', '10:00'), ZONED('2026-09-18', '22:00'))
+  assert.deepEqual(plain(withAlerts(hourly(), [AMARILLO, enCurso])), [
+    'Sin lluvia prevista hoy ni mañana',
+    'Aviso amarillo del SMN: Viento · hasta las 22:00 · +1 aviso más',
+  ])
+})
+
+test('un aviso vencido no aparece, sea amarillo o crítico', () => {
+  const rain = hourly({ 2: 1.2, 3: 2.0, 4: 0.6 })
+  const base = plain(buildVerdict(rain as never, NOW_MS, false))
+  const amarillo = alertaEntre('amarillo', 'Tormentas', ZONED('2026-09-18', '06:00'), ZONED('2026-09-18', '14:00'))
+  const rojo = alertaEntre('rojo', 'Tormentas', ZONED('2026-09-18', '06:00'), ZONED('2026-09-18', '14:00'))
+  assert.deepEqual(plain(withAlerts(rain, [amarillo, rojo])), base)
+})
+
+test('un aviso que empieza después del fin de mañana no aparece; uno de mañana a la noche sí', () => {
+  const rain = hourly({ 2: 1.2, 3: 2.0, 4: 0.6 })
+  const base = plain(buildVerdict(rain as never, NOW_MS, false))
+  const amarilloPasado = alertaEntre('amarillo', 'Tormentas', ZONED('2026-09-20', '00:00'), ZONED('2026-09-20', '12:00'))
+  const rojoPasado = alertaEntre('rojo', 'Tormentas', ZONED('2026-09-20', '00:00'), ZONED('2026-09-20', '12:00'))
+  assert.deepEqual(plain(withAlerts(rain, [amarilloPasado, rojoPasado])), base)
+  const nocheDeManana = alertaEntre('amarillo', 'Tormentas', ZONED('2026-09-19', '23:59'), ZONED('2026-09-20', '06:00'))
+  assert.deepEqual(plain(withAlerts(rain, [nocheDeManana])), [
+    RAIN_16_18,
+    'Aviso amarillo del SMN: Tormentas · desde el sáb 23:59 hasta el dom 06:00',
+  ])
+})
+
+test('sin avisos el veredicto no cambia (hoy y mañana)', () => {
+  assert.deepEqual(plain(withAlerts(hourly({ 2: 1.2, 3: 2.0, 4: 0.6 }), [])), [RAIN_16_18])
+})
+
+test('el fin del horizonte se calcula en hora argentina: 23:30 y 00:30 AR', () => {
+  const lateNight = Date.UTC(2026, 8, 19, 2, 30) // 23:30 AR del 18/09 -> fin: 00:00 del 20/09
+  const early = Date.UTC(2026, 8, 19, 3, 30) // 00:30 AR del 19/09 -> fin: 00:00 del 21/09
+  const run = (nowMs: number, nivel: string, desde: string) =>
+    buildVerdict(
+      hourly() as never,
+      nowMs,
+      false,
+      [alertaEntre(nivel, 'Tormentas', desde, null)] as never,
+    ).some((l) => l.tone === 'alert')
+  for (const nivel of ['amarillo', 'naranja']) {
+    assert.equal(run(lateNight, nivel, ZONED('2026-09-19', '23:00')), true)
+    assert.equal(run(lateNight, nivel, ZONED('2026-09-20', '00:30')), false)
+    assert.equal(run(early, nivel, ZONED('2026-09-20', '23:00')), true)
+    assert.equal(run(early, nivel, ZONED('2026-09-21', '00:30')), false)
+  }
+})
+
+// Caso real: Córdoba, 2026-10-07. Hora de referencia 14:43 AR del 06/10; franjas de 3 h.
+const CBA_NOW_MS = 1791308614602
+const CBA_SLOTS: [string, string, number, number, 'low' | 'moderate'][] = [
+  ['2026-10-06', '15:00', 0, 20, 'low'],
+  ['2026-10-06', '18:00', 0, 30, 'low'],
+  ['2026-10-06', '21:00', 0, 42, 'low'],
+  ['2026-10-07', '00:00', 0, 29.2, 'low'],
+  ['2026-10-07', '03:00', 0, 22.3, 'moderate'],
+  ['2026-10-07', '06:00', 0, 20.5, 'moderate'],
+  ['2026-10-07', '09:00', 0.1, 15.1, 'moderate'],
+  ['2026-10-07', '12:00', 0.8, 30.2, 'moderate'],
+  ['2026-10-07', '15:00', 3.3, 59, 'moderate'],
+  ['2026-10-07', '18:00', 3.0, 44.6, 'low'],
+  ['2026-10-07', '21:00', 0, 16.2, 'low'],
+]
+const CBA_ENTRIES = CBA_SLOTS.map(([date, hour, mm, gust, risk]) => ({
+  timestamp: Date.parse(`${date}T${hour}:00-03:00`) / 1000,
+  hour_label: hour,
+  date,
+  temp_c: 20,
+  precip_mm: mm,
+  precip_prob: mm > 0.1 ? 80 : 10,
+  weather_code: 1,
+  icon: 'clear-day',
+  is_day: true,
+  wind_gusts_kmh: gust,
+  convective_risk: risk,
+}))
+const CBA_AMARILLO = alertaEntre('amarillo', 'Tormentas', '2026-10-07T09:00:00-03:00', '2026-10-07T20:59:00-03:00')
+const RIO_CUARTO_NARANJA = alertaEntre('naranja', 'Tormentas', '2026-10-07T03:00:00-03:00', '2026-10-07T08:59:00-03:00')
+
+test('caso Córdoba con el aviso amarillo: el pronóstico primero y el aviso al final', () => {
+  const lines = buildVerdict(CBA_ENTRIES as never, CBA_NOW_MS, false, [CBA_AMARILLO] as never)
+  assert.deepEqual(plain(lines), [
+    'Lluvia débil prevista mañana de 12:00 a 18:00 · ≈ 7 mm en total',
+    'Ráfagas de hasta 59 km/h mañana a las 15:00',
+    'Aviso amarillo del SMN: Tormentas · desde el mié 09:00 hasta el mié 20:59',
+  ])
+  assert.deepEqual(lines.map((l) => l.tone), ['rain', 'wind', 'alert'])
+  assert.equal(lines[2].level, 'amarillo')
+})
+
+test('caso Córdoba sin aviso: la lluvia completa de 12:00 a 18:00 de mañana y las ráfagas', () => {
+  assert.deepEqual(plain(buildVerdict(CBA_ENTRIES as never, CBA_NOW_MS, false)), [
+    'Lluvia débil prevista mañana de 12:00 a 18:00 · ≈ 7 mm en total',
+    'Ráfagas de hasta 59 km/h mañana a las 15:00',
+  ])
+})
+
+test('caso con aviso naranja (Río Cuarto): el aviso encabeza y no hay línea de lluvia', () => {
+  const lines = buildVerdict(CBA_ENTRIES as never, CBA_NOW_MS, false, [RIO_CUARTO_NARANJA] as never)
+  assert.deepEqual(plain(lines), [
+    'Aviso naranja del SMN: Tormentas · desde el mié 03:00 hasta el mié 08:59',
+    'Ráfagas de hasta 59 km/h mañana a las 15:00',
+  ])
+  assert.equal(lines[0].level, 'naranja')
+  assert.ok(!plain(lines).some((l) => l.includes('Lluvia')))
 })

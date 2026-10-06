@@ -247,7 +247,7 @@ const dashboard = (mm: Record<number, number> = {}, status = 'Sin lluvia') => ({
 test('headline: no rain ahead', () => {
   const line = nowHeadline(dashboard())
   assert.ok(line)
-  assert.equal(plain(line.text), 'Sin lluvia prevista en las próximas 24 h')
+  assert.equal(plain(line.text), 'Sin lluvia prevista hoy ni mañana')
   assert.equal(line.tone, 'clear')
 })
 

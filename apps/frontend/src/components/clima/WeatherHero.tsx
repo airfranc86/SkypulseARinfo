@@ -4,7 +4,7 @@ import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { WindArrow } from '@/components/ui/WindArrow'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 import { cn } from '@/lib/utils'
-import { LEVEL_COLOR, type CriticalLevel } from '@/lib/smnAlertas'
+import { LEVEL_COLOR, type CriticalLevel, type HeadlineLevel } from '@/lib/smnAlertas'
 import { uvCategory, type UvLevel } from '@/lib/uvScale'
 import type { VerdictLine, VerdictTone } from '@/lib/weatherVerdict'
 import type { CurrentDetailed, DailyEntry } from '@/lib/api'
@@ -36,9 +36,11 @@ const TONE: Record<Exclude<VerdictTone, 'alert'>, { Icon: LucideIcon; color: str
 }
 
 /** El aviso del SMN lleva el ícono y el color de su nivel, los mismos de su tarjeta. */
-const ALERT_TONE: Record<CriticalLevel, { Icon: LucideIcon; color: string }> = {
-  rojo:    { Icon: OctagonAlert,  color: LEVEL_COLOR.rojo },
-  naranja: { Icon: TriangleAlert, color: LEVEL_COLOR.naranja },
+const ALERT_TONE: Record<HeadlineLevel, { Icon: LucideIcon; color: string }> = {
+  rojo:     { Icon: OctagonAlert,  color: LEVEL_COLOR.rojo },
+  naranja:  { Icon: TriangleAlert, color: LEVEL_COLOR.naranja },
+  // El amarillo es contexto, no titular: va al final del veredicto, con ícono de información y, si quedara solo, peso medio.
+  amarillo: { Icon: Info,          color: LEVEL_COLOR.amarillo },
 }
 
 /** Brillo y borde del héroe según el aviso crítico vigente: el peso visual escala con la gravedad. */
@@ -68,7 +70,7 @@ interface Props {
   current: CurrentDetailed
   /** Hoy en el pronóstico de 7 días: de ahí salen la máxima y la mínima. */
   today?: DailyEntry
-  /** Lo que viene en las próximas 24 h, ya redactado (ver lib/weatherVerdict). */
+  /** Lo que viene hoy y mañana, ya redactado (ver lib/weatherVerdict). */
   verdict: VerdictLine[]
   /** Aviso crítico (naranja o rojo) vigente del SMN, si lo hay. */
   severity?: CriticalLevel | null
@@ -154,14 +156,15 @@ export function WeatherHero({ current, today, verdict, severity = null, sources 
 
       {/* Lo que viene: hora, cantidad e intensidad, sin porcentajes ni promesas. La primera línea es el titular. */}
       {verdict.length > 0 && (
-        <div role="group" aria-label="Lo que viene en las próximas 24 horas" className="mt-4 space-y-2">
+        <div role="group" aria-label="Lo que viene hoy y mañana" className="mt-4 space-y-2">
           {verdict.map((line, index) => {
             const { Icon, color } = line.tone === 'alert' ? ALERT_TONE[line.level ?? 'naranja'] : TONE[line.tone]
             const headline = index === 0
+            const light = line.tone === 'alert' && line.level === 'amarillo'
             return (
               <p
                 key={line.text}
-                className={cn('flex items-start gap-2.5 leading-snug', headline ? 'text-xl font-semibold' : 'text-base')}
+                className={cn('flex items-start gap-2.5 leading-snug', headline ? (light ? 'text-xl font-medium' : 'text-xl font-semibold') : 'text-base')}
                 style={{ color: 'var(--color-foreground)' }}
               >
                 <Icon

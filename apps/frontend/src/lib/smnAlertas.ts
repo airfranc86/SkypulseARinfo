@@ -2,6 +2,8 @@ import type { SmnAlerta, SmnAlertasResponse } from '@/lib/api'
 
 export type AlertLevel = 'rojo' | 'naranja' | 'amarillo' | 'verde' | 'otro'
 export type CriticalLevel = 'rojo' | 'naranja'
+/** Niveles que pueden encabezar el titular del héroe: los críticos y el amarillo (que pesa menos). */
+export type HeadlineLevel = CriticalLevel | 'amarillo'
 
 /** Fuente oficial de los avisos: destino de todos los enlaces a smn.gob.ar. */
 export const SMN_URL = 'https://www.smn.gob.ar/'
@@ -69,6 +71,34 @@ export function criticalAlertas(alertas: SmnAlerta[]): SmnAlerta[] {
     const level = alertLevel(alerta.nivel)
     return level === 'rojo' || level === 'naranja'
   })
+}
+
+/**
+ * Avisos que entran al veredicto del héroe (rojo y naranja lo encabezan; el amarillo va al final): rojo, naranja y amarillo que no vencieron (`fecha_hasta`
+ * posterior a `nowMs`) y empiezan antes de `horizonMs` (vigentes ahora o por empezar dentro del
+ * horizonte). Del más grave al menos grave y, a igual nivel, el que empieza antes. Una fecha ausente o
+ * sin zona horaria no descarta el aviso: no se inventa una hora para sacarlo. Sin hora de referencia
+ * válida no se puede juzgar la vigencia, así que no se filtra.
+ */
+export function headlineAlertas(alertas: SmnAlerta[], nowMs: number, horizonMs: number): SmnAlerta[] {
+  const startOf = (alerta: SmnAlerta) => parseZoned(alerta.fecha_desde) ?? Number.NEGATIVE_INFINITY
+  return alertas
+    .filter((alerta) => {
+      const level = alertLevel(alerta.nivel)
+      if (level !== 'rojo' && level !== 'naranja' && level !== 'amarillo') return false
+      if (!Number.isFinite(nowMs)) return true
+      const hasta = parseZoned(alerta.fecha_hasta)
+      if (hasta !== null && hasta <= nowMs) return false
+      return startOf(alerta) < horizonMs
+    })
+    .map((alerta, index) => ({ alerta, index }))
+    .sort(
+      (a, b) =>
+        RANK[alertLevel(a.alerta.nivel)] - RANK[alertLevel(b.alerta.nivel)] ||
+        startOf(a.alerta) - startOf(b.alerta) ||
+        a.index - b.index,
+    )
+    .map(({ alerta }) => alerta)
 }
 
 /** El nivel crítico más alto entre los avisos (solo naranja y rojo cambian el peso del héroe). */

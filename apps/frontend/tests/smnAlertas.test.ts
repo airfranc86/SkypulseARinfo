@@ -5,6 +5,7 @@ import {
   alertSummary,
   criticalAlertas,
   criticalLevel,
+  headlineAlertas,
   isSmnUnavailable,
   smnAlertasLocation,
   smnAlertasQueryKey,
@@ -56,6 +57,7 @@ test('criticalAlertas: solo naranja y rojo, del más grave al menos grave', () =
   const input = [alerta('amarillo', { tipo: 'A' }), alerta('naranja', { tipo: 'B' }), alerta('rojo', { tipo: 'C' }), alerta('verde')]
   assert.deepEqual(criticalAlertas(input).map((a) => a.tipo), ['C', 'B'])
   assert.deepEqual(criticalAlertas([alerta('amarillo')]), [])
+  assert.equal(criticalLevel([alerta('amarillo')]), null)
   assert.deepEqual(criticalAlertas([]), [])
 })
 
@@ -146,4 +148,28 @@ test('smnAlertasQueryKey: una entrada por zona; la variación del GPS comparte c
 
 test('smnAlertasQueryKey: sin ubicación la clave es estable', () => {
   assert.deepEqual(smnAlertasQueryKey(null), ['smn-alertas', null, null])
+})
+
+test('headlineAlertas: sin vencidos ni posteriores al horizonte, del más grave al que empieza antes', () => {
+  const horizon = Date.UTC(2026, 8, 20, 3, 0) // 00:00 AR del 20/09
+  const a = (nivel: string, desde: string | null, hasta: string | null) =>
+    ({ nivel, tipo: nivel, fecha_desde: desde, fecha_hasta: hasta, descripcion: '' })
+  const input = [
+    a('amarillo', '2026-09-19T08:00:00-03:00', null),
+    a('verde', null, null),
+    a('naranja', '2026-09-19T20:00:00-03:00', null),
+    a('amarillo', '2026-09-18T10:00:00-03:00', '2026-09-18T22:00:00-03:00'),
+    a('rojo', '2026-09-18T06:00:00-03:00', '2026-09-18T14:00:00-03:00'), // vencido
+    a('rojo', '2026-09-20T00:00:00-03:00', null), // empieza en el límite
+    a('naranja', '2026-09-19T10:00:00-03:00', null),
+  ]
+  assert.deepEqual(
+    headlineAlertas(input, NOW_MS, horizon).map((x) => `${x.nivel}@${x.fecha_desde}`),
+    [
+      'naranja@2026-09-19T10:00:00-03:00',
+      'naranja@2026-09-19T20:00:00-03:00',
+      'amarillo@2026-09-18T10:00:00-03:00',
+      'amarillo@2026-09-19T08:00:00-03:00',
+    ],
+  )
 })

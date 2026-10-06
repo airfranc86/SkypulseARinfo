@@ -1,6 +1,6 @@
 import type { HourlyEntry, SmnAlerta } from '@/lib/api'
-import { arDateKey } from './dates.ts'
-import { alertLevel, criticalAlertas, vigenciaText, type CriticalLevel } from './smnAlertas.ts'
+import { addDays, arDateKey } from './dates.ts'
+import { alertLevel, headlineAlertas, vigenciaText, type HeadlineLevel } from './smnAlertas.ts'
 
 /**
  * Lluvia = más de 0,1 mm en el tramo. Es el mismo umbral con el que el backend arma
@@ -21,7 +21,6 @@ export const LIGHT_RAIN_MAX_MM_H = 2.5
 export const MODERATE_RAIN_MAX_MM_H = 7.6
 
 const HOUR_MS = 3_600_000
-const AHEAD_HOURS = 24
 const MIN_SLOT_HOURS = 0.25
 const MAX_SLOT_HOURS = 6
 
@@ -43,7 +42,7 @@ export interface VerdictLine {
   text: string
   segments: VerdictSegment[]
   /** Nivel del aviso, solo en las líneas de tono "alert": define el color y el ícono. */
-  level?: CriticalLevel
+  level?: HeadlineLevel
 }
 
 type LinePart = string | { fact: string }
@@ -189,9 +188,17 @@ function strongest(runs: RainRun[]): RainRun {
   return runs.reduce((a, b) => (b.totalMm > a.totalMm ? b : a))
 }
 
-/** Línea del aviso crítico que encabeza el veredicto: "Aviso rojo del SMN: Tormentas · hasta las 21:00". */
+/**
+ * Fin del horizonte del titular: las 00:00 de pasado mañana en hora argentina, o sea hoy y mañana
+ * completos. Argentina está en UTC-3 todo el año (sin horario de verano), así que el offset es fijo.
+ */
+function horizonEndMs(baseDate: string): number {
+  return Date.parse(`${addDays(baseDate, 2)}T00:00:00-03:00`)
+}
+
+/** Línea del aviso que encabeza el veredicto: "Aviso rojo del SMN: Tormentas · hasta las 21:00". */
 function alertLine(alerta: SmnAlerta, others: number, nowMs: number): VerdictLine {
-  const level = alertLevel(alerta.nivel) as CriticalLevel
+  const level = alertLevel(alerta.nivel) as HeadlineLevel
   const vigencia = vigenciaText(alerta, nowMs)
   const parts: LinePart[] = [`Aviso ${level} del SMN: `, fact(alerta.tipo)]
   if (vigencia) parts.push(' · ', fact(keepTogether(vigencia)))
@@ -205,14 +212,18 @@ function keepTogether(text: string): string {
 }
 
 /**
- * Lo que viene en las próximas 24 h, en hechos: hora, cantidad e intensidad. Sin porcentajes ni
+ * Lo que viene hoy y mañana (hasta las 00:00 de pasado mañana), en hechos: hora, cantidad e intensidad. Sin porcentajes ni
  * promesas: si el dato no alcanza para decirlo, no se dice.
  *
  * El titular lo manda la gravedad, no el orden en que se calcula cada cosa:
- * 1. Un aviso crítico (naranja o rojo) del SMN vigente: es el titular y **no hay línea de lluvia**.
- *    El aviso y el modelo son fuentes distintas y pueden contradecirse ("Sin lluvia prevista" bajo
- *    un aviso de tormentas severas): con un aviso vigente el héroe habla solo por el aviso, más las
- *    ráfagas y el riesgo de tormentas del modelo. Los avisos amarillos no cambian nada.
+ * 1. Un aviso crítico (naranja o rojo) del SMN que no venció y empieza antes del fin de mañana: es
+ *    el titular y **no hay línea de lluvia**. El aviso y el modelo son fuentes distintas y pueden
+ *    contradecirse ("Sin lluvia prevista" bajo un aviso de tormentas severas): con un aviso crítico
+ *    el héroe habla solo por el aviso, más las ráfagas y el riesgo de tormentas del modelo. Un aviso
+ *    crítico es una advertencia de gravedad: no se tapa con el pronóstico. Si además hay amarillos,
+ *    no se repiten acá (quedan en el bloque del SMN).
+ * 1b. Sin críticos, los avisos amarillos no ocultan nada: manda nuestro pronóstico y el amarillo va
+ *    al final, como una sola línea secundaria de contexto.
  * 2. Sin aviso, un riesgo alto o severo de tormentas encabeza; la lluvia prevista lo acompaña, pero
  *    no se le pone debajo un "sin lluvia" ni un "llovizna posible".
  * 3. Sin nada de eso, la lluvia: el titular es el tramo más fuerte (una llovizna previa no puede
@@ -227,17 +238,23 @@ export function buildVerdict(
   drizzleHint: boolean,
   alertas: SmnAlerta[] = [],
 ): VerdictLine[] {
-  const critical = criticalAlertas(alertas)
-  const alertLines = critical.length > 0 ? [alertLine(critical[0], critical.length - 1, nowMs)] : []
-
-  const horizon = Number.isFinite(nowMs) ? nowMs + AHEAD_HOURS * HOUR_MS : Number.POSITIVE_INFINITY
-  const ahead = entriesFromNow(entries, nowMs).filter((entry) => entry.timestamp * 1000 <= horizon)
-  if (ahead.length === 0) return alertLines
-
   // "Mañana" se cuenta desde el día argentino de la hora de referencia. La fecha de la primera franja
   // no sirve: a las 23:30, con franjas de 3 h, la próxima ya es la de las 00:00 del día siguiente.
-  const baseDate = Number.isFinite(nowMs) ? arDateKey(nowMs) : ahead[0].date
-  const lines: VerdictLine[] = [...alertLines]
+  const fromNow = entriesFromNow(entries, nowMs)
+  const baseDate = Number.isFinite(nowMs) ? arDateKey(nowMs) : (fromNow[0]?.date ?? '')
+  const horizon = Number.isFinite(nowMs) ? horizonEndMs(baseDate) : Number.POSITIVE_INFINITY
+
+  const inHorizon = headlineAlertas(alertas, nowMs, horizon)
+  const critical = inHorizon.filter((alerta) => alertLevel(alerta.nivel) !== 'amarillo')
+  const yellow = inHorizon.filter((alerta) => alertLevel(alerta.nivel) === 'amarillo')
+  const criticalLines = critical.length > 0 ? [alertLine(critical[0], critical.length - 1, nowMs)] : []
+  // Con críticos no se repiten los amarillos; sin ellos, el amarillo cierra el veredicto.
+  const yellowLines = critical.length === 0 && yellow.length > 0 ? [alertLine(yellow[0], yellow.length - 1, nowMs)] : []
+
+  const ahead = fromNow.filter((entry) => entry.timestamp * 1000 < horizon)
+  if (ahead.length === 0) return [...criticalLines, ...yellowLines]
+
+  const lines: VerdictLine[] = [...criticalLines]
 
   const storm = ahead.find((entry) => entry.convective_risk === 'high' || entry.convective_risk === 'severe')
   if (storm) {
@@ -247,7 +264,7 @@ export function buildVerdict(
     )
   }
 
-  // Con un aviso crítico vigente no hay línea de lluvia (ver arriba).
+  // Con un aviso crítico no hay línea de lluvia (ver arriba).
   if (critical.length === 0) {
     const runs = rainRuns(ahead, nowMs)
     if (runs.length > 0) {
@@ -281,8 +298,10 @@ export function buildVerdict(
       if (drizzleHint) {
         lines.push(line('rain', 'Llovizna posible, sin lluvia medida en el pronóstico'))
       } else {
-        const spanHours = (ahead[ahead.length - 1].timestamp * 1000 - nowMs) / HOUR_MS
-        const horizonText = spanHours >= AHEAD_HOURS - 1 ? `en las próximas 24${NBSP}h` : 'en las próximas horas'
+        // "Hoy ni mañana" solo si las franjas cubren hasta el fin de mañana; si no, no se promete más de lo que hay.
+        const lastIndex = ahead.length - 1
+        const coverageEnd = ahead[lastIndex].timestamp * 1000 + slotHours(ahead, lastIndex) * HOUR_MS
+        const horizonText = coverageEnd >= horizon ? 'hoy ni mañana' : 'en las próximas horas'
         lines.push(line('clear', `Sin lluvia prevista ${horizonText}`))
       }
     }
@@ -304,5 +323,5 @@ export function buildVerdict(
     }
   }
 
-  return lines
+  return [...lines, ...yellowLines]
 }
