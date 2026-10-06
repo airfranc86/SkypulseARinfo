@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 import { isColdStart, isProviderSaturated, isClientError } from '@/lib/apiErrors'
 import { DASHBOARD_RETRY } from '@/lib/retryPolicy'
 import { LOAD_RETRY } from '@/lib/loadError'
+import { smnAlertasLocation, smnAlertasQueryKey } from '@/lib/smnAlertas'
 
 // isColdStart/isProviderSaturated/isClientError viven en lib/apiErrors.ts (junto a ApiError,
 // del que dependen exclusivamente — ese módulo no toca `import.meta.env` y por eso es
@@ -114,11 +115,23 @@ export function useVolcanes() {
   })
 }
 
-export function useSmnAlertas() {
+/**
+ * Un aviso oficial nuevo (o uno que vence) importa en minutos, no en horas: la caché del navegador dura
+ * menos que la del backend (30 min), así que una pestaña abierta vuelve a preguntar seguido.
+ */
+const STALE_SMN_ALERTAS = 10 * 60 * 1000
+
+/** Avisos del SMN para el punto dado: sin ubicación la consulta queda apagada (no se piden los de todo el país). */
+export function useSmnAlertas(lat: number | null, lon: number | null) {
+  const location = smnAlertasLocation(lat, lon)
   return useQuery({
-    queryKey: ['smn-alertas'],
-    queryFn: () => api.alertasSmn(),
-    staleTime: STALE_VOLCANES, // mismo orden de magnitud — avisos oficiales, no cambian minuto a minuto
+    queryKey: smnAlertasQueryKey(location),
+    queryFn: () => {
+      if (location === null) throw new Error('coordinates required')
+      return api.alertasSmn(location.lat, location.lon)
+    },
+    staleTime: STALE_SMN_ALERTAS,
+    enabled: location !== null,
   })
 }
 
