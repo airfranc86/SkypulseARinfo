@@ -8,6 +8,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type SVGProps } from 'react'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { ICON_VIEW_MARGIN, iconMotion } from '@/lib/iconMotion'
+import { isWeatherIconCode, type WeatherIconCode } from '@/lib/weatherIconCodes'
 
 import ClearDay            from '@/assets/meteocons/clear-day.svg?react'
 import ClearNight          from '@/assets/meteocons/clear-night.svg?react'
@@ -59,7 +60,7 @@ import MoonWaningCrescent  from '@/assets/meteocons/moon-waning-crescent.svg?rea
 
 type SvgComponent = React.FC<SVGProps<SVGSVGElement>>
 
-const ICON_MAP: Record<string, SvgComponent> = {
+const ICON_MAP: Record<WeatherIconCode, SvgComponent> = {
   'clear-day':                    ClearDay,
   'clear-night':                  ClearNight,
   'partly-cloudy-day':            PartlyCloudyDay,
@@ -171,7 +172,7 @@ function observeInView(element: Element, onChange: (inView: boolean) => void): (
 }
 
 export function WeatherIcon({ code, size = 48, className, isDay = true, glow = false, label }: WeatherIconProps) {
-  const IconComponent = ICON_MAP[code] ?? (isDay ? ClearDay : ClearNight)
+  const IconComponent = isWeatherIconCode(code) ? ICON_MAP[code] : isDay ? ClearDay : ClearNight
   const svgRef = useRef<SVGSVGElement>(null)
   const reducedMotion = useReducedMotion()
   // Visible until the observer says otherwise (also where IntersectionObserver does not exist).

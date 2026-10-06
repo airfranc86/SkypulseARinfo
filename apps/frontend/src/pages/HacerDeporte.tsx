@@ -1,10 +1,11 @@
-import { Activity } from 'lucide-react'
 import { useHacerDeporte, useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { SportBlock } from '@/components/clima/SportBlock'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
 import { isWaitingForColdStart } from '@/lib/loadError'
+import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { TOOL_HEADER_ICON_CODES, TOOL_HEADER_ICON_SIZE } from '@/lib/toolIcons'
 
 interface Props { location: LocationState | null }
 
@@ -26,7 +27,7 @@ export function HacerDeporte({ location }: Props) {
   return (
     <div>
       <PageHeader
-        icon={<Activity size={32} style={{ color: '#3fb8c4' }} />}
+        icon={<WeatherIcon code={TOOL_HEADER_ICON_CODES.hacerDeporte} size={TOOL_HEADER_ICON_SIZE} />}
         title="Hacer deporte"
         subtitle={location.label}
         accentColor="#3fb8c4"
