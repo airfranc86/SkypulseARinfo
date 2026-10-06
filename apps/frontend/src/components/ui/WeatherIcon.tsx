@@ -5,8 +5,9 @@
  * in each SVG file work in the browser (they would be silently stripped in
  * <img> tags due to browser security restrictions).
  */
-import { useLayoutEffect, useRef, type SVGProps } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type SVGProps } from 'react'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { ICON_VIEW_MARGIN, iconMotion } from '@/lib/iconMotion'
 
 import ClearDay            from '@/assets/meteocons/clear-day.svg?react'
 import ClearNight          from '@/assets/meteocons/clear-night.svg?react'
@@ -149,26 +150,60 @@ function glowFilter(code: string): string | undefined {
  */
 const REST_FRAME_S = 0.45
 
+/** One IntersectionObserver shared by every icon on the page, instead of one per icon. */
+const inViewListeners = new WeakMap<Element, (inView: boolean) => void>()
+let sharedObserver: IntersectionObserver | null = null
+
+function observeInView(element: Element, onChange: (inView: boolean) => void): () => void {
+  if (typeof IntersectionObserver === 'undefined') return () => {}
+  sharedObserver ??= new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) inViewListeners.get(entry.target)?.(entry.isIntersecting)
+    },
+    { rootMargin: ICON_VIEW_MARGIN },
+  )
+  inViewListeners.set(element, onChange)
+  sharedObserver.observe(element)
+  return () => {
+    sharedObserver?.unobserve(element)
+    inViewListeners.delete(element)
+  }
+}
+
 export function WeatherIcon({ code, size = 48, className, isDay = true, glow = false, label }: WeatherIconProps) {
   const IconComponent = ICON_MAP[code] ?? (isDay ? ClearDay : ClearNight)
   const svgRef = useRef<SVGSVGElement>(null)
   const reducedMotion = useReducedMotion()
+  // Visible until the observer says otherwise (also where IntersectionObserver does not exist).
+  const [inView, setInView] = useState(true)
   const a11y: SVGProps<SVGSVGElement> = label
     ? { role: 'img', 'aria-label': label }
     : { 'aria-hidden': true }
 
+  // Every running SMIL timeline costs style and layout work on each frame, even off screen or
+  // inside a collapsed section (FRA-342): the icon only animates while it can be seen.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    return observeInView(svg, setInView)
+  }, [IconComponent])
+
   // Los Meteocons animan con SMIL, que ignora prefers-reduced-motion: se pausan en un cuadro
   // donde el fenómeno (gotas, copos, rayo) se ve. Al volver a permitir movimiento, se reanudan.
+  // Fuera de pantalla se pausan donde estén, sin saltar de cuadro.
   useLayoutEffect(() => {
     const svg = svgRef.current
     if (!svg) return
-    if (reducedMotion) {
+    const motion = iconMotion({ reducedMotion, inView })
+    if (motion === 'freeze') {
       svg.setCurrentTime(REST_FRAME_S)
+      svg.pauseAnimations()
+    } else if (motion === 'pause') {
       svg.pauseAnimations()
     } else {
       svg.unpauseAnimations()
     }
-  }, [reducedMotion, code])
+  }, [reducedMotion, inView, IconComponent])
 
   return (
     <IconComponent
