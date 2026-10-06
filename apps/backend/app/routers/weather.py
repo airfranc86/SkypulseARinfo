@@ -6,7 +6,10 @@ Fuentes del dashboard:
        el aeropuerto está a ≤ 30 km y el dato tiene ≤ 90 min; si no, queda Open-Meteo con el motivo
        (FRA-320, ver services/current_blend.py). Si el METAR o la mezcla fallan, se sirve el modelo.
     2. Open-Meteo — todo el pronóstico: diario multi-modelo (GFS + ECMWF) y horario (lluvia,
-       probabilidad, ráfagas, CAPE, 850 hPa, weather_code, uv, sunrise/sunset).
+       probabilidad, ráfagas, CAPE, 850 hPa, weather_code, uv, sunrise/sunset). El horario sale de
+       best_match con la lluvia, el viento (velocidad, ráfagas, dirección), el weather_code y el CAPE
+       superpuestos desde ECMWF, igual que las filas de 7 días (FRA-363); si ECMWF falla, queda
+       best_match solo. Las herramientas no pasan por esa superposición.
     Windy ya no es fuente de nada: la key del plan Testing devolvía los datos mezclados al azar (ver
     CLAUDE.md). Si Open-Meteo diario falla no hay pronóstico: se responde 503 en vez de mostrar datos
     que no son.
@@ -20,6 +23,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Literal
 
+from app.core import usage_counter
 from app.core.params import LatParam, LonParam, SOURCE_OPENMETEO_FORECAST
 from app.core.rate_limit import limiter
 from app.schemas.weather import (
@@ -46,7 +50,9 @@ from app.services.weather_aggregator import aggregate_current
 from app.services.openmeteo import (
     get_current as get_openmeteo_current,
     get_multi_model_daily,
+    get_hourly_forecast_ecmwf,
     get_hourly_forecast_ext,
+    merge_hourly_ecmwf,
     DailyForecastDataExt,
     HourlyForecastExt,
 )
@@ -129,18 +135,21 @@ async def get_dashboard(
     #   - current (SMN/OM): bloqueante.
     #   - multi-model Open-Meteo diario: bloqueante — provee el pronóstico, weather_code, uv,
     #     sunrise y sunset.
-    #   - Open-Meteo horario: best-effort — sin él la tira horaria queda vacía.
+    #   - Open-Meteo horario (best_match): best-effort — sin él la tira horaria queda vacía.
+    #   - Open-Meteo horario ECMWF: best-effort — lidera lluvia, viento, weather_code y CAPE de la tira;
+    #     si falla se sirve best_match solo (FRA-363).
     #   - METAR del aeropuerto más cercano: best-effort, timeout corto (FRA-320).
     #   - Open-Meteo `current` (solo la ráfaga): best-effort; comparte la caché single-flight con
     #     `aggregate_current`, así que no suma un request a Open-Meteo.
     current_task = aggregate_current(lat, lon)
     om_daily_task = get_multi_model_daily(lat, lon, days=7)
     om_hourly_task = get_hourly_forecast_ext(lat, lon, days=7)
+    om_hourly_ecmwf_task = get_hourly_forecast_ecmwf(lat, lon, days=7)
     metar_task = get_nearest_metar_observation(lat, lon)
     om_current_task = get_openmeteo_current(lat, lon)
 
-    (current, daily_multi, om_hourly, metar, om_current) = await asyncio.gather(
-        current_task, om_daily_task, om_hourly_task, metar_task, om_current_task,
+    (current, daily_multi, om_hourly, om_hourly_ecmwf, metar, om_current) = await asyncio.gather(
+        current_task, om_daily_task, om_hourly_task, om_hourly_ecmwf_task, metar_task, om_current_task,
         return_exceptions=True,
     )
 
@@ -149,8 +158,11 @@ async def get_dashboard(
         logger.error("aggregate_current falló en /dashboard: %s", current)
         raise HTTPException(status_code=503, detail="current_unavailable")
 
-    om_hourly_data: HourlyForecastExt | None = (
-        om_hourly if not isinstance(om_hourly, Exception) else None
+    # Serie horaria del dashboard: best_match con ECMWF encima. Todo lo que sigue la consume ya mezclada
+    # (tira, lluvia de hoy, riesgo convectivo, lluvia actual del METAR, 850 hPa).
+    om_hourly_data: HourlyForecastExt | None = _dashboard_hourly(
+        om_hourly if not isinstance(om_hourly, Exception) else None,
+        om_hourly_ecmwf,
     )
 
     # Sin el pronóstico diario no hay dashboard: antes se sintetizaba desde Windy, pero esos datos
@@ -357,6 +369,33 @@ async def get_dashboard(
 # ---------------------------------------------------------------------------
 # Helpers privados
 # ---------------------------------------------------------------------------
+
+def _dashboard_hourly(
+    base: HourlyForecastExt | None,
+    ecmwf: HourlyForecastExt | BaseException | None,
+) -> HourlyForecastExt | None:
+    """La serie horaria del dashboard: `base` (best_match) con los campos de ECMWF superpuestos.
+
+    Sin ECMWF (None, excepción, o una mezcla que falle) devuelve `base` tal cual: el dashboard se
+    comporta como antes de FRA-363. Ese respaldo se registra y se cuenta (sin datos del usuario).
+    Sin `base` no hay serie: no se arma una solo con ECMWF.
+    """
+    if base is None:
+        return None
+    if isinstance(ecmwf, Exception):
+        reason = "error"
+    elif ecmwf is None:
+        reason = "unavailable"
+    else:
+        try:
+            return merge_hourly_ecmwf(base, ecmwf)
+        except Exception as exc:
+            logger.warning("merge_hourly_ecmwf falló en /dashboard: %r", exc)
+            reason = "merge_error"
+    logger.info("dashboard_hourly_ecmwf_fallback reason=%s", reason)
+    usage_counter.record("open_meteo_hourly_ecmwf_fallback")
+    return base
+
 
 def _get_weather_code_from_current(current: WeatherCurrentResponse) -> int | None:
     """SMN no provee weather_code; retorna None para que describe_wmo use fallback."""

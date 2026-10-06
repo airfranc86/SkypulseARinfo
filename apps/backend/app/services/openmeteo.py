@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
 from app.core import usage_counter
@@ -377,6 +377,59 @@ class HourlyForecastExt:
     elevation_m: float | None = None                                   # altitud del punto (cota de nieve)
 
 
+def _parse_hourly_payload(data: dict) -> HourlyForecastExt:
+    """Arma un `HourlyForecastExt` desde la respuesta horaria de Open-Meteo.
+
+    Toda variable que la respuesta no trae queda como lista vacía (p. ej. el pedido a un solo modelo
+    pide menos variables). Lanza KeyError/TypeError si falta o viene mal formado `hourly`.
+    """
+    hourly = data["hourly"]
+    time_list: list[str] = hourly.get("time", [])
+
+    timestamps: list[int] = []
+    hour_labels: list[str] = []
+    dates: list[str] = []
+    for t in time_list:
+        # La hora viene sin zona: anclarla a UTC-3. `.timestamp()` sobre un naive usaría el
+        # reloj del servidor (UTC en Render) y el instante saldría 3 h antes.
+        dt = datetime.fromisoformat(t).replace(tzinfo=_AR_TZ)
+        timestamps.append(int(dt.timestamp()))
+        hour_labels.append(t[11:16])   # "14:00"
+        dates.append(t[:10])           # "2026-05-20"
+
+    # weather_code como int
+    weather_codes: list[int | None] = []
+    for v in hourly.get("weather_code", []):
+        pf = parse_float(v)
+        weather_codes.append(int(pf) if pf is not None else None)
+
+    # is_day puede ser 0/1 int de Open-Meteo
+    is_day_raw = hourly.get("is_day", [])
+    is_day: list[bool] = [bool(v) for v in is_day_raw]
+
+    return HourlyForecastExt(
+        timestamps=timestamps,
+        hour_labels=hour_labels,
+        dates=dates,
+        temps_c=[parse_float(v) for v in hourly.get("temperature_2m", [])],
+        precipitations=[parse_float(v) for v in hourly.get("precipitation", [])],
+        precip_probs=[parse_float(v) for v in hourly.get("precipitation_probability", [])],
+        wind_speeds=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
+        weather_codes=weather_codes,
+        is_day=is_day,
+        freezing_level_heights_m=[
+            parse_float(v) for v in hourly.get("freezing_level_height", [])
+        ],
+        wind_gusts_kmh=[parse_float(v) for v in hourly.get("wind_gusts_10m", [])],
+        cape_j_kg=[parse_float(v) for v in hourly.get("cape", [])],
+        temps_850_c=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
+        humidities=[parse_float(v) for v in hourly.get("relative_humidity_2m", [])],
+        cloud_covers=[parse_float(v) for v in hourly.get("cloud_cover", [])],
+        wind_dirs_deg=[parse_float(v) for v in hourly.get("wind_direction_10m", [])],
+        elevation_m=parse_float(data.get("elevation")),
+    )
+
+
 async def get_hourly_forecast_ext(
     lat: float,
     lon: float,
@@ -385,9 +438,11 @@ async def get_hourly_forecast_ext(
     """
     Pronóstico horario extendido con weather_code, precip_probability, is_day, ráfagas, CAPE,
     temperatura a 850 hPa, humedad, nubosidad y dirección del viento, más la elevación del punto. Es
-    la fuente del dashboard y de las herramientas: reemplaza a Windy, cuya clave del plan Testing
-    devuelve datos mezclados al azar. Con el mismo `days` comparten caché.
-    Usa best_match (sin modelo específico) para máxima disponibilidad.
+    la fuente de las herramientas y la base del dashboard: reemplaza a Windy, cuya clave del plan
+    Testing devuelve datos mezclados al azar. Con el mismo `days` comparten caché.
+    Usa best_match (sin modelo específico, una mezcla de modelos) para máxima disponibilidad. Las
+    herramientas leen esta serie tal cual; el dashboard le superpone los campos de lluvia, viento y
+    CAPE de ECMWF (`get_hourly_forecast_ecmwf` + `merge_hourly_ecmwf`) y deja el resto de best_match.
     """
     params = {
         "latitude": lat,
@@ -419,56 +474,143 @@ async def get_hourly_forecast_ext(
             return None
 
         try:
-            hourly = data["hourly"]
-            time_list: list[str] = hourly.get("time", [])
-
-            timestamps: list[int] = []
-            hour_labels: list[str] = []
-            dates: list[str] = []
-            for t in time_list:
-                # La hora viene sin zona: anclarla a UTC-3. `.timestamp()` sobre un naive usaría el
-                # reloj del servidor (UTC en Render) y el instante saldría 3 h antes.
-                dt = datetime.fromisoformat(t).replace(tzinfo=_AR_TZ)
-                timestamps.append(int(dt.timestamp()))
-                hour_labels.append(t[11:16])   # "14:00"
-                dates.append(t[:10])           # "2026-05-20"
-
-            # weather_code como int
-            weather_codes: list[int | None] = []
-            for v in hourly.get("weather_code", []):
-                pf = parse_float(v)
-                weather_codes.append(int(pf) if pf is not None else None)
-
-            # is_day puede ser 0/1 int de Open-Meteo
-            is_day_raw = hourly.get("is_day", [])
-            is_day: list[bool] = [bool(v) for v in is_day_raw]
-
-            return HourlyForecastExt(
-                timestamps=timestamps,
-                hour_labels=hour_labels,
-                dates=dates,
-                temps_c=[parse_float(v) for v in hourly.get("temperature_2m", [])],
-                precipitations=[parse_float(v) for v in hourly.get("precipitation", [])],
-                precip_probs=[parse_float(v) for v in hourly.get("precipitation_probability", [])],
-                wind_speeds=[parse_float(v) for v in hourly.get("wind_speed_10m", [])],
-                weather_codes=weather_codes,
-                is_day=is_day,
-                freezing_level_heights_m=[
-                    parse_float(v) for v in hourly.get("freezing_level_height", [])
-                ],
-                wind_gusts_kmh=[parse_float(v) for v in hourly.get("wind_gusts_10m", [])],
-                cape_j_kg=[parse_float(v) for v in hourly.get("cape", [])],
-                temps_850_c=[parse_float(v) for v in hourly.get("temperature_850hPa", [])],
-                humidities=[parse_float(v) for v in hourly.get("relative_humidity_2m", [])],
-                cloud_covers=[parse_float(v) for v in hourly.get("cloud_cover", [])],
-                wind_dirs_deg=[parse_float(v) for v in hourly.get("wind_direction_10m", [])],
-                elevation_m=parse_float(data.get("elevation")),
-            )
+            return _parse_hourly_payload(data)
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo hourly_ext parse error: %s", exc)
             return None
 
     return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
+
+
+# ---------------------------------------------------------------------------
+# Superposición ECMWF sobre la serie horaria del dashboard (FRA-363)
+# ---------------------------------------------------------------------------
+
+# Mismo modelo que ancla la lluvia, el viento y el ícono de las filas de 7 días (daily_anchor.ECMWF_KEY;
+# no se importa de allá porque daily_anchor ya importa este módulo).
+_ECMWF_MODEL = "ecmwf_ifs025"
+
+_ECMWF_HOURLY_FIELDS = (
+    "precipitation,wind_gusts_10m,wind_speed_10m,wind_direction_10m,weather_code,cape"
+)
+
+# Campos de `HourlyForecastExt` que lidera ECMWF en el dashboard. El resto sale de best_match.
+_ECMWF_LED_FIELDS = (
+    "precipitations",
+    "wind_gusts_kmh",
+    "wind_speeds",
+    "wind_dirs_deg",
+    "weather_codes",
+    "cape_j_kg",
+)
+
+
+async def get_hourly_forecast_ecmwf(
+    lat: float,
+    lon: float,
+    days: int = 7,
+) -> HourlyForecastExt | None:
+    """
+    Serie horaria de ECMWF IFS 0.25° con lo que lidera en el dashboard: lluvia, ráfagas, velocidad y
+    dirección del viento, weather_code y CAPE. Las demás listas del resultado quedan vacías.
+
+    No reemplaza a `get_hourly_forecast_ext`: la usa solo el dashboard, que la superpone con
+    `merge_hourly_ecmwf`. Su clave de caché incluye el modelo, así que no comparte entrada con la
+    serie best_match de las herramientas. Devuelve None ante cualquier fallo (HTTP, timeout, JSON o
+    payload inválido) para que el dashboard siga con best_match.
+    """
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": _ECMWF_HOURLY_FIELDS,
+        "models": _ECMWF_MODEL,
+        "forecast_days": days,
+        "timezone": "America/Argentina/Buenos_Aires",
+        "wind_speed_unit": "kmh",
+    }
+    key = _cache_key(params)
+
+    async def _fetch() -> HourlyForecastExt | None:
+        try:
+            client = get_client()
+            usage_counter.record("open_meteo")
+            response = await fetch_with_retry(
+                client, "GET", settings.openmeteo_base_url,
+                params=params,
+                timeout=settings.http_timeout_seconds,
+            )
+            data = response.json()
+        except Exception as exc:
+            logger.warning("Open-Meteo hourly ECMWF forecast failed: %s", exc)
+            return None
+
+        try:
+            return _parse_hourly_payload(data)
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            logger.warning("Open-Meteo hourly ECMWF parse error: %s", exc)
+            return None
+
+    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
+
+
+def merge_hourly_ecmwf(
+    base: HourlyForecastExt,
+    ecmwf: HourlyForecastExt | None,
+) -> HourlyForecastExt:
+    """
+    Superpone los campos que lidera ECMWF sobre la serie best_match del dashboard. Función pura.
+
+    Política de fuentes (decisión de producto): ECMWF lidera lluvia (`precipitations`), ráfagas,
+    velocidad y dirección del viento, `weather_codes` y `cape_j_kg`. Todo lo demás (temperatura,
+    probabilidad de lluvia, is_day, cota de nieve, 850 hPa, humedad, nubosidad, elevación, etiquetas
+    y fechas) queda de `base` (best_match); GFS/best_match también es el respaldo.
+
+    Reglas, valor por valor:
+    - Las dos series se emparejan por INSTANTE (`timestamps`), nunca por posición. Si ECMWF no cubre
+      todos los instantes de `base` (o arranca en otra hora), solo se reemplazan los comunes.
+    - Un valor nulo de ECMWF, o una lista de ECMWF vacía para ese campo, deja el valor de `base` en
+      ese índice. Si `base` no trae el campo (lista vacía) y ECMWF sí, el resultado se completa con
+      None en los instantes que ECMWF no cubre (las lecturas puntuales ya toleran listas cortas).
+    - Sin `ecmwf` (None) devuelve una copia del contenido de `base`.
+    - No muta ninguna de las dos entradas: el resultado trae listas nuevas (la serie best_match es la
+      que las herramientas comparten por caché).
+    """
+    updates: dict[str, list] = {}
+    for name in _ECMWF_LED_FIELDS:
+        base_values: list = getattr(base, name)
+        updates[name] = _overlay_field(base, base_values, ecmwf, name)
+
+    # Listas nuevas también para lo que no se superpone: ningún alias con las entradas.
+    for name in (
+        "timestamps", "hour_labels", "dates", "temps_c", "precip_probs", "is_day",
+        "freezing_level_heights_m", "temps_850_c", "humidities", "cloud_covers",
+    ):
+        updates[name] = list(getattr(base, name))
+    return replace(base, **updates)
+
+
+def _overlay_field(
+    base: HourlyForecastExt,
+    base_values: list,
+    ecmwf: HourlyForecastExt | None,
+    name: str,
+) -> list:
+    """Valores de `name` para los instantes de `base`, con los de ECMWF donde los hay (ver arriba)."""
+    ecmwf_values: list = getattr(ecmwf, name) if ecmwf is not None else []
+    if not ecmwf_values:
+        return list(base_values)
+
+    ecmwf_index = {stamp: i for i, stamp in enumerate(ecmwf.timestamps)}
+    padded: list = list(base_values) + [None] * (len(base.timestamps) - len(base_values))
+    replaced = False
+    for i, stamp in enumerate(base.timestamps):
+        j = ecmwf_index.get(stamp)
+        if j is None or j >= len(ecmwf_values) or ecmwf_values[j] is None:
+            continue
+        padded[i] = ecmwf_values[j]
+        replaced = True
+    # Sin ningún instante en común no se toca la lista (ni se rellena con None una serie corta).
+    return padded if replaced else list(base_values)
 
 
 # ---------------------------------------------------------------------------

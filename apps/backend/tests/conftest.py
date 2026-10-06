@@ -136,6 +136,11 @@ def pytest_configure(config: pytest.Config) -> None:
         "live_current_observation: el dashboard pide de verdad el METAR (respx) y el Open-Meteo "
         "current en vez de los dobles por defecto",
     )
+    config.addinivalue_line(
+        "markers",
+        "live_hourly_ecmwf: el dashboard pide de verdad la serie horaria ECMWF (respx) en vez del "
+        "doble por defecto",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -160,6 +165,23 @@ def stub_dashboard_current_observation(request: pytest.FixtureRequest, monkeypat
         AsyncMock(return_value=unavailable),
     )
     monkeypatch.setattr("app.routers.weather.get_openmeteo_current", AsyncMock(return_value=None))
+
+
+@pytest.fixture(autouse=True)
+def stub_dashboard_hourly_ecmwf(request: pytest.FixtureRequest, monkeypatch):
+    """Doble por defecto para la serie horaria ECMWF del dashboard (FRA-363).
+
+    Los tests del dashboard parchean `get_hourly_forecast_ext` pero no sabían del segundo pedido a
+    Open-Meteo: sin este doble saldrían a la red. Devuelve None (ECMWF caído): el dashboard sirve la
+    serie best_match tal cual, que es lo que esos tests ya esperaban. Los tests marcados
+    `live_hourly_ecmwf` ejercitan la llamada real (con respx); los de `test_openmeteo_hourly_ecmwf.py`
+    parchean `get_hourly_forecast_ecmwf` con sus propios valores.
+    """
+    if request.node.get_closest_marker("live_hourly_ecmwf") is not None:
+        return
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr("app.routers.weather.get_hourly_forecast_ecmwf", AsyncMock(return_value=None))
 
 
 # ---------------------------------------------------------------------------
