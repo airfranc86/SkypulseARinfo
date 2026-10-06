@@ -1,6 +1,7 @@
 import {
   FLIGHT_CATEGORY_STYLES,
   categoryNote,
+  changeExplanation,
   changeLabel,
   cloudsText,
   formatLocalInstant,
@@ -68,6 +69,8 @@ function PeriodItem({ period }: { period: TafPeriod }) {
   const weather = cavok ? [] : weatherText(period.weather)
   const clouds = cloudsText(period.clouds)
   const inherits = (field: string) => period.inherited.includes(field)
+  const explanation = changeExplanation(period)
+  const completesAt = period.change === 'becoming' && period.becoming_by ? formatLocalInstant(period.becoming_by) : null
 
   return (
     <li
@@ -96,9 +99,10 @@ function PeriodItem({ period }: { period: TafPeriod }) {
         </div>
       </div>
 
-      {period.change === 'becoming' && period.becoming_by && (
-        <p className="text-[.72rem]" style={{ ...MUTED, opacity: 0.85 }}>
-          Cambio completo hacia {formatLocalInstant(period.becoming_by)}
+      {(explanation || completesAt) && (
+        <p className="text-[.72rem] leading-[1.6]" style={{ ...MUTED, opacity: 0.9 }}>
+          {explanation}
+          {completesAt && <> Cambio completo hacia {completesAt}.</>}
         </p>
       )}
 
