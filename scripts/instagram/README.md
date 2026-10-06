@@ -18,10 +18,14 @@ apps\backend\.venv\Scripts\python.exe scripts\instagram\generar_reporte.py --sol
 
 # Reporte completo (necesita config.local.json o --salida)
 apps\backend\.venv\Scripts\python.exe scripts\instagram\generar_reporte.py
+
+# Aviso nocturno de las 22:00 (ver más abajo): solo genera algo si mañana hay fenómenos intensos
+apps\backend\.venv\Scripts\python.exe scripts\instagram\generar_reporte.py --modo aviso-nocturno
 ```
 
-Opciones: `--dias 1|2` (por defecto 1), `--fecha AAAA-MM-DD` (reemplaza a `--dias`), `--solo-datos`, `--sin-aviso`,
-`--salida RUTA` (raíz de salida para pruebas; reemplaza a `config.local.json`).
+Opciones: `--modo reporte|aviso-nocturno` (por defecto `reporte`, el de las 19:00), `--dias 1|2` (por defecto 1),
+`--fecha AAAA-MM-DD` (reemplaza a `--dias`), `--solo-datos`, `--sin-aviso`, `--salida RUTA` (raíz de salida para
+pruebas; reemplaza a `config.local.json`).
 Códigos de salida: `0` ok, `1` error de datos, configuración, render o escritura (las demás ciudades y carpetas
 siguen), `2` argumentos inválidos.
 
@@ -29,12 +33,14 @@ siguen), `2` argumentos inválidos.
 
 Copiá `config.example.json` como `config.local.json` (está en `.gitignore`) y completá las carpetas:
 
-- `drive_dir`: la carpeta sincronizada con Google Drive para escritorio. **Va vacía en el ejemplo a propósito**:
-  la ruta es del equipo de cada persona y no se versiona. Mientras esté vacía, ese destino se omite con un aviso
-  por stderr.
-- `backup_dir`: el respaldo local (`G:\Developer\AgenciaAssests\MARKETING\SkyPulse\Instagram`).
+- `backup_dir`: el respaldo local (`G:\Developer\AgenciaAssests\MARKETING\SkyPulse\Instagram`). Si esa carpeta
+  es la que se sincroniza con Google Drive, no hace falta nada más.
+- `drive_dir` (opcional, no está en el ejemplo): otra carpeta sincronizada con Google Drive para escritorio. La
+  ruta es del equipo de cada persona y no se versiona.
 
-Alcanza con una de las dos; si faltan las dos, el script termina con un error claro. No hay claves ni secretos.
+Alcanza con una de las dos y la que falta se omite sin avisar; si faltan las dos, el script termina con un error
+claro. Si las dos apuntan a la misma carpeta (comparadas ya resueltas), se escribe una sola vez. No hay claves
+ni secretos.
 
 ## Qué guarda
 
@@ -42,6 +48,8 @@ Alcanza con una de las dos; si faltan las dos, el script termina con un error cl
 <raíz>/SkyPulse_Instagram_Reports/AAAA/MM_Mes/Semana_NN/
     AAAA-MM-DD_Reporte_<Alerta|Estandar>_<Cordoba|CABA|Resistencia>.png
     AAAA-MM-DD_Caption_Instagram.txt
+    AAAA-MM-DD_Aviso_Nocturno_<ciudad>.png        (solo las ciudades del aviso nocturno)
+    AAAA-MM-DD_Caption_Aviso_Nocturno.txt
 ```
 
 La fecha, el mes y la semana ISO son los del **día pronosticado** (el 6/10/2026 es `Semana_41`). Volver a correr
@@ -77,6 +85,31 @@ año: `2027-01-01` queda en `2027/01_Enero/Semana_53`.
 - El caption nunca nombra los modelos ni la fuente de datos: crédito `Datos: SkyPulse` y la leyenda de que no es un
   aviso oficial.
 
+## Aviso nocturno (22:00)
+
+Una corrida aparte (`--modo aviso-nocturno`; el reporte de las 19:00 no cambia) que revisa el pronóstico de
+**mañana** con los mismos datos. Una ciudad entra en el aviso si tiene un **fenómeno intenso**:
+
+| Fenómeno | Umbral | Dónde está |
+|---|---|---|
+| Ráfaga (ECMWF diario) | 50 km/h o más, de cualquier dirección | `reglas.GUST_ALERT_KMH` |
+| Tormenta | código 95 a 99, o riesgo convectivo alto o severo | `reglas.STORM_CODES`, `reglas.STORM_RISKS` |
+| Lluvia | más de 15 mm con la cifra mostrada (incluida la cota "hasta X mm") | `reglas.HEAVY_RAIN_MM`, `reglas.shown_rain_mm` |
+| Niebla densa | visibilidad menor a 500 m en alguna hora de mañana (00:00 a 23:00, hora local) | `reglas.FOG_VISIBILITY_M` |
+
+- **Visibilidad:** `fuente_visibilidad.py` hace **una llamada extra por ciudad** a Open-Meteo (`hourly=visibility`,
+  en metros, modelo por defecto), sin reintentos. Si falla o faltan horas, esa ciudad no activa la niebla y el
+  motivo queda en el log y en el resumen de avisos. La niebla es un dato de modelo: siempre se dice **"posible"**,
+  con el rango de la primera a la última hora bajo 500 m y la visibilidad mínima.
+- **Placa:** la de Alerta con el encabezado **AVISO NOCTURNO**, solo los bloques que aplican (ráfaga, tormenta,
+  lluvia y, al final, "Alerta · Niebla densa posible") y abajo máxima, mínima y cielo. Una placa por ciudad afectada.
+- **Caption corto:** "Aviso para mañana, …", un bloque por ciudad con solo lo intenso, 1 o 2 precauciones, la
+  leyenda de que no es un aviso oficial, `Datos: SkyPulse` y los hashtags. Sin nombres de modelos.
+- **Si ninguna ciudad tiene un fenómeno intenso** no se escribe nada, no se crea ninguna carpeta y no se avisa:
+  sale con código 0 y la línea `Sin fenómenos intensos para mañana: no se genera aviso`.
+- Si se generó algo, notificación de Windows "Aviso nocturno listo: N ciudades" (`--sin-aviso` la omite).
+  `--solo-datos` imprime el JSON con los motivos y los fenómenos de cada ciudad, sin render ni escritura.
+
 ## Placas
 
 Cada ciudad es una página HTML autocontenida (`plantillas/`: `placa.html`, `base.css`, `alerta.css`,
@@ -106,4 +139,5 @@ ni Edge; para correr solo esas: `-m navegador`).
 
 ## Qué falta
 
-- **Programación diaria a las 19:00 (T4):** todavía no hay tarea en el Programador de tareas.
+- **Programación diaria a las 19:00 (T4) y del aviso nocturno a las 22:00:** todavía no hay tareas en el
+  Programador de tareas.

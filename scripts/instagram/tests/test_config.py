@@ -25,22 +25,32 @@ def test_both_roots_in_order_drive_then_backup(tmp_path: Path, capsys: pytest.Ca
     assert capsys.readouterr().err == ""
 
 
-def test_missing_drive_dir_is_skipped_with_a_stderr_warning(
+def test_drive_dir_is_optional_and_silent_when_the_backup_is_set(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config = load_config(write_config(tmp_path, {"backup_dir": str(tmp_path / "bk")}))
     assert config.roots == (tmp_path / "bk",)
-    err = capsys.readouterr().err
-    assert "drive_dir" in err
-    assert "backup_dir" not in err
+    assert capsys.readouterr().err == ""  # the user syncs the backup folder with Drive: nothing to warn
 
 
-def test_missing_backup_dir_is_skipped_with_a_stderr_warning(
+def test_backup_dir_is_optional_and_silent_when_drive_is_set(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config = load_config(write_config(tmp_path, {"drive_dir": str(tmp_path / "drive")}))
     assert config.roots == (tmp_path / "drive",)
-    assert "backup_dir" in capsys.readouterr().err
+    assert capsys.readouterr().err == ""
+
+
+def test_the_same_folder_twice_is_one_destination(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    same = str(tmp_path / "otra" / ".." / "Instagram")
+    config = load_config(write_config(tmp_path, {"drive_dir": str(tmp_path / "Instagram"), "backup_dir": same}))
+    assert config.roots == (tmp_path / "Instagram",)
+    assert capsys.readouterr().err == ""
+
+
+def test_different_folders_stay_two_destinations(tmp_path: Path) -> None:
+    config = load_config(write_config(tmp_path, {"drive_dir": str(tmp_path / "a"), "backup_dir": str(tmp_path / "b")}))
+    assert len(config.roots) == 2
 
 
 @pytest.mark.parametrize("empty", ["", "   ", None])
@@ -85,9 +95,8 @@ def test_the_default_path_is_the_local_file_next_to_the_scripts() -> None:
 
 def test_example_config_is_valid_and_has_no_personal_data() -> None:
     example = json.loads((PACKAGE_DIR / "config.example.json").read_text(encoding="utf-8"))
-    assert example["drive_dir"] == ""
-    assert example["backup_dir"] == r"G:\Developer\AgenciaAssests\MARKETING\SkyPulse\Instagram"
-    assert set(example) == {"drive_dir", "backup_dir"}
+    # drive_dir is optional (the backup folder is the one synchronised with Drive) and personal: not in the example
+    assert example == {"backup_dir": r"G:\Developer\AgenciaAssests\MARKETING\SkyPulse\Instagram"}
 
 
 def test_local_config_and_output_are_gitignored() -> None:

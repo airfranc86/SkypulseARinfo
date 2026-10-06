@@ -2,18 +2,20 @@
 
 Keys (both optional, at least one required):
 
-- ``drive_dir``: the folder synchronised by Google Drive for desktop.
+- ``drive_dir``: the folder synchronised by Google Drive for desktop. Optional: when the backup
+  folder is itself the one synchronised with Drive, it is simply left out.
 - ``backup_dir``: local backup folder.
 
-A missing key skips that destination with a warning on stderr; with none the run cannot save
-anything and fails with a clear error. No keys, secrets or personal paths live in the repository.
+A missing key is skipped silently as long as there is at least one destination; with none the run
+cannot save anything and fails with a clear error. Two keys pointing to the same folder (after
+resolving it) are one destination, so every file is written once. No keys, secrets or personal paths
+live in the repository.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -61,16 +63,24 @@ def _read_dir(raw: dict[str, object], key: str) -> Path | None:
     return Path(os.path.expandvars(value.strip())).expanduser()
 
 
+def _same_folder_key(root: Path) -> str:
+    """Identity of a folder: resolved (``..``, links) and case-folded like Windows compares it."""
+    return os.path.normcase(str(root.resolve(strict=False)))
+
+
 def load_config(path: Path | None = None) -> Config:
-    """Read the configuration; warn on stderr for each skipped destination."""
+    """Read the configuration: the configured destinations, each folder once, in key order."""
     config_path = path if path is not None else DEFAULT_CONFIG_PATH
     raw = _read_object(config_path)
     roots: list[Path] = []
+    seen: set[str] = set()
     for key in _KEYS:
         root = _read_dir(raw, key)
         if root is None:
-            print(f"Aviso: falta '{key}' en {config_path.name}; se omite ese destino.", file=sys.stderr)
-        else:
+            continue
+        identity = _same_folder_key(root)
+        if identity not in seen:
+            seen.add(identity)
             roots.append(root)
     if not roots:
         raise ConfigError(

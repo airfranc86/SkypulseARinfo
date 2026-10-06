@@ -16,9 +16,9 @@ from string import Template
 
 import placa_fragmentos as frag
 from placa_layout import CONTENT_BOX, city_font_px, figure_font_px
-from placa_textos import PlateContent, build_content
+from placa_textos import REPORT_TAG, PlateContent, build_content
 from recursos import font_faces_css, icon_data_uri, logo_data_uri
-from reglas import VARIANT_LABEL, Variante
+from reglas import VARIANT_LABEL, Fog, Variante
 from tipos import ReportData
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "plantillas"
@@ -93,7 +93,9 @@ def _alerta_body(content: PlateContent, icon_uri: str | None) -> str:
 
 def _plate_class(content: PlateContent) -> str:
     classes = ["plate", _VARIANT_CLASS[content.variante]]
-    if content.dense:
+    if content.crowded:
+        classes.extend(["plate--dense", "plate--crowded"])
+    elif content.dense:
         classes.append("plate--dense")
     elif content.compact:
         classes.append("plate--compact")
@@ -108,12 +110,17 @@ def build_html(
     *,
     assets: PlateAssets | None = None,
     probe: bool = False,
+    fog: Fog | None = None,
+    tag: str | None = None,
 ) -> str:
-    """The full page of one plate. `probe` adds the layout probe used by the tests."""
+    """The full page of one plate. `probe` adds the layout probe used by the tests.
+
+    `fog` and `tag` are for the night notice (dense-fog block, "Aviso nocturno" header).
+    """
     if variante not in VARIANT_LABEL:
         raise ValueError(f"unknown variant {variante!r}: expected one of {sorted(VARIANT_LABEL)}")
     used = assets if assets is not None else default_assets()
-    content = build_content(data, variante)
+    content = build_content(data, variante, fog=fog, tag=REPORT_TAG if tag is None else tag)
     icon_uri = used.icon(content.sky_icon)
     body = (_alerta_body if variante == "Alerta" else _estandar_body)(content, icon_uri)
     probe_script = f"<script>{_template_text('medir.js')}</script>" if probe else ""

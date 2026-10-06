@@ -342,3 +342,32 @@
 .plate--dense .summary { padding-top: 12px; }
 .plate--dense .summary-icon { width: 100px; height: 100px; }
 .plate--dense .summary .temp-value { font-size: 68px; }
+
+/* ---- Crowded: four alerts (night notice: wind, storm, rain and fog), on top of the dense rules ---- */
+
+.plate--crowded .city { font-size: min(var(--city-size, 128px), 96px); }
+.plate--crowded .head { padding-bottom: 14px; margin-bottom: 14px; }
+.plate--crowded .brand { margin-bottom: 10px; }
+.plate--crowded .brand-logo { width: 56px; height: 56px; }
+.plate--crowded .date { margin-top: 4px; font-size: 40px; }
+.plate--crowded .alerts { gap: 10px; }
+.plate--crowded .alert { padding: 12px 24px 14px 32px; }
+.plate--crowded .badge { font-size: 30px; padding: 5px 20px 5px 14px; }
+.plate--crowded .badge .ico { width: 32px; height: 32px; }
+.plate--crowded .alert-lead { margin-top: 4px; font-size: 36px; }
+.plate--crowded .alert--wind .figure-value { font-size: calc(var(--figure-size, 240px) * 0.5); }
+.plate--crowded .alert--wind .figure-unit { font-size: 44px; }
+.plate--crowded .alert-trail { font-size: 44px; padding-bottom: 6px; }
+.plate--crowded .alert-message { margin-top: 8px; font-size: 44px; }
+.plate--crowded .alert-figures { margin-top: 6px; column-gap: 40px; }
+.plate--crowded .alert-figures--inline { margin-top: 0; }
+.plate--crowded .figure-value { font-size: 96px; }
+.plate--crowded .figure-unit { font-size: 42px; }
+.plate--crowded .figure-caption { font-size: 30px; }
+.plate--crowded .window { margin-top: 6px; }
+.plate--crowded .window-label { font-size: 32px; }
+.plate--crowded .window-time { font-size: 44px; }
+.plate--crowded .summary { padding-top: 10px; gap: 16px; }
+.plate--crowded .summary-icon { width: 88px; height: 88px; margin: -10px -6px -10px -8px; }
+.plate--crowded .summary .temp-value { font-size: 60px; }
+.plate--crowded .summary-sky { font-size: 38px; }

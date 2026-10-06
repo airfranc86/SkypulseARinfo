@@ -7,6 +7,9 @@ Run it with the Python of the backend virtual environment, for example::
 Flow: data of the three cities -> variant -> one caption -> save the caption -> plate hook
 (``render.render_placa``: HTML -> PNG with headless Chrome or Edge) -> save the plates -> Windows notification.
 
+``--modo aviso-nocturno`` runs the 22:00 night notice instead (:mod:`aviso_nocturno`): an Alerta plate
+per city with an intense phenomenon tomorrow (dense fog included) and a short caption, or nothing at all.
+
 Exit codes: 0 everything went well; 1 a data, configuration, render or write error (the other cities
 and destinations still ran); 2 invalid arguments.
 """
@@ -24,12 +27,20 @@ from datetime import date, datetime
 from pathlib import Path
 
 from aviso import CityResult, build_notice, notify
+from aviso_nocturno import (
+    NightRenderer,
+    VisibilityFetcher,
+    collect_night,
+    deliver_night,
+    night_payload,
+    warn_night_notes,
+)
 from caption import build_caption
 from ciudades import CITIES
 from config import ConfigError, load_config
 from fechas import parse_iso_date, resolve_target_date, today_ar
 from fuente_datos import CollectResult, Fetcher, collect_reports
-from render import render_placa
+from render import render_aviso_nocturno, render_placa
 from reglas import Variante, assess, variante
 from rutas import write_caption, write_plate
 from tipos import ReportData
@@ -37,6 +48,9 @@ from tipos import ReportData
 EXIT_OK = 0
 EXIT_ERROR = 1
 EXIT_USAGE = 2
+
+MODE_REPORT = "reporte"
+MODE_NIGHT = "aviso-nocturno"
 
 Renderer = Callable[[ReportData, Variante], bytes | None]
 Notifier = Callable[[str, str], bool]
@@ -66,13 +80,17 @@ def build_parser() -> argparse.ArgumentParser:
         description="Reporte diario de Instagram de SkyPulse: datos, reglas, caption, carpetas y aviso.",
     )
     parser.add_argument(
+        "--modo", choices=(MODE_REPORT, MODE_NIGHT), default=MODE_REPORT,
+        help="reporte (19:00, por defecto) o aviso-nocturno (22:00: solo si mañana hay fenómenos intensos)",
+    )
+    parser.add_argument(
         "--dias", type=int, choices=(1, 2), default=1,
         help="1 = mañana (por defecto), 2 = pasado mañana, en hora de Argentina",
     )
     parser.add_argument("--fecha", type=_date_argument, metavar="AAAA-MM-DD",
-                        help="día a pronosticar (reemplaza a --dias)")
+                        help="día a pronosticar o a revisar (reemplaza a --dias)")
     parser.add_argument("--solo-datos", action="store_true",
-                        help="imprime los datos y la variante de cada ciudad como JSON; no escribe nada")
+                        help="imprime como JSON los datos (o los fenómenos intensos) de cada ciudad; no escribe nada")
     parser.add_argument("--sin-aviso", action="store_true", help="no muestra la notificación de Windows")
     parser.add_argument("--salida", type=Path, metavar="RUTA",
                         help="carpeta raíz de salida (reemplaza a config.local.json; sirve para pruebas)")
@@ -201,6 +219,38 @@ def _roots(salida: Path | None, config_path: Path | None) -> tuple[Path, ...]:
     return (salida,) if salida is not None else load_config(config_path).roots
 
 
+def _run_night(
+    args: argparse.Namespace,
+    target: date,
+    roots: Sequence[Path],
+    *,
+    now: datetime | None,
+    fetcher: Fetcher | None,
+    visibility_fetcher: VisibilityFetcher | None,
+    renderer: NightRenderer | None,
+    notifier: Notifier | None,
+) -> int:
+    """The 22:00 night notice: only the cities with an intense phenomenon, or nothing at all."""
+    collected = asyncio.run(collect_night(CITIES, target, fetcher, visibility_fetcher))
+    for error in collected.errors:
+        _err(error.message)
+    _warn_anchor_fallbacks([city.data for city in collected.cities])
+    if args.solo_datos:
+        print(json.dumps(night_payload(target, collected), ensure_ascii=False, indent=2))
+        code = EXIT_ERROR if collected.errors else EXIT_OK
+    else:
+        code = deliver_night(
+            collected,
+            target,
+            roots,
+            today=today_ar(now),
+            renderer=renderer if renderer is not None else render_aviso_nocturno,
+            notifier=None if args.sin_aviso else (notifier if notifier is not None else notify),
+        )
+    warn_night_notes(collected)
+    return code
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -209,8 +259,13 @@ def main(
     notifier: Notifier | None = None,
     now: datetime | None = None,
     config_path: Path | None = None,
+    visibility_fetcher: VisibilityFetcher | None = None,
+    night_renderer: NightRenderer | None = None,
 ) -> int:
-    """Run the report. The keyword arguments are test seams (network, plates, toast, clock, config)."""
+    """Run the report or the night notice.
+
+    The keyword arguments are test seams (network, visibility, plates, toast, clock, config).
+    """
     try:
         args = build_parser().parse_args(argv)
     except SystemExit as exc:
@@ -225,6 +280,17 @@ def main(
     except ConfigError as exc:
         _err(f"Configuración: {exc}")
         return EXIT_ERROR
+    if args.modo == MODE_NIGHT:
+        return _run_night(
+            args,
+            target,
+            roots,
+            now=now,
+            fetcher=fetcher,
+            visibility_fetcher=visibility_fetcher,
+            renderer=night_renderer,
+            notifier=notifier,
+        )
 
     result = asyncio.run(collect_reports(CITIES, target, fetcher))
     for error in result.errors:

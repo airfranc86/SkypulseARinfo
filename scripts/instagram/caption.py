@@ -37,8 +37,8 @@ _SKY_EMOJI = {
 # Sky texts that only restate a phenomenon that already has its own line.
 _RAIN_SKIES = frozenset({"Lluvia", "Lluvia leve", "Llovizna", "Lluvia helada"})
 
-_Precaution = tuple[str, str, Callable[[Assessment], bool]]
-_PRECAUTIONS: tuple[_Precaution, ...] = (
+Precaution = tuple[str, str, Callable[[Assessment], bool]]
+PRECAUTIONS: tuple[Precaution, ...] = (
     ("💨", "Viento fuerte en {cities}: asegurá los objetos sueltos y manejá con precaución.",
      lambda a: a.wind is not None),
     ("⛈️", "Tormenta fuerte posible en {cities}: evitá refugiarte bajo árboles y seguí los avisos oficiales.",
@@ -87,7 +87,7 @@ def _sky_line(result: Assessment) -> str | None:
     return None if redundant else f"{_SKY_EMOJI.get(result.sky, '🌤️')} {result.sky}"
 
 
-def _rain_line(rain: RainSummary) -> str:
+def rain_line(rain: RainSummary) -> str:
     """Same decision as the plate (`lluvia_texto.rain_summary`), worded for the caption."""
     if rain.kind == "seco":
         return f"☂️ {DRY}"
@@ -102,7 +102,7 @@ def _rain_line(rain: RainSummary) -> str:
     return f"🌧️ Lluvia: {', '.join(parts)}"
 
 
-def _wind_line(wind: WindAlert) -> str:
+def wind_line(wind: WindAlert) -> str:
     line = f"💨 Ráfagas de hasta {wind.gust_kmh} km/h"
     if wind.origin is not None:
         line += f" {wind.origin}"
@@ -119,9 +119,9 @@ def _city_block(data: ReportData, result: Assessment) -> str:
     ]
     rain = rain_summary(data, result)
     if rain is not None:
-        lines.append(_rain_line(rain))
+        lines.append(rain_line(rain))
     if result.wind is not None:
-        lines.append(_wind_line(result.wind))
+        lines.append(wind_line(result.wind))
     if result.storm:
         lines.append(f"⛈️ {STORM_TEXT}")
     return "\n".join(line for line in lines if line)
@@ -129,7 +129,7 @@ def _city_block(data: ReportData, result: Assessment) -> str:
 
 def _precautions(assessed: Sequence[tuple[ReportData, Assessment]]) -> str | None:
     lines = []
-    for emoji, template, applies in _PRECAUTIONS:
+    for emoji, template, applies in PRECAUTIONS:
         names = [data.city.name for data, result in assessed if applies(result)]
         if names:
             lines.append(f"{emoji} {template.format(cities=_join_names(names))}")

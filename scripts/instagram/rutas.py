@@ -1,4 +1,4 @@
-"""Folder layout, file names and atomic writes of the daily report.
+"""Folder layout, file names and atomic writes of the daily report and of the night notice.
 
 Layout: ``<root>/SkyPulse_Instagram_Reports/AAAA/MM_Mes/Semana_NN/`` where the year is the calendar
 year of the FORECAST day and the week is its ISO week (the 6th of October 2026 is week 41). Around
@@ -37,6 +37,15 @@ def caption_name(day: date) -> str:
     return f"{day.isoformat()}_Caption_Instagram.txt"
 
 
+def night_plate_name(day: date, slug: str) -> str:
+    """``AAAA-MM-DD_Aviso_Nocturno_<slug>.png``: never the name of a report plate."""
+    return f"{day.isoformat()}_Aviso_Nocturno_{slug}.png"
+
+
+def night_caption_name(day: date) -> str:
+    return f"{day.isoformat()}_Caption_Aviso_Nocturno.txt"
+
+
 def write_atomic(path: Path, content: bytes) -> Path:
     """Write `content` to `path` through a temp file in the same folder, then rename over it.
 
@@ -66,3 +75,13 @@ def write_caption(root: Path, day: date, text: str) -> Path:
 def write_plate(root: Path, day: date, variant: Variante, slug: str, png: bytes) -> Path:
     """Write one PNG plate in the folder of the forecast day."""
     return write_atomic(day_folder(root, day) / plate_name(day, variant, slug), png)
+
+
+def write_night_caption(root: Path, day: date, text: str) -> Path:
+    """Write the night-notice caption (UTF-8) in the folder of the forecast day."""
+    return write_atomic(day_folder(root, day) / night_caption_name(day), text.encode("utf-8"))
+
+
+def write_night_plate(root: Path, day: date, slug: str, png: bytes) -> Path:
+    """Write one night-notice PNG plate in the folder of the forecast day."""
+    return write_atomic(day_folder(root, day) / night_plate_name(day, slug), png)
