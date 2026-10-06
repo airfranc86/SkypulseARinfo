@@ -59,7 +59,7 @@ export interface ObservationNotice {
   stale: boolean
 }
 
-function parseObservedAt(raw: string | null | undefined): Date | null {
+export function parseObservedAt(raw: string | null | undefined): Date | null {
   if (typeof raw !== 'string' || raw.trim() === '') return null
   const text = raw.trim()
   const date = new Date(ISO_WITHOUT_ZONE_RE.test(text) ? `${text}Z` : text)

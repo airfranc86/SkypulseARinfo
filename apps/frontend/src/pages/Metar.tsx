@@ -6,6 +6,17 @@ import { TafDecodedCard } from '@/components/aeronautica/TafDecodedCard'
 import { api } from '@/lib/api'
 import { ApiError } from '@/lib/apiErrors'
 import { LOAD_RETRY } from '@/lib/loadError'
+import {
+  FLIGHT_CATEGORY_RULES,
+  cloudNote,
+  dewpointText,
+  observedLabel,
+  qnhHpa,
+  qnhNote,
+  temperatureNote,
+  visibilityNote,
+  windDisplay,
+} from '@/lib/metarDecode'
 import { FLIGHT_CATEGORY_STYLES, TAF_GROUP_NOTES, tafStatusMessage, type TafDecoded } from '@/lib/taf'
 
 // ---------------------------------------------------------------------------
@@ -256,39 +267,11 @@ function FieldCard({
 }
 
 // ---------------------------------------------------------------------------
-// Visibility / cloud helpers
-// ---------------------------------------------------------------------------
-
-function visNote(m: number | null): string {
-  if (m === null) return ''
-  if (m >= 9999) return 'Excelente visibilidad — VFR sin restricciones'
-  if (m >= 5000) return 'Buena visibilidad — VFR posible'
-  if (m >= 3000) return 'Visibilidad reducida — MVFR'
-  if (m >= 1600) return 'Visibilidad baja — condiciones IFR'
-  return 'Visibilidad muy baja — LIFR, condiciones críticas'
-}
-
-function cloudNote(clouds: MetarData['clouds']): string {
-  if (!clouds || clouds.length === 0) return ''
-  const hasCB = clouds.some(c => c.type === 'CB')
-  const lowestBKN = clouds.find(c => c.code === 'BKN' || c.code === 'OVC')
-  if (hasCB) return '⚠️ Cumulonimbus reportado — condición crítica'
-  if (lowestBKN) return `Techo definido a ${lowestBKN.base_feet_agl} ft AGL`
-  return 'Sin capa de techo definida'
-}
-
-// ---------------------------------------------------------------------------
 // METAR result display
 // ---------------------------------------------------------------------------
 
 function MetarResult({ metar, taf, tafMessage }: { metar: MetarData; taf: TafDecoded | null; tafMessage: string | null }) {
-  const windData = metar.wind
-  const windVal = windData
-    ? `${windData.degrees ?? windData.direction ?? 'VRB'}° / ${windData.speed_kts ?? windData.speed ?? '?'} kt${windData.gust_kts ? ` G${windData.gust_kts}` : ''}`
-    : null
-  const windNote = windData?.gust_kts
-    ? `Ráfagas de ${windData.gust_kts} kt — atención al despegue y aterrizaje`
-    : 'Sin ráfagas reportadas'
+  const wind = windDisplay(metar.wind, metar.raw_text)
 
   const visData = metar.visibility
   const visM = visData
@@ -300,8 +283,9 @@ function MetarResult({ metar, taf, tafMessage }: { metar: MetarData; taf: TafDec
 
   const tempC = metar.temperature?.celsius ?? metar.temperature?.value
   const dewC  = metar.dewpoint?.celsius ?? metar.dewpoint?.value
-  const diff  = typeof tempC === 'number' && typeof dewC === 'number' ? Math.abs(tempC - dewC) : null
-  const qnhHpa = metar.barometer?.hpa
+  const qnh = qnhHpa(metar.raw_text, metar.barometer?.hpa)
+  const qnhText = qnhNote(qnh)
+  const reportedAt = observedLabel(metar.observed)
 
   return (
     <div className="space-y-4">
@@ -366,31 +350,26 @@ function MetarResult({ metar, taf, tafMessage }: { metar: MetarData; taf: TafDec
           Desglose
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {windVal && <FieldCard label="Viento" color="#f0a030" value={windVal} note={windNote} />}
-          {visData && <FieldCard label="Visibilidad" color="#5aaad8" value={visDisplay} note={visNote(visM)} />}
+          {wind && <FieldCard label="Viento" color="#f0a030" value={wind.value} note={wind.note} />}
+          {visData && <FieldCard label="Visibilidad" color="#5aaad8" value={visDisplay} note={visibilityNote(visM)} />}
           {metar.clouds && metar.clouds.length > 0 && (
             <FieldCard
               label="Nubes"
               color="#3ecf7a"
               value={metar.clouds.map(c => `${c.code ?? ''}${c.base_feet_agl ? (c.base_feet_agl / 100).toFixed(0) + '00ft' : ''}`).join(' · ')}
-              note={cloudNote(metar.clouds)}
+              note={cloudNote(metar.clouds, metar.raw_text)}
             />
           )}
           {tempC !== undefined && tempC !== null && (
             <FieldCard
               label="Temperatura"
               color="#ff9966"
-              value={`${tempC}°C / Rocío ${dewC}°C`}
-              note={diff !== null ? `Diferencia Temp–Rocío: ${diff}°C${diff < 3 ? ' — riesgo de niebla' : ''}` : 'Temperatura registrada'}
+              value={dewpointText(tempC, dewC)}
+              note={temperatureNote(tempC, dewC)}
             />
           )}
-          {qnhHpa !== undefined && (
-            <FieldCard
-              label="QNH"
-              color="#bb88ff"
-              value={`${qnhHpa} hPa`}
-              note={qnhHpa < 980 ? 'Presión muy baja — sistema de baja activo' : qnhHpa > 1030 ? 'Presión alta — tiempo estable' : 'Presión normal'}
-            />
+          {qnh !== null && qnhText && (
+            <FieldCard label="QNH" color="#bb88ff" value={`${qnh} hPa`} note={qnhText} />
           )}
         </div>
       </div>
@@ -403,9 +382,9 @@ function MetarResult({ metar, taf, tafMessage }: { metar: MetarData; taf: TafDec
         </p>
       )}
 
-      {metar.observed && (
+      {reportedAt && (
         <p className="text-right text-[.67rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
-          Reporte emitido: {new Date(metar.observed).toUTCString()}
+          Reporte emitido: {reportedAt}
         </p>
       )}
     </div>
@@ -1102,12 +1081,7 @@ export function Metar() {
               Determinadas por techo de nubes y visibilidad — definen qué tipo de vuelo es posible
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { cat: 'VFR',  sub: 'Visual Flight Rules',      ceiling: 'Techo > 3.000 ft',    vis: 'Visib. > 5 km',   note: 'Vuelo visual sin restricciones' },
-                { cat: 'MVFR', sub: 'Marginal VFR',             ceiling: 'Techo 1.000–3.000 ft', vis: 'Visib. 3–5 km',   note: 'Condiciones límite VFR' },
-                { cat: 'IFR',  sub: 'Instrument Flight Rules',  ceiling: 'Techo 500–1.000 ft',   vis: 'Visib. 1,6–3 km', note: 'Solo vuelo instrumental' },
-                { cat: 'LIFR', sub: 'Low IFR',                  ceiling: 'Techo < 500 ft',       vis: 'Visib. < 1,6 km', note: 'Condiciones muy severas' },
-              ].map(item => {
+              {FLIGHT_CATEGORY_RULES.map(item => {
                 const s = FLIGHT_CATEGORY_STYLES[item.cat]
                 return (
                   <div
