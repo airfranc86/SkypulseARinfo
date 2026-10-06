@@ -31,13 +31,17 @@ import {
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { revealPosition, shouldAutoScroll } from '@/lib/motionPreference'
-import { PILL_TINT_ALPHA, pillLabelColor, type PillColors } from '@/lib/navContrast'
+import { PILL_TINT_ALPHA, layerCssVars, pillLabelColor, type PillColors } from '@/lib/navContrast'
+import { LAYERS, LAYER_INK, type LayerId } from '@/lib/toolRegistry'
+import { LayerGlyph } from '@/components/ui/LayerGlyph'
 
 export interface NavRailItem {
   to: string
   label: string
   emoji: ReactNode
   colors: PillColors
+  /** "Estratos" layer of a bottom-row pill; without it the pill keeps the legacy look. */
+  layer?: LayerId
   badge?: ReactNode
 }
 
@@ -106,8 +110,36 @@ function edgeOverlayStyle(side: 'left' | 'right'): CSSProperties {
   }
 }
 
+/**
+ * A bottom-row pill in the "Estratos" look. Colors and states (hover, keyboard focus, current page)
+ * live in `.layer-pill` in index.css, fed by the custom properties of its layer; NavLink sets
+ * `aria-current="page"` on the current page, which fills the pill with the layer color.
+ */
+function LayerNavPill({ item, layer, hidden }: { item: NavRailItem; layer: LayerId; hidden: boolean }) {
+  return (
+    <li aria-hidden={hidden ? true : undefined} className="flex shrink-0">
+      <NavLink
+        to={item.to}
+        aria-label={item.label}
+        tabIndex={hidden ? -1 : undefined}
+        draggable={false}
+        className="layer-pill"
+        style={layerCssVars(item.colors, LAYER_INK) as CSSProperties}
+      >
+        <LayerGlyph level={LAYERS[layer].level} />
+        <span aria-hidden="true" className="layer-pill__icon">{item.emoji}</span>
+        <span style={{ position: 'relative' }}>
+          {item.label}
+          {item.badge}
+        </span>
+      </NavLink>
+    </li>
+  )
+}
+
 /** One destination. `hidden` marks the loop copy: invisible to assistive tech and not tabbable. */
 function NavPill({ item, hidden }: { item: NavRailItem; hidden: boolean }) {
+  if (item.layer) return <LayerNavPill item={item} layer={item.layer} hidden={hidden} />
   return (
     <li aria-hidden={hidden ? true : undefined} className="flex shrink-0">
       <NavLink

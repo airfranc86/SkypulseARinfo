@@ -215,6 +215,140 @@ body::before {
   outline-offset: 2px;
 }
 
+/* ── "Estratos" — layer pills (bottom menu row), staircase glyph and landing cards ── */
+/* Colors arrive inline as custom properties from the tool registry (layerCssVars).
+   Unlayered like the `*` border rule above, so these borders win over it. */
+.layer-pill {
+  --glyph-lit: var(--layer);
+  --glyph-dim: var(--layer-glyph-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 8px 15px 8px 12px;
+  border: 1px solid var(--layer-border);
+  border-radius: 9999px;
+  background-color: var(--layer-tint);
+  color: var(--layer-label);
+  font-size: 0.74rem;
+  font-weight: 400;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 0.18s, border-color 0.18s;
+}
+
+.layer-pill__icon {
+  display: inline-flex;
+  color: var(--layer);
+}
+
+.layer-pill:hover,
+.layer-pill:focus-visible {
+  border-color: var(--layer-border-hover);
+  background-color: var(--layer-tint-hover);
+}
+
+.layer-pill:focus-visible {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 2px;
+}
+
+/* Current page: filled with the layer color, ink text and icon (after :hover so it wins). */
+.layer-pill[aria-current='page'] {
+  --glyph-lit: var(--layer-ink);
+  --glyph-dim: var(--layer-ink-dim);
+  border-color: var(--layer);
+  background-color: var(--layer);
+  color: var(--layer-ink);
+  font-weight: 600;
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.6), inset 0 -2px 0 rgba(7, 18, 37, 0.25);
+}
+
+.layer-pill[aria-current='page'] .layer-pill__icon {
+  color: var(--layer-ink);
+}
+
+.layer-glyph {
+  flex-shrink: 0;
+}
+
+.layer-glyph__step {
+  fill: var(--glyph-dim);
+}
+
+.layer-glyph__step--lit {
+  fill: var(--glyph-lit);
+}
+
+/* Landing cards: the same presence for all 16 (border, hover/focus wash, focus ring). */
+.tool-card {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-card);
+  border: 1px solid var(--tool-border);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.tool-card:hover,
+.tool-card:focus-visible {
+  border-color: var(--tool-border-active);
+  background-image: linear-gradient(var(--tool-tint-active), var(--tool-tint-active));
+}
+
+.tool-card:focus-visible {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 2px;
+}
+
+/* Layer cards make room for the altimeter strip on the left edge. */
+.tool-card--layer {
+  padding-left: 30px;
+}
+
+.tool-card__altimeter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 12px;
+}
+
+.tool-card__segment {
+  flex: 1;
+  background-color: var(--layer-altimeter-dim);
+}
+
+.tool-card__segment--lit {
+  background-color: var(--layer);
+}
+
+.tool-card__tag {
+  --glyph-lit: var(--layer);
+  --glyph-dim: var(--layer-tag-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 9999px;
+  background-color: var(--layer-tag);
+  color: var(--layer-label);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer-pill,
+  .tool-card {
+    transition: none;
+  }
+}
+
 /* ── Nav marquee — JS-driven (InfiniteNavRail uses requestAnimationFrame) ── */
 /* CSS animation removed; transform is applied directly via JS */
 
