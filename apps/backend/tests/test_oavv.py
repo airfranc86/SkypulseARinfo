@@ -53,26 +53,26 @@ class TestDetectAlertLevel:
     def test_red_image_returns_rojo(self):
         assert _detect_alert_level(_RED_PNG) == "rojo"
 
-    def test_corrupt_bytes_returns_verde(self):
-        """Bytes no válidos → excepción interna → degradación a verde."""
+    def test_corrupt_bytes_returns_sin_datos(self):
+        """Bytes no válidos → excepción interna → sin_datos, nunca verde (FRA-343)."""
         result = _detect_alert_level(b"not a png")
-        assert result == "verde"
+        assert result == "sin_datos"
 
-    def test_empty_bytes_returns_verde(self):
+    def test_empty_bytes_returns_sin_datos(self):
         result = _detect_alert_level(b"")
-        assert result == "verde"
+        assert result == "sin_datos"
 
-    def test_zero_width_image_returns_verde(self):
-        """Imagen degenerada 0×100 no crashea — retorna verde."""
+    def test_tiny_image_returns_sin_datos(self):
+        """Imagen degenerada no crashea — sin filas que samplear → sin_datos (FRA-343)."""
         # PIL no acepta 0 en dimensiones — generamos imagen muy pequeña (1×1)
         img = Image.new("RGB", (1, 1), (148, 205, 126))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         result = _detect_alert_level(buf.getvalue())
-        assert result == "verde"
+        assert result == "sin_datos"
 
     def test_returns_valid_alert_level(self):
-        valid = {"verde", "amarillo", "naranja", "rojo"}
+        valid = {"verde", "amarillo", "naranja", "rojo", "sin_datos"}
         for png in [_GREEN_PNG, _YELLOW_PNG, _ORANGE_PNG, _RED_PNG]:
             assert _detect_alert_level(png) in valid
 
@@ -194,8 +194,8 @@ class TestFetchAllVolcanes:
         assert len(result) == len(_CATALOG)
 
     @pytest.mark.asyncio
-    async def test_failed_image_degrades_to_verde(self):
-        """Ante error en una imagen, el volcán queda en nivel verde (no falla todo)."""
+    async def test_failed_image_degrades_to_sin_datos(self):
+        """Ante error en una imagen, el volcán queda en sin_datos (no falla todo, nunca verde)."""
         from httpx import TimeoutException
 
         mock_client = AsyncMock()
@@ -204,7 +204,7 @@ class TestFetchAllVolcanes:
         with patch("app.services.oavv.get_client", return_value=mock_client):
             result = await _fetch_all_volcanes()
 
-        assert all(v.alert_level == "verde" for v in result)
+        assert all(v.alert_level == "sin_datos" for v in result)
 
     @pytest.mark.asyncio
     async def test_alert_color_hex_matches_level(self):
