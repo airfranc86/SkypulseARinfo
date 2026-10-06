@@ -1,18 +1,26 @@
 /**
- * Texts of one row of the 7-day card (FRA-322): the rain line, the trend notice and the
- * per-model detail table. Pure functions (no React) so `node --test` can check each rule.
+ * Texts of one row of the 7-day card (FRA-334): the headline (rain or sky), the rain note, the wind
+ * and the trend notice. No model names and no model disagreement: the row reads like a forecast,
+ * not like a model comparison. Pure functions (no React) so `node --test` can check each rule.
  */
-import { precipKind } from './weatherLabels.ts'
-import type { DailyEntry, ForecastModelName, ModelDayDetail } from '@/lib/api'
+import { describeWeatherIcon, precipKind } from './weatherLabels.ts'
+import type { DailyEntry } from '@/lib/api'
 
-/** A rain pill shows up above this probability (percent). */
-const PILL_MIN_PROB = 15
-/** A model "rains" strictly above this daily amount (mm); at or below it, the amount is small. */
+/** The rain phrase shows up above this probability (percent), on days 1 to 4. */
+const RAIN_MIN_PROB = 15
+/** At or below this daily amount (mm) the rain is "poca cantidad"; above it, the hours are worth showing. */
 const RAIN_MM_THRESHOLD = 0.9
+/** The wind is highlighted when it rotates and its maximum rises at least this much (km/h) over the previous day. */
+const WIND_RISE_KMH = 10
+/** Absorbs floating-point noise in the rise (17.3 − 7.3 must count as 10). */
+const EPSILON = 1e-9
 
-const NO_DATA = 'Sin dato'
-const MODEL_MISSING = 'No disponible'
-const MISSING_PART = '—'
+/** Keeps a number with its unit and "del" with the direction when the line wraps. */
+const NBSP = String.fromCharCode(0xa0)
+
+const SMALL_AMOUNT = 'poca cantidad'
+const CALM = 'Calma'
+const ROTATES_AND_RISES = 'rota y aumenta'
 
 export const TREND_NOTICE = 'Días 5–7: tendencia, puede cambiar'
 
@@ -22,7 +30,8 @@ const BAND_LABEL: Record<string, string> = {
   '60-100': '60–100',
 }
 
-const MODEL_LABEL: Record<ForecastModelName, string> = { gfs: 'GFS', ecmwf: 'ECMWF' }
+/** 8-point compass in Spanish, clockwise from the north (same sectors as the backend). */
+const COMPASS_ES = ['norte', 'noreste', 'este', 'sudeste', 'sur', 'sudoeste', 'oeste', 'noroeste'] as const
 
 /** What a row needs from a day; every field may be missing in an incomplete response. */
 export type RowDay = Partial<
@@ -33,151 +42,114 @@ export type RowDay = Partial<
     | 'precip_prob'
     | 'precip_sum'
     | 'rain_band'
-    | 'rain_disagreement'
-    | 'temp_max'
-    | 'temp_min'
     | 'wind_speed_max'
-    | 'models'
+    | 'wind_dir_dominant_deg'
+    | 'wind_shift'
   >
 >
 
-/** The model whose numbers the row follows: the card's selector, or consensus. */
-export type ShownModel = 'consensus' | ForecastModelName
-
 export interface RainText {
-  /** Pill text ("Lluvia 40 %", "Lluvia 40–60 % · poca cantidad"), or null when the row shows none. */
-  pill: string | null
-  /** Show the rain hours next to the pill (only when the amount is above the threshold). */
-  showWindow: boolean
-  /** "GFS: 0,1 mm · ECMWF: 7,1 mm" when only one model predicts rain, else null. */
-  disagreement: string | null
+  /** "Llovizna 83 %", "Lluvia 40–60 %"; null when the day shows no rain. */
+  label: string | null
+  /** "poca cantidad" or the rain hours ("06–18 h"), never both; null when neither applies. */
+  note: string | null
 }
 
-export interface DetailRow {
-  id: 'temp' | 'rain' | 'prob' | 'wind' | 'cloud'
-  label: string
-  gfs: string
-  ecmwf: string
-  /** What the row itself uses (the mean in temperature, the anchor model in the rest). */
-  inRow: string
+export interface WindText {
+  /** "Viento 17 km/h del sur", "Viento 17 km/h", "Calma"; with " · rota y aumenta" when highlighted. */
+  text: string
+  /** Rotation of 90° or more and a maximum at least 10 km/h above the previous day's. */
+  highlight: boolean
 }
+
+export interface RowText {
+  /** Line 1: the rain phrase when there is one, else the sky in words; null when the icon says neither. */
+  headline: string | null
+  /** The headline is about rain (it carries the rain styling). */
+  rainy: boolean
+  /** Line 2, rain part: "poca cantidad" or the rain hours. */
+  rainNote: string | null
+  /** Line 2, wind part; null when the day has no wind speed. */
+  wind: WindText | null
+}
+
+const NO_RAIN: RainText = { label: null, note: null }
 
 function isNumber(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-/** Millimetres with a decimal comma and one decimal ("0,1"); null when there is no number. */
-export function formatMm(value: number | null | undefined): string | null {
-  return isNumber(value) ? value.toFixed(1).replace('.', ',') : null
-}
-
-function formatDisagreement(day: RowDay): string | null {
-  const gfs = formatMm(day.rain_disagreement?.gfs_mm)
-  const ecmwf = formatMm(day.rain_disagreement?.ecmwf_mm)
-  return gfs !== null && ecmwf !== null ? `GFS: ${gfs} mm · ECMWF: ${ecmwf} mm` : null
-}
-
-/** Appends " · poca cantidad" when the amount is known and does not pass the threshold. */
-function withAmountNote(text: string, sum: number | null | undefined): string {
-  return isNumber(sum) && sum <= RAIN_MM_THRESHOLD ? `${text} · poca cantidad` : text
-}
-
-function nearDayRain(day: RowDay, kind: string, disagreement: string | null): RainText {
-  // The disagreement text replaces the pill (and the hours that go with it).
-  if (disagreement !== null) return { pill: null, showWindow: false, disagreement }
+/** The exact probability (days 1 to 4) or the band (days 5 to 7), with the unit; null when there is no rain. */
+function rainProbability(day: RowDay): string | null {
+  if (day.is_trend) {
+    const band = day.rain_band ? BAND_LABEL[day.rain_band] : undefined
+    return band ? `${band}${NBSP}%` : null
+  }
   const prob = day.precip_prob
-  if (!isNumber(prob) || prob <= PILL_MIN_PROB) return { pill: null, showWindow: false, disagreement: null }
-  return {
-    pill: withAmountNote(`${kind} ${Math.round(prob)} %`, day.precip_sum),
-    showWindow: isNumber(day.precip_sum) && day.precip_sum > RAIN_MM_THRESHOLD,
-    disagreement: null,
-  }
+  return isNumber(prob) && prob > RAIN_MIN_PROB ? `${Math.round(prob)}${NBSP}%` : null
 }
 
-function trendDayRain(day: RowDay, kind: string, disagreement: string | null): RainText {
-  const band = day.rain_band ? BAND_LABEL[day.rain_band] : undefined
-  return {
-    pill: band ? withAmountNote(`${kind} ${band} %`, day.precip_sum) : null,
-    showWindow: false,
-    disagreement,
-  }
+/** "poca cantidad" for a small known amount; the hours for a bigger one (days 1 to 4 only). */
+function rainNote(day: RowDay, window: string | null | undefined): string | null {
+  const sum = day.precip_sum
+  if (!isNumber(sum)) return null
+  if (sum <= RAIN_MM_THRESHOLD) return SMALL_AMOUNT
+  return !day.is_trend && window ? window : null
 }
 
 /**
- * The rain line of a row. Days 1 to 4 show the exact probability; days 5 to 7 only a band, because
- * the exact figure promises more than a trend can deliver.
+ * The rain of a day. Days 1 to 4 show the exact probability; days 5 to 7 only a band, because the
+ * exact figure promises more than a trend can deliver.
  */
-export function describeRain(day: RowDay): RainText {
+export function describeRain(day: RowDay, window?: string | null): RainText {
+  const probability = rainProbability(day)
+  if (probability === null) return NO_RAIN
   const kind = precipKind(day.icon ?? '') ?? 'Lluvia'
-  const disagreement = formatDisagreement(day)
-  return day.is_trend ? trendDayRain(day, kind, disagreement) : nearDayRain(day, kind, disagreement)
+  return { label: `${kind} ${probability}`, note: rainNote(day, window) }
+}
+
+/** Where the wind comes from, in Spanish ("sur", "noroeste"); null without a direction. */
+export function windDirectionEs(deg: number | null | undefined): string | null {
+  if (!isNumber(deg)) return null
+  const normalized = ((deg % 360) + 360) % 360
+  return COMPASS_ES[Math.floor((normalized + 22.5) / 45) % COMPASS_ES.length]
+}
+
+function rotatesAndRises(day: RowDay, previous: RowDay | undefined): boolean {
+  const today = day.wind_speed_max
+  const before = previous?.wind_speed_max
+  if (day.wind_shift !== true || !isNumber(today) || !isNumber(before)) return false
+  return today - before >= WIND_RISE_KMH - EPSILON
+}
+
+/**
+ * The wind of a day: whole km/h and where it comes from. `previous` is the day before in the list;
+ * without it (the first day) the wind is never highlighted.
+ */
+export function describeWind(day: RowDay, previous?: RowDay): WindText | null {
+  const speed = day.wind_speed_max
+  if (!isNumber(speed)) return null
+  const kmh = Math.round(speed)
+  if (kmh === 0) return { text: CALM, highlight: false }
+  const direction = windDirectionEs(day.wind_dir_dominant_deg)
+  const base = `Viento ${kmh}${NBSP}km/h${direction ? ` del${NBSP}${direction}` : ''}`
+  const highlight = rotatesAndRises(day, previous)
+  return { text: highlight ? `${base} · ${ROTATES_AND_RISES}` : base, highlight }
+}
+
+/** Every text of the row at `index`; `window` is that day's rain hours, when known. */
+export function describeRow(days: ReadonlyArray<RowDay>, index: number, window?: string | null): RowText {
+  const day = days[index] ?? {}
+  const rain = describeRain(day, window)
+  return {
+    headline: rain.label ?? describeWeatherIcon(day.icon ?? ''),
+    rainy: rain.label !== null,
+    rainNote: rain.note,
+    wind: describeWind(day, index > 0 ? days[index - 1] : undefined),
+  }
 }
 
 /** True for the first day of the trend: the notice goes once, right before it. */
 export function isFirstTrendDay(days: ReadonlyArray<Pick<RowDay, 'is_trend'>>, index: number): boolean {
   return Boolean(days[index]?.is_trend) && !days.slice(0, index).some((previous) => previous.is_trend)
-}
-
-// ── Per-model detail ────────────────────────────────────────────────────────
-
-function whole(value: number | null | undefined, unit: string): string {
-  return isNumber(value) ? `${Math.round(value)} ${unit}` : NO_DATA
-}
-
-function millimetres(value: number | null | undefined): string {
-  const text = formatMm(value)
-  return text === null ? NO_DATA : `${text} mm`
-}
-
-function temperatures(max: number | null | undefined, min: number | null | undefined): string {
-  if (!isNumber(max) && !isNumber(min)) return NO_DATA
-  const part = (value: number | null | undefined) => (isNumber(value) ? `${Math.round(value)}°` : MISSING_PART)
-  return `${part(max)} / ${part(min)}`
-}
-
-type Formatter = (detail: ModelDayDetail) => string
-
-const FORMATTERS: ReadonlyArray<readonly [DetailRow['id'], string, Formatter]> = [
-  ['temp', 'Temperatura', (m) => temperatures(m.temp_max, m.temp_min)],
-  ['rain', 'Lluvia', (m) => millimetres(m.precip_sum)],
-  ['prob', 'Probabilidad de lluvia', (m) => whole(m.precip_prob, '%')],
-  ['wind', 'Viento máximo', (m) => whole(m.wind_speed_max, 'km/h')],
-  ['cloud', 'Nubosidad', (m) => whole(m.cloud_cover_mean, '%')],
-]
-
-/** The numbers the row itself shows, so the column "En la fila" never disagrees with the row. */
-function rowDetail(day: RowDay, shown: ShownModel): ModelDayDetail {
-  const models = day.models
-  const anchor = shown === 'gfs' ? models?.gfs : (models?.ecmwf ?? models?.gfs)
-  return {
-    temp_max: day.temp_max ?? null,
-    temp_min: day.temp_min ?? null,
-    precip_sum: day.precip_sum ?? null,
-    precip_prob: day.precip_prob ?? null,
-    wind_speed_max: day.wind_speed_max ?? null,
-    cloud_cover_mean: anchor?.cloud_cover_mean ?? null,
-  }
-}
-
-/**
- * Rows of the accordion table: GFS | ECMWF | what the row uses. A model that did not answer reads
- * "No disponible"; a number it did not give reads "Sin dato". Never NaN, null or undefined.
- */
-export function detailRows(day: RowDay, shown: ShownModel = 'consensus'): DetailRow[] {
-  const inRow = rowDetail(day, shown)
-  const column = (model: ModelDayDetail | null | undefined, format: Formatter) =>
-    model ? format(model) : MODEL_MISSING
-  return FORMATTERS.map(([id, label, format]) => ({
-    id,
-    label,
-    gfs: column(day.models?.gfs, format),
-    ecmwf: column(day.models?.ecmwf, format),
-    inRow: format(inRow),
-  }))
-}
-
-/** Notice for when one of the two models did not answer; null when both did (or nothing is known). */
-export function missingModelNotice(models: ReadonlyArray<ForecastModelName> | null | undefined): string | null {
-  if (!models || models.length !== 1) return null
-  return `Solo hay datos de ${MODEL_LABEL[models[0]]}: el otro modelo no respondió.`
 }

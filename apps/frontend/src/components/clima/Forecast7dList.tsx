@@ -1,15 +1,10 @@
-import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { Droplets } from 'lucide-react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
-import { WindArrow } from '@/components/ui/WindArrow'
 import { cn } from '@/lib/utils'
 import { formatShortDate } from '@/lib/dates'
-import { describeWeatherIcon } from '@/lib/weatherLabels'
-import { TREND_NOTICE, describeRain, detailRows, isFirstTrendDay } from '@/lib/forecastRow'
-import type { ShownModel } from '@/lib/forecastRow'
-import { RainPill } from './RainPill'
+import { TREND_NOTICE, describeRow, isFirstTrendDay } from '@/lib/forecastRow'
+import type { RowText } from '@/lib/forecastRow'
 import { dayRowId } from './anchors'
-import { windColor } from './windColor'
 import type { DailyEntry } from '@/lib/api'
 import './forecast7dList.css'
 
@@ -17,12 +12,10 @@ interface Props {
   days: DailyEntry[]
   /** Franja con lluvia prevista por fecha, cuando hay horas para calcularla. */
   rainWindows?: Record<string, string>
-  /** El modelo de los días en pantalla: decide de qué modelo sale la nubosidad de la columna "En la fila". */
-  shownModel?: ShownModel
 }
 
 /** Los días, uno debajo del otro: en el celular se lee de corrido, sin deslizar. */
-export function Forecast7dList({ days, rainWindows = {}, shownModel = 'consensus' }: Props) {
+export function Forecast7dList({ days, rainWindows = {} }: Props) {
   return (
     <ol
       aria-label={`Pronóstico de ${days.length} días`}
@@ -33,8 +26,7 @@ export function Forecast7dList({ days, rainWindows = {}, shownModel = 'consensus
         <DayRow
           key={day.date}
           day={day}
-          rainWindow={rainWindows[day.date]}
-          shownModel={shownModel}
+          row={describeRow(days, index, rainWindows[day.date])}
           showTrendNotice={isFirstTrendDay(days, index)}
         />
       ))}
@@ -44,24 +36,19 @@ export function Forecast7dList({ days, rainWindows = {}, shownModel = 'consensus
 
 interface DayRowProps {
   day: DailyEntry
-  rainWindow?: string
-  shownModel: ShownModel
+  /** The row's texts: headline, rain note and wind (see describeRow). */
+  row: RowText
   /** Primer día de tendencia: el aviso va una sola vez, antes de él. */
   showTrendNotice: boolean
 }
 
-/** Toda la fila es un botón: tocarla abre y cierra los números de cada modelo. */
-function DayRow({ day, rainWindow, shownModel, showTrendNotice }: DayRowProps) {
-  const [open, setOpen] = useState(false)
+/**
+ * One day, read only (no detail to open). Reading order for a screen reader: day, condition with its
+ * rain, temperatures, wind; the grid puts the wind line visually under the condition.
+ */
+function DayRow({ day, row, showTrendNotice }: DayRowProps) {
   const isToday = day.day_label === 'Hoy'
-  const condition = describeWeatherIcon(day.icon)
-  const rain = describeRain(day)
-  const wind = windColor(day.wind_intensity)
-  const hasWind = day.wind_speed_max !== null
-  const showShift = Boolean(day.wind_shift && day.wind_dir_cardinal)
-  const hasRain = rain.pill !== null || rain.disagreement !== null
-  const hasMeta = hasRain || hasWind || showShift
-  const panelId = `${dayRowId(day.date)}-detalle`
+  const hasMeta = row.rainNote !== null || row.wind !== null
 
   return (
     <li
@@ -77,14 +64,7 @@ function DayRow({ day, rainWindow, shownModel, showTrendNotice }: DayRowProps) {
         </p>
       )}
 
-      <button
-        type="button"
-        className="day-row__button px-4 py-3"
-        data-meta={hasMeta}
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((current) => !current)}
-      >
+      <div className="day-row px-4 py-3" data-meta={hasMeta}>
         {/* Día y fecha: con siete días seguidos "dom" y "lun" se repiten, la fecha desambigua */}
         <span className="day-row__day leading-tight">
           <span
@@ -99,50 +79,13 @@ function DayRow({ day, rainWindow, shownModel, showTrendNotice }: DayRowProps) {
         </span>
 
         <span className="day-row__icon">
-          <WeatherIcon code={day.icon} size={40} glow />
+          <WeatherIcon code={day.icon} size={32} glow />
         </span>
 
-        {/* La condición en palabras: con la palabra a la vista el ícono queda decorativo */}
-        {condition && (
-          <span className="day-row__cond text-sm leading-snug" style={{ color: 'var(--color-foreground)' }}>
-            {condition}
-          </span>
-        )}
+        {row.headline !== null && <Headline row={row} />}
 
-        {hasMeta && (
-          <span className="day-row__meta flex flex-wrap items-center gap-x-3 gap-y-1">
-            {rain.pill !== null && <RainPill inline label={rain.pill} window={rain.showWindow ? rainWindow : undefined} />}
-            {rain.disagreement !== null && (
-              <span className="text-xs" style={{ color: 'var(--color-info)' }}>
-                {rain.disagreement}
-              </span>
-            )}
-            {hasWind && (
-              <span className="inline-flex items-center gap-1 text-xs" style={{ color: wind }}>
-                {day.wind_icon && <WeatherIcon code={day.wind_icon} size={16} />}
-                <span className="sr-only">Viento </span>
-                {Math.round(day.wind_speed_max ?? 0)} km/h
-                {day.wind_dir_dominant_deg !== null && day.wind_dir_dominant_deg !== undefined && (
-                  <WindArrow deg={day.wind_dir_dominant_deg} size={12} color={wind} />
-                )}
-                {day.wind_dir_cardinal && (
-                  <span style={{ color: 'var(--color-muted-foreground)' }}>{day.wind_dir_cardinal}</span>
-                )}
-              </span>
-            )}
-            {showShift && (
-              <span
-                className="text-[11px] px-1.5 py-0.5 rounded-full"
-                style={{ background: 'rgba(200,168,75,0.12)', color: '#c8a84b' }}
-              >
-                ↻ Rota al {day.wind_dir_cardinal}
-              </span>
-            )}
-          </span>
-        )}
-
-        {/* Máxima y mínima; para un lector de pantalla, con su nombre (antes "23° 13°" sin decir cuál era cuál) */}
-        <span className="day-row__temps tabular-nums leading-none text-right">
+        {/* Máxima y mínima; para un lector de pantalla, con su nombre */}
+        <span className="day-row__temps tabular-nums leading-none text-right whitespace-nowrap">
           <span className="sr-only">Máxima </span>
           <span className="text-lg font-bold" style={{ color: 'var(--color-foreground)' }}>
             {day.temp_max !== null ? `${Math.round(day.temp_max)}°` : '—'}
@@ -151,59 +94,47 @@ function DayRow({ day, rainWindow, shownModel, showTrendNotice }: DayRowProps) {
           <span className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
             {day.temp_min !== null ? `${Math.round(day.temp_min)}°` : '—'}
           </span>
-          <span className="sr-only">. Detalle por modelo</span>
-          <ChevronDown
-            size={16}
-            aria-hidden="true"
-            className={cn(
-              'ml-1.5 inline-block align-middle transition-transform motion-reduce:transition-none',
-              open && 'rotate-180',
-            )}
-            style={{ color: 'var(--color-muted-foreground)' }}
-          />
         </span>
-      </button>
 
-      <div id={panelId} hidden={!open} className="px-4 pb-3 pt-1">
-        {open && <ModelDetailTable day={day} shownModel={shownModel} />}
+        {hasMeta && <MetaLine row={row} />}
       </div>
     </li>
   )
 }
 
-interface ModelDetailTableProps {
-  day: DailyEntry
-  shownModel: ShownModel
+/** Line 1: one rain element (phrase with its probability) or the sky in words. */
+function Headline({ row }: { row: RowText }) {
+  return (
+    <span className="day-row__cond text-sm leading-snug">
+      {row.rainy ? (
+        <span className="font-medium" style={{ color: 'var(--color-info)' }}>
+          <Droplets size={12} strokeWidth={2} aria-hidden="true" className="mr-1 inline-block align-[-1px]" />
+          {row.headline}
+        </span>
+      ) : (
+        <span style={{ color: 'var(--color-muted-foreground)' }}>{row.headline}</span>
+      )}
+      {/* The rain note is read with the rain, not after the temperatures */}
+      {row.rainNote !== null && <span className="sr-only">, {row.rainNote}</span>}
+    </span>
+  )
 }
 
-/** Los números de cada modelo para el día; la última columna es lo que usa la fila. */
-function ModelDetailTable({ day, shownModel }: ModelDetailTableProps) {
-  const rows = detailRows(day, shownModel)
+/** Line 2, grey: the rain hours or "poca cantidad", then the wind (amber, with words, when it rotates and rises). */
+function MetaLine({ row }: { row: RowText }) {
+  const { rainNote, wind } = row
   return (
-    <table className="day-detail w-full table-fixed text-xs tabular-nums" style={{ color: 'var(--color-foreground)' }}>
-      <caption className="sr-only">Detalle por modelo, {day.day_label_long}</caption>
-      <thead style={{ color: 'var(--color-muted-foreground)' }}>
-        <tr>
-          <th scope="col" className="w-[30%] px-1 py-1.5 text-left font-medium">
-            <span className="sr-only">Dato</span>
-          </th>
-          <th scope="col" className="px-1 py-1.5 text-left font-semibold">GFS</th>
-          <th scope="col" className="px-1 py-1.5 text-left font-semibold">ECMWF</th>
-          <th scope="col" className="px-1 py-1.5 text-left font-semibold">En la fila</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-            <th scope="row" className="px-1 py-1.5 text-left align-top font-normal" style={{ color: 'var(--color-muted-foreground)' }}>
-              {row.label}
-            </th>
-            <td className="px-1 py-1.5 align-top">{row.gfs}</td>
-            <td className="px-1 py-1.5 align-top">{row.ecmwf}</td>
-            <td className="px-1 py-1.5 align-top font-semibold">{row.inRow}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <p className="day-row__meta text-xs leading-snug" style={{ color: 'var(--color-muted-foreground)' }}>
+      {rainNote !== null && <span aria-hidden="true">{rainNote}</span>}
+      {rainNote !== null && wind !== null && <span aria-hidden="true"> · </span>}
+      {wind !== null && (
+        <span
+          className={wind.highlight ? 'font-medium' : undefined}
+          style={wind.highlight ? { color: 'var(--color-watch)' } : undefined}
+        >
+          {wind.text}
+        </span>
+      )}
+    </p>
   )
 }
