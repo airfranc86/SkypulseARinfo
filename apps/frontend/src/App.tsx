@@ -2,7 +2,7 @@ import {
   lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation as useRouterLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Analytics } from '@vercel/analytics/react'
@@ -205,8 +205,10 @@ function skipToContent(event: ReactMouseEvent<HTMLAnchorElement>) {
 // ── RootLayout — wired to the ModelStatusProvider ─────────────────────────────
 
 function RootLayout() {
-  const { location, geoLoading, geoError, selectCity, detectLocation } =
+  const { location, isFallback, geoLoading, geoError, selectCity, detectLocation } =
     useLocationState()
+  // On the landing the "now" goes first: on phones the catalog row of the menu steps aside.
+  const isLanding = useRouterLocation().pathname === '/'
 
   const showThreads = useShowThreads()
   const { data: volcanesData } = useVolcanes()
@@ -315,7 +317,7 @@ function RootLayout() {
             <p className="-mt-1 pb-2 text-xs text-[var(--color-destructive)]">{geoError}</p>
           )}
         </div>
-        <InfiniteNavRail tools={navTools} catalog={NAV_CATALOG} />
+        <InfiniteNavRail tools={navTools} catalog={NAV_CATALOG} hideCatalogOnMobile={isLanding} />
       </header>
 
       <main
@@ -326,7 +328,7 @@ function RootLayout() {
         <ErrorBoundary fallbackMessage="Algo falló al mostrar esta página.">
           <Suspense fallback={<div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">Cargando…</div>}>
             <Routes>
-              <Route path="/" element={<Landing />} />
+              <Route path="/" element={<Landing location={location} isFallback={isFallback} />} />
               <Route path="/prevision" element={<PrevisionClima location={location} />} />
               <Route path="/tender-ropa" element={<TenderRopa location={location} />} />
               <Route path="/sensacion-termica" element={<Navigate to="/prevision" replace />} />

@@ -5,6 +5,9 @@ import {
 } from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
+import { NowCard } from '@/components/landing/NowCard'
+import { DecisionShortcuts } from '@/components/landing/DecisionShortcuts'
+import type { LocationState } from '@/hooks/useLocation'
 
 interface Item {
   to: string
@@ -120,14 +123,27 @@ const GUIDES: Item[] = [
 
 const SOURCE_PILLS = ['SMN', 'GFS', 'ECMWF', 'USGS', 'EMSC']
 
-export function Landing() {
+interface LandingProps {
+  location: LocationState | null
+  /** The city on screen is the Buenos Aires fallback (no saved city, location denied or unavailable). */
+  isFallback: boolean
+}
+
+export function Landing({ location, isFallback }: LandingProps) {
   return (
-    <div className="relative py-8">
+    <div className="relative pb-8">
       <Dither opacity={0.04} />
+
+      {/* "Now" first (FRA-333, direction A): the city's weather and the everyday decisions.
+          Outside FadeContent so it shows at once and the skeleton never fades in. */}
+      <div className="relative">
+        <NowCard location={location} isFallback={isFallback} />
+        <DecisionShortcuts />
+      </div>
 
       <FadeContent>
         {/* Hero */}
-        <div className="mb-12 text-center">
+        <div className="mt-12 mb-12 text-center">
           <h1
             className="text-4xl sm:text-5xl font-semibold tracking-tight mb-3"
             style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}
