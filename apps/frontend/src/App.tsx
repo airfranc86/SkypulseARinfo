@@ -14,7 +14,7 @@ import { usePageTitle } from '@/hooks/usePageTitle'
 import { LocationPicker } from '@/components/LocationPicker'
 import { getConsent, setConsent, loadGTM, type ConsentStatus } from '@/lib/consent'
 import { DESKTOP_MEDIA_QUERY, shouldShowThreads } from '@/lib/motionPreference'
-import { NAV_PILL_COLORS, type NavRoute } from '@/lib/navContrast'
+import { navRow, type Tool } from '@/lib/toolRegistry'
 import { CookieConsentBanner } from '@/components/ui/CookieConsentBanner'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import {
@@ -25,10 +25,6 @@ import {
 import { useModelStatusDispatch } from '@/hooks/useModelStatus'
 import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
-import {
-  CloudSun, Activity, Shirt, Car, Waves, MountainSnow, Mountain, TreePine,
-  Cloud, Radio, CloudRain, Radar as RadarIcon, Eye, TriangleAlert, Gauge, WindArrowDown, type LucideIcon,
-} from 'lucide-react'
 import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 
 // Static imports — critical path (landing + primary forecast)
@@ -160,35 +156,22 @@ const THREADS_COLOR: [number, number, number] = [0.753, 0.612, 0.169]
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
-/** Colors come from `NAV_PILL_COLORS` (contrast-checked); the icon shares the pill's accent. */
-const navItem = (to: NavRoute, label: string, NavIcon: LucideIcon): Omit<NavRailItem, 'badge'> => {
-  const colors = NAV_PILL_COLORS[to]
-  return { to, label, emoji: <NavIcon size={15} style={{ color: colors.accent }} />, colors }
+/**
+ * Label, icon, colors and layer come from the tool registry (contrast-checked). A legacy icon takes the
+ * full tool color inline; a layer icon inherits its color from `.layer-pill` (ink on the current page).
+ */
+const navItem = (tool: Tool): Omit<NavRailItem, 'badge'> => {
+  const { path, label, Icon, colors } = tool
+  return tool.look === 'layer'
+    ? { to: path, label, emoji: <Icon size={15} />, colors, layer: tool.layer }
+    : { to: path, label, emoji: <Icon size={15} style={{ color: colors.accent }} />, colors }
 }
 
 /** Live-data tools — require location + backend (Row 1, scrolls ←) */
-const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = [
-  navItem('/prevision',     'Previsión',      CloudSun),
-  navItem('/hacer-deporte', 'Hacer deporte',  Activity),
-  navItem('/tender-ropa',   'Secado de ropa', Shirt),
-  navItem('/lavar-auto',    'Lavar el auto',  Car),
-  navItem('/terremotos',    'Terremotos',     Waves),
-  navItem('/cota-de-nieve', 'Cota de nieve',  MountainSnow),
-  navItem('/volcanes',      'Volcanes',       Mountain),
-  navItem('/incendios',     'Incendios',      TreePine),
-]
+const NAV_TOOLS_BASE: Omit<NavRailItem, 'badge'>[] = navRow('tools').map(navItem)
 
-/** Technical/catalog pages (Row 2, scrolls →). Altitud de densidad calcula en el backend pero tiene fallback local. */
-const NAV_CATALOG: NavRailItem[] = [
-  navItem('/nubes',                'Nubes',               Cloud),
-  navItem('/metar',                'METAR',               Radio),
-  navItem('/altitud-de-densidad',  'Altitud de densidad', Gauge),
-  navItem('/cizalladura',          'Cizalladura / LLWS',  WindArrowDown),
-  navItem('/desastres',            'Desastres',           TriangleAlert),
-  navItem('/lluvias',              'Lluvias',             CloudRain),
-  navItem('/radar',                'Radar',               RadarIcon),
-  navItem('/niebla',               'Niebla',              Eye),
-]
+/** Reference pages (Row 2, scrolls →) */
+const NAV_CATALOG: NavRailItem[] = navRow('catalog').map(navItem)
 
 // ── Skip link ─────────────────────────────────────────────────────────────────
 

@@ -2,14 +2,32 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
+  LAYER_PRESENCE,
+  LAYER_STATES,
   MIN_TEXT_CONTRAST,
   NAV_PILL_COLORS,
+  PILL_BORDER_ALPHA,
+  PILL_TINT_ALPHA,
   blendHex,
   contrastRatio,
+  layerPillBackground,
+  layerPillLabelColor,
+  layerPillContrast,
+  oklabDistance,
+  oklchHue,
+  pillLabelColor,
   pillLabelContrast,
   relativeLuminance,
+  toOklab,
   type PillState,
 } from '../src/lib/navContrast.ts'
+import { LAYER_INK, TOOLS, toolByPath } from '../src/lib/toolRegistry.ts'
+
+const lookOf = (route: string) => {
+  const tool = toolByPath(route)
+  assert.ok(tool, `${route} no está en el registro`)
+  return tool.look
+}
 
 // The surface the pills are drawn on comes from the real stylesheet, so a theme change re-runs the check.
 const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8')
@@ -53,16 +71,67 @@ test('blendHex: alfa 0 deja el fondo, alfa 1 el primer plano, y redondea al cana
   assert.equal(blendHex('#ffffff', '#000000', 0.5), '#808080')
 })
 
+test('toOklab: blanco L=1 y negro L=0, ambos sin croma', () => {
+  const [lw, aw, bw] = toOklab('#ffffff')
+  assert.ok(Math.abs(lw - 1) < 1e-3 && Math.abs(aw) < 1e-3 && Math.abs(bw) < 1e-3)
+  assert.deepEqual(toOklab('#000000').map((v) => Math.abs(v) < 1e-9), [true, true, true])
+})
+
+test('oklabDistance: 0 para el mismo color, simétrica, y blanco/negro a distancia 1', () => {
+  assert.equal(oklabDistance('#7cc4f2', '#7cc4f2'), 0)
+  assert.equal(oklabDistance('#e05545', '#40d9c1'), oklabDistance('#40d9c1', '#e05545'))
+  assert.ok(Math.abs(oklabDistance('#000000', '#ffffff') - 1) < 1e-3)
+})
+
+test('oklchHue: el rojo puro cae cerca de 29°, el verde de 142° y el azul de 264°', () => {
+  assert.ok(Math.abs(oklchHue('#ff0000') - 29.2) < 1)
+  assert.ok(Math.abs(oklchHue('#00ff00') - 142.5) < 1)
+  assert.ok(Math.abs(oklchHue('#0000ff') - 264.1) < 1)
+})
+
 test('la barra de navegación tiene los 16 destinos', () => {
   assert.equal(Object.keys(NAV_PILL_COLORS).length, 16)
 })
 
-test('todas las pills (reposo y activa) tienen texto >= 4,5:1 contra su fondo real', () => {
+test('NAV_PILL_COLORS sale del registro (un solo lugar para los colores)', () => {
+  assert.deepEqual(
+    NAV_PILL_COLORS,
+    Object.fromEntries(TOOLS.map((tool) => [tool.path, tool.colors])),
+  )
+})
+
+test('la presencia legada es la de origin/main: fondo 0d/18, borde 2a, texto activo = acento', () => {
+  assert.deepEqual(PILL_TINT_ALPHA, { idle: '0d', active: '18' })
+  assert.equal(PILL_BORDER_ALPHA, '2a')
+  const colors = { accent: '#c8a84b', label: '#937e3e' }
+  assert.equal(pillLabelColor(colors, 'idle'), '#937e3e')
+  assert.equal(pillLabelColor(colors, 'active'), '#c8a84b')
+})
+
+test('la presencia de capa es la de la maqueta: tinte 13 %/22 %, borde 34 %/85 %', () => {
+  assert.deepEqual(LAYER_PRESENCE.tint, { idle: '21', hover: '38' })
+  assert.deepEqual(LAYER_PRESENCE.border, { idle: '57', hover: 'd9' })
+  const alpha = (hex: string) => Math.round((parseInt(hex, 16) / 255) * 100)
+  assert.deepEqual([alpha('21'), alpha('38'), alpha('57'), alpha('d9')], [13, 22, 34, 85])
+})
+
+test('pill de capa: texto claro en reposo y hover, tinta sobre el color pleno cuando es la página actual', () => {
+  const colors = { accent: '#7db9f2', label: '#dcebfc' }
+  assert.equal(layerPillLabelColor(colors, LAYER_INK, 'idle'), '#dcebfc')
+  assert.equal(layerPillLabelColor(colors, LAYER_INK, 'hover'), '#dcebfc')
+  assert.equal(layerPillLabelColor(colors, LAYER_INK, 'current'), LAYER_INK)
+  assert.equal(layerPillBackground('#7db9f2', '#060d1a', 'current'), '#7db9f2')
+  assert.equal(layerPillBackground('#7db9f2', '#060d1a', 'idle'), blendHex('#7db9f2', '#060d1a', 0x21 / 255))
+})
+
+test('todas las pills tienen texto >= 4,5:1 contra su fondo real, en cada estado', () => {
   const surface = cssToken('color-background')
   const failures: string[] = []
   for (const [route, colors] of Object.entries(NAV_PILL_COLORS)) {
-    for (const state of STATES) {
-      const ratio = pillLabelContrast(colors, surface, state)
+    const ratios = lookOf(route) === 'legacy'
+      ? STATES.map((state) => [state, pillLabelContrast(colors, surface, state)] as const)
+      : LAYER_STATES.map((state) => [state, layerPillContrast(colors, LAYER_INK, surface, state)] as const)
+    for (const [state, ratio] of ratios) {
       if (ratio < MIN_TEXT_CONTRAST) failures.push(`${route} ${state}: ${ratio.toFixed(2)}:1`)
     }
   }
