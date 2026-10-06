@@ -475,22 +475,30 @@ async def get_hourly_forecast_ext(
 # Visibilidad actual + pronóstico 12h (niebla)
 # ---------------------------------------------------------------------------
 
+def _ar_now() -> datetime:
+    """Hora actual en Argentina (UTC-3). Punto único para fijar el reloj en los tests."""
+    return datetime.now(_AR_TZ)
+
+
 def _next_ar_hour_idx(time_list: list[str]) -> int:
     """
     Retorna el índice en `time_list` correspondiente a la próxima hora AR redonda.
 
     Open-Meteo devuelve cadenas ISO locales ("2026-05-27T01:00") sin timezone.
     Comparamos como strings: el formato YYYY-MM-DDTHH:MM permite comparación lexicográfica.
+
+    Misma regla que el TAF: a las 22:50 la próxima es 23:00 y exactamente a las 17:00 es 18:00.
+    Si la serie no llega a la próxima hora devuelve len(time_list) (recorte vacío): nunca
+    se vuelve al inicio, que serían horas ya pasadas.
     """
-    from datetime import datetime, timezone, timedelta
-    ar_now   = datetime.now(timezone(timedelta(hours=-3)))
+    ar_now   = _ar_now()
     next_ar  = ar_now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     next_str = next_ar.strftime("%Y-%m-%dT%H:%M")  # "2026-05-27T02:00"
 
     for i, t in enumerate(time_list):
         if t >= next_str:
             return i
-    return 0  # fallback al inicio si el TAF cubre el futuro y OM no lo alcanza
+    return len(time_list)
 
 
 @dataclass(frozen=True)
@@ -534,8 +542,14 @@ def _classify_visibility(v: float | None) -> tuple[int, str, str]:
 
 # get_visibility_forecast y get_fog_inference_forecast piden variables disjuntas
 # (visibility+weather_code "current" vs humedad/rocío/temp/viento/weather_code
-# "hourly") pero mismo forecast_days=1 y mismo bucket de caché — se unifican en
+# "hourly") pero mismo forecast_days y mismo bucket de caché — se unifican en
 # 1 solo request a Open-Meteo; cada función parsea su porción de la respuesta.
+#
+# 2 días: la serie arranca a las 00:00 locales de hoy, así que con 1 solo día a la
+# noche no quedan 12 horas por delante (a las 22:50 solo la de las 23:00). Con 2
+# días siempre hay 12 horas desde la próxima, también con la respuesta cacheada
+# (15 min) después de medianoche. Sigue siendo un único pedido.
+_NIEBLA_FORECAST_DAYS = 2
 _NIEBLA_HOURLY_FIELDS = ",".join([
     "visibility",
     "relative_humidity_2m",
@@ -558,7 +572,7 @@ async def _fetch_niebla_combined(lat: float, lon: float) -> dict | None:
         "current": "visibility,weather_code",
         "hourly": _NIEBLA_HOURLY_FIELDS,
         "timezone": "America/Argentina/Buenos_Aires",
-        "forecast_days": 1,
+        "forecast_days": _NIEBLA_FORECAST_DAYS,
     }
     key = _cache_key(params)
 
