@@ -21,7 +21,10 @@ router = APIRouter()
     description=(
         "Retorna el nivel de alerta actual (verde/amarillo/naranja/rojo) de los "
         "10 volcanes monitoreados por el OAVV-SEGEMAR, con coordenadas y link "
-        "al portal oficial. Caché de 2 horas."
+        "al portal oficial. Si la imagen de un volcán no se puede descargar o "
+        "interpretar, ese volcán viene en 'sin_datos' y `available` es false; "
+        "`total` y `has_active_alert` cuentan solo volcanes con dato. Caché de "
+        "2 horas (60 s si falta algún volcán)."
     ),
 )
 @limiter.limit("10/minute")
