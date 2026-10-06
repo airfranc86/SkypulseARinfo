@@ -263,7 +263,7 @@ export type ForecastModelName = 'gfs' | 'ecmwf'
 /** Rain probability band of a trend day (days 5 to 7), in percent. */
 export type RainBand = '10-40' | '40-60' | '60-100'
 
-/** One model's numbers for one day (the detail table of a row). */
+/** One model's numbers for one day. Still in the response, not shown in the UI (FRA-334). */
 export interface ModelDayDetail {
   temp_max: number | null
   temp_min: number | null
@@ -273,7 +273,7 @@ export interface ModelDayDetail {
   cloud_cover_mean: number | null
 }
 
-/** Only one of the two models predicts rain (above 0.9 mm). */
+/** Only one of the two models predicts rain (above 0.9 mm). Still in the response, not shown in the UI (FRA-334). */
 export interface RainDisagreement {
   gfs_mm: number
   ecmwf_mm: number

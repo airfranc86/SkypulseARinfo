@@ -1,8 +1,8 @@
+import { Droplets } from 'lucide-react'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { formatShortDate } from '@/lib/dates'
 import { describeWeatherIcon } from '@/lib/weatherLabels'
 import { describeRain } from '@/lib/forecastRow'
-import { RainPill } from './RainPill'
 import type { DailyEntry } from '@/lib/api'
 
 interface NextDaysProps {
@@ -27,7 +27,7 @@ export function NextDays({ days, rainWindows, onSelectDay }: NextDaysProps) {
       <ul className="grid divide-x" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}>
         {days.map((day) => {
           const condition = describeWeatherIcon(day.icon)
-          const rain = describeRain(day)
+          const rain = describeRain(day, rainWindows[day.date])
           return (
             <li key={day.date} className="p-1 min-w-0" style={{ borderColor: 'var(--color-border)' }}>
               <button
@@ -52,12 +52,16 @@ export function NextDays({ days, rainWindows, onSelectDay }: NextDaysProps) {
                     {day.temp_min !== null ? `${Math.round(day.temp_min)}°` : '—'}
                   </span>
                 </span>
-                {rain.pill !== null && (
-                  <RainPill label={rain.pill} window={rain.showWindow ? rainWindows[day.date] : undefined} />
+                {/* One rain element, same rule as the 7-day row; the note (hours or "poca cantidad") in grey */}
+                {rain.label !== null && (
+                  <span className="text-xs font-medium leading-tight" style={{ color: 'var(--color-info)' }}>
+                    <Droplets size={12} strokeWidth={2} aria-hidden="true" className="mr-0.5 inline-block align-[-1px]" />
+                    {rain.label}
+                  </span>
                 )}
-                {rain.disagreement !== null && (
-                  <span className="text-[11px] leading-tight" style={{ color: 'var(--color-info)' }}>
-                    {rain.disagreement}
+                {rain.note !== null && (
+                  <span className="text-[11px] leading-tight" style={{ color: 'var(--color-muted-foreground)' }}>
+                    {rain.note}
                   </span>
                 )}
               </button>
