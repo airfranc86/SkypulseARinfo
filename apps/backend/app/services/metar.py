@@ -149,6 +149,23 @@ def _parse_taf_visib_sm(visib: object) -> float | None:
     return total if total > 0 else None
 
 
+def _parse_metar_visib_m(visib: object) -> float | None:
+    """
+    Convierte el campo `visib` de un METAR (AWC) a metros, topado a `_MAX_VIS_M`.
+
+    AWC manda "6+" (o "P6SM") cuando el METAR trae CAVOK / 6 o más millas: eso vale el tope
+    de 10 km, no 6 SM = 9.656 m (la clasificación de niebla separa "Despejada" de "Buena" en
+    los 10 km). El resto se parsea como en el TAF. Devuelve None si el valor no es utilizable.
+    """
+    raw = str(visib).strip().upper() if visib is not None else ""
+    if "+" in raw or raw.startswith("P"):
+        return _MAX_VIS_M if _parse_taf_visib_sm(visib) is not None else None
+    visib_sm = _parse_taf_visib_sm(visib)
+    if visib_sm is None or not math.isfinite(visib_sm) or visib_sm < 0:
+        return None
+    return min(visib_sm * _SM_TO_M, _MAX_VIS_M)
+
+
 # ---------------------------------------------------------------------------
 # METAR — visibilidad actual
 # ---------------------------------------------------------------------------
@@ -191,15 +208,14 @@ async def get_metar_visibility(icao: str) -> float | None:
         logger.info("METAR: no visib field for %s", icao)
         return None
 
-    try:
-        vis_m = float(visib_sm) * _SM_TO_M
-    except (TypeError, ValueError):
+    vis_m = _parse_metar_visib_m(visib_sm)
+    if vis_m is None:
+        logger.info("METAR: unparseable visib %r for %s", visib_sm, icao)
         return None
 
-    vis_m = min(vis_m, _MAX_VIS_M)
     logger.info(
-        "METAR %s: %.2f SM → %.0f m (obs: %s)",
-        icao, float(visib_sm), vis_m, entry.get("obsTime", "?"),
+        "METAR %s: visib %r → %.0f m (obs: %s)",
+        icao, visib_sm, vis_m, entry.get("obsTime", "?"),
     )
     _metar_cache[icao] = vis_m   # solo cacheamos éxitos
     return vis_m
