@@ -1,4 +1,5 @@
 import { ApiError, buildApiError } from '@/lib/apiErrors'
+import type { TafDecoded } from '@/lib/taf'
 
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -654,4 +655,8 @@ export const api = {
   /** TAF en código aeronáutico crudo — a demanda, para no consumir la cuota diaria de CheckWX (198/200 por día). */
   tafRaw: (icao: string) =>
     request<MetarRawResponse>('/api/metar', { icao, type: 'taf' }),
+
+  /** TAF decodificado por períodos (Aviation Weather Center, no gasta cupo de CheckWX). 404 = el aeródromo no publica TAF. */
+  tafDecoded: (icao: string) =>
+    request<TafDecoded>('/api/taf', { icao }),
 }

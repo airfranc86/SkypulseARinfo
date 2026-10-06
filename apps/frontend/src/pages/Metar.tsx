@@ -2,9 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
-import { api, BASE_URL } from '@/lib/api'
+import { TafDecodedCard } from '@/components/aeronautica/TafDecodedCard'
+import { api } from '@/lib/api'
 import { ApiError } from '@/lib/apiErrors'
 import { LOAD_RETRY } from '@/lib/loadError'
+import { FLIGHT_CATEGORY_STYLES, tafStatusMessage, type TafDecoded } from '@/lib/taf'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -167,16 +169,8 @@ const REGIONS = [
 // Flight category helpers
 // ---------------------------------------------------------------------------
 
-const CAT_STYLES: Record<string, { color: string; bg: string; border: string }> = {
-  VFR:     { color: '#3ecf7a', bg: 'rgba(62,207,122,.12)',  border: 'rgba(62,207,122,.4)'  },
-  MVFR:    { color: '#5aaad8', bg: 'rgba(43,143,212,.12)',  border: 'rgba(43,143,212,.4)'  },
-  IFR:     { color: '#e05545', bg: 'rgba(192,57,43,.12)',   border: 'rgba(192,57,43,.4)'   },
-  LIFR:    { color: '#cc66ff', bg: 'rgba(204,102,255,.12)', border: 'rgba(204,102,255,.4)' },
-  UNKNOWN: { color: '#90aabb', bg: 'rgba(96,112,128,.12)',  border: 'rgba(96,112,128,.4)'  },
-}
-
 function FlightCatBadge({ cat }: { cat: string }) {
-  const s = CAT_STYLES[cat] ?? CAT_STYLES.UNKNOWN
+  const s = FLIGHT_CATEGORY_STYLES[cat] ?? FLIGHT_CATEGORY_STYLES.UNKNOWN
   return (
     <span
       className="px-3 py-1.5 rounded text-[.75rem] font-medium tracking-wide"
@@ -287,7 +281,7 @@ function cloudNote(clouds: MetarData['clouds']): string {
 // METAR result display
 // ---------------------------------------------------------------------------
 
-function MetarResult({ metar, taf, tafError }: { metar: MetarData; taf: string | null; tafError: boolean }) {
+function MetarResult({ metar, taf, tafMessage }: { metar: MetarData; taf: TafDecoded | null; tafMessage: string | null }) {
   const windData = metar.wind
   const windVal = windData
     ? `${windData.degrees ?? windData.direction ?? 'VRB'}° / ${windData.speed_kts ?? windData.speed ?? '?'} kt${windData.gust_kts ? ` G${windData.gust_kts}` : ''}`
@@ -402,22 +396,10 @@ function MetarResult({ metar, taf, tafError }: { metar: MetarData; taf: string |
       </div>
 
       {/* TAF */}
-      {taf && (
-        <div>
-          <p className="text-[.67rem] font-medium tracking-widest uppercase mb-1.5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
-            TAF — Pronóstico
-          </p>
-          <div
-            className="rounded-md px-5 py-4 overflow-x-auto text-[.82rem] leading-[1.8]"
-            style={{ fontFamily: 'monospace', color: '#c8e6ff', background: '#020810', border: '1px solid var(--color-border)' }}
-          >
-            {taf}
-          </div>
-        </div>
-      )}
-      {!taf && tafError && (
+      {taf && <TafDecodedCard taf={taf} />}
+      {!taf && tafMessage && (
         <p className="text-[.72rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
-          No se pudo obtener el TAF para este aeródromo.
+          {tafMessage}
         </p>
       )}
 
@@ -622,8 +604,8 @@ function MetarWidget() {
   const [icao, setIcao]       = useState('')
   const [loading, setLoading] = useState(false)
   const [metar, setMetar]     = useState<MetarData | null>(null)
-  const [taf, setTaf]         = useState<string | null>(null)
-  const [tafError, setTafError] = useState(false)
+  const [taf, setTaf]         = useState<TafDecoded | null>(null)
+  const [tafMessage, setTafMessage] = useState<string | null>(null)
   const [error, setError]     = useState<unknown>(null)
   const [waking, setWaking]   = useState(false)
   const [queried, setQueried] = useState('')
@@ -639,17 +621,16 @@ function MetarWidget() {
     openModalBtnRef.current?.focus()
   }, [])
 
-  const fetchTAF = useCallback(async (code: string) => {
-    setTafError(false)
+  // El TAF decodificado viene del backend (Aviation Weather Center, sin cupo de CheckWX). Una
+  // respuesta tardía de una consulta anterior no pisa el TAF de la actual.
+  const fetchTAF = useCallback(async (code: string, isCurrent: () => boolean) => {
+    setTafMessage(null)
     try {
-      const res = await fetch(`${BASE_URL}/api/metar?icao=${encodeURIComponent(code)}&type=taf`)
-      if (!res.ok) { setTafError(true); return }
-      const data = await res.json()
-      const entry = data.data?.[0]
-      const rawText = typeof entry === 'string' ? entry : entry?.raw_text
-      if (rawText) setTaf(rawText)
-      // Sin rawText pero res.ok: el aeródromo no tiene TAF vigente — no es un error.
-    } catch { setTafError(true) }
+      const decoded = await api.tafDecoded(code)
+      if (isCurrent()) setTaf(decoded)
+    } catch (err) {
+      if (isCurrent()) setTafMessage(tafStatusMessage(err instanceof ApiError ? err.status : null))
+    }
   }, [])
 
   const doFetch = useCallback(async (code: string) => {
@@ -660,7 +641,7 @@ function MetarWidget() {
     setLoading(true)
     setMetar(null)
     setTaf(null)
-    setTafError(false)
+    setTafMessage(null)
     setError(null)
     setWaking(false)
     setQueried(clean)
@@ -672,7 +653,7 @@ function MetarWidget() {
         if (!isCurrent()) return
         if (!entry) throw new ApiError('icao_not_found', 404, null, true)
         setMetar(entry as MetarData)
-        fetchTAF(clean)
+        fetchTAF(clean, isCurrent)
         break
       } catch (err) {
         if (!isCurrent()) return
@@ -759,9 +740,13 @@ function MetarWidget() {
         </div>
 
         <p className="mt-3 text-[.67rem]" style={{ color: 'var(--color-muted-foreground)', opacity: 0.75 }}>
-          Datos provistos por{' '}
+          METAR provisto por{' '}
           <a href="https://www.checkwx.com" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-100 transition-opacity">
             CheckWX
+          </a>
+          ; TAF del{' '}
+          <a href="https://aviationweather.gov" target="_blank" rel="noopener noreferrer" className="underline hover:opacity-100 transition-opacity">
+            Aviation Weather Center
           </a>.
         </p>
       </div>
@@ -785,7 +770,7 @@ function MetarWidget() {
 
       {metar && (
         <div className="mt-6 animate-[fadeUp_.35s_ease_both]">
-          <MetarResult metar={metar} taf={taf} tafError={tafError} />
+          <MetarResult metar={metar} taf={taf} tafMessage={tafMessage} />
         </div>
       )}
 
@@ -937,6 +922,12 @@ const GLOSARIO = [
   { code: 'CB / TCU', color: '#e05545', note: 'Cumulonimbus / Towering Cumulus — siempre crítico' },
   { code: 'TEMPO',    color: '#f0a030', note: 'Cambio temporal de <1 hora, durante <mitad del período' },
   { code: 'BECMG',    color: '#f0a030', note: 'Becoming — cambio gradual y permanente hacia nuevas condiciones' },
+  { code: 'FM',       color: '#f0a030', note: 'From — cambio rápido y permanente a partir de la hora indicada (FM060900 = desde las 09:00 UTC del día 06)' },
+  { code: 'PROB30 / PROB40', color: '#f0a030', note: 'Probabilidad de 30 % o 40 % de que ocurra lo que sigue; solo o junto con TEMPO' },
+  { code: 'TX / TN',  color: '#ff9966', note: 'Temperatura máxima / mínima prevista, con su hora UTC (TX28/0719Z)' },
+  { code: 'VRB',      color: '#f0a030', note: 'Variable — viento sin dirección definida (VRB03KT)' },
+  { code: 'NSW',      color: '#3ecf7a', note: 'No significant weather — termina un fenómeno que había antes' },
+  { code: 'NSC',      color: '#3ecf7a', note: 'No significant cloud — sin nubes significativas' },
 ]
 
 function GlosarioSection() {
@@ -1116,7 +1107,7 @@ export function Metar() {
                 { cat: 'IFR',  sub: 'Instrument Flight Rules',  ceiling: 'Techo 500–1.000 ft',   vis: 'Visib. 1,6–3 km', note: 'Solo vuelo instrumental' },
                 { cat: 'LIFR', sub: 'Low IFR',                  ceiling: 'Techo < 500 ft',       vis: 'Visib. < 1,6 km', note: 'Condiciones muy severas' },
               ].map(item => {
-                const s = CAT_STYLES[item.cat]
+                const s = FLIGHT_CATEGORY_STYLES[item.cat]
                 return (
                   <div
                     key={item.cat}
