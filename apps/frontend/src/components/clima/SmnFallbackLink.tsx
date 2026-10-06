@@ -1,9 +1,10 @@
 import { SMN_URL } from '@/lib/smnAlertas'
 
 /**
- * Pie de la previsión cuando el SMN no respondió: un enlace discreto a la fuente oficial, no un aviso.
- * Sin ícono ni estilo de alerta, sin `role="alert"` ni región viva, y solo se monta tras la falla (no
- * reserva espacio). El texto es chico pero el área táctil llega a 44 px de alto.
+ * Pie de la previsión: un enlace discreto a la fuente oficial, no un aviso. Se muestra siempre (con avisos,
+ * sin avisos o con el SMN caído). Sin ícono ni estilo de alerta, sin `role="alert"` ni región viva, y solo se
+ * monta cuando ya hay pronóstico o error final (no reserva espacio). El texto es chico pero el área táctil
+ * llega a 44 px de alto.
  */
 export function SmnFallbackLink() {
   return (
