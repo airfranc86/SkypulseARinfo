@@ -5,7 +5,8 @@ TAF    → pronóstico horario 24-30h (emitido por meteorólogos de aviación).
 
 Endpoints:
   METAR: GET https://aviationweather.gov/api/data/metar?ids=SAEZ&format=json&hours=2
-  TAF:   GET https://aviationweather.gov/api/data/taf?ids=SAEZ&format=json&hours=24
+  TAF:   GET https://aviationweather.gov/api/data/taf?ids=SAEZ&format=json
+         (sin `hours`: AWC responde HTTP 400 si se lo manda; el TAF ya trae su vigencia)
 
 Sin API key requerida.
 """
@@ -79,7 +80,7 @@ _AR_AIRPORTS: list[_Airport] = [
 # ---------------------------------------------------------------------------
 
 _metar_cache: TTLCache[str, float]        = TTLCache(maxsize=64, ttl=1800)
-_taf_cache:   TTLCache[str, list[dict]]   = TTLCache(maxsize=32, ttl=3600)
+_taf_cache:   TTLCache[str, dict]         = TTLCache(maxsize=32, ttl=3600)  # entrada completa de AWC
 
 # Fenómenos de niebla reconocidos en TAF/METAR (WMO / ICAO)
 _FOG_WX_CODES: frozenset[str] = frozenset({"FG", "MIFG", "BCFG", "FZFG", "BR"})
@@ -147,6 +148,16 @@ def _parse_taf_visib_sm(visib: object) -> float | None:
             except ValueError:
                 return None
     return total if total > 0 else None
+
+
+def _has_fog(wx_string: object) -> bool:
+    """True si el `wxString` de AWC ("-RA BR", "+TSRA FG") trae algún fenómeno de niebla.
+
+    Compara cada código completo, sin el prefijo de intensidad (+/-): "BRAND" no cuenta.
+    """
+    if not isinstance(wx_string, str):
+        return False
+    return any(code.lstrip("+-") in _FOG_WX_CODES for code in wx_string.upper().split())
 
 
 def _parse_metar_visib_m(visib: object) -> float | None:
@@ -261,44 +272,63 @@ class TafHourlySlot:
     fog_probable: bool    # True si wx incluye FG/MIFG/BCFG/FZFG
 
 
-async def get_taf_for_icao(icao: str) -> list[dict] | None:
-    """
-    Fetch los períodos TAF (fcsts) de un aeropuerto.
+class TafFetchError(Exception):
+    """AWC no respondió con un TAF utilizable (red, HTTP de error o JSON inválido)."""
 
-    - Solo cachea resultados con al menos un período válido.
-    - Errores NO se cachean (permiten reintento).
+
+async def fetch_taf_entry(icao: str) -> dict | None:
     """
-    if icao in _taf_cache:
-        logger.debug("TAF cache hit: %s (%d periods)", icao, len(_taf_cache[icao]))
-        return _taf_cache[icao]
+    Entrada completa del TAF de AWC (texto crudo, vigencia y períodos `fcsts`).
+
+    - Devuelve None si AWC respondió pero el aeropuerto no tiene TAF (no es un error).
+    - Lanza `TafFetchError` si AWC falló: así la ruta distingue "no hay TAF" (404) de
+      "no pudimos consultarlo" (503).
+    - Solo cachea entradas con al menos un período; los errores NO se cachean.
+    """
+    cached = _taf_cache.get(icao)
+    if cached is not None:
+        logger.debug("TAF cache hit: %s", icao)
+        return cached
 
     try:
         client = get_client()
         usage_counter.record("metar_awc")
         response = await client.get(
             AWC_TAF_BASE,
-            params={"ids": icao, "format": "json", "hours": "24"},
+            params={"ids": icao, "format": "json"},
             timeout=settings.metar_timeout_seconds,
         )
         response.raise_for_status()
         data = response.json()
     except Exception as exc:
-        logger.warning("TAF fetch failed for %s: %s", icao, exc)
-        return None
+        raise TafFetchError(f"{type(exc).__name__}: {exc}") from exc
 
-    if not isinstance(data, list) or len(data) == 0:
+    if not isinstance(data, list) or not data or not isinstance(data[0], dict):
         logger.info("TAF: no data for %s", icao)
         return None
 
     entry = data[0]
-    fcsts: list[dict] = entry.get("fcsts") or []
-    if not fcsts:
+    if not entry.get("fcsts"):
         logger.info("TAF: no fcsts for %s", icao)
         return None
 
-    _taf_cache[icao] = fcsts
-    logger.info("TAF %s: %d forecast periods cached", icao, len(fcsts))
-    return fcsts
+    _taf_cache[icao] = entry
+    logger.info("TAF %s: %d forecast periods cached", icao, len(entry["fcsts"]))
+    return entry
+
+
+async def get_taf_for_icao(icao: str) -> list[dict] | None:
+    """
+    Períodos TAF (fcsts) de un aeropuerto, para el pronóstico horario de Niebla.
+
+    Versión tolerante: cualquier error devuelve None (el llamador cae a otra fuente).
+    """
+    try:
+        entry = await fetch_taf_entry(icao)
+    except TafFetchError as exc:
+        logger.warning("TAF fetch failed for %s: %s", icao, exc)
+        return None
+    return entry["fcsts"] if entry else None
 
 
 async def get_nearest_taf_hourly(
@@ -348,22 +378,16 @@ async def get_nearest_taf_hourly(
 
             any_period_found = True
 
-            visib_sm = _parse_taf_visib_sm(period.get("visib"))
-            if visib_sm is not None:
-                vis_m = min(visib_sm * _SM_TO_M, _MAX_VIS_M)
+            # "6+" (6 millas o más) vale el tope de 10 km, no 6 SM = 9.656 m.
+            vis_m = _parse_metar_visib_m(period.get("visib"))
+            if vis_m is not None:
                 # Conservador: tomar la visibilidad más baja entre períodos solapados
                 if best_vis_m is None or vis_m < best_vis_m:
                     best_vis_m = vis_m
 
-            # Fenómenos de niebla en wxList
-            wx_list: list = period.get("wxList") or []
-            for wx_item in wx_list:
-                wx_code = (
-                    wx_item.get("wx", "") if isinstance(wx_item, dict) else str(wx_item)
-                )
-                if wx_code.upper() in _FOG_WX_CODES:
-                    fog_probable = True
-                    break
+            # Fenómenos de niebla en `wxString` ("-RA BR"); AWC no manda `wxList`.
+            if _has_fog(period.get("wxString")):
+                fog_probable = True
 
         slots.append(TafHourlySlot(
             hour_label=hour_label,
