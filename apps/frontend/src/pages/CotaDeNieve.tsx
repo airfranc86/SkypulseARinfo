@@ -9,7 +9,6 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { FrostText } from '@/components/animated/FrostText'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
 import { isWaitingForColdStart } from '@/lib/loadError'
-import { ModelBadge } from '@/components/ui/ModelBadge'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -128,7 +127,6 @@ export function CotaDeNieve({ location }: Props) {
         title="Cota de nieve"
         subtitle={location.label}
         accentColor="#90aabb"
-        modelBadge={<ModelBadge model="openmeteo_forecast" variant="header" />}
       />
 
       {showSkeleton && <PageSkeleton />}

@@ -23,7 +23,7 @@ import {
   type ModelStatusAction,
 } from '@/contexts/ModelStatusContext'
 import { useModelStatusDispatch } from '@/hooks/useModelStatus'
-import { ModelStatusBar } from '@/components/ui/ModelStatusBar'
+import { CAFECITO_URL, DATA_PAGE_PATH, OPEN_METEO_URL } from '@/lib/siteLinks'
 import { InfiniteNavRail, type NavRailItem } from '@/components/ui/InfiniteNavRail'
 import { ScrollToTopBubble } from '@/components/ui/ScrollToTopBubble'
 
@@ -52,6 +52,7 @@ const HacerDeporte  = lazy(() => import('@/pages/HacerDeporte').then(m => ({ def
 const AltitudDensidad = lazy(() => import('@/pages/AltitudDensidad').then(m => ({ default: m.AltitudDensidad })))
 const Cizalladura = lazy(() => import('@/pages/Cizalladura').then(m => ({ default: m.Cizalladura })))
 const Privacidad    = lazy(() => import('@/pages/Privacidad').then(m => ({ default: m.Privacidad })))
+const DatosFuentes  = lazy(() => import('@/pages/DatosFuentes').then(m => ({ default: m.DatosFuentes })))
 const NotFound      = lazy(() => import('@/pages/NotFound').then(m => ({ default: m.NotFound })))
 
 import { useVolcanes } from '@/hooks/useWeather'
@@ -331,18 +332,48 @@ function RootLayout() {
               <Route path="/altitud-de-densidad" element={<AltitudDensidad />} />
               <Route path="/cizalladura" element={<Cizalladura location={location} />} />
               <Route path="/privacidad" element={<Privacidad />} />
+              <Route path={DATA_PAGE_PATH} element={<DatosFuentes />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>
       </main>
 
-      <footer className="border-t border-[var(--color-border)] py-4 text-center text-xs text-[var(--color-muted-foreground)] space-y-2">
-        <p>Datos: SkyPulse</p>
-        <ModelStatusBar />
-        <Link to="/privacidad" className="block underline hover:opacity-80">
-          Política de privacidad
-        </Link>
+      {/* FRA-347: no model names here — the credit and the page that explains the sources instead. */}
+      <footer className="border-t border-[var(--color-border)] px-4 py-3 text-center text-xs text-[var(--color-muted-foreground)]">
+        <p className="flex flex-wrap items-center justify-center gap-x-2">
+          <span>Datos: SkyPulse</span>
+          <span aria-hidden="true">·</span>
+          <span className="inline-flex items-center">
+            Datos del tiempo:&nbsp;
+            <a
+              href={OPEN_METEO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80"
+            >
+              Open-Meteo.com
+            </a>
+          </span>
+          <span aria-hidden="true">·</span>
+          <Link to={DATA_PAGE_PATH} className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80">
+            De dónde salen los datos
+          </Link>
+        </p>
+        <p className="flex flex-wrap items-center justify-center gap-x-2">
+          <a
+            href={CAFECITO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80"
+          >
+            Contribuir en Cafecito
+          </a>
+          <span aria-hidden="true">·</span>
+          <Link to="/privacidad" className="inline-flex min-h-[44px] items-center px-1 underline hover:opacity-80">
+            Política de privacidad
+          </Link>
+        </p>
       </footer>
 
       <ScrollToTopBubble />

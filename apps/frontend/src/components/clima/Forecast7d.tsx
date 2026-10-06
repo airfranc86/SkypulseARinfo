@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { ChevronDown, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DATA_PAGE_PATH } from '@/lib/siteLinks'
 import { missingAnchorNotice } from '@/lib/forecastRow'
 import { Forecast7dList } from './Forecast7dList'
 import { Forecast7dChart } from './Forecast7dChart'
@@ -123,6 +125,15 @@ export function Forecast7d({ days, badge, selectedModel, onModelChange, refreshi
               onSelect={onModelChange}
             />
           </section>
+
+          {/* FRA-347: the page that explains every source, for whoever wants to learn more. */}
+          <Link
+            to={DATA_PAGE_PATH}
+            className="inline-flex min-h-[44px] items-center text-xs underline hover:opacity-80"
+            style={{ color: 'var(--color-muted-foreground)' }}
+          >
+            Más sobre de dónde salen los datos
+          </Link>
         </div>
       </details>
     </div>

@@ -5,7 +5,6 @@ import { SportBlock } from '@/components/clima/SportBlock'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
 import { isWaitingForColdStart } from '@/lib/loadError'
-import { ModelBadge } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
 
@@ -31,7 +30,6 @@ export function HacerDeporte({ location }: Props) {
         title="Hacer deporte"
         subtitle={location.label}
         accentColor="#3fb8c4"
-        modelBadge={<ModelBadge model="openmeteo_forecast" variant="header" />}
       />
 
       {showSkeleton && <PageSkeleton />}

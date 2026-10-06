@@ -6,7 +6,6 @@ import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
 import { isWaitingForColdStart } from '@/lib/loadError'
-import { ModelBadge } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
 
@@ -32,7 +31,6 @@ export function TenderRopa({ location }: Props) {
         title="Secado de ropa"
         subtitle={location.label}
         accentColor="#3ecf7a"
-        modelBadge={<ModelBadge model="openmeteo_forecast" variant="header" />}
       />
 
       {showSkeleton && <PageSkeleton />}
