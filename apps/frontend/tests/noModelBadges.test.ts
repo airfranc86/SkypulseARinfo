@@ -37,11 +37,10 @@ test('Niebla no longer shows the provider name', () => {
 test('the footer credits Open-Meteo, links to /datos and to Cafecito', () => {
   const app = read('../src/App.tsx')
   assert.ok(app.includes('OPEN_METEO_URL'))
-  assert.ok(app.includes('CAFECITO_URL'))
+  assert.ok(app.includes('<CafecitoButton />'))
   assert.ok(app.includes('DATA_PAGE_PATH'))
   assert.ok(app.includes('Datos del tiempo:'))
   assert.ok(app.includes('De dónde salen los datos'))
-  assert.ok(app.includes('Contribuir en Cafecito'))
   assert.ok(app.includes('Política de privacidad'))
 })
 
