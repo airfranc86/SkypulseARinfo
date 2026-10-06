@@ -396,3 +396,84 @@ def test_json_mode_prints_no_progress_even_on_a_terminal() -> None:
 def test_no_secret_in_usage_error_output(tmp_path: Path) -> None:
     _, out, err, _ = run(["--env-file", str(_env_file(tmp_path, token=False))])
     assert not any(secret in out + err for secret in ALL_SECRETS)
+
+
+# ------------------------------------------------------------------ --web (FRA-364)
+
+
+def _run_web(argv: list[str], routes: list | None = None) -> tuple[int, dict, str]:
+    """main(--web ...) with an injected `serve` that records what it was given."""
+    http = FakeHttp(routes if routes is not None else happy_routes())
+    seen: dict[str, Any] = {}
+
+    def fake_serve(collect, secrets, *, port, out):
+        seen.update(collect=collect, secrets=tuple(secrets), port=port)
+        return 0
+
+    err = io.StringIO()
+    code = monitor.main(
+        argv,
+        http=http,
+        stdout=io.StringIO(),
+        stderr=err,
+        environ={},
+        now=NOW,
+        serve=fake_serve,
+    )
+    return code, seen, err.getvalue()
+
+
+def test_web_mode_hands_a_collector_and_the_default_port_to_serve() -> None:
+    code, seen, _ = _run_web(["--web"])
+    assert code == 0
+    assert seen["port"] == 8765
+    report = seen["collect"]()
+    assert report.generated_at == NOW
+    assert [s.key for s in report.sections] == ["quotas", "production", "sources", "models"]
+
+
+def test_web_mode_passes_the_secrets_so_the_page_can_redact_them(tmp_path: Path) -> None:
+    code, seen, _ = _run_web(["--web", "--puerto", "9000", "--env-file", str(_env_file(tmp_path))])
+    assert code == 0
+    assert seen["port"] == 9000
+    assert TEST_TOKEN in seen["secrets"] and TEST_UPSTASH_URL in seen["secrets"]
+
+
+def test_web_mode_does_not_collect_until_serve_asks_for_it() -> None:
+    http = FakeHttp(happy_routes())
+    monitor.main(
+        ["--web"],
+        http=http,
+        stdout=io.StringIO(),
+        stderr=io.StringIO(),
+        environ={},
+        now=NOW,
+        serve=lambda *a, **k: 0,
+    )
+    assert http.calls == []
+
+
+def test_web_mode_rejects_json_and_bad_ports() -> None:
+    for argv in (["--web", "--json"], ["--web", "--puerto", "80"], ["--web", "--puerto", "70000"]):
+        code, seen, err = _run_web(argv)
+        assert code == 3, argv
+        assert seen == {}
+        assert "error" in err
+
+
+def test_puerto_without_web_is_a_usage_error() -> None:
+    code, _, err = _run_web(["--puerto", "9000"])
+    assert code == 3
+    assert "--web" in err
+
+
+def test_web_mode_reports_a_busy_port_as_a_usage_error() -> None:
+    def busy(collect, secrets, *, port, out):
+        raise OSError(98, "Address already in use")
+
+    err = io.StringIO()
+    code = monitor.main(
+        ["--web"], http=FakeHttp([]), stdout=io.StringIO(), stderr=err, environ={}, now=NOW, serve=busy
+    )
+    assert code == 3
+    assert "8765" in err.getvalue()

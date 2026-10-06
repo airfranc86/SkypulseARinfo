@@ -1,8 +1,8 @@
 """SkyPulse: mini monitor de administración, LOCAL y de solo lectura.
 
-Muestra en la terminal los cupos del día (Upstash), el estado de producción, las
-fuentes externas y la comparación GFS vs ECMWF. Solo hace pedidos GET; no escribe
-nada, ni en producción ni en Upstash. Las credenciales se leen en tiempo de ejecución
+Muestra en la terminal (o, con --web, en una página en localhost) los cupos del día
+(Upstash), el estado de producción, las fuentes externas y la comparación GFS vs ECMWF.
+Solo hace pedidos GET; no escribe nada, ni en producción ni en Upstash. Las credenciales se leen en tiempo de ejecución
 desde el archivo que se indica con --env-file y nunca se imprimen.
 
 Códigos de salida: 0 todo OK, 1 atención, 2 crítico, 3 error de uso o de configuración.
@@ -14,23 +14,36 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Protocol, TextIO
 
 from monitor_core.envfile import EnvFileError
 from monitor_core.httpio import HttpGetter, UrllibGetter
 from monitor_core.production import CITIES, parse_city_list
 from monitor_core.render import Painter, color_enabled
-from monitor_core.report import redact, to_jsonable
+from monitor_core.report import Report, redact, to_jsonable
 from monitor_core.runner import Options, build_report
 from monitor_core.status import EXIT_USAGE
 from monitor_core.upstash import load_upstash_credentials
 from monitor_core.views import render_report
+from monitor_core.web import DEFAULT_PORT, MAX_PORT, MIN_PORT
+from monitor_core.web import serve as serve_web
 
 _WINDOWS_VT_FLAG = 0x0004
 _STD_OUTPUT_HANDLE = -11
+
+
+class ServeFn(Protocol):
+    def __call__(
+        self,
+        collect: Callable[[], Report],
+        secrets: Sequence[str],
+        *,
+        port: int,
+        out: TextIO,
+    ) -> int: ...
 
 
 class _Exit(Exception):
@@ -87,6 +100,17 @@ def build_parser(out: TextIO) -> argparse.ArgumentParser:
     parser.add_argument(
         "--json", action="store_true", help="misma información en JSON, sin colores"
     )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="en vez de imprimir, sirve la misma información en una página en localhost",
+    )
+    parser.add_argument(
+        "--puerto",
+        type=int,
+        metavar="N",
+        help=f"puerto de --web (por defecto: {DEFAULT_PORT})",
+    )
     return parser
 
 
@@ -119,6 +143,15 @@ def _enable_windows_vt() -> bool:
         return False
 
 
+def _check_web_args(args: argparse.Namespace) -> None:
+    if args.puerto is not None and not args.web:
+        raise ValueError("--puerto solo se usa junto con --web")
+    if args.web and args.json:
+        raise ValueError("--web y --json no se pueden combinar")
+    if args.puerto is not None and not MIN_PORT <= args.puerto <= MAX_PORT:
+        raise ValueError(f"--puerto debe estar entre {MIN_PORT} y {MAX_PORT}")
+
+
 def _options_from(args: argparse.Namespace) -> Options:
     cities = parse_city_list(args.ciudades)
     credentials = (
@@ -135,6 +168,29 @@ def _progress_printer(err: TextIO):
     return say
 
 
+def _serve_web(
+    args: argparse.Namespace,
+    options: Options,
+    secrets: Sequence[str],
+    http: HttpGetter | None,
+    now: datetime | None,
+    out: TextIO,
+    err: TextIO,
+    serve: ServeFn | None,
+) -> int:
+    port = args.puerto or DEFAULT_PORT
+
+    def collect() -> Report:
+        return build_report(http or UrllibGetter(), options, now or datetime.now(UTC))
+
+    try:
+        return (serve or serve_web)(collect, secrets, port=port, out=out)
+    except OSError as problem:
+        reason = problem.strerror or problem
+        err.write(f"error: no se pudo abrir el puerto {port}: {reason}\n")
+        return EXIT_USAGE
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -143,6 +199,7 @@ def main(
     stderr: TextIO | None = None,
     environ: Mapping[str, str] | None = None,
     now: datetime | None = None,
+    serve: ServeFn | None = None,
 ) -> int:
     """Run the monitor. Streams, environment, HTTP client and clock can be injected."""
     out = stdout if stdout is not None else sys.stdout
@@ -153,6 +210,7 @@ def main(
         _prepare_console(err)
     try:
         args = build_parser(out).parse_args(argv)
+        _check_web_args(args)
         options = _options_from(args)
     except _Exit as stop:
         (out if stop.status == 0 else err).write(stop.message)
@@ -160,6 +218,10 @@ def main(
     except (ValueError, EnvFileError) as problem:
         err.write(f"error: {problem}\n")
         return EXIT_USAGE
+
+    secrets = options.credentials.secrets() if options.credentials else ()
+    if args.web:
+        return _serve_web(args, options, secrets, http, now, out, err, serve)
 
     use_color = not args.json and color_enabled(_isatty(out), env)
     if use_color and stdout is None:
