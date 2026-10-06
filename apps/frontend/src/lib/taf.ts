@@ -212,13 +212,13 @@ export const TAF_GROUP_NOTES = {
     'El cambio que se viene: las condiciones pasan de forma gradual a las de este grupo y siguen así después del cambio.',
   TEMPO:
     'Fluctuaciones pasajeras: cada una dura menos de 1 hora y, en total, menos de la mitad del lapso. Después vuelve lo anterior.',
-  PROB30: 'Probabilidad baja: 30 % de que se den estas condiciones durante el lapso indicado.',
+  PROB30: 'Baja probabilidad de que se den estas condiciones durante el lapso indicado.',
   PROB40:
-    'Probabilidad alta dentro del TAF: 40 %, la máxima que admite (arriba de eso se escribe como pronóstico principal). Aun así, es menos probable que ocurra a que no.',
+    'Alta probabilidad dentro del TAF: es la máxima que admite (arriba de eso se escribe como pronóstico principal). Aun así, es menos probable que ocurra a que no.',
   PROB30_TEMPO:
-    'Con 30 % de probabilidad (baja), pueden darse de forma pasajera estas condiciones durante el lapso indicado.',
+    'Con baja probabilidad, pueden darse de forma pasajera estas condiciones durante el lapso indicado.',
   PROB40_TEMPO:
-    'Con 40 % de probabilidad (la máxima que admite el TAF), pueden darse de forma pasajera estas condiciones durante el lapso indicado; sigue siendo menos probable que ocurra a que no.',
+    'Con alta probabilidad (la máxima que admite el TAF), pueden darse de forma pasajera estas condiciones durante el lapso indicado; sigue siendo menos probable que ocurra a que no.',
 } as const
 
 function probabilityWord(probability: number): string {
@@ -227,10 +227,10 @@ function probabilityWord(probability: number): string {
   return ''
 }
 
-/** "baja (30 %)", "alta (40 %)" o "50 %" si el valor no es de los que admite el código. */
+/** "baja probabilidad", "alta probabilidad" (sin el %) o "50 % de probabilidad" si el código no admite el valor. */
 function probabilityText(probability: number): string {
   const word = probabilityWord(probability)
-  return word ? `probabilidad ${word} (${probability} %)` : `${probability} % de probabilidad`
+  return word ? `${word} probabilidad` : `${probability} % de probabilidad`
 }
 
 export function changeLabel(period: TafPeriod): string {

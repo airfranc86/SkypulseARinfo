@@ -102,12 +102,12 @@ test('CAVOK: visibility 10 km or more, no significant cloud and no weather', () 
 test('change groups are named in plain Spanish and keep their code next to the name', () => {
   assert.equal(changeLabel(saco.periods[0]), 'Condición base')
   assert.equal(changeLabel(saco.periods[1]), 'Cambio gradual · BECMG')
-  assert.equal(changeLabel(saco.periods[3]), 'Temporalmente, probabilidad alta (40 %) · PROB40 TEMPO')
-  assert.equal(changeLabel(sari.periods[1]), 'Probabilidad baja (30 %) · PROB30')
+  assert.equal(changeLabel(saco.periods[3]), 'Temporalmente, alta probabilidad · PROB40 TEMPO')
+  assert.equal(changeLabel(sari.periods[1]), 'Baja probabilidad · PROB30')
   assert.equal(changeLabel({ ...saco.periods[0], change: 'from' }), 'A partir de entonces · FM')
   assert.equal(changeLabel({ ...saco.periods[3], probability: null }), 'Temporalmente · TEMPO')
-  assert.equal(changeLabel({ ...sari.periods[1], probability: 40 }), 'Probabilidad alta (40 %) · PROB40')
-  assert.equal(changeLabel({ ...saco.periods[3], probability: 30 }), 'Temporalmente, probabilidad baja (30 %) · PROB30 TEMPO')
+  assert.equal(changeLabel({ ...sari.periods[1], probability: 40 }), 'Alta probabilidad · PROB40')
+  assert.equal(changeLabel({ ...saco.periods[3], probability: 30 }), 'Temporalmente, baja probabilidad · PROB30 TEMPO')
 })
 
 test('a probability that the TAF code does not allow is shown as is, never as low or high', () => {
@@ -136,14 +136,14 @@ test('TEMPO explains the short fluctuations and that the previous conditions com
 test('PROB30 is a low probability inside the stated period', () => {
   const text = changeExplanation(sari.periods[1]) ?? ''
   assert.equal(text, TAF_GROUP_NOTES.PROB30)
-  assert.match(text, /Probabilidad baja: 30 %/)
+  assert.match(text, /^Baja probabilidad/)
   assert.match(text, /durante el lapso indicado/)
 })
 
 test('PROB40 is the highest the TAF allows and is still less likely than not', () => {
   const text = changeExplanation({ ...sari.periods[1], probability: 40 }) ?? ''
   assert.equal(text, TAF_GROUP_NOTES.PROB40)
-  assert.match(text, /40 %/)
+  assert.match(text, /^Alta probabilidad/)
   assert.match(text, /la máxima que admite/)
   assert.match(text, /arriba de eso se escribe como pronóstico principal/)
   assert.match(text, /menos probable que ocurra a que no/)
@@ -152,12 +152,12 @@ test('PROB40 is the highest the TAF allows and is still less likely than not', (
 test('PROB with TEMPO says the conditions are temporary and gives the probability', () => {
   const p40 = changeExplanation(saco.periods[3]) ?? ''
   assert.equal(p40, TAF_GROUP_NOTES.PROB40_TEMPO)
-  assert.match(p40, /40 %/)
+  assert.match(p40, /alta probabilidad/)
   assert.match(p40, /de forma pasajera/)
   assert.match(p40, /menos probable que ocurra a que no/)
   const p30 = changeExplanation({ ...saco.periods[3], probability: 30 }) ?? ''
   assert.equal(p30, TAF_GROUP_NOTES.PROB30_TEMPO)
-  assert.match(p30, /30 %/)
+  assert.match(p30, /baja probabilidad/)
   assert.match(p30, /de forma pasajera/)
 })
 
@@ -235,4 +235,24 @@ test('TAF messages tell apart "no TAF", "too many requests" and "could not fetch
     assert.match(tafStatusMessage(status), /No se pudo obtener el TAF/, String(status))
   }
   assert.notEqual(tafStatusMessage(404), tafStatusMessage(503))
+})
+
+test('PROB30 and PROB40 are said with words only: "baja probabilidad" and "alta probabilidad", never with a %', () => {
+  const prob30 = [
+    changeLabel(sari.periods[1]),
+    changeExplanation(sari.periods[1]),
+    changeLabel({ ...saco.periods[3], probability: 30 }),
+    changeExplanation({ ...saco.periods[3], probability: 30 }),
+  ]
+  const prob40 = [
+    changeLabel({ ...sari.periods[1], probability: 40 }),
+    changeExplanation({ ...sari.periods[1], probability: 40 }),
+    changeLabel(saco.periods[3]),
+    changeExplanation(saco.periods[3]),
+  ]
+  for (const text of [...prob30, ...prob40]) assert.ok(!(text ?? '').includes('%'), `has a %: ${text}`)
+  assert.ok(prob30.every(t => /baja probabilidad/i.test(t ?? '')), 'PROB30 does not say "baja probabilidad"')
+  assert.ok(prob40.every(t => /alta probabilidad/i.test(t ?? '')), 'PROB40 does not say "alta probabilidad"')
+  assert.ok(prob30.every(t => !/alta/i.test(t ?? '')), 'PROB30 says "alta"')
+  assert.ok(prob40.every(t => !/baja/i.test(t ?? '')), 'PROB40 says "baja"')
 })
