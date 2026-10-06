@@ -259,7 +259,10 @@ export function PrevisionClima({ location }: Props) {
                 transition: reducedMotion ? 'none' : 'grid-template-rows 0.5s cubic-bezier(0.16,1,0.3,1)',
               }}
             >
-              <div style={{ overflow: 'hidden', minHeight: 0 }}>
+              {/* relative: overflow:hidden solo recorta a los absolutos cuyo bloque contenedor
+                  está adentro; sin él, los .sr-only plegados escapan del recorte y dejan
+                  ~1.000 px de scroll en blanco bajo el footer. */}
+              <div style={{ position: 'relative', overflow: 'hidden', minHeight: 0 }}>
                 <div className="space-y-5 pt-1">
                   <DayArc
                     dayArc={data.day_arc}
