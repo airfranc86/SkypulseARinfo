@@ -13,7 +13,8 @@ import {
   defaultEarthquakeFilters,
   type EarthquakeFilterState,
 } from '@/lib/earthquakeFilters'
-import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
+import { isWaitingForColdStart } from '@/lib/loadError'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 import { magnitudeInfo } from '@/lib/magnitude'
 import { FadeContent } from '@/components/animated/FadeContent'
@@ -180,12 +181,19 @@ const columns: Column<EarthquakeEvent>[] = [
 ]
 
 export function Terremotos({ location }: Props) {
-  const { data, isLoading, isFetching, error, dataUpdatedAt, refetch } =
+  const { data, isFetching, error, dataUpdatedAt, refetch, failureCount, failureReason } =
     useEarthquakes(location?.lat ?? null, location?.lon ?? null, 2000)
   const [showAll, setShowAll] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filters, setFilters] = useState<EarthquakeFilterState>(defaultEarthquakeFilters)
   const syncAnnouncement = useSyncAnnouncement(dataUpdatedAt)
+
+  // While the cold-start retries run there is a waiting notice instead of an error; during
+  // any other load (first one or a manual "Reintentar") the skeleton, and the error only
+  // once the query stopped fetching (FRA-340).
+  const waitingColdStart = isWaitingForColdStart({ hasData: Boolean(data), isFetching, failureCount, failureReason })
+  const showSkeleton = !data && isFetching && !waitingColdStart
+  const showError = Boolean(error) && !isFetching
 
   if (location === null) return <PageSkeleton />
 
@@ -288,8 +296,9 @@ export function Terremotos({ location }: Props) {
         </div>
       </header>
 
-      {isLoading && <PageSkeleton />}
-      {error && <ErrorMessage message={(error as Error).message} onRetry={() => refetch()} />}
+      {showSkeleton && <PageSkeleton />}
+      {waitingColdStart && <ColdStartNotice />}
+      {showError && <LoadError error={error} onRetry={() => { void refetch() }} />}
       {data && (
         <FadeContent>
           <div className="space-y-5">

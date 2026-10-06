@@ -3,7 +3,8 @@ import { useHacerDeporte, useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import { SportBlock } from '@/components/clima/SportBlock'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
+import { isWaitingForColdStart } from '@/lib/loadError'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
@@ -11,8 +12,15 @@ interface Props { location: LocationState | null }
 export function HacerDeporte({ location }: Props) {
   const lat = location?.lat ?? null
   const lon = location?.lon ?? null
-  const { data, isLoading, error } = useHacerDeporte(lat, lon)
+  const { data, isFetching, error, refetch, failureCount, failureReason } = useHacerDeporte(lat, lon)
   const { data: dash } = useWeatherDashboard(lat, lon)
+
+  // While the cold-start retries run there is a waiting notice instead of an error; during
+  // any other load (first one or a manual "Reintentar") the skeleton, and the error only
+  // once the query stopped fetching (FRA-340).
+  const waitingColdStart = isWaitingForColdStart({ hasData: Boolean(data), isFetching, failureCount, failureReason })
+  const showSkeleton = !data && isFetching && !waitingColdStart
+  const showError = Boolean(error) && !isFetching
 
   if (location === null) return <PageSkeleton />
 
@@ -26,8 +34,9 @@ export function HacerDeporte({ location }: Props) {
         modelBadge={<ModelBadge model="openmeteo_forecast" variant="header" />}
       />
 
-      {isLoading && <PageSkeleton />}
-      {error && <ErrorMessage message={(error as Error).message} />}
+      {showSkeleton && <PageSkeleton />}
+      {waitingColdStart && <ColdStartNotice />}
+      {showError && <LoadError error={error} onRetry={() => { void refetch() }} />}
       {data && (
         <SportBlock
           lat={lat}

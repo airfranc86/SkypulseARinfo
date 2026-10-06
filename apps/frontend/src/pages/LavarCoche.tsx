@@ -7,7 +7,8 @@ import { FadeContent } from '@/components/animated/FadeContent'
 import { GlowCard } from '@/components/animated/GlowCard'
 import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
+import { isWaitingForColdStart } from '@/lib/loadError'
 import { ModelBadge } from '@/components/ui/ModelBadge'
 
 interface Props { location: LocationState | null }
@@ -142,7 +143,14 @@ function DayRow({ day }: { day: CarWashDay }) {
 // ---------------------------------------------------------------------------
 
 export function LavarCoche({ location }: Props) {
-  const { data, isLoading, error } = useLavarCoche(location?.lat ?? null, location?.lon ?? null)
+  const { data, isFetching, error, refetch, failureCount, failureReason } = useLavarCoche(location?.lat ?? null, location?.lon ?? null)
+
+  // While the cold-start retries run there is a waiting notice instead of an error; during
+  // any other load (first one or a manual "Reintentar") the skeleton, and the error only
+  // once the query stopped fetching (FRA-340).
+  const waitingColdStart = isWaitingForColdStart({ hasData: Boolean(data), isFetching, failureCount, failureReason })
+  const showSkeleton = !data && isFetching && !waitingColdStart
+  const showError = Boolean(error) && !isFetching
 
   if (location === null) return <PageSkeleton />
 
@@ -159,8 +167,9 @@ export function LavarCoche({ location }: Props) {
         modelBadge={<ModelBadge model="openmeteo_forecast" variant="header" />}
       />
 
-      {isLoading && <PageSkeleton />}
-      {error && <ErrorMessage message={(error as Error).message} />}
+      {showSkeleton && <PageSkeleton />}
+      {waitingColdStart && <ColdStartNotice />}
+      {showError && <LoadError error={error} onRetry={() => { void refetch() }} />}
 
       {data && (
         <FadeContent>
