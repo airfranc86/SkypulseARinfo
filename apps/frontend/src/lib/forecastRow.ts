@@ -1,6 +1,6 @@
 /**
  * Texts of one row of the 7-day card (FRA-334): the headline (rain or sky), the rain note, the wind
- * and the trend notice. No model names and no model disagreement: the row reads like a forecast,
+ * and the trend notice; plus the card's partial-data notice (FRA-336). No model names and no model disagreement: the row reads like a forecast,
  * not like a model comparison. Pure functions (no React) so `node --test` can check each rule.
  */
 import { describeWeatherIcon, precipKind } from './weatherLabels.ts'
@@ -23,6 +23,12 @@ const CALM = 'Calma'
 const ROTATES_AND_RISES = 'rota y aumenta'
 
 export const TREND_NOTICE = 'Días 5–7: tendencia, puede cambiar'
+
+/** Shown when the model the rain follows did not answer (FRA-336). Never names a model. */
+export const MISSING_ANCHOR_NOTICE = 'Pronóstico con datos parciales: la lluvia puede ser menos precisa.'
+
+/** The model the rain, wind and icon follow; without it the rain comes from the other one. */
+const ANCHOR_MODEL = 'ecmwf'
 
 const BAND_LABEL: Record<string, string> = {
   '10-40': '10–40',
@@ -147,6 +153,15 @@ export function describeRow(days: ReadonlyArray<RowDay>, index: number, window?:
     rainNote: rain.note,
     wind: describeWind(day, index > 0 ? days[index - 1] : undefined),
   }
+}
+
+/**
+ * The partial-data notice, only when the response lists models and the anchor is not among them.
+ * A missing, null or empty list (older responses) never warns; a missing GFS never warns either.
+ */
+export function missingAnchorNotice(forecastModels: ReadonlyArray<string> | null | undefined): string | null {
+  if (!forecastModels || forecastModels.length === 0) return null
+  return forecastModels.includes(ANCHOR_MODEL) ? null : MISSING_ANCHOR_NOTICE
 }
 
 /** True for the first day of the trend: the notice goes once, right before it. */

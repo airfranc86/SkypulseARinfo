@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { missingAnchorNotice } from '@/lib/forecastRow'
 import { Forecast7dList } from './Forecast7dList'
 import { Forecast7dChart } from './Forecast7dChart'
 import { ModelBadge } from '@/components/ui/ModelBadge'
@@ -28,8 +29,8 @@ interface Props {
   /** Franja con lluvia prevista por fecha, cuando hay horas para calcularla. */
   rainWindows?: Record<string, string>
   /**
-   * Models behind the days. No longer shown (FRA-334: the card never names models); kept only because
-   * PrevisionClima still passes it. Remove both together.
+   * Models that answered. Never named on the card (FRA-334); it only decides whether the partial-data
+   * note shows above the days (FRA-336).
    */
   forecastModels?: ForecastModelName[]
 }
@@ -43,9 +44,10 @@ const MODEL_OPTIONS: { id: ForecastModel; label: string }[] = [
 const SEGMENT_BASE = 'px-3.5 py-2 min-h-[44px] rounded-md text-xs font-medium transition-colors'
 const SEGMENT_ACTIVE = { background: 'var(--color-primary)', boxShadow: '0 1px 4px rgba(0,0,0,0.35)' }
 
-export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChange, refreshing = false, rainWindows }: Props) {
+export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChange, refreshing = false, rainWindows, forecastModels }: Props) {
   const modelLabel = MODEL_OPTIONS.find(({ id }) => id === selectedModel)?.label ?? selectedModel
   const dimmed = { opacity: refreshing ? 0.55 : 1 }
+  const partialNotice = missingAnchorNotice(forecastModels)
 
   return (
     <div
@@ -72,6 +74,9 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
       <p role="status" className="px-5 pt-2 text-xs empty:hidden" style={{ color: 'var(--color-muted-foreground)' }}>
         {refreshing ? 'Actualizando…' : ''}
       </p>
+
+      {/* Si falta el modelo de la lluvia, se dice sin nombrar modelos (FRA-336) */}
+      {partialNotice && <PartialDataNote text={partialNotice} />}
 
       <div aria-busy={refreshing} style={dimmed}>
         <Forecast7dList days={days} rainWindows={rainWindows} />
@@ -133,6 +138,24 @@ export function Forecast7d({ days, badge, selectedModel, shownModel, onModelChan
         </div>
       </details>
     </div>
+  )
+}
+
+interface PartialDataNoteProps {
+  text: string
+}
+
+/** Línea discreta sobre los días: el texto dice todo, el ícono es solo decorativo. */
+function PartialDataNote({ text }: PartialDataNoteProps) {
+  return (
+    <p
+      role="note"
+      className="px-5 pt-3 pb-2 flex items-start gap-1.5 text-xs leading-snug"
+      style={{ color: 'var(--color-muted-foreground)' }}
+    >
+      <Info size={14} strokeWidth={1.75} className="mt-px shrink-0" aria-hidden="true" />
+      <span>{text}</span>
+    </p>
   )
 }
 
