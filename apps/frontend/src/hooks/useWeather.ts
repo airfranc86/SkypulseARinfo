@@ -47,6 +47,7 @@ export function useCotaDeNieve(lat: number | null, lon: number | null) {
     queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.cotaDeNieve(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
+    ...LOAD_RETRY, // solo el cold start reintenta solo; el resto espera el botón (FRA-340)
   })
 }
 
@@ -56,6 +57,7 @@ export function useHacerDeporte(lat: number | null, lon: number | null) {
     queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.hacerDeporte(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
+    ...LOAD_RETRY, // solo el cold start reintenta solo; el resto espera el botón (FRA-340)
   })
 }
 
@@ -68,6 +70,7 @@ export function useEarthquakes(lat: number | null, lon: number | null, radius_km
     // requests que van a pegar el mismo dato cacheado en el backend (TTL 300s).
     refetchInterval: 60_000,
     enabled: lat !== null && lon !== null,
+    ...LOAD_RETRY, // solo el cold start reintenta solo; el resto espera el botón (FRA-340)
   })
 }
 
@@ -77,6 +80,7 @@ export function useLavarCoche(lat: number | null, lon: number | null) {
     queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.lavarCoche(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
+    ...LOAD_RETRY, // solo el cold start reintenta solo; el resto espera el botón (FRA-340)
   })
 }
 
@@ -106,6 +110,7 @@ export function useVolcanes() {
     queryKey: ['volcanes'],
     queryFn: () => api.volcanes(),
     staleTime: STALE_VOLCANES,
+    ...LOAD_RETRY, // solo el cold start reintenta solo; el resto espera el botón (FRA-340)
   })
 }
 
@@ -123,6 +128,7 @@ export function useLaundryForecast(lat: number | null, lon: number | null) {
     queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.laundryForecast(lat, lon) },
     staleTime: STALE,
     enabled: lat !== null && lon !== null,
+    ...LOAD_RETRY, // solo el cold start reintenta solo; el resto espera el botón (FRA-340)
   })
 }
 
@@ -132,6 +138,7 @@ export function useFireDanger(lat: number | null, lon: number | null) {
     queryFn: () => { if (lat === null || lon === null) throw new Error('coordinates required'); return api.fireDanger(lat, lon) },
     enabled: lat !== null && lon !== null,
     staleTime: 1000 * 60 * 60, // 1 hora
+    ...LOAD_RETRY, // solo el cold start reintenta solo; el resto espera el botón (FRA-340)
   })
 }
 

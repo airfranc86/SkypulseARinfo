@@ -1,7 +1,8 @@
 import { TreePine } from 'lucide-react'
 import type { FireDangerSlot } from '@/lib/api'
 import { useFireDanger } from '@/hooks/useWeather'
-import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
+import { isWaitingForColdStart } from '@/lib/loadError'
 import { HourlyAccessibleList } from '@/components/ui/HourlyAccessibleList'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -340,10 +341,17 @@ function PageSkeleton() {
 // ---------------------------------------------------------------------------
 
 export function Incendios({ location }: Props) {
-  const { data, isLoading, error } = useFireDanger(
+  const { data, isFetching, error, refetch, failureCount, failureReason } = useFireDanger(
     location?.lat ?? null,
     location?.lon ?? null,
   )
+
+  // While the cold-start retries run there is a waiting notice instead of an error; during
+  // any other load (first one or a manual "Reintentar") the skeleton, and the error only
+  // once the query stopped fetching (FRA-340).
+  const waitingColdStart = isWaitingForColdStart({ hasData: Boolean(data), isFetching, failureCount, failureReason })
+  const showSkeleton = !data && isFetching && !waitingColdStart
+  const showError = Boolean(error) && !isFetching
 
   if (location === null) return <PageSkeleton />
 
@@ -362,8 +370,9 @@ export function Incendios({ location }: Props) {
         modelBadge={data ? <ModelBadge model="openmeteo_forecast" variant="header" /> : undefined}
       />
 
-      {isLoading && <PageSkeleton />}
-      {error && <ErrorMessage message={(error as Error).message} />}
+      {showSkeleton && <PageSkeleton />}
+      {waitingColdStart && <ColdStartNotice />}
+      {showError && <LoadError error={error} onRetry={() => { void refetch() }} />}
 
       {data && (
         <FadeContent>

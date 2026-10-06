@@ -12,7 +12,8 @@ import {
 import { FadeContent } from '@/components/animated/FadeContent'
 import { ElectricBorder } from '@/components/animated/ElectricBorder'
 import { ModelBadge } from '@/components/ui/ModelBadge'
-import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
+import { isWaitingForColdStart } from '@/lib/loadError'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { MeltText } from '@/components/animated/MeltText'
 
@@ -165,7 +166,13 @@ function PageSkeleton() {
 // ---------------------------------------------------------------------------
 
 export function Volcanes() {
-  const { data, isLoading, error } = useVolcanes()
+  const { data, isFetching, error, refetch, failureCount, failureReason } = useVolcanes()
+  // While the cold-start retries run there is a waiting notice instead of an error; during
+  // any other load (first one or a manual "Reintentar") the skeleton, and the error only
+  // once the query stopped fetching (FRA-340).
+  const waitingColdStart = isWaitingForColdStart({ hasData: Boolean(data), isFetching, failureCount, failureReason })
+  const showSkeleton = !data && isFetching && !waitingColdStart
+  const showError = Boolean(error) && !isFetching
 
   const featured = data?.volcanes.find(v => v.ranking === 1) ?? null
   const rest      = data?.volcanes.filter(v => v.ranking !== 1) ?? []
@@ -200,8 +207,9 @@ export function Volcanes() {
         })}
       </div>
 
-      {isLoading && <PageSkeleton />}
-      {error && <ErrorMessage message={(error as Error).message} />}
+      {showSkeleton && <PageSkeleton />}
+      {waitingColdStart && <ColdStartNotice />}
+      {showError && <LoadError error={error} onRetry={() => { void refetch() }} />}
 
       {data && (
         <FadeContent>
