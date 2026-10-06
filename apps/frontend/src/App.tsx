@@ -59,6 +59,7 @@ const Privacidad    = lazy(() => import('@/pages/Privacidad').then(m => ({ defau
 const NotFound      = lazy(() => import('@/pages/NotFound').then(m => ({ default: m.NotFound })))
 
 import { useVolcanes } from '@/hooks/useWeather'
+import { volcanNavBadge } from '@/lib/volcanStatus'
 
 // ── queryKey → ModelCategory map ─────────────────────────────────────────────
 
@@ -214,15 +215,14 @@ function RootLayout() {
   const { data: volcanesData } = useVolcanes()
 
   // T-11: memoize to avoid new array/element references on every location update
-  const volcanAlertColor = useMemo(
-    () => volcanesData?.volcanes.some(v => v.alert_level === 'rojo') ? '#ff3333' : '#e05545',
-    [volcanesData],
-  )
+  // FRA-343: a volcano without data ('sin_datos') never lights the badge nor sets its color.
+  const volcanBadge = useMemo(() => volcanNavBadge(volcanesData), [volcanesData])
+  const volcanAlertColor = volcanBadge.color
 
   // Inject reactive Volcanes badge into the tools row
   const navTools = useMemo(
     () => NAV_TOOLS_BASE.map(item =>
-      item.to === '/volcanes' && volcanesData?.has_active_alert
+      item.to === '/volcanes' && volcanBadge.show
         ? {
             ...item,
             badge: (
@@ -243,7 +243,7 @@ function RootLayout() {
           }
         : item
     ),
-    [volcanesData, volcanAlertColor],
+    [volcanBadge.show, volcanAlertColor],
   )
 
   usePageTitle()

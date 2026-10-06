@@ -184,7 +184,8 @@ export interface EarthquakesResponse {
 
 // ── Volcanes schemas ──────────────────────────────────────────────────────────
 
-export type AlertLevel = 'verde' | 'amarillo' | 'naranja' | 'rojo'
+/** 'sin_datos': OAVV no respondió o su imagen no se pudo leer. No es "estable" ni alerta. */
+export type AlertLevel = 'verde' | 'amarillo' | 'naranja' | 'rojo' | 'sin_datos'
 
 export interface Volcan {
   id: number
@@ -199,9 +200,13 @@ export interface Volcan {
 }
 
 export interface VolcanesResponse {
+  /** Volcanes con dato (excluye los 'sin_datos'). */
   total: number
+  /** Algún volcán con dato en naranja o rojo. */
   has_active_alert: boolean
   volcanes: Volcan[]
+  /** False si falta el dato de al menos un volcán. Opcional: un backend anterior no lo envía. */
+  available?: boolean
 }
 
 // ── Alertas SMN ────────────────────────────────────────────────────────────────

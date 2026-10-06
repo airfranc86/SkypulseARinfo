@@ -1,6 +1,14 @@
 import { Mountain } from 'lucide-react'
 import { useVolcanes } from '@/hooks/useWeather'
 import type { AlertLevel, Volcan } from '@/lib/api'
+import {
+  VOLCAN_LEGEND_LEVELS,
+  activeVolcanAlerts,
+  isVolcanAlert,
+  volcanDataNotice,
+  volcanLevelStyle,
+  type VolcanDataNotice,
+} from '@/lib/volcanStatus'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { ElectricBorder } from '@/components/animated/ElectricBorder'
 import { ModelBadge } from '@/components/ui/ModelBadge'
@@ -9,22 +17,11 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { MeltText } from '@/components/animated/MeltText'
 
 // ---------------------------------------------------------------------------
-// Alert level config
-// ---------------------------------------------------------------------------
-
-const ALERT_CONFIG: Record<AlertLevel, { label: string; hex: string; border: string; bg: string }> = {
-  verde:    { label: 'Estable',        hex: '#3ecf7a', border: 'rgba(62,207,122,.30)',  bg: 'rgba(62,207,122,.06)'  },
-  amarillo: { label: 'Vigilancia',     hex: '#f0a030', border: 'rgba(240,160,48,.30)',  bg: 'rgba(240,160,48,.06)'  },
-  naranja:  { label: 'Preocupación',   hex: '#e05545', border: 'rgba(224,85,69,.35)',   bg: 'rgba(224,85,69,.06)'   },
-  rojo:     { label: 'Alerta máxima',  hex: '#ff3333', border: 'rgba(255,51,51,.40)',   bg: 'rgba(255,51,51,.07)'   },
-}
-
-// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
 function AlertChip({ level }: { level: AlertLevel }) {
-  const cfg = ALERT_CONFIG[level]
+  const cfg = volcanLevelStyle(level)
   return (
     <span
       className="inline-flex items-center gap-1.5 text-[.65rem] font-semibold px-2.5 py-1 rounded uppercase tracking-wide"
@@ -37,8 +34,8 @@ function AlertChip({ level }: { level: AlertLevel }) {
 }
 
 function VolcanCard({ volcan, featured = false }: { volcan: Volcan; featured?: boolean }) {
-  const cfg = ALERT_CONFIG[volcan.alert_level]
-  const isAlert = volcan.alert_level === 'naranja' || volcan.alert_level === 'rojo'
+  const cfg = volcanLevelStyle(volcan.alert_level)
+  const isAlert = isVolcanAlert(volcan)
 
   const inner = (
     <a
@@ -92,7 +89,7 @@ function VolcanCard({ volcan, featured = false }: { volcan: Volcan; featured?: b
 }
 
 function ActiveAlertBanner({ volcanes }: { volcanes: Volcan[] }) {
-  const active = volcanes.filter(v => v.alert_level === 'naranja' || v.alert_level === 'rojo')
+  const active = activeVolcanAlerts(volcanes)
   const hasRojo = active.some(v => v.alert_level === 'rojo')
   const color = hasRojo ? '#ff3333' : '#e05545'
   const borderColor = hasRojo ? 'rgba(255,51,51,.40)' : 'rgba(224,85,69,.35)'
@@ -124,6 +121,28 @@ function ActiveAlertBanner({ volcanes }: { volcanes: Volcan[] }) {
   )
 }
 
+/** Aviso discreto en ámbar (mismo estilo que los avisos de Previsión): faltan datos de OAVV. */
+function MissingDataNotice({ notice }: { notice: VolcanDataNotice }) {
+  return (
+    <div
+      className="rounded-xl px-4 py-2 mb-6 flex flex-wrap items-center gap-x-3 text-sm"
+      role="status"
+      style={{ border: '1px solid rgba(240,160,48,0.3)', background: 'rgba(240,160,48,0.06)', color: 'var(--color-muted-foreground)' }}
+    >
+      <span className="py-1.5">{notice.text}</span>
+      <a
+        href={notice.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center min-h-11 font-medium"
+        style={{ color: '#f0a030' }}
+      >
+        Ir a SEGEMAR →
+      </a>
+    </div>
+  )
+}
+
 function PageSkeleton() {
   return (
     <div className="space-y-5 animate-pulse">
@@ -150,6 +169,7 @@ export function Volcanes() {
 
   const featured = data?.volcanes.find(v => v.ranking === 1) ?? null
   const rest      = data?.volcanes.filter(v => v.ranking !== 1) ?? []
+  const notice    = volcanDataNotice(data)
 
   return (
     <div>
@@ -165,16 +185,19 @@ export function Volcanes() {
 
       {/* Scale legend */}
       <div className="flex gap-3 flex-wrap mb-6">
-        {(Object.entries(ALERT_CONFIG) as [AlertLevel, typeof ALERT_CONFIG[AlertLevel]][]).map(([level, cfg]) => (
-          <span
-            key={level}
-            className="inline-flex items-center gap-1.5 text-[.63rem] px-2.5 py-1 rounded"
-            style={{ color: cfg.hex, background: cfg.bg, border: `1px solid ${cfg.border}` }}
-          >
-            <span className="size-1.5 rounded-full" style={{ background: cfg.hex }} />
-            {cfg.label}
-          </span>
-        ))}
+        {VOLCAN_LEGEND_LEVELS.map(level => {
+          const cfg = volcanLevelStyle(level)
+          return (
+            <span
+              key={level}
+              className="inline-flex items-center gap-1.5 text-[.63rem] px-2.5 py-1 rounded"
+              style={{ color: cfg.hex, background: cfg.bg, border: `1px solid ${cfg.border}` }}
+            >
+              <span className="size-1.5 rounded-full" style={{ background: cfg.hex }} />
+              {cfg.label}
+            </span>
+          )
+        })}
       </div>
 
       {isLoading && <PageSkeleton />}
@@ -182,8 +205,11 @@ export function Volcanes() {
 
       {data && (
         <FadeContent>
-          {/* Banner de alerta activa */}
-          {data.has_active_alert && <ActiveAlertBanner volcanes={data.volcanes} />}
+          {/* Aviso de datos faltantes: OAVV no respondió para algún volcán */}
+          {notice && <MissingDataNotice notice={notice} />}
+
+          {/* Banner de alerta activa: solo volcanes con dato */}
+          {activeVolcanAlerts(data.volcanes).length > 0 && <ActiveAlertBanner volcanes={data.volcanes} />}
 
           {/* Grid: Copahue destacado + resto */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
