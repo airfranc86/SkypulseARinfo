@@ -227,3 +227,89 @@ async def init_shared_http_client():
     yield
     await client.aclose()
     _http_client_module._client = None
+
+
+# ---------------------------------------------------------------------------
+# Upstash falso con estado — para los tests de alertas push (FRA-353)
+# ---------------------------------------------------------------------------
+
+FAKE_UPSTASH_URL = "https://fake-upstash.io"
+FAKE_UPSTASH_TOKEN = "test-token"
+
+
+class FakeUpstash:
+    """Upstash REST falso: entiende los comandos que van en el cuerpo JSON (`["SET", ...]`).
+
+    Guarda cada pedido para que los tests afirmen qué se mandó y a qué URL, y puede simular una caída.
+    """
+
+    def __init__(self) -> None:
+        self.strings: dict[str, str] = {}
+        self.ttls: dict[str, int] = {}
+        self.sets: dict[str, set[str]] = {}
+        self.commands: list[list[str]] = []
+        self.requests: list = []
+        self.down = False
+
+    def fill_ids(self, count: int, key: str = "alertas:ids") -> None:
+        """Llena un set con `count` ids sintéticos (para probar el tope sin 5.000 pedidos)."""
+        self.sets[key] = {f"relleno-{i:016d}" for i in range(count)}
+
+    def handle(self, request):
+        import json
+
+        import httpx
+
+        self.requests.append(request)
+        if self.down:
+            raise httpx.ConnectError("upstash caído")
+        command = json.loads(request.content)
+        self.commands.append(command)
+        name, *args = command
+        return httpx.Response(200, json={"result": self._run(name.upper(), args)})
+
+    def _run(self, name: str, args: list[str]):
+        if name == "GET":
+            return self.strings.get(args[0])
+        if name == "SET":
+            self.strings[args[0]] = args[1]
+            if len(args) >= 4 and args[2].upper() == "EX":
+                self.ttls[args[0]] = int(args[3])
+            return "OK"
+        if name == "DEL":
+            removed = self.strings.pop(args[0], None) is not None
+            self.ttls.pop(args[0], None)
+            return int(removed)
+        if name == "SADD":
+            members = self.sets.setdefault(args[0], set())
+            before = len(members)
+            members.update(args[1:])
+            return len(members) - before
+        if name == "SREM":
+            members = self.sets.get(args[0], set())
+            before = len(members)
+            members.difference_update(args[1:])
+            return before - len(members)
+        if name == "SCARD":
+            return len(self.sets.get(args[0], set()))
+        raise AssertionError(f"comando no soportado por FakeUpstash: {name}")
+
+
+@pytest.fixture
+def fake_upstash():
+    """Mock respx de Upstash + el estado en memoria. Todo pedido a otro host falla (assert_all_mocked)."""
+    fake = FakeUpstash()
+    with respx.mock(assert_all_called=False) as router:
+        router.post(url__startswith=FAKE_UPSTASH_URL).mock(side_effect=fake.handle)
+        yield fake
+
+
+@pytest.fixture
+def alertas_redis(fake_upstash):
+    """Deja un `UpstashRedis` apuntando al falso como el handle que usan los endpoints de alertas."""
+    from app.core.upstash import UpstashRedis, configure_redis
+
+    redis = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    configure_redis(redis)
+    yield redis
+    configure_redis(None)
