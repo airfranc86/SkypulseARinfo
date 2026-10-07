@@ -48,6 +48,41 @@ async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): P
   return res.json()
 }
 
+/**
+ * POST con cuerpo JSON y el mismo tope de 30 s que `request`: pasado el tiempo, `ApiError` 504 en vez de
+ * quedar cargando. Devuelve la respuesta ya comprobada (`ok`); cada variante decide si lee el cuerpo.
+ * Es lo que usan las alertas push; `postJson` (sin tope) sigue igual para sus otros llamadores.
+ */
+async function postConTope(path: string, body: unknown): Promise<Response> {
+  const url = new URL(`${BASE_URL}${path}`, window.location.origin)
+  let res: Response
+  try {
+    res = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new ApiError('El servidor no respondió a tiempo.', 504)
+    }
+    throw error
+  }
+  if (!res.ok) await throwApiError(res)
+  return res
+}
+
+async function postJsonConTope<T>(path: string, body: unknown): Promise<T> {
+  const res = await postConTope(path, body)
+  return res.json()
+}
+
+/** Para las respuestas sin cuerpo (204): `res.json()` reventaría con "Unexpected end of JSON input". */
+async function postSinCuerpo(path: string, body: unknown): Promise<void> {
+  await postConTope(path, body)
+}
+
 // ── Schemas — espejados del backend ──────────────────────────────────────────
 
 export interface WeatherCurrentResponse {
@@ -595,6 +630,34 @@ export interface WindShearResponse {
   drivers: WindShearDriverCode[]
 }
 
+// Alertas push (FRA-353, FRA-354): espejo de apps/backend/app/schemas/alertas.py.
+
+/** Lo que devuelve `PushSubscription.toJSON()` más la ciudad (slug de `ZONAS_ALERTAS`). */
+export interface AlertaSuscripcionRequest {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  zona: string
+}
+
+export interface AlertaSuscripcionResponse {
+  /** Identificador de la suscripción, 22 caracteres base64url; sirve para la baja y la prueba. */
+  id: string
+  zona: string
+}
+
+export interface AlertaBajaRequest {
+  id: string
+}
+
+export interface AlertaPruebaRequest {
+  id: string
+}
+
+export interface AlertaPruebaResponse {
+  /** El servicio push aceptó el aviso de prueba (aún puede tardar en llegar). */
+  enviada: boolean
+}
+
 // ── API client ────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -659,4 +722,22 @@ export const api = {
   /** TAF decodificado por períodos (Aviation Weather Center, no gasta cupo de CheckWX). 404 = el aeródromo no publica TAF. */
   tafDecoded: (icao: string) =>
     request<TafDecoded>('/api/taf', { icao }),
+
+  /**
+   * Alta (o renovación) de la suscripción push a una ciudad. Repetirla con el mismo endpoint es un upsert:
+   * devuelve el mismo `id`. Errores como `ApiError`: 422 datos inválidos, 429 (con `retryAfter`), 503 sin servicio o tope.
+   */
+  alertasSuscribir: (body: AlertaSuscripcionRequest) =>
+    postJsonConTope<AlertaSuscripcionResponse>('/api/alertas/suscripcion', body),
+
+  /** Baja por `id`. El backend contesta 204 sin cuerpo, también para un `id` desconocido. */
+  alertasBaja: (body: AlertaBajaRequest) =>
+    postSinCuerpo('/api/alertas/baja', body),
+
+  /**
+   * Aviso de prueba a una suscripción. Errores como `ApiError`: 404 no existe, 410 vencida (el servidor ya
+   * la borró), 429 (una por minuto, con `retryAfter`), 502 el servicio push falló, 503 sin servicio.
+   */
+  alertasPrueba: (body: AlertaPruebaRequest) =>
+    postJsonConTope<AlertaPruebaResponse>('/api/alertas/prueba', body),
 }
