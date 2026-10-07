@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
+import { inflateSync } from 'node:zlib'
 
 // FRA-352: public/sw.js is a hand-written service worker that only shows push notifications.
 // It is loaded here in a `node:vm` sandbox with a fake service-worker scope.
@@ -131,4 +132,97 @@ test('notificationclick focuses an already open window instead of opening anothe
   await w.click('/alertas')
   assert.equal(focused, true)
   assert.deepEqual(w.opened, [])
+})
+
+// ── Android: el `badge` es el ícono chico de la barra de estado ──────────────────────────────────────
+// Android lo pinta usando solo la transparencia de la imagen. Con un PNG a color y opaco (como el logo) se
+// ve un cuadrado blanco: tiene que ser una silueta blanca sobre fondo transparente.
+
+const BADGE = '/icons/badge-96.png'
+const ICON_NOTIFICACION = '/icons/icon-192.png'
+
+interface Png { width: number; height: number; colorType: number; bitDepth: number; rgba: Uint8Array }
+
+// Decodifica un PNG RGBA de 8 bits (lo único que acepta el test para el badge). Sin dependencias.
+function decodePng(file: Buffer): Png {
+  assert.deepEqual([...file.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], 'firma PNG')
+  let width = 0, height = 0, bitDepth = 0, colorType = 0
+  const idat: Buffer[] = []
+  for (let pos = 8; pos < file.length; ) {
+    const length = file.readUInt32BE(pos)
+    const type = file.toString('ascii', pos + 4, pos + 8)
+    const data = file.subarray(pos + 8, pos + 8 + length)
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0)
+      height = data.readUInt32BE(4)
+      bitDepth = data[8]
+      colorType = data[9]
+    } else if (type === 'IDAT') idat.push(data)
+    pos += 12 + length
+  }
+  assert.equal(bitDepth, 8, 'profundidad de 8 bits')
+  assert.equal(colorType, 6, 'RGBA (con canal alfa)')
+  const raw = inflateSync(Buffer.concat(idat))
+  const stride = width * 4
+  const out = new Uint8Array(height * stride)
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)]
+    const row = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1))
+    for (let x = 0; x < stride; x++) {
+      const left = x >= 4 ? out[y * stride + x - 4] : 0
+      const up = y > 0 ? out[(y - 1) * stride + x] : 0
+      const upLeft = y > 0 && x >= 4 ? out[(y - 1) * stride + x - 4] : 0
+      let add = 0
+      if (filter === 1) add = left
+      else if (filter === 2) add = up
+      else if (filter === 3) add = (left + up) >> 1
+      else if (filter === 4) {
+        const p = left + up - upLeft
+        const pa = Math.abs(p - left), pb = Math.abs(p - up), pc = Math.abs(p - upLeft)
+        add = pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft
+      }
+      out[y * stride + x] = (row[x] + add) & 255
+    }
+  }
+  return { width, height, colorType, bitDepth, rgba: out }
+}
+
+const publicFile = (path: string) => readFileSync(new URL(`../public${path}`, import.meta.url))
+
+test('the notification uses a dedicated monochrome badge and a 192 px icon, not the colour logo', async () => {
+  const w = loadWorker()
+  await w.push(jsonPayload({ title: 'T', body: 'B' }))
+  assert.equal(w.shown[0].options.badge, BADGE)
+  assert.equal(w.shown[0].options.icon, ICON_NOTIFICACION)
+  assert.notEqual(w.shown[0].options.badge, w.shown[0].options.icon)
+  assert.doesNotMatch(SW_SOURCE, /Logo\.png/)
+})
+
+test('the badge is a 96x96 PNG with an alpha channel', () => {
+  const png = decodePng(publicFile(BADGE))
+  assert.equal(png.width, 96)
+  assert.equal(png.height, 96)
+})
+
+test('the badge is a white silhouette on a transparent background (what Android needs)', () => {
+  const { rgba, width, height } = decodePng(publicFile(BADGE))
+  let transparent = 0, opaque = 0, notWhite = 0
+  for (let i = 0; i < width * height; i++) {
+    const [r, g, b, a] = [rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], rgba[i * 4 + 3]]
+    if (a === 0) transparent++
+    else {
+      if (a > 200) opaque++
+      if (r < 250 || g < 250 || b < 250) notWhite++
+    }
+  }
+  const total = width * height
+  assert.equal(notWhite, 0, 'todo píxel visible es blanco: nada de color ni de sombras grises')
+  assert.ok(transparent / total >= 0.2, 'al menos un 20 % transparente (si no, Android lo pinta como un cuadrado)')
+  assert.ok(opaque / total >= 0.1, 'al menos un 10 % sólido: hay una silueta visible')
+  assert.equal(rgba[3], 0, 'la esquina superior izquierda es transparente (no hay fondo)')
+})
+
+test('the notification icon exists and is at least 192 px', () => {
+  const png = decodePng(publicFile(ICON_NOTIFICACION))
+  assert.ok(png.width >= 192 && png.height >= 192)
 })
