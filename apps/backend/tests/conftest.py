@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 
 import pytest
 import pytest_asyncio
@@ -263,7 +264,15 @@ class FakeUpstash:
         self.requests.append(request)
         if self.down:
             raise httpx.ConnectError("upstash caído")
-        command = json.loads(request.content)
+        if request.content:
+            command = json.loads(request.content)
+        else:
+            # `UpstashRedis._call` (setnx_ex, incr...) manda el comando en la ruta: POST /SET/clave/1/NX/EX/60.
+            from urllib.parse import unquote
+
+            command = [
+                unquote(parte) for parte in request.url.path.strip("/").split("/")
+            ]
         self.commands.append(command)
         name, *args = command
         return httpx.Response(200, json={"result": self._run(name.upper(), args)})
@@ -272,9 +281,12 @@ class FakeUpstash:
         if name == "GET":
             return self.strings.get(args[0])
         if name == "SET":
+            opciones = [a.upper() for a in args[2:]]
+            if "NX" in opciones and args[0] in self.strings:
+                return None  # SET ... NX sobre una clave que ya existe: Upstash responde null
             self.strings[args[0]] = args[1]
-            if len(args) >= 4 and args[2].upper() == "EX":
-                self.ttls[args[0]] = int(args[3])
+            if "EX" in opciones:
+                self.ttls[args[0]] = int(args[2:][opciones.index("EX") + 1])
             return "OK"
         if name == "DEL":
             removed = self.strings.pop(args[0], None) is not None
@@ -313,3 +325,175 @@ def alertas_redis(fake_upstash):
     configure_redis(redis)
     yield redis
     configure_redis(None)
+
+
+# ---------------------------------------------------------------------------
+# Web Push falso — para los tests de envío de alertas push (FRA-354)
+#
+# Ninguna clave se escribe en el repo: la clave VAPID y las claves de cada "navegador" se generan al
+# correr cada test. `pywebpush` corre de verdad (cifra y firma); solo la capa HTTP está reemplazada.
+# ---------------------------------------------------------------------------
+
+ENDPOINT_FCM = "https://fcm.googleapis.com/fcm/send/SECRETO-ENDPOINT-fcm-0001"
+ENDPOINT_MOZILLA = (
+    "https://updates.push.services.mozilla.com/wpush/v2/SECRETO-ENDPOINT-moz-0001"
+)
+ENDPOINT_APPLE = "https://web.push.apple.com/SECRETO-ENDPOINT-apple-0001"
+
+
+class FakePushHttp:
+    """Doble de `HTTPAdapter.send`: guarda cada pedido que haría `requests` y responde lo que se le diga.
+
+    `requests` guarda los `PreparedRequest` (URL, cabeceras, cuerpo ya cifrado) y `timeouts` el timeout con
+    que se pidió cada uno. Por defecto responde 201, como un servicio push que aceptó el mensaje.
+    """
+
+    def __init__(self) -> None:
+        self.requests: list = []
+        self.timeouts: list = []
+        self.respuesta: tuple[int, dict[str, str], str] = (201, {}, "")
+        self.error: Exception | None = None
+
+    def responder(
+        self, status: int, cabeceras: dict[str, str] | None = None, cuerpo: str = ""
+    ) -> None:
+        self.respuesta = (status, cabeceras or {}, cuerpo)
+        self.error = None
+
+    def fallar(self, error: Exception) -> None:
+        self.error = error
+
+    def send(self, request, **kwargs):
+        import io
+
+        import requests
+
+        self.requests.append(request)
+        self.timeouts.append(kwargs.get("timeout"))
+        if self.error is not None:
+            raise self.error
+        status, cabeceras, cuerpo = self.respuesta
+        respuesta = requests.Response()
+        respuesta.status_code = status
+        respuesta.headers.update(cabeceras)
+        respuesta.url = request.url
+        respuesta.reason = "Respuesta falsa"
+        respuesta.request = request
+        respuesta.encoding = "utf-8"
+        respuesta._content = cuerpo.encode()
+        respuesta._content_consumed = True
+        respuesta.raw = io.BytesIO(cuerpo.encode())
+        return respuesta
+
+
+@pytest.fixture
+def push_http(monkeypatch):
+    """Corta la red de `pywebpush`/`requests`: todo pedido push va a un `FakePushHttp`."""
+    import requests.adapters
+
+    fake = FakePushHttp()
+    monkeypatch.setattr(
+        requests.adapters.HTTPAdapter,
+        "send",
+        lambda _adaptador, request, **kwargs: fake.send(request, **kwargs),
+    )
+    return fake
+
+
+@dataclass(frozen=True)
+class VapidEfimera:
+    # 32 bytes en base64url: el formato corto que se carga en Render.
+    privada: str
+    # Punto sin comprimir en base64url: el `applicationServerKey` del navegador.
+    publica: str
+    pem: str
+
+
+def nueva_clave_vapid() -> VapidEfimera:
+    from cryptography.hazmat.primitives import serialization
+    from py_vapid import Vapid
+    from py_vapid.utils import b64urlencode
+
+    vapid = Vapid()
+    vapid.generate_keys()
+    privada = vapid.private_key.private_numbers().private_value.to_bytes(32, "big")
+    publica = vapid.public_key.public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
+    return VapidEfimera(
+        privada=b64urlencode(privada),
+        publica=b64urlencode(publica),
+        pem=vapid.private_pem().decode(),
+    )
+
+
+@pytest.fixture
+def vapid_efimera(monkeypatch) -> VapidEfimera:
+    """Una clave VAPID nueva por test, ya cargada en `settings` (con el `sub` de producción)."""
+    from app.core.config import settings
+
+    clave = nueva_clave_vapid()
+    monkeypatch.setattr(settings, "vapid_private_key", clave.privada)
+    monkeypatch.setattr(settings, "vapid_subject", "https://skypulse-ar.vercel.app")
+    return clave
+
+
+@dataclass(frozen=True)
+class ReceptorPush:
+    """El "navegador": su suscripción y las claves con las que podría descifrar lo que le llega."""
+
+    endpoint: str
+    p256dh: str
+    auth: str
+    clave_privada: object
+    secreto_auth: bytes
+
+
+def nuevo_receptor(endpoint: str = ENDPOINT_FCM) -> ReceptorPush:
+    import base64
+    import os
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    def b64(datos: bytes) -> str:
+        return base64.urlsafe_b64encode(datos).decode().rstrip("=")
+
+    clave = ec.generate_private_key(ec.SECP256R1())
+    publica = clave.public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+    )
+    secreto = os.urandom(16)
+    return ReceptorPush(endpoint, b64(publica), b64(secreto), clave, secreto)
+
+
+@dataclass(frozen=True)
+class SuscripcionGuardada:
+    id: str
+    registro: str  # el JSON tal cual quedó en Upstash
+    receptor: ReceptorPush
+    zona: str
+
+
+@pytest_asyncio.fixture
+async def suscribir(alertas_redis, fake_upstash):
+    """Fábrica: guarda una suscripción real (claves válidas) con `alta` y devuelve id, registro y claves."""
+    from app.services.alertas import suscripcion as svc
+
+    async def _suscribir(
+        endpoint: str = ENDPOINT_FCM, zona: str = "cordoba"
+    ) -> SuscripcionGuardada:
+        receptor = nuevo_receptor(endpoint)
+        sub_id = await svc.alta(
+            alertas_redis,
+            svc.Suscripcion(
+                endpoint=receptor.endpoint,
+                p256dh=receptor.p256dh,
+                auth=receptor.auth,
+                zona=zona,
+            ),
+        )
+        registro = fake_upstash.strings[f"alertas:sub:{sub_id}"]
+        return SuscripcionGuardada(sub_id, registro, receptor, zona)
+
+    return _suscribir

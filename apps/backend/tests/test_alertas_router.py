@@ -466,4 +466,7 @@ def test_sentry_is_configured_not_to_send_request_bodies() -> None:
     assert linea is not None, resultado.stderr[-2000:]
     kwargs = json.loads(linea.removeprefix("KWARGS="))
     assert kwargs["max_request_body_size"] == "never"
+    # Sin variables locales de los frames: un 503 desde los handlers de alertas llevaría el endpoint y
+    # las claves del suscriptor (`payload`, `suscripcion`, `registro`) como variables del frame.
+    assert kwargs["include_local_variables"] is False
     assert kwargs["send_default_pii"] is False

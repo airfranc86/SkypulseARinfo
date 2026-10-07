@@ -9,6 +9,10 @@ cualquier ajuste se hace acá. Ver `regla.py` para cómo se aplican.
 # usa también el reporte de Instagram).
 CODIGOS_TORMENTA: frozenset[int] = frozenset(range(95, 100))
 
+# Los códigos WMO de tormenta CON granizo: el único dato del modelo que permite decir «posible granizo»
+# en el aviso. El CAPE alto solo no lo dice.
+CODIGOS_GRANIZO: frozenset[int] = frozenset({96, 99})
+
 # CAPE de ECMWF (J/kg) a partir del cual una hora cuenta como tormenta aunque
 # el código del tiempo todavía no la marque.
 CAPE_TORMENTA_J_KG: float = 2500.0
