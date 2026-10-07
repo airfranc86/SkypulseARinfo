@@ -8,7 +8,11 @@
 
 const DEFAULT_TITLE = 'SkyPulse'
 const DEFAULT_BODY = 'Hay una novedad del tiempo en tu zona. Abrí SkyPulse para ver el detalle.'
-const ICON = '/Logo.png'
+// `icon` is the colour picture shown inside the notification. `badge` is the small icon of the Android status
+// bar: Android paints it using ONLY the transparency of the image, so it must be a white silhouette on a
+// transparent background. A colour PNG (like the logo) shows up as a white square.
+const ICON = '/icons/icon-192.png'
+const BADGE = '/icons/badge-96.png'
 
 function readPayload(data) {
   if (!data) return {}
@@ -41,7 +45,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: text(payload.body, DEFAULT_BODY),
     icon: ICON,
-    badge: ICON,
+    badge: BADGE,
     tag: text(payload.tag, 'skypulse-alerta'),
     data: { url: safeUrl(payload.url) },
   }
