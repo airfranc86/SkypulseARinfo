@@ -18,6 +18,8 @@ if _SENTRY_DSN and os.getenv('ENV') == 'prod':
         traces_sample_rate=0.1,
         profiles_sample_rate=0.05,
         send_default_pii=False,
+        # Sin cuerpos de request en los eventos: el alta de alertas trae el endpoint push y sus claves.
+        max_request_body_size="never",
     )
 
 from fastapi import FastAPI, Request, Response, status
@@ -32,9 +34,9 @@ from .core.config import settings
 from .core.counter import MemoryCounter, RedisCounter
 from .core.http_client import create_client, close_client
 from .core.rate_limit import limiter
-from .core.upstash import UpstashRedis
+from .core.upstash import UpstashRedis, configure_redis as configure_alertas_redis
 from .core import usage_counter
-from .routers import aeronautica, earthquakes, incendios, metar, niebla, smn_alertas, taf, tools, volcanes, weather
+from .routers import aeronautica, alertas, earthquakes, incendios, metar, niebla, smn_alertas, taf, tools, volcanes, weather
 from .services import checkwx as checkwx_svc
 
 
@@ -76,10 +78,12 @@ async def lifespan(app: FastAPI):
         redis = UpstashRedis(settings.upstash_redis_rest_url, settings.upstash_redis_rest_token)
         checkwx_svc.set_counter(RedisCounter(redis))
         usage_counter.configure_redis(redis)
+        configure_alertas_redis(redis)
         logger.info("checkwx_counter=redis")
     else:
         checkwx_svc.set_counter(MemoryCounter())
         usage_counter.configure_memory()
+        configure_alertas_redis(None)  # sin Upstash las alertas responden 503
         logger.warning("checkwx_counter=memory — quota not persisted across restarts")
     logger.info("SkyPulse backend starting...")
     yield
@@ -170,14 +174,18 @@ def _is_nan_or_inf(value: object) -> bool:
 # recibe lat/lon y conserva los mensajes de coordenadas.
 _ICAO_PATHS = frozenset({"/api/metar", "/api/taf"})
 
+# Rutas con body JSON que no reciben coordenadas. `/api/alertas/` lleva la barra final a propósito:
+# `/api/alertas-smn` sí recibe lat/lon y conserva sus mensajes.
+_INVALID_REQUEST_PREFIXES = ("/api/v1/aeronautica", "/api/alertas/")
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     safe = _safe_errors(exc)
-    # Los endpoints de aeronáutica reciben un body JSON, y METAR/TAF reciben `icao`:
+    # Los endpoints de aeronáutica y de alertas push reciben un body JSON, y METAR/TAF reciben `icao`:
     # el mensaje de "coordenadas inválidas" no aplica.
     path = request.url.path
-    if path.startswith("/api/v1/aeronautica") or path.rstrip("/") in _ICAO_PATHS:
+    if path.startswith(_INVALID_REQUEST_PREFIXES) or path.rstrip("/") in _ICAO_PATHS:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
@@ -234,4 +242,5 @@ app.include_router(niebla.router,    prefix="/api/niebla",    tags=["niebla"])
 app.include_router(metar.router,     prefix="/api/metar",     tags=["metar"])
 app.include_router(taf.router,       prefix="/api/taf",       tags=["taf"])
 app.include_router(smn_alertas.router, prefix="/api/alertas-smn", tags=["alertas-smn"])
+app.include_router(alertas.router,    prefix="/api/alertas",    tags=["alertas"])
 app.include_router(aeronautica.router, prefix="/api/v1/aeronautica", tags=["aeronautica"])
