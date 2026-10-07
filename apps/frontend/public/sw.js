@@ -40,6 +40,16 @@ function safeUrl(raw) {
   }
 }
 
+// A new version of this worker takes control right away. Without this the new one waits while the old one keeps
+// showing the notifications (with its old icons). It touches nothing of the site: there is no `fetch` and no cache.
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting())
+})
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
 self.addEventListener('push', (event) => {
   const payload = readPayload(event.data)
   const options = {
