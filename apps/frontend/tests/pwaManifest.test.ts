@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { decodePng, resumenAlfa } from './helpers/png.ts'
 
 // FRA-352: the site must be installable. These are the fields Chrome (web.dev/install-criteria)
 // needs, plus the headers and <head> tags that make the browser find and read the manifest.
@@ -101,4 +102,33 @@ test('index.html links a 180x180 apple-touch-icon (iOS ignores the manifest icon
   const href = /<link rel="apple-touch-icon" href="([^"]+)"\s*\/?>/.exec(read('../index.html'))?.[1]
   assert.ok(href, 'apple-touch-icon link')
   assert.deepEqual(pngSize(`../public${href}`), { width: 180, height: 180 })
+})
+
+// ── Ícono monocromo: la silueta que Android usa en la barra de estado ────────────────────────────────
+// En una app instalada (WebAPK) Chrome saca el ícono chico de las notificaciones del manifest, del ícono con
+// `purpose: "monochrome"`. Sin uno, usa el logo a color, que Android pinta como un cuadrado blanco.
+
+test('manifest declares a 512 monochrome icon', () => {
+  const mono = (manifest().icons ?? []).filter(i => i.purpose === 'monochrome')
+  assert.equal(mono.length, 1)
+  assert.equal(mono[0].sizes, '512x512')
+  assert.equal(mono[0].type, 'image/png')
+})
+
+test('the monochrome icon is a white silhouette on a transparent background', () => {
+  const src = (manifest().icons ?? []).find(i => i.purpose === 'monochrome')?.src
+  assert.ok(src, 'monochrome icon declared')
+  const png = decodePng(readFileSync(new URL(`../public${src}`, import.meta.url)))
+  const { transparente, solido, noBlancos } = resumenAlfa(png)
+  assert.equal(noBlancos, 0, 'todo píxel visible es blanco')
+  assert.ok(transparente >= 0.2, 'al menos un 20 % transparente')
+  assert.ok(solido >= 0.1, 'al menos un 10 % sólido')
+  assert.equal(png.rgba[3], 0, 'la esquina superior izquierda es transparente')
+})
+
+test('the colour icons never carry the monochrome purpose (a colour logo as a mask is a white square)', () => {
+  for (const icon of manifest().icons ?? []) {
+    if (icon.purpose === 'monochrome') continue
+    assert.ok(!(icon.purpose ?? '').includes('monochrome'), icon.src)
+  }
 })

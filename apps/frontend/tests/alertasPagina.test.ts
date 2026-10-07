@@ -197,6 +197,16 @@ test('useRenovarAvisos no hace nada sin estado guardado: lee el almacenamiento a
   assert.match(efecto, /if \(!hayQueRenovar\(guardado\)\) return/)
 })
 
+test('useRenovarAvisos pide la versión nueva del service worker, y solo si hay estado guardado', () => {
+  const efecto = efectos(cuerpoDe(RENOVAR, 'export function useRenovarAvisos'))[0]
+  assert.match(efecto, /if \(guardado !== null\) void actualizarServiceWorker\(\)/)
+  assert.ok(efecto.indexOf('leerEstadoLocal()') < efecto.indexOf('actualizarServiceWorker()'))
+  const actualizar = cuerpoDe(RENOVAR, 'async function actualizarServiceWorker')
+  assert.ok(actualizar.includes("getRegistration('/')") && actualizar.includes('.update()'))
+  assert.ok(!actualizar.includes('.register('), 'actualizar no registra nada: solo pide la versión nueva del que ya existe')
+  assert.ok(!actualizar.includes('requestPermission'))
+})
+
 test('la renovación exige permiso concedido, soporte de push y que toque renovar', () => {
   const comprobacion = cuerpoDe(RENOVAR, 'function hayQueRenovar')
   assert.ok(comprobacion.includes('debeRenovar('))

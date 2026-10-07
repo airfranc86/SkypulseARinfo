@@ -111,6 +111,21 @@ async function renovar(guardado: EstadoGuardado): Promise<void> {
   }
 }
 
+/**
+ * Pide la versión nueva de `sw.js` sin esperar el chequeo automático del navegador (que puede tardar hasta un día):
+ * así una corrección del service worker, como el ícono de las notificaciones, llega enseguida. No registra nada:
+ * solo actualiza el que ya está. Un fallo no importa, el navegador lo reintenta solo.
+ */
+async function actualizarServiceWorker(): Promise<void> {
+  try {
+    if (!('serviceWorker' in navigator)) return
+    const registro = await navigator.serviceWorker.getRegistration('/')
+    if (registro) await registro.update()
+  } catch {
+    // Sin conexión o sin permiso para consultar: se vuelve a intentar en la próxima visita.
+  }
+}
+
 function hayQueRenovar(guardado: EstadoGuardado | null): guardado is EstadoGuardado {
   if (guardado === null || !debeRenovar(guardado.ultimaRenovacion, Date.now())) return false
   if (detectarDisponibilidad(entornoDelNavegador()).tipo !== 'activar') return false
@@ -126,6 +141,7 @@ export function useRenovarAvisos(config: ConfigAlertas): void {
   useEffect(() => {
     if (claveVapid === null || renovando) return
     const guardado = leerEstadoLocal()
+    if (guardado !== null) void actualizarServiceWorker()
     if (!hayQueRenovar(guardado)) return
     renovando = true
     void renovar(guardado).finally(() => {
