@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 _DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app,https://skypulseinfo.vercel.app"
@@ -49,6 +49,14 @@ class Settings(BaseSettings):
 
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
+
+    # Alertas push (FRA-354). La clave privada VAPID firma cada envío: solo vive en el entorno (Render),
+    # nunca en el repo, y `repr=False` evita que salga en un `repr(settings)` o en un log. Acepta el valor
+    # crudo de 32 bytes en base64url (el formato corto que se pega en Render) o un PEM; ver
+    # `services/alertas/envio.py::cargar_vapid`. Vacía = el aviso de prueba responde 503.
+    vapid_private_key: str = Field(default="", repr=False)
+    # Contacto que declara el VAPID ante los servicios push: `https://...` o `mailto:...`.
+    vapid_subject: str = "https://skypulse-ar.vercel.app"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 

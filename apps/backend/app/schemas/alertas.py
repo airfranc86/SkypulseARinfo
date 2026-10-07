@@ -1,4 +1,4 @@
-"""Esquemas de las alertas push: alta y baja de suscripciones (FRA-353).
+"""Esquemas de las alertas push: alta y baja de suscripciones (FRA-353) y aviso de prueba (FRA-354).
 
 El cuerpo del alta es lo que devuelve `PushSubscription.toJSON()` del navegador más la zona. Los campos
 que no usamos (p. ej. `expirationTime`) se ignoran. Los validadores reutilizan los de
@@ -65,4 +65,16 @@ class SuscripcionCreada(BaseModel):
 class BajaRequest(BaseModel):
     id: str = Field(
         pattern=r"^[A-Za-z0-9_-]{22}$", description="El `id` devuelto por el alta."
+    )
+
+
+class PruebaRequest(BaseModel):
+    id: str = Field(
+        pattern=r"^[A-Za-z0-9_-]{22}$", description="El `id` devuelto por el alta."
+    )
+
+
+class PruebaEnviada(BaseModel):
+    enviada: bool = Field(
+        description="`true`: el servicio push aceptó el aviso de prueba (aún puede tardar en llegar)."
     )

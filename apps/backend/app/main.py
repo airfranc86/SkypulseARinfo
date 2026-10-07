@@ -20,6 +20,8 @@ if _SENTRY_DSN and os.getenv('ENV') == 'prod':
         send_default_pii=False,
         # Sin cuerpos de request en los eventos: el alta de alertas trae el endpoint push y sus claves.
         max_request_body_size="never",
+        # Ni variables locales: los handlers de alertas manejan el endpoint y las claves del suscriptor.
+        include_local_variables=False,
     )
 
 from fastapi import FastAPI, Request, Response, status

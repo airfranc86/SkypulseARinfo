@@ -14,7 +14,7 @@ Datos en Upstash:
     alertas:ids          set de todos los ids (un SCARD alcanza para el tope)
 
 Los ids de suscripciones vencidas (TTL) quedan en los sets hasta que alguien los saque: quien envíe las
-notificaciones (FRA-354) debe hacer SREM cuando el GET de `alertas:sub:{id}` devuelva null.
+notificaciones (FRA-355) llama a `limpiar_id_vencido` cuando el GET de `alertas:sub:{id}` devuelve null.
 """
 
 from __future__ import annotations
@@ -254,3 +254,41 @@ async def baja(redis: UpstashRedis, sub_id: str) -> None:
     await redis.srem(_CLAVE_IDS, sub_id)
     if zona is not None:
         await redis.srem(_clave_zona(zona), sub_id)
+
+
+async def registro_de(redis: UpstashRedis, sub_id: str) -> str | None:
+    """El JSON guardado de una suscripción tal cual (para `envio.enviar`); None si no existe o venció.
+
+    Raises:
+        SuscripcionInvalida: el id no tiene la forma válida (no se toca Upstash).
+        UpstashUnavailableError: Upstash no respondió.
+    """
+    if not isinstance(sub_id, str) or not PATRON_ID.fullmatch(sub_id):
+        raise SuscripcionInvalida("id_invalido")
+    return await redis.read(_clave_sub(sub_id))
+
+
+async def limpiar_id_vencido(
+    redis: UpstashRedis, sub_id: str, zona: str | None = None
+) -> bool:
+    """Saca de los índices un id cuyo registro ya no existe (venció el TTL de 180 días).
+
+    `zona` es el slug del set donde apareció el id; sin él solo se limpia `alertas:ids`, porque con el
+    registro borrado ya no hay de dónde leer la zona. Vuelve a leer el registro antes de quitar nada: si
+    alguien se resuscribió entre la lectura de quien llama y esta limpieza, no se toca. Devuelve True si
+    quitó el id y False si el registro existe.
+
+    Raises:
+        SuscripcionInvalida: el id o la zona no tienen la forma válida (no se toca Upstash).
+        UpstashUnavailableError: Upstash no respondió.
+    """
+    if not isinstance(sub_id, str) or not PATRON_ID.fullmatch(sub_id):
+        raise SuscripcionInvalida("id_invalido")
+    if zona is not None:
+        validar_zona(zona)
+    if await redis.read(_clave_sub(sub_id)) is not None:
+        return False
+    await redis.srem(_CLAVE_IDS, sub_id)
+    if zona is not None:
+        await redis.srem(_clave_zona(zona), sub_id)
+    return True
