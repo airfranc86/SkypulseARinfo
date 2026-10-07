@@ -18,6 +18,7 @@ const TITLES: Record<string, string> = {
   '/niebla':       'SkyPulse — Niebla',
   '/altitud-de-densidad': 'SkyPulse — Altitud de densidad',
   '/cizalladura':  'SkyPulse — Cizalladura / LLWS',
+  '/alertas':      'SkyPulse — Avisos de tormenta',
   '/privacidad':   'SkyPulse — Política de privacidad',
   '/datos':        'SkyPulse — De dónde salen los datos',
 }
