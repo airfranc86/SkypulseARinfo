@@ -28,3 +28,39 @@ test('img-src allows the origin of every Cafecito button image', () => {
     assert.ok(allowed.includes(new URL(url).origin), `img-src must allow ${new URL(url).origin} (${url})`)
   }
 })
+
+// B10: the 23 photos of /nubes and /desastres are hosted by the site (public/fotos), so the hosts
+// they used to be hot-linked from must not stay allowed in `img-src`.
+const FORMER_PHOTO_HOSTS = [
+  'upload.wikimedia.org',
+  'images.unsplash.com',
+  'cdn.zmescience.com',
+  'scied.ucar.edu',
+]
+
+test('img-src no longer allows the hosts the photos used to be hot-linked from', () => {
+  const allowed = cspDirective('img-src')
+  for (const host of FORMER_PHOTO_HOSTS) {
+    assert.ok(!allowed.some(source => source.includes(host)), `img-src must not allow ${host}`)
+  }
+})
+
+test('img-src keeps the hosts still in use', () => {
+  const allowed = cspDirective('img-src')
+  for (const source of ["'self'", 'data:', 'blob:', 'https://server.arcgisonline.com', 'https://cdn.cafecito.app']) {
+    assert.ok(allowed.includes(source), `img-src keeps ${source}`)
+  }
+})
+
+test('no photo of clouds.ts or Desastres.tsx points at another origin', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const photoLines = [
+    ...read('../src/data/clouds.ts').split('\n').filter(l => /^ {4}imgSrc: '/.test(l)),
+    ...read('../src/pages/Desastres.tsx').split('\n').filter(l => /^ {4}img: '/.test(l)),
+  ]
+  assert.equal(photoLines.length, 23)
+  for (const line of photoLines) {
+    assert.match(line, /['"]\/fotos\/[a-z-]+\.webp['"]/, `local photo expected: ${line.trim()}`)
+    assert.doesNotMatch(line, /https?:\/\//, line.trim())
+  }
+})
