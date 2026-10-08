@@ -8,6 +8,7 @@
 
 import { parseObservedAt } from './windShearHelpers.ts'
 import { formatLocalInstant } from './taf.ts'
+import { cloudBaseFeet, cloudBaseText, cloudType, type CloudLayerData } from './cloudBase.ts'
 
 const SM_IN_METERS = 1609.344
 const HPA_PER_INHG = 33.8639
@@ -130,25 +131,33 @@ export function observedLabel(observed: string | null | undefined): string | nul
 
 // ------------------------------------------------------------------ nubes
 
-export interface MetarCloudData {
-  code?: string
-  base_feet_agl?: number
-  type?: string
-}
+export type MetarCloudData = CloudLayerData
 
 const CONVECTIVE_RAW_RE = /\b(?:FEW|SCT|BKN|OVC)\d{3}(CB|TCU)\b/
 
-/** CB y TCU se buscan también en el texto del METAR: no hay evidencia de que CheckWX mande `type`. */
+/**
+ * CB y TCU se buscan en el texto del METAR y también en el `type` de cada capa. CheckWX documenta ese
+ * `type` como un objeto `{ code, text }`; la respuesta real de SACO (sin convección) no lo trae.
+ */
 export function cloudNote(clouds: MetarCloudData[] | undefined, rawText: string | undefined): string {
   if (!clouds || clouds.length === 0) return ''
   const fromText = CONVECTIVE_RAW_RE.exec(rawText ?? '')?.[1]
-  const kinds = new Set([fromText, ...clouds.map(c => c.type)])
+  const kinds = new Set([fromText, ...clouds.map(cloudType)])
   if (kinds.has('CB')) return '⚠️ Cumulonimbus reportado — condición crítica'
   if (kinds.has('TCU')) return '⚠️ Cúmulos en torre (TCU) reportados — condición crítica'
 
   const ceiling = clouds
-    .filter(c => c.code === 'BKN' || c.code === 'OVC')
-    .sort((a, b) => (a.base_feet_agl ?? Infinity) - (b.base_feet_agl ?? Infinity))[0]
+    .filter(c => c.code === 'BKN' || c.code === 'OVC' || c.code === 'VV') // VV (visibilidad vertical) también es techo
+    .sort((a, b) => (cloudBaseFeet(a) ?? Infinity) - (cloudBaseFeet(b) ?? Infinity))[0]
   if (!ceiling) return 'Sin capa de techo definida'
-  return isFiniteNumber(ceiling.base_feet_agl) ? `Techo definido a ${ceiling.base_feet_agl} ft AGL` : 'Techo definido'
+  const base = cloudBaseText(ceiling)
+  return base === null ? 'Techo definido' : `Techo definido a ${base} AGL`
+}
+
+/** Valor de la tarjeta de nubes: "SCT 3500 ft (1067 m) · OVC 8000 ft (2438 m)"; sin altura, solo el código. */
+export function cloudsDisplay(clouds: MetarCloudData[] | undefined): string {
+  return (clouds ?? [])
+    .map(c => [c.code ?? '', cloudBaseText(c) ?? ''].filter(part => part !== '').join(' '))
+    .filter(label => label !== '')
+    .join(' · ')
 }

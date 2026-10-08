@@ -83,13 +83,37 @@ def test_full_moon_icon():
 def test_first_quarter_phase():
     result = compute_moon_phase(KNOWN_FIRST_QUARTER)
     # ~7 días después de luna nueva → cuarto creciente o gibosa creciente
-    assert result.name in ("Cuarto creciente", "Gibosa creciente", "Creciente iluminante")
+    assert result.name in ("Cuarto creciente", "Gibosa creciente", "Creciente")
 
 
 def test_last_quarter_phase():
     result = compute_moon_phase(KNOWN_LAST_QUARTER)
     # ~7 días después de luna llena → cuarto menguante o gibosa menguante
     assert result.name in ("Cuarto menguante", "Gibosa menguante")
+
+
+def test_waning_crescent_is_called_menguante():
+    """~3 días antes de la luna nueva (fracción ~0.90): luna menguante, no "creciente"."""
+    result = compute_moon_phase(datetime(2024, 1, 8, 12, 0, tzinfo=timezone.utc))
+    assert result.name == "Menguante"
+    assert result.icon == "moon-waning-crescent"
+
+
+def test_waxing_crescent_is_called_creciente():
+    """~3 días después de la luna nueva (fracción ~0.10): creciente."""
+    result = compute_moon_phase(datetime(2024, 1, 14, 12, 0, tzinfo=timezone.utc))
+    assert result.name == "Creciente"
+    assert result.icon == "moon-waxing-crescent"
+
+
+def test_phase_names_are_the_expected_eight_across_a_month():
+    """Recorrido de un mes lunar: el conjunto de nombres es exactamente el de las 8 fases."""
+    import datetime as dt
+    names = {compute_moon_phase(KNOWN_NEW_MOON + dt.timedelta(hours=6 * i)).name for i in range(120)}
+    assert names == {
+        "Nueva", "Creciente", "Cuarto creciente", "Gibosa creciente",
+        "Llena", "Gibosa menguante", "Cuarto menguante", "Menguante",
+    }
 
 
 # ---------------------------------------------------------------------------

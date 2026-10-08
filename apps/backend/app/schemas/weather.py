@@ -126,7 +126,7 @@ class DayArcSchema(BaseModel):
     sunrise: str                    # ISO datetime "2026-05-20T06:45"
     sunset: str
     current_position_pct: float     # 0.0 = sunrise, 1.0 = sunset, >1.0 = después de sunset
-    daylight_label: str             # "10h 26m de luz"
+    daylight_label: str             # "Quedan 10h 26m de luz" (de día); "Sale en 2h 05m" / "Amanece en 3h 10m" (de noche)
     is_day: bool
 
 

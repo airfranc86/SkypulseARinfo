@@ -53,7 +53,7 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
       style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
     >
       {/* SVG arc */}
-      <svg viewBox="0 0 200 126" className="w-full" style={{ maxHeight: '140px' }}>
+      <svg viewBox="0 0 200 140" className="w-full" style={{ maxHeight: '154px' }}>
         <defs>
           <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#f0a030" stopOpacity="0.3" />
@@ -130,10 +130,11 @@ export function DayArc({ dayArc, moonPhase, snowLevelM }: Props) {
           {timeLabel(dayArc.sunset)}
         </text>
 
-        {/* Daylight label centered */}
+        {/* Daylight label centered, en su propia línea: "Quedan 10h 26m de luz" mide ~120 unidades y,
+            a la altura de las horas de salida y puesta, se pisaba con ellas. */}
         <text
           x={cx}
-          y={cy + 12}
+          y={cy + 28}
           fontSize="11"
           fill="var(--color-muted-foreground)"
           textAnchor="middle"

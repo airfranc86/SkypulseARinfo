@@ -9,6 +9,7 @@ import { LOAD_RETRY } from '@/lib/loadError'
 import {
   FLIGHT_CATEGORY_RULES,
   cloudNote,
+  cloudsDisplay,
   dewpointText,
   observedLabel,
   qnhHpa,
@@ -16,6 +17,7 @@ import {
   temperatureNote,
   visibilityNote,
   windDisplay,
+  type MetarCloudData,
 } from '@/lib/metarDecode'
 import { FLIGHT_CATEGORY_STYLES, TAF_GROUP_NOTES, tafStatusMessage, type TafDecoded } from '@/lib/taf'
 
@@ -41,7 +43,7 @@ interface MetarData {
     miles_float?: number
     text?: string
   }
-  clouds?: Array<{ code?: string; base_feet_agl?: number; type?: string }>
+  clouds?: MetarCloudData[]
   temperature?: { celsius?: number; value?: number }
   dewpoint?: { celsius?: number; value?: number }
   barometer?: { hpa?: number }
@@ -356,7 +358,7 @@ function MetarResult({ metar, taf, tafMessage }: { metar: MetarData; taf: TafDec
             <FieldCard
               label="Nubes"
               color="#3ecf7a"
-              value={metar.clouds.map(c => `${c.code ?? ''}${c.base_feet_agl ? (c.base_feet_agl / 100).toFixed(0) + '00ft' : ''}`).join(' · ')}
+              value={cloudsDisplay(metar.clouds)}
               note={cloudNote(metar.clouds, metar.raw_text)}
             />
           )}
