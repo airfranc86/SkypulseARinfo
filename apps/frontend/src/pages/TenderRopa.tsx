@@ -6,6 +6,7 @@ import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
 import { isWaitingForColdStart } from '@/lib/loadError'
+import { qualifiedBestDay } from '@/lib/laundryDay'
 
 interface Props { location: LocationState | null }
 
@@ -38,7 +39,7 @@ export function TenderRopa({ location }: Props) {
       {showError && <LoadError error={error} onRetry={() => { void refetch() }} />}
       {data && (
         <div className="space-y-4">
-          <QualityScaleBar bestLabel={data.days.find(d => d.is_best)?.label ?? ''} />
+          <QualityScaleBar bestLabel={qualifiedBestDay(data.days)?.label ?? ''} />
           <div className="space-y-3">
             {data.days.map((day, i) => (
               <LaundryDayCard

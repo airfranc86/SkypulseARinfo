@@ -17,7 +17,7 @@ export function QualityScaleBar({ bestLabel }: QualityScaleBarProps) {
       className="rounded-xl p-4"
       style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
     >
-      <p className="text-[.55rem] uppercase tracking-widest mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
+      <p className="text-[.65rem] uppercase tracking-widest mb-3" style={{ color: 'var(--color-muted-foreground)' }}>
         Escala de aptitud
       </p>
       <div className="flex gap-[3px] h-[10px]">
@@ -25,7 +25,7 @@ export function QualityScaleBar({ bestLabel }: QualityScaleBarProps) {
           <div
             key={q.label}
             className="flex-1 rounded-full"
-            style={{ background: q.color, opacity: 0.55 }}
+            style={{ background: q.color, opacity: 1 }}
           />
         ))}
       </div>
@@ -33,7 +33,7 @@ export function QualityScaleBar({ bestLabel }: QualityScaleBarProps) {
         {QUALITY_SCALE.map((q) => (
           <div key={q.label} className="flex-1 text-center">
             <span
-              className="text-[.48rem] leading-tight block"
+              className="text-[.65rem] leading-tight block"
               style={{
                 color: q.color,
                 fontWeight: q.label === bestLabel ? 700 : undefined,

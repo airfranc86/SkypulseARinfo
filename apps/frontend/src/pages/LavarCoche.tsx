@@ -2,7 +2,8 @@ import { Car } from 'lucide-react'
 import { useLavarCoche } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { CarWashDay } from '@/lib/api'
-import { LABEL_COLOR } from '@/lib/qualityScale'
+import { LABEL_COLOR, resolveLabel, type QualityLabel } from '@/lib/qualityScale'
+import { isQualifiedBest, qualifiedBestDay } from '@/lib/laundryDay'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { GlowCard } from '@/components/animated/GlowCard'
 import { QualityScaleBar } from '@/components/ui/QualityScaleBar'
@@ -12,24 +13,19 @@ import { isWaitingForColdStart } from '@/lib/loadError'
 
 interface Props { location: LocationState | null }
 
-const COLOR_MAP: Record<CarWashDay['color'], string> = {
-  green: '#3ecf7a',
-  yellow: '#f0a030',
-  red:    '#e05545',
-}
-
 interface ScoreInfo {
   rowBg: string
   fontSize: string
   fontWeight: number
 }
 
-function scoreInfo(color: CarWashDay['color'], score: number): ScoreInfo {
-  if (color === 'green' && score >= 80) return { rowBg: 'rgba(62,207,122,0.08)', fontSize: '1.15rem', fontWeight: 700 }
-  if (color === 'green')               return { rowBg: 'rgba(62,207,122,0.04)', fontSize: '1.0rem',  fontWeight: 600 }
-  if (color === 'yellow')              return { rowBg: 'transparent',            fontSize: '0.9rem',  fontWeight: 500 }
-  if (score < 30)                      return { rowBg: 'rgba(155,32,32,0.10)',   fontSize: '0.75rem', fontWeight: 400 }
-  return                                      { rowBg: 'rgba(224,85,69,0.07)',   fontSize: '0.8rem',  fontWeight: 400 }
+// Row tints are the scale colors with an alpha (hex 14 = 8 %, 0a = 4 %, 1a = 10 %, 12 = 7 %).
+function scoreInfo(label: QualityLabel, score: number): ScoreInfo {
+  if (label === 'Excelente' && score >= 80) return { rowBg: `${LABEL_COLOR['Excelente']}14`, fontSize: '1.15rem', fontWeight: 700 }
+  if (label === 'Excelente')               return { rowBg: `${LABEL_COLOR['Excelente']}0a`, fontSize: '1.0rem',  fontWeight: 600 }
+  if (label === 'Bueno')                   return { rowBg: 'transparent',                    fontSize: '0.9rem',  fontWeight: 500 }
+  if (label === 'No apto')                 return { rowBg: `${LABEL_COLOR['No apto']}1a`,   fontSize: '0.75rem', fontWeight: 400 }
+  return                                          { rowBg: `${LABEL_COLOR['Regular']}12`,   fontSize: '0.8rem',  fontWeight: 400 }
 }
 
 // ---------------------------------------------------------------------------
@@ -37,8 +33,10 @@ function scoreInfo(color: CarWashDay['color'], score: number): ScoreInfo {
 // ---------------------------------------------------------------------------
 
 function DayRow({ day }: { day: CarWashDay }) {
-  const barColor = LABEL_COLOR[day.label] ?? COLOR_MAP[day.color]
-  const info = scoreInfo(day.color, day.score)
+  const label = resolveLabel(day)
+  const barColor = LABEL_COLOR[label]
+  const info = scoreInfo(label, day.score)
+  const isBest = isQualifiedBest(day)
 
   const row = (
     <div
@@ -55,19 +53,19 @@ function DayRow({ day }: { day: CarWashDay }) {
             style={{ color: 'var(--color-foreground)' }}
           >
             {day.day_label}
-            {day.is_best && (
+            {isBest && (
               <span className="ml-1" style={{ color: 'var(--color-watch)' }} title="Mejor día">★</span>
             )}
           </span>
           <span
-            className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+            className="text-xs px-1.5 py-0.5 rounded-full font-medium"
             style={{
-              background: `${barColor}20`,
+              background: 'var(--color-card)',
               color: barColor,
-              border: `1px solid ${barColor}40`,
+              border: `1px solid ${barColor}66`,
             }}
           >
-            {day.label}
+            {label}
           </span>
         </div>
         <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
@@ -126,7 +124,7 @@ function DayRow({ day }: { day: CarWashDay }) {
     </div>
   )
 
-  if (day.is_best) {
+  if (isBest) {
     return (
       <GlowCard glowColor={barColor} borderRadius={12} glowSize={280}>
         {row}
@@ -153,8 +151,8 @@ export function LavarCoche({ location }: Props) {
 
   if (location === null) return <PageSkeleton />
 
-  const bestDay = data?.days.find(d => d.is_best) ?? null
-  const bestColor = bestDay ? COLOR_MAP[bestDay.color] : '#3ecf7a'
+  const bestDay = data ? qualifiedBestDay(data.days) : null
+  const bestColor = LABEL_COLOR[bestDay ? resolveLabel(bestDay) : 'Excelente']
 
   return (
     <div>
@@ -203,7 +201,7 @@ export function LavarCoche({ location }: Props) {
             )}
 
             {/* Escala de referencia */}
-            <QualityScaleBar bestLabel={bestDay?.label ?? ''} />
+            <QualityScaleBar bestLabel={bestDay ? resolveLabel(bestDay) : ''} />
 
             {/* Lista de días */}
             <div className="space-y-3">
