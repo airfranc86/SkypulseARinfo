@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
 
+from app.schemas.incendios import RISK_COLOR_MAP
 from app.schemas.weather import SourceMeta, WeatherCurrentResponse
 from app.services.fire_danger import FireDangerEntry, compute_fire_risk
 from tests.hourly_fixtures import AR, make_uniform_hourly
@@ -369,6 +370,20 @@ class TestIncendiosFromOpenMeteo:
         expected_score, expected_label = compute_fire_risk(34.0, 20.0, 25.0, 0.0)
         assert data["current_score"] == expected_score
         assert data["current_label"] == expected_label
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_a_hot_dry_windy_forecast_reaches_extremo_with_its_color(self, async_client: AsyncClient):
+        # 40 °C, 0 % de humedad y 40 km/h suman 80 puntos: "Extremo" tiene que poder salir del endpoint.
+        forecast = make_uniform_hourly(temp_c=40.0, humidity=0.0, wind=40.0, precip=0.0)
+        with patch(OPEN_METEO, new_callable=AsyncMock, return_value=forecast):
+            response = await async_client.get("/api/incendios?lat=-34.6&lon=-58.4")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert (data["current_score"], data["current_label"]) == (80.0, "Extremo")
+        assert data["current_color"] == RISK_COLOR_MAP["Extremo"]
+        assert (data["peak_score"], data["peak_label"]) == (80.0, "Extremo")
 
     @pytest.mark.asyncio
     @pytest.mark.integration

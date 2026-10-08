@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { BurnText } from '@/components/animated/BurnText'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { TOOL_HEADER_ICON_CODES, TOOL_HEADER_ICON_SIZE, fireConditionIconCode } from '@/lib/toolIcons'
+import { formatPeakTime, riskBarHeights } from '@/lib/incendios'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -204,22 +205,6 @@ function ConditionChip({
   )
 }
 
-/** Formatea "2026-06-02 09:00" → "Hoy 09:00" / "Mañana 09:00" / "2 jun 09:00" */
-function formatPeakTime(raw: string): string {
-  const parts = raw.split(' ')
-  if (parts.length < 2) return raw
-  const [datePart, timePart] = parts
-  const today = new Date()
-  const todayStr = today.toISOString().slice(0, 10)
-  const tomorrow = new Date(today)
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const tomorrowStr = tomorrow.toISOString().slice(0, 10)
-  if (datePart === todayStr)     return `Hoy ${timePart}`
-  if (datePart === tomorrowStr)  return `Mañana ${timePart}`
-  const d = new Date(`${datePart}T12:00:00`)
-  return `${d.getDate()} ${d.toLocaleDateString('es-AR', { month: 'short' })} ${timePart}`
-}
-
 interface RiskGroup {
   hourLabel: string
   maxScore: number
@@ -248,7 +233,8 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
     } satisfies RiskGroup
   }).filter((g): g is RiskGroup => g !== null)
 
-  const globalMax = Math.max(...groups.map(g => g.maxScore), 1)
+  // Escala absoluta 0 a 100: el alto de la barra es el puntaje, no relativo al máximo de las 8 franjas.
+  const bars = riskBarHeights(groups.map(g => g.maxScore))
 
   return (
     <div
@@ -263,21 +249,21 @@ function RiskTimeline({ slots }: { slots: FireDangerSlot[] }) {
         items={groups.map(g => ({ hourLabel: g.hourLabel, description: `${g.label}, puntaje ${g.maxScore}` }))}
       />
       <div className="flex items-end gap-1.5 h-14">
-        {groups.map((g) => {
-          const heightPct = (g.maxScore / globalMax) * 100
+        {groups.map((g, i) => {
+          const bar = bars[i]
           return (
             <div
               key={g.hourLabel}
-              className="flex-1 flex flex-col items-center justify-end gap-1 cursor-help"
+              className="h-full flex-1 flex flex-col items-center justify-end gap-1 cursor-help"
               title={`${g.hourLabel} — ${g.label} (${g.maxScore})`}
             >
               <div
                 className="w-full rounded-sm transition-all"
                 style={{
-                  height: `${Math.max(heightPct, 5)}%`,
+                  height: `${bar.heightPct}%`,
                   background: g.color,
                   opacity: g.isNow ? 1 : 0.72,
-                  minHeight: '3px',
+                  minHeight: `${bar.minHeightPx}px`,
                   outline: g.isNow ? `2px solid ${g.color}` : undefined,
                   outlineOffset: g.isNow ? '1px' : undefined,
                 }}
