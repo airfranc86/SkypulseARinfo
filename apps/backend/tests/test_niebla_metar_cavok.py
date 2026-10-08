@@ -1,6 +1,7 @@
 """FRA-331: con un METAR CAVOK ("visib": "6+") /api/niebla usa el METAR y no cae a Open-Meteo."""
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock
 
 import httpx
@@ -46,7 +47,7 @@ def stub_other_sources(monkeypatch):
 async def test_cavok_metar_is_used_and_does_not_fall_back_to_open_meteo(async_client: AsyncClient):
     with respx.mock:
         respx.get(metar_module.AWC_METAR_BASE).mock(
-            return_value=httpx.Response(200, json=[{"icao": "SAAR", "visib": "6+", "obsTime": 1705320000}])
+            return_value=httpx.Response(200, json=[{"icao": "SAAR", "visib": "6+", "obsTime": int(time.time()) - 600}])
         )
         resp = await async_client.get("/api/niebla", params={"lat": ROSARIO[0], "lon": ROSARIO[1]})
 

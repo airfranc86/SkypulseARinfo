@@ -7,6 +7,8 @@ de 6 o más millas vale el tope de 10 km, no 6 SM = 9.656 m: la clasificación d
 """
 from __future__ import annotations
 
+import time
+
 import httpx
 import pytest
 import respx
@@ -22,10 +24,15 @@ def clear_metar_caches():
     metar_module._metar_cache.clear()
 
 
+def _fresh_obs_time() -> int:
+    """Hora de observación de hace 10 min: `get_metar_visibility` descarta los METAR de más de 90 min."""
+    return int(time.time()) - 600
+
+
 async def _visibility_for(entry: dict, icao: str = "SAEZ") -> float | None:
     with respx.mock:
         respx.get(metar_module.AWC_METAR_BASE).mock(
-            return_value=httpx.Response(200, json=[{"icao": icao, "obsTime": 1705320000, **entry}])
+            return_value=httpx.Response(200, json=[{"icao": icao, "obsTime": _fresh_obs_time(), **entry}])
         )
         return await get_metar_visibility(icao)
 
@@ -78,7 +85,7 @@ async def test_http_error_is_none_and_not_cached():
 async def test_cavok_value_is_cached_second_call_makes_no_request():
     with respx.mock:
         route = respx.get(metar_module.AWC_METAR_BASE).mock(
-            return_value=httpx.Response(200, json=[{"icao": "SAAR", "visib": "6+"}])
+            return_value=httpx.Response(200, json=[{"icao": "SAAR", "visib": "6+", "obsTime": _fresh_obs_time()}])
         )
         first = await get_metar_visibility("SAAR")
         second = await get_metar_visibility("SAAR")

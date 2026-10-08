@@ -18,7 +18,8 @@ from tests.test_dashboard_integration import _daily_ext, _hourly, _multi_model
 pytestmark = [pytest.mark.integration, pytest.mark.live_current_observation]
 
 ROSARIO = (-32.95, -60.65)               # SAAR ~13 km
-SANTIAGO_DEL_ESTERO = (-27.78, -64.27)   # no airport within 30 km
+SANTIAGO_DEL_ESTERO = (-27.78, -64.27)   # no airport within 20 km
+QUILMES = (-34.72, -58.25)               # SABE ~23.5 km: inside the old 30 km limit, beyond the 20 km one
 
 
 @pytest.fixture(autouse=True)
@@ -124,6 +125,24 @@ async def test_dashboard_far_from_airports_uses_the_model_with_its_real_time(
     assert current["station"] is None
     assert current["model_temp_c"] is None
     assert current["notices"] == []
+    assert route.call_count == 0
+
+
+async def test_dashboard_between_20_and_30_km_from_an_airport_no_longer_gets_a_metar(
+    async_client: AsyncClient,
+):
+    model_time = _model_time()
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(AWC_METAR_URL).mock(
+            return_value=httpx.Response(200, json=_metar(model_time - timedelta(minutes=10)))
+        )
+        response = await _get_dashboard(async_client, *QUILMES, model_time)
+
+    assert response.status_code == 200
+    current = response.json()["current"]
+    assert current["source"] == "openmeteo"
+    assert current["source_reason"] == "metar_too_far"
+    assert current["station"] is None
     assert route.call_count == 0
 
 

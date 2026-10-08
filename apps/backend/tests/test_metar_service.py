@@ -8,6 +8,7 @@ puntos reales de fetch a AviationWeather/NOAA.
 """
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock
 
 import httpx
@@ -32,7 +33,7 @@ async def test_get_metar_visibility_records_usage(monkeypatch):
     mock_record = MagicMock()
     monkeypatch.setattr(metar_module.usage_counter, "record", mock_record)
 
-    payload = [{"icao": "SAEZ", "visib": "6", "obsTime": 1705320000}]
+    payload = [{"icao": "SAEZ", "visib": "6", "obsTime": int(time.time()) - 600}]
     with respx.mock:
         respx.get(metar_module.AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=payload)

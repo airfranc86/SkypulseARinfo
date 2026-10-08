@@ -4,8 +4,8 @@ GET /api/niebla?lat=...&lon=...
 
 Estrategia de fuentes:
   Visibilidad actual (ahora):
-    1. METAR del aeropuerto más cercano (AWC, dato real)
-    2. Open-Meteo (fallback si METAR falla)
+    1. METAR del aeropuerto más cercano (AWC, dato real) si está a <= 20 km y tiene <= 90 min
+    2. Open-Meteo (fallback si el METAR falla, está lejos o es viejo)
 
   Pronóstico horario 12h:
     1. TAF del aeropuerto más cercano (AWC, emitido por meteorólogos)
