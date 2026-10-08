@@ -1,9 +1,10 @@
 /**
  * Which icon each tool page uses (FRA-346). Pure module: no React and no SVG imports, so
  * `node --test` can load it. Weather phenomena use the animated Meteocons through `WeatherIcon`;
- * signals with no weather equivalent (ok, warning, time, ski, runner) use lucide icons, chosen by
+ * signals with no weather equivalent (ok, warning, time, runner) use lucide icons, chosen by
  * the page component.
  */
+import type { SnowBandKey } from './cotaDeNieve.ts'
 import type { WeatherIconCode } from './weatherIconCodes.ts'
 
 /** Header icon of each tool page: a Meteocon inside the 64 px `PageHeader` square. */
@@ -62,15 +63,16 @@ export function sunIconCode(isDay: boolean, uvIndex: number | null): WeatherIcon
 
 // ── Cota de nieve ────────────────────────────────────────────────────────────
 
-/** Status icon: a Meteocon, or the name of a lucide status icon drawn by the page. */
-export type SnowStatusIcon =
-  | { kind: 'weather'; code: WeatherIconCode }
-  | { kind: 'status'; name: 'ok' | 'ski' | 'warning' }
+/** Status icon of the snow-level card: always a Meteocon (no verdict glyphs such as a check or a warning). */
+export type SnowStatusIcon = { kind: 'weather'; code: WeatherIconCode }
 
-/** Icon of each snow-level status, from best to worst. */
+/**
+ * Icon of the snow-level card: one neutral thermometer for every band. The snow line is a height,
+ * so the icon must not claim a phenomenon (rain, snow) for the current state.
+ */
 export const SNOW_STATUS_ICONS = {
-  excellent: { kind: 'status', name: 'ok' },
-  good: { kind: 'status', name: 'ski' },
-  moderate: { kind: 'status', name: 'warning' },
-  low: { kind: 'weather', code: 'rain' },
-} as const satisfies Record<string, SnowStatusIcon>
+  veryHigh: { kind: 'weather', code: 'thermometer' },
+  high: { kind: 'weather', code: 'thermometer' },
+  medium: { kind: 'weather', code: 'thermometer' },
+  low: { kind: 'weather', code: 'thermometer' },
+} as const satisfies Record<SnowBandKey, SnowStatusIcon>
