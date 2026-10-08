@@ -118,6 +118,11 @@ def icon_from_description_es(text: str | None, is_day: bool = True) -> str | Non
     t = _normalize_es(text)
     suffix = "day" if is_day else "night"
 
+    # Polvo y arena van antes que "tormenta": "tormenta de polvo" es polvo, no rayo.
+    # Todos los íconos de fenómenos (dust, smoke, haze, mist) son neutros: sin sufijo day/night.
+    if any(k in t for k in ("polvo", "arena")):
+        return "dust"
+
     # Precipitación (lo más específico primero para evitar falsos positivos).
     # 'thunderstorms' es neutro (rayo sin sol) ⇒ no lleva sufijo day/night.
     if "tormenta" in t:
@@ -130,8 +135,15 @@ def icon_from_description_es(text: str | None, is_day: bool = True) -> str | Non
         return "snow"
     if any(k in t for k in ("lluvia", "chaparr", "chubasco", "precipit")):
         return "rain"
+    if "humo" in t:
+        return "smoke"
+    # "bruma seca" (calima) se evalúa antes que "bruma" a secas; en Argentina bruma = neblina.
+    if "calima" in t or "bruma seca" in t:
+        return "haze"
+    if "neblina" in t or "bruma" in t:
+        return "mist"
     # 'fog' es neutro (nube + bruma, sin sol/luna) ⇒ no lleva sufijo day/night.
-    if any(k in t for k in ("niebla", "neblina", "bruma")):
+    if "niebla" in t:
         return "fog"
 
     # Nubosidad ("algo/parcial/ligeramente nublado" antes que "nublado" pleno).

@@ -4,6 +4,9 @@
 // Las horas se muestran en hora de Argentina y en UTC, nunca en la zona del dispositivo: el TAF
 // se emite en UTC y quien lo lee necesita el mismo reloj que el pronóstico del resto del sitio.
 
+import { phenomenonIconsForToken } from './phenomenonIcons.ts'
+import type { WeatherIconCode } from './weatherIconCodes.ts'
+
 export interface TafWind {
   direction_deg: number | null
   variable: boolean
@@ -186,6 +189,16 @@ function describeWeatherToken(token: string): string {
 
 export function weatherText(codes: string[]): string[] {
   return codes.map(describeWeatherToken)
+}
+
+export interface WeatherItem {
+  text: string
+  icons: WeatherIconCode[]
+}
+
+/** Decoded phenomena with the icons their codes map to (BR, FG, HZ, FU, DU); texts are unchanged. */
+export function weatherItems(codes: string[]): WeatherItem[] {
+  return codes.map(code => ({ text: describeWeatherToken(code), icons: phenomenonIconsForToken(code) }))
 }
 
 // ------------------------------------------------------------------ grupos de cambio

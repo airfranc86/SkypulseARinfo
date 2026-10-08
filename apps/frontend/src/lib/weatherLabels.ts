@@ -25,6 +25,10 @@ function skyKind(code: string): string | null {
   if (code.startsWith('partly-cloudy')) return 'parcialmente nublado'
   if (code.startsWith('overcast')) return 'nublado'
   if (code.startsWith('fog')) return 'niebla'
+  if (code === 'mist') return 'neblina'
+  if (code === 'haze') return 'calima'
+  if (code === 'smoke') return 'humo'
+  if (code === 'dust') return 'polvo'
   if (code.startsWith('clear')) return 'despejado'
   return null
 }

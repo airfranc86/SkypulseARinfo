@@ -10,11 +10,13 @@ import {
   hasConvectiveSigns,
   isCavok,
   visibilityText,
-  weatherText,
+  weatherItems,
   windText,
   type TafDecoded,
   type TafPeriod,
+  type WeatherItem,
 } from '@/lib/taf'
+import { WeatherIcon } from '@/components/ui/WeatherIcon'
 
 // TAF decodificado por períodos (FRA-365). Los datos llegan ya normalizados desde GET /api/taf;
 // acá solo se muestran. Las horas van en hora de Argentina y, debajo, en UTC.
@@ -63,10 +65,28 @@ function Row({ label, children, inherited }: { label: string; children: React.Re
   )
 }
 
+function WeatherList({ items }: { items: WeatherItem[] }) {
+  return (
+    <>
+      {items.map((item, index) => (
+        <span key={`${item.text}-${index}`}>
+          {index > 0 && ' · '}
+          <span className="inline-flex items-center gap-1 align-middle">
+            {item.icons.map(icon => (
+              <WeatherIcon key={icon} code={icon} size={22} />
+            ))}
+            {item.text}
+          </span>
+        </span>
+      ))}
+    </>
+  )
+}
+
 function PeriodItem({ period }: { period: TafPeriod }) {
   const time = formatWindow(period)
   const cavok = isCavok(period)
-  const weather = cavok ? [] : weatherText(period.weather)
+  const weather = cavok ? [] : weatherItems(period.weather)
   const clouds = cloudsText(period.clouds)
   const inherits = (field: string) => period.inherited.includes(field)
   const explanation = changeExplanation(period)
@@ -122,7 +142,7 @@ function PeriodItem({ period }: { period: TafPeriod }) {
                 {clouds.join(' · ')}
               </Row>
             )}
-            {weather.length > 0 && <Row label="Fenómenos">{weather.join(' · ')}</Row>}
+            {weather.length > 0 && <Row label="Fenómenos"><WeatherList items={weather} /></Row>}
           </>
         )}
       </dl>

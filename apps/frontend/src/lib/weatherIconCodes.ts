@@ -13,6 +13,11 @@ export const WEATHER_ICON_CODES = [
   'fog',
   'fog-day',
   'fog-night',
+  // Visibility phenomena reported in METAR/TAF and by the SMN text: neutral icons, no sun or moon.
+  'mist',
+  'haze',
+  'smoke',
+  'dust',
   'drizzle',
   'overcast-drizzle',
   'partly-cloudy-day-drizzle',

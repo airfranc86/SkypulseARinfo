@@ -21,6 +21,10 @@ import OvercastNight       from '@/assets/meteocons/overcast-night.svg?react'
 import Fog                 from '@/assets/meteocons/fog.svg?react'
 import FogDay              from '@/assets/meteocons/fog-day.svg?react'
 import FogNight            from '@/assets/meteocons/fog-night.svg?react'
+import Mist                from '@/assets/meteocons/mist.svg?react'
+import Haze                from '@/assets/meteocons/haze.svg?react'
+import Smoke               from '@/assets/meteocons/smoke.svg?react'
+import Dust                from '@/assets/meteocons/dust.svg?react'
 import Drizzle             from '@/assets/meteocons/drizzle.svg?react'
 import OvercastDrizzle     from '@/assets/meteocons/overcast-drizzle.svg?react'
 import PartlyCloudyDayDrizzle   from '@/assets/meteocons/partly-cloudy-day-drizzle.svg?react'
@@ -85,6 +89,10 @@ const ICON_MAP: Record<WeatherIconCode, SvgComponent> = {
   'fog':                          Fog,
   'fog-day':                      FogDay,
   'fog-night':                    FogNight,
+  'mist':                         Mist,
+  'haze':                         Haze,
+  'smoke':                        Smoke,
+  'dust':                         Dust,
   'drizzle':                      Drizzle,
   'overcast-drizzle':             OvercastDrizzle,
   'partly-cloudy-day-drizzle':    PartlyCloudyDayDrizzle,

@@ -21,3 +21,10 @@ test('cada SVG de un código es un SVG sin scripts ni enlaces externos', () => {
     assert.doesNotMatch(svg, /<foreignObject/i, `${code}: lleva foreignObject`)
   }
 })
+
+test('los íconos de bruma, calima, humo y polvo están en el catálogo y tienen archivo', () => {
+  for (const code of ['mist', 'haze', 'smoke', 'dust'] as const) {
+    assert.ok(WEATHER_ICON_CODES.includes(code), `${code} falta en WEATHER_ICON_CODES`)
+    assert.ok(existsSync(join(DIR, `${code}.svg`)), `${code}.svg no existe`)
+  }
+})
