@@ -33,26 +33,43 @@ test('13: cada fila de la escala del radar tiene un nombre distinto', () => {
   assert.deepEqual(labels, [...new Set(labels)], `nombres repetidos: ${labels.join(' | ')}`)
 })
 
-test('13: las filas de 5–20 y 20–35 mm/h se llaman "Verde intenso" y "Amarillo"', () => {
+test('13: los cortes de la escala siguen las clases de la OMM (ligera, moderada desde 2,5, intensa desde 7,6, violenta desde 50)', () => {
   const byRange = new Map(radarRows.map(r => [r.mmh, r.label]))
-  assert.equal(byRange.get('5–20 mm/h'), 'Verde intenso')
-  assert.equal(byRange.get('20–35 mm/h'), 'Amarillo')
+  assert.equal(byRange.get('< 2,5 mm/h'), 'Verde claro')
+  assert.equal(byRange.get('2,5–7,6 mm/h'), 'Verde intenso')
+  assert.equal(byRange.get('7,6–20 mm/h'), 'Amarillo')
+  assert.equal(byRange.get('20–50 mm/h'), 'Naranja')
+  assert.equal(byRange.get('> 50 mm/h'), 'Rojo')
+  // Los cortes viejos (5, 35) ya no figuran en ninguna fila.
+  assert.ok(radarRows.every(r => !/\b(5|35)\b/.test(r.mmh.replace('2,5', '').replace('7,6', ''))))
+})
+
+test('13: la clase "intensa" empieza en 7,6 mm/h y "violenta" en 50 (OMM)', () => {
+  const block = arrayBlock('RADAR_SCALE')
+  const row = (label: string) => block.split('\n').find(line => line.includes(`label: '${label}'`)) ?? ''
+  assert.match(row('Verde claro'), /Lluvia ligera/)
+  assert.match(row('Verde intenso'), /Lluvia moderada/)
+  assert.match(row('Amarillo'), /Lluvia intensa/)
+  assert.match(row('Amarillo'), /7,6/)
+  assert.match(row('Rojo'), /violenta/i)
+  // El corte viejo de 35 mm/h no queda en ningún texto (un "35" suelto, no el de un color como #a3e635).
+  assert.doesNotMatch(block, /(?<![\w#])35(?!\w)/)
 })
 
 test('13: la tabla se rotula como referencia aproximada', () => {
   assert.match(source, /referencia aproximada/i)
 })
 
-test('13: el ejercicio 1 responde lo mismo que la escala (naranja-rojo, más de 35 mm/h)', () => {
+test('13: el ejercicio 1 responde lo mismo que la escala (naranja-rojo, más de 20 mm/h)', () => {
   const exercises = arrayBlock('EXERCISES')
   assert.ok(
-    exercises.includes('El naranja-rojo indica lluvia intensa a muy intensa (más de 35 mm/h)'),
+    exercises.includes('El naranja-rojo indica lluvia intensa a muy intensa (más de 20 mm/h)'),
     'el ejercicio 1 no tiene la respuesta corregida',
   )
-  assert.doesNotMatch(exercises, /El naranja indica lluvia muy intensa/)
-  // The "35" in the answer is the start of the orange row in the table.
+  assert.doesNotMatch(exercises, /El naranja indica lluvia muy intensa|más de 35 mm\/h/)
+  // The "20" in the answer is the start of the orange row in the table.
   const orange = radarRows.find(r => r.label === 'Naranja')
-  assert.ok(orange?.mmh.startsWith('35'), `la fila naranja empieza en ${orange?.mmh}`)
+  assert.ok(orange?.mmh.startsWith('20'), `la fila naranja empieza en ${orange?.mmh}`)
 })
 
 test('26: el satélite IR dice de qué es el calor del cielo despejado', () => {

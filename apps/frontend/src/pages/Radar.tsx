@@ -8,11 +8,11 @@ import { ScanText } from '@/components/animated/ScanText'
 // ---------------------------------------------------------------------------
 
 const RADAR_SCALE = [
-  { color: '#4ade80', label: 'Verde claro',              mmh: '< 5 mm/h',   desc: 'Lluvia ligera — menos de 5 mm/h. Paraguas alcanza. Sin riesgo de vuelo.' },
-  { color: '#a3e635', label: 'Verde intenso',            mmh: '5–20 mm/h',  desc: 'Lluvia moderada — 5 a 20 mm/h. Se moja fácil. Vuelo VFR empieza a ser incómodo.' },
-  { color: '#facc15', label: 'Amarillo',                 mmh: '20–35 mm/h', desc: 'Lluvia moderada a intensa — 20 a 35 mm/h. Visibilidad reducida. Evitar salir a volar.' },
-  { color: '#f97316', label: 'Naranja',                  mmh: '35–50 mm/h', desc: 'Lluvia intensa — 35 a 50 mm/h. Posibles ráfagas y rayos. Riesgo real en tierra y en vuelo.' },
-  { color: '#ef4444', label: 'Rojo',                     mmh: '> 50 mm/h',  desc: 'Lluvia muy intensa o granizo — más de 50 mm/h. Tormentas severas. No salir.' },
+  { color: '#4ade80', label: 'Verde claro',              mmh: '< 2,5 mm/h',   desc: 'Lluvia ligera — menos de 2,5 mm/h. Paraguas alcanza. Sin riesgo de vuelo.' },
+  { color: '#a3e635', label: 'Verde intenso',            mmh: '2,5–7,6 mm/h', desc: 'Lluvia moderada — 2,5 a 7,6 mm/h. Se moja fácil. Vuelo VFR empieza a ser incómodo.' },
+  { color: '#facc15', label: 'Amarillo',                 mmh: '7,6–20 mm/h',  desc: 'Lluvia intensa (la clase "intensa" de la OMM empieza en 7,6 mm/h) — 7,6 a 20 mm/h. Visibilidad reducida. Evitar salir a volar.' },
+  { color: '#f97316', label: 'Naranja',                  mmh: '20–50 mm/h',   desc: 'Lluvia intensa a muy intensa — 20 a 50 mm/h. Posibles ráfagas y rayos. Riesgo real en tierra y en vuelo.' },
+  { color: '#ef4444', label: 'Rojo',                     mmh: '> 50 mm/h',    desc: 'Lluvia violenta (clase de la OMM) o granizo — más de 50 mm/h. Tormentas severas. No salir.' },
   { color: '#a855f7', label: 'Morado / violeta',         mmh: 'Granizo',    desc: 'Granizo grande confirmado o reflectividad extrema. Núcleo severo de tormenta. Peligro máximo.', highlight: true },
 ]
 
@@ -28,7 +28,7 @@ const EXERCISES = [
     tag: 'Caso 1 — Radar', tagColor: '#f97316',
     question: <>El radar muestra una mancha <strong style={{ color: '#f1f5f9' }}>naranja-roja</strong> con un núcleo morado en el centro, moviéndose hacia tu ciudad. Velocidad estimada: 40 km/h. Llegada: 30 minutos.</>,
     answerTag: 'Interpretación', answerColor: '#ef4444',
-    answer: <>Tormenta severa en camino. El naranja-rojo indica lluvia intensa a muy intensa (más de 35 mm/h); el núcleo morado confirma <strong style={{ color: '#f1f5f9' }}>granizo probable</strong>. Tenés unos 30 minutos para buscar refugio sólido. Suspendé cualquier actividad al aire libre y posponé cualquier vuelo sin excepción. No esperes a que llegue para actuar.</>,
+    answer: <>Tormenta severa en camino. El naranja-rojo indica lluvia intensa a muy intensa (más de 20 mm/h); el núcleo morado confirma <strong style={{ color: '#f1f5f9' }}>granizo probable</strong>. Tenés unos 30 minutos para buscar refugio sólido. Suspendé cualquier actividad al aire libre y posponé cualquier vuelo sin excepción. No esperes a que llegue para actuar.</>,
   },
   {
     tag: 'Caso 2 — Satélite IR', tagColor: '#7dd3fc',
