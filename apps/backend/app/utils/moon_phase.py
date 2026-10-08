@@ -19,13 +19,13 @@ _SYNODIC_MONTH = 29.530588853  # días
 
 _PHASES = [
     (0.00, 0.06, "Nueva",              "moon-new"),
-    (0.06, 0.19, "Creciente iluminante", "moon-waxing-crescent"),
+    (0.06, 0.19, "Creciente",          "moon-waxing-crescent"),
     (0.19, 0.31, "Cuarto creciente",   "moon-first-quarter"),
     (0.31, 0.44, "Gibosa creciente",   "moon-waxing-gibbous"),
     (0.44, 0.56, "Llena",              "moon-full"),
     (0.56, 0.69, "Gibosa menguante",   "moon-waning-gibbous"),
     (0.69, 0.81, "Cuarto menguante",   "moon-last-quarter"),
-    (0.81, 1.00, "Creciente menguante", "moon-waning-crescent"),
+    (0.81, 1.00, "Menguante",          "moon-waning-crescent"),
 ]
 
 
@@ -53,7 +53,7 @@ def compute_moon_phase(date: datetime) -> MoonPhaseInfo:
             return MoonPhaseInfo(name=name, illumination=round(illumination, 4), icon=icon)
 
     # Cierre del último segmento (phase_fraction muy próximo a 1.0)
-    return MoonPhaseInfo(name="Creciente menguante", illumination=round(illumination, 4), icon="moon-waning-crescent")
+    return MoonPhaseInfo(name="Menguante", illumination=round(illumination, 4), icon="moon-waning-crescent")
 
 
 # ---------------------------------------------------------------------------

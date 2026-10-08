@@ -1,6 +1,7 @@
 """Tests de integración para GET /api/weather/dashboard."""
 from __future__ import annotations
 
+import re
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -200,7 +201,11 @@ async def test_dashboard_day_arc_shape(async_client: AsyncClient):
     assert "current_position_pct" in arc
     assert "daylight_label" in arc
     assert "is_day" in arc
-    assert "h" in arc["daylight_label"]
+    # La etiqueta depende de la hora del día (de día, de noche, antes del amanecer): se comprueba que sea
+    # una de las formas conocidas, no una hora puntual (ver test_daylight_label.py para el texto exacto).
+    assert re.fullmatch(
+        r"(Quedan .+ de luz|Sale en .+|Amanece en .+|Hoy: .+ de luz|.+ de luz)", arc["daylight_label"]
+    )
 
 
 @pytest.mark.asyncio

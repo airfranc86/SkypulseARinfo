@@ -258,7 +258,7 @@ async def get_dashboard(
             remaining = (ss_dt2 - now).total_seconds()
             h = int(remaining // 3600)
             m = int((remaining % 3600) // 60)
-            daylight_label = f"{h}h {m:02d}m de luz"
+            daylight_label = f"Quedan {h}h {m:02d}m de luz" if h > 0 else f"Quedan {m}m de luz"
         else:
             # Es de noche (post-sunset). Mostrar cuánto falta para el amanecer.
             # El índice [1] del pronóstico diario es el sunrise de mañana.

@@ -1,8 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   FLIGHT_CATEGORY_RULES,
   cloudNote,
+  cloudsDisplay,
   dewpointText,
   observedLabel,
   qnhHpa,
@@ -146,20 +148,70 @@ test('report time: with Z it gives the same instant, and a missing or broken tim
 
 // ------------------------------------------------------------------ clouds
 
-test('clouds: ceiling in feet, and never "undefined ft"', () => {
-  assert.equal(cloudNote([{ code: 'BKN', base_feet_agl: 4800 }], RAW), 'Techo definido a 4800 ft AGL')
+// CheckWX layers, in the documented shape: { code, feet, meters, text } (type is optional).
+const BKN_4800 = { code: 'BKN', feet: 4800, meters: 1463.0, text: 'Broken' }
+
+test('clouds: ceiling with its height in feet and metres, and never "undefined ft"', () => {
+  assert.equal(cloudNote([BKN_4800], RAW), 'Techo definido a 4800 ft (1463 m) AGL')
+  assert.equal(cloudNote([{ code: 'OVC', feet: 2000 }], ''), 'Techo definido a 2000 ft (610 m) AGL')
   assert.equal(cloudNote([{ code: 'BKN' }], 'METAR SACO 062300Z 06009KT 9999 BKN 21/15 Q1008'), 'Techo definido')
+  // VV (visibilidad vertical, p. ej. niebla cerrada) también es techo, y el más bajo manda.
+  assert.equal(cloudNote([{ code: 'VV', feet: 200 }], ''), 'Techo definido a 200 ft (61 m) AGL')
+  assert.equal(
+    cloudNote([{ code: 'OVC', feet: 800 }, { code: 'VV', feet: 300 }], ''),
+    'Techo definido a 300 ft (91 m) AGL',
+  )
   assert.ok(!cloudNote([{ code: 'OVC' }], '').includes('undefined'))
-  assert.equal(cloudNote([{ code: 'FEW', base_feet_agl: 2000 }], 'METAR X 062300Z 06009KT 9999 FEW020 21/15 Q1008'), 'Sin capa de techo definida')
+  assert.equal(cloudNote([{ code: 'FEW', feet: 2000 }], 'METAR X 062300Z 06009KT 9999 FEW020 21/15 Q1008'), 'Sin capa de techo definida')
   assert.equal(cloudNote([], RAW), '')
   assert.equal(cloudNote(undefined, RAW), '')
 })
 
-test('clouds: CB and TCU are detected in the METAR text, because CheckWX is not known to send the type', () => {
-  const cb = cloudNote([{ code: 'FEW', base_feet_agl: 2000 }], 'METAR X 062300Z 06009KT 9999 FEW020CB 21/15 Q1008')
+test('clouds: the ceiling is the lowest BKN or OVC layer', () => {
+  const layers = [
+    { code: 'FEW', feet: 1000, meters: 305.0, text: 'Few' },
+    { code: 'OVC', feet: 8000, meters: 2438.0, text: 'Overcast' },
+    { code: 'BKN', feet: 3000, meters: 914.0, text: 'Broken' },
+  ]
+  assert.equal(cloudNote(layers, ''), 'Techo definido a 3000 ft (914 m) AGL')
+})
+
+test('clouds: CB and TCU are detected in the METAR text', () => {
+  const cb = cloudNote([{ code: 'FEW', feet: 2000 }], 'METAR X 062300Z 06009KT 9999 FEW020CB 21/15 Q1008')
   assert.match(cb, /Cumulonimbus/)
-  const tcu = cloudNote([{ code: 'SCT', base_feet_agl: 3000 }], 'METAR X 062300Z 06009KT 9999 SCT030TCU 21/15 Q1008')
+  const tcu = cloudNote([{ code: 'SCT', feet: 3000 }], 'METAR X 062300Z 06009KT 9999 SCT030TCU 21/15 Q1008')
   assert.match(tcu, /Cúmulo|cúmulos en torre/i)
-  const bySchema = cloudNote([{ code: 'FEW', base_feet_agl: 2000, type: 'CB' }], '')
-  assert.match(bySchema, /Cumulonimbus/)
+})
+
+test('clouds: CB and TCU are detected from the layer type, as a string or as the documented { code, text } object', () => {
+  assert.match(cloudNote([{ code: 'FEW', feet: 2000, type: 'CB' }], ''), /Cumulonimbus/)
+  assert.match(cloudNote([{ code: 'FEW', feet: 2000, type: { code: 'CB', text: 'Cumulonimbus' } }], ''), /Cumulonimbus/)
+  assert.match(cloudNote([{ code: 'SCT', feet: 3000, type: { code: 'TCU', text: 'Towering Cumulus' } }], ''), /torre/i)
+})
+
+test('clouds card: every layer says its height in feet and metres', () => {
+  assert.equal(cloudsDisplay([BKN_4800]), 'BKN 4800 ft (1463 m)')
+  assert.equal(
+    cloudsDisplay([{ code: 'FEW', feet: 1000, meters: 305.0 }, { code: 'OVC', feet: 8000 }]),
+    'FEW 1000 ft (305 m) · OVC 8000 ft (2438 m)',
+  )
+  assert.equal(cloudsDisplay([{ code: 'BKN' }]), 'BKN')
+  assert.equal(cloudsDisplay([{ code: 'FEW', base_feet_agl: 2000 }]), 'FEW 2000 ft (610 m)')
+  assert.equal(cloudsDisplay([]), '')
+  assert.equal(cloudsDisplay(undefined), '')
+})
+
+test('clouds: a REAL CheckWX response (SACO 2026-10-08 16:00Z) shows the cloud base height', () => {
+  const body = JSON.parse(readFileSync(new URL('./fixtures/checkwx/SACO-20261008T1600Z.json', import.meta.url), 'utf8'))
+  const metar = body.data[0]
+  assert.equal(metar.raw_text, 'METAR SACO 081600Z 17013KT 9999 SCT035 19/10 Q1016 NOSIG')
+
+  const sky = cloudsDisplay(metar.clouds)
+  assert.equal(sky, 'SCT 3500 ft (1067 m)')
+  assert.ok(sky.includes('3500 ft (1067 m)'))
+
+  // SCT is not a ceiling: the note says so, and never a bare "Techo definido" without height.
+  const note = cloudNote(metar.clouds, metar.raw_text)
+  assert.equal(note, 'Sin capa de techo definida')
+  assert.ok(!note.includes('Techo definido'))
 })
