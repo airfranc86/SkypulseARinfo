@@ -23,7 +23,7 @@ COVERS = [None, 0.0, 10.0, 24.9, 25.0, 40.0, 62.0, 62.1, 80.0, 100.0]
 # Un texto del SMN por cada rama de `icon_from_description_es`.
 SMN_TEXTS = [
     "Tormenta", "Llovizna", "Aguanieve", "Nieve", "Nevadas", "Lluvia", "Chaparrones", "Chubascos",
-    "Niebla", "Neblina", "Cubierto", "Algo nublado", "Parcialmente nublado", "Nublado", "Despejado",
+    "Niebla", "Neblina", "Bruma", "Bruma seca", "Calima", "Humo", "Polvo", "Tormenta de arena", "Cubierto", "Algo nublado", "Parcialmente nublado", "Nublado", "Despejado",
 ]
 
 
@@ -57,6 +57,12 @@ def _backend_icons() -> set[str]:
                 for prob in (None, 10.0, 90.0):
                     icons.add(resolve_row_icon(code, precip_sum, prob, cover))
     return icons
+
+
+def test_the_new_phenomenon_icons_are_emitted_and_in_the_catalog():
+    emitted = {icon_from_description_es(t, True) for t in ("Neblina", "Bruma seca", "Humo", "Polvo")}
+    assert emitted == {"mist", "haze", "smoke", "dust"}
+    assert emitted <= _frontend_codes()
 
 
 def test_the_frontend_list_was_read():

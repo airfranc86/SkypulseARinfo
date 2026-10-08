@@ -3,6 +3,7 @@ import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { ColdStartNotice, LoadError } from '@/components/ui/LoadError'
 import { TafDecodedCard } from '@/components/aeronautica/TafDecodedCard'
+import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { api } from '@/lib/api'
 import { ApiError } from '@/lib/apiErrors'
 import { LOAD_RETRY } from '@/lib/loadError'
@@ -882,12 +883,14 @@ const GLOSARIO = [
   { code: 'TS',       color: '#e05545', note: 'Thunderstorm — tormenta eléctrica' },
   { code: 'TSRA',     color: '#e05545', note: 'Tormenta con lluvia' },
   { code: 'GR',       color: '#e05545', note: 'Granizo' },
-  { code: 'FG',       color: '#5aaad8', note: 'Fog — niebla (<1000 m)' },
-  { code: 'BR',       color: '#5aaad8', note: 'Mist — neblina (1000–5000 m)' },
+  { code: 'FG',       color: '#5aaad8', icon: 'fog', note: 'Fog — niebla (<1000 m)' },
+  { code: 'BR',       color: '#5aaad8', icon: 'mist', note: 'Mist — neblina (1000–5000 m)' },
   { code: 'RA',       color: '#5aaad8', note: 'Rain — lluvia' },
   { code: 'SN',       color: '#90aabb', note: 'Snow — nieve' },
   { code: 'DZ',       color: '#90aabb', note: 'Drizzle — llovizna' },
-  { code: 'HZ',       color: '#f0a030', note: 'Haze — calima / bruma seca' },
+  { code: 'HZ',       color: '#f0a030', icon: 'haze', note: 'Haze — calima / bruma seca' },
+  { code: 'FU',       color: '#f0a030', icon: 'smoke', note: 'Smoke — humo' },
+  { code: 'DU',       color: '#f0a030', icon: 'dust', note: 'Dust — polvo' },
   { code: 'FC',       color: '#e05545', note: 'Funnel cloud — tornado / tromba' },
   { code: 'FZ',       color: '#90aabb', note: 'Freezing — prefijo de engelamiento (FZRA, FZFG)' },
   { code: 'SKC / CLR',color: '#3ecf7a', note: 'Sky clear — cielo despejado' },
@@ -945,8 +948,11 @@ function GlosarioSection() {
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(42,74,112,.8)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--color-border)' }}
             >
-              <div className="text-[.88rem] mb-1" style={{ fontFamily: 'monospace', color: g.color }}>
-                {g.code}
+              <div className="flex items-center justify-between gap-2 min-h-7 mb-1">
+                <span className="text-[.88rem]" style={{ fontFamily: 'monospace', color: g.color }}>
+                  {g.code}
+                </span>
+                {g.icon && <WeatherIcon code={g.icon} size={28} />}
               </div>
               <p className="text-[.72rem] leading-[1.55]" style={{ color: 'var(--color-muted-foreground)' }}>
                 {g.note}
