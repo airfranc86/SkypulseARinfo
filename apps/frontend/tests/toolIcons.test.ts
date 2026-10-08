@@ -10,6 +10,7 @@ import {
   fireConditionIconCode,
   sunIconCode,
 } from '../src/lib/toolIcons.ts'
+import { sunChipLabel } from '../src/lib/sunChip.ts'
 
 test('the valid icon codes have no duplicates', () => {
   assert.equal(new Set(WEATHER_ICON_CODES).size, WEATHER_ICON_CODES.length)
@@ -69,13 +70,31 @@ test('sunIconCode: UV 6 or more is the UV index icon', () => {
 
 test('sunIconCode: UV from 3 up to 6 is direct sun', () => {
   assert.equal(sunIconCode(true, 3), 'clear-day')
-  assert.equal(sunIconCode(true, 5.9), 'clear-day')
+  assert.equal(sunIconCode(true, 5.4), 'clear-day')
 })
 
 test('sunIconCode: below UV 3, or without UV, is moderate sun', () => {
-  assert.equal(sunIconCode(true, 2.9), 'partly-cloudy-day')
+  assert.equal(sunIconCode(true, 2.4), 'partly-cloudy-day')
   assert.equal(sunIconCode(true, 0), 'partly-cloudy-day')
   assert.equal(sunIconCode(true, null), 'partly-cloudy-day')
+})
+
+test('sunIconCode: classifies the rounded UV, like the chip text (uvCategory)', () => {
+  // The chip reads "UV 3" for 2.6 and "UV 6" for 5.6: the icon has to be the one of the number shown.
+  assert.equal(sunIconCode(true, 2.6), 'clear-day')
+  assert.equal(sunIconCode(true, 2.9), 'clear-day')
+  assert.equal(sunIconCode(true, 5.6), 'uv-index')
+  assert.equal(sunIconCode(true, 5.9), 'uv-index')
+})
+
+test('sunIconCode and sunChipLabel agree on every UV band', () => {
+  for (const uv of [0, 1, 2.4, 2.5, 2.6, 3, 5.4, 5.5, 5.6, 6, 7.4, 11]) {
+    const icon = sunIconCode(true, uv)
+    const label = sunChipLabel(true, uv)
+    if (label === 'UV bajo') assert.equal(icon, 'partly-cloudy-day', `uv ${uv}`)
+    else if (label === 'Sol directo') assert.equal(icon, 'clear-day', `uv ${uv}`)
+    else assert.equal(icon, 'uv-index', `uv ${uv}`)
+  }
 })
 
 test('sunIconCode always returns a valid code', () => {

@@ -662,6 +662,34 @@ class TestStormVeto:
         )
         assert r.label == "No apto"
 
+    def test_lavar_coche_titular_dice_tormenta_electrica(self):
+        """B6/11: mismo formato que los titulares de tender-ropa y hacer-deporte."""
+        r = score_lavar_coche(
+            temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=40.0,
+            weather_code=96,
+        )
+        assert r.headline == "Tormenta eléctrica — no laves el auto hoy"
+
+    @pytest.mark.parametrize("weather_code", [95, 96, 99])
+    def test_lavar_coche_ni_titular_ni_motivo_prometen_granizo(self, weather_code):
+        """El veto salta con cualquier tormenta (el WMO 95 no es granizo): el texto no puede decir 'granizo'."""
+        r = score_lavar_coche(
+            temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=40.0,
+            weather_code=weather_code,
+        )
+        assert "granizo" not in r.headline.lower()
+        assert "granizo" not in r.reason.lower()
+        assert "Tormenta eléctrica" in r.headline
+        assert "Tormenta eléctrica" in r.reason
+
+    def test_lavar_coche_cape_alto_sin_tormenta_tampoco_dice_granizo(self):
+        r = score_lavar_coche(
+            temp_max_c=25.0, precip_mm=0.0, wind_speed_kmh=10.0, humidity=40.0,
+            cape_j_kg=1800.0,
+        )
+        assert "granizo" not in r.headline.lower()
+        assert "granizo" not in r.reason.lower()
+
 
 class TestActiveRainCap:
     """
@@ -696,3 +724,109 @@ class TestActiveRainCap:
         )
         assert r.label != "Excelente"
         assert r.score <= 74
+
+    # ------------------------------------------------------------------ #
+    # B6/9a: el motivo de hacer-deporte explica lo que resta puntos        #
+    # ------------------------------------------------------------------ #
+
+    def test_hacer_deporte_motivo_incluye_la_lluvia_prevista(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=2.0, wind_speed_kmh=15.0)
+        assert "Lluvia prevista: 2 mm en 12 h" in r.reason
+
+    def test_hacer_deporte_motivo_con_lluvia_leve_usa_coma_decimal(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=0.5, wind_speed_kmh=15.0)
+        assert "Lluvia prevista: 0,5 mm en 12 h" in r.reason
+
+    def test_hacer_deporte_motivo_mantiene_los_factores_favorables(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=2.0, wind_speed_kmh=15.0)
+        assert "Factores favorables: temperatura óptima, humedad tolerable, viento suave." in r.reason
+
+    def test_hacer_deporte_sin_lluvia_el_motivo_no_habla_de_lluvia(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=0.0, wind_speed_kmh=15.0)
+        assert "Lluvia prevista" not in r.reason
+        assert r.reason == "Factores favorables: temperatura óptima, humedad tolerable, sin lluvia, viento suave."
+
+    def test_hacer_deporte_motivo_incluye_el_viento_que_resta(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=0.0, wind_speed_kmh=24.0)
+        assert "Viento de 24 km/h" in r.reason
+        assert "viento suave" not in r.reason
+
+    def test_hacer_deporte_motivo_incluye_temperatura_fuera_de_rango(self):
+        r = score_hacer_deporte(temp_c=31.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0)
+        assert "Calor: 31,0 °C, por encima del rango ideal." in r.reason
+
+    def test_hacer_deporte_motivo_calor_conserva_el_decimal(self):
+        """25,3 no puede leerse "25 °C fuera del rango": se dice el sentido y se conserva el decimal."""
+        r = score_hacer_deporte(temp_c=25.3, humidity=50.0, precip=0.0, wind_speed_kmh=10.0)
+        assert "Calor: 25,3 °C, por encima del rango ideal." in r.reason
+
+    def test_hacer_deporte_motivo_frio_conserva_el_decimal(self):
+        r = score_hacer_deporte(temp_c=9.6, humidity=50.0, precip=0.0, wind_speed_kmh=10.0)
+        assert "Frío: 9,6 °C, por debajo del rango ideal." in r.reason
+
+    def test_hacer_deporte_motivo_temperatura_pegada_al_borde_no_redondea_hacia_adentro(self):
+        """25,04 redondea a 25,0 (dentro del rango): el texto no puede decir "25,0 por encima"."""
+        calor = score_hacer_deporte(temp_c=25.04, humidity=50.0, precip=0.0, wind_speed_kmh=10.0)
+        frio = score_hacer_deporte(temp_c=9.96, humidity=50.0, precip=0.0, wind_speed_kmh=10.0)
+        assert "Calor: 25,1 °C, por encima del rango ideal." in calor.reason
+        assert "Frío: 9,9 °C, por debajo del rango ideal." in frio.reason
+
+    def test_hacer_deporte_temperatura_dentro_del_rango_no_figura_como_penalizacion(self):
+        for t in (10.0, 25.0):
+            r = score_hacer_deporte(temp_c=t, humidity=50.0, precip=0.0, wind_speed_kmh=10.0)
+            assert "Calor" not in r.reason and "Frío" not in r.reason
+
+    def test_hacer_deporte_motivo_incluye_humedad_alta(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=85.0, precip=0.0, wind_speed_kmh=10.0)
+        assert "Humedad de 85%" in r.reason
+
+    def test_hacer_deporte_dato_faltante_no_se_cuenta_como_penalizacion(self):
+        r = score_hacer_deporte(temp_c=None, humidity=None, precip=None, wind_speed_kmh=None)
+        assert r.reason == "Condiciones desfavorables para deporte."
+
+    def test_hacer_deporte_lluvia_regular_se_explica_en_el_motivo(self):
+        """El caso del reporte: puntaje 'Regular' por lluvia, el motivo tiene que decir por qué."""
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=3.0, wind_speed_kmh=15.0)
+        assert r.score <= 49
+        assert "Lluvia prevista" in r.reason
+
+    def test_hacer_deporte_lluvia_minima_no_se_muestra_como_cero_mm(self):
+        r = score_hacer_deporte(temp_c=20.0, humidity=50.0, precip=0.02, wind_speed_kmh=15.0)
+        assert "Lluvia prevista: menos de 0,1 mm en 12 h" in r.reason
+        assert "0 mm" not in r.reason
+
+    # ------------------------------------------------------------------ #
+    # B6: el reason de tormenta es el mismo en las tres herramientas       #
+    # ------------------------------------------------------------------ #
+
+    @pytest.mark.parametrize("weather_code", [95, 96, 99])
+    def test_hacer_deporte_veto_de_tormenta_no_promete_granizo(self, weather_code):
+        r = score_hacer_deporte(
+            temp_c=18.0, humidity=50.0, precip=0.0, wind_speed_kmh=10.0,
+            weather_code=weather_code,
+        )
+        assert "granizo" not in r.headline.lower()
+        assert "granizo" not in r.reason.lower()
+        assert r.reason == "Tormenta eléctrica en el pronóstico."
+
+    @pytest.mark.parametrize("weather_code", [95, 96, 99])
+    def test_tender_ropa_veto_de_tormenta_no_promete_granizo(self, weather_code):
+        r = score_tender_ropa(
+            temp_c=25.0, humidity=30.0, wind_speed_kmh=10.0, precip_mm=0.0,
+            weather_code=weather_code,
+        )
+        assert "granizo" not in r.headline.lower()
+        assert "granizo" not in r.reason.lower()
+        assert r.reason == "Tormenta eléctrica en el pronóstico."
+
+    def test_el_reason_de_tormenta_es_igual_en_las_tres_herramientas(self):
+        deporte = score_hacer_deporte(18.0, 50.0, 0.0, 10.0, weather_code=95)
+        ropa = score_tender_ropa(temp_c=25.0, humidity=30.0, wind_speed_kmh=10.0, precip_mm=0.0, weather_code=95)
+        coche = score_lavar_coche(25.0, 0.0, 10.0, 40.0, weather_code=95)
+        assert deporte.reason == ropa.reason == coche.reason
+
+    def test_tender_ropa_cape_alto_tampoco_dice_granizo(self):
+        r = score_tender_ropa(
+            temp_c=25.0, humidity=30.0, wind_speed_kmh=10.0, precip_mm=0.0, cape_j_kg=2000.0,
+        )
+        assert "granizo" not in r.reason.lower()
