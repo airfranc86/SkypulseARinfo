@@ -72,9 +72,9 @@ async def test_a_prueba_is_delivered_to_the_subscription_and_answers_200(
     mensaje = json.loads(_descifrar(pedido, sub.receptor))
     assert mensaje["web_push"] == 8030
     assert mensaje["title"] == "SkyPulse · Prueba"
-    assert (
-        mensaje["body"]
-        == "Así vas a ver los avisos de tormenta para Córdoba. Si te llegó, está todo listo."
+    assert mensaje["body"] == (
+        "Esto es un aviso de prueba para Córdoba. "
+        "Los avisos automáticos de tormenta todavía no están activos."
     )
     assert mensaje["notification"]["title"] == mensaje["title"]
     assert mensaje["tag"] == "skypulse-prueba"
@@ -468,7 +468,7 @@ async def test_no_log_record_contains_the_endpoint_the_keys_the_id_the_payload_o
     assert (
         "status=503" in logueado and "ConnectionError" in logueado
     )  # el test mira logs de verdad
-    extra = (vapid_efimera.privada, vapid_efimera.publica, "Así vas a ver los avisos")
+    extra = (vapid_efimera.privada, vapid_efimera.publica, "Esto es un aviso de prueba")
     assert _filtra(logueado, sub, extra) == []
     for respuesta in respuestas:
         assert _filtra(respuesta.text, sub, extra) == []

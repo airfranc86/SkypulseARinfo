@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
+import { ENVIO_AUTOMATICO_ACTIVO } from '../src/lib/alertas/copy.ts'
 import {
   CONTACTO_PRIVACIDAD,
   mailtoPrivacidad,
   SECCIONES_PRIVACIDAD,
+  seccionesPrivacidad,
   type SeccionPrivacidad,
 } from '../src/lib/privacidad.ts'
 
@@ -13,8 +15,8 @@ import {
  * política tiene que decir (porque es lo que el código hace de verdad) y lo que no puede volver a decir.
  */
 
-const porTitulo = (parte: string): SeccionPrivacidad => {
-  const seccion = SECCIONES_PRIVACIDAD.find((s) => s.titulo.includes(parte))
+const porTitulo = (parte: string, secciones: readonly SeccionPrivacidad[] = SECCIONES_PRIVACIDAD): SeccionPrivacidad => {
+  const seccion = secciones.find((s) => s.titulo.includes(parte))
   assert.ok(seccion, `falta la sección «${parte}»`)
   return seccion
 }
@@ -63,9 +65,39 @@ test('los avisos: no promete que la IP no existe en ningún lado (los registros 
   assert.match(t, /registros de acceso/)
 })
 
-test('los avisos: para qué se usan, por dónde viajan y dónde se guardan', () => {
+test('con el envío automático activo, los avisos se usan solo para enviarte esos avisos (a las 21 h y durante el día)', () => {
+  const t = texto(porTitulo('Avisos en el celular', seccionesPrivacidad(true)))
+  assert.match(t, /Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día, si aparece algo nuevo; nunca entre las 22 y las 7\. También para la notificación de prueba cuando la pedís\./)
+})
+
+test('sin envío automático, la política dice que hoy solo se envía el aviso de prueba y que los automáticos no están activos', () => {
+  const t = texto(porTitulo('Avisos en el celular', seccionesPrivacidad(false)))
+  assert.match(t, /solo para mandarte el aviso de prueba cuando lo pedís/)
+  assert.match(t, /único aviso que se envía/)
+  assert.match(t, /avisos automáticos de tormenta todavía no están activos/)
+  // No anuncia horarios ni usos futuros que el consentimiento de hoy no cubre: si se activan, se vuelve a pedir.
+  assert.match(t, /vamos a actualizar esta política y a pedirte de nuevo tu consentimiento/)
+  assert.doesNotMatch(t, /previstos|Cuando empiecen|21 h|entre las 22 y las 7/)
+  assert.doesNotMatch(t, /solo para enviarte esos avisos|si aparece algo nuevo/)
+})
+
+test('la política que se publica es la del valor actual de ENVIO_AUTOMATICO_ACTIVO', () => {
+  assert.deepEqual(SECCIONES_PRIVACIDAD, seccionesPrivacidad(ENVIO_AUTOMATICO_ACTIVO))
+  assert.deepEqual(seccionesPrivacidad(), seccionesPrivacidad(ENVIO_AUTOMATICO_ACTIVO))
+})
+
+test('el envío automático solo cambia un párrafo de la política: el de para qué se usan los datos', () => {
+  const planos = (secciones: readonly SeccionPrivacidad[]) => secciones.flatMap((s) => s.parrafos)
+  const con = planos(seccionesPrivacidad(true))
+  const sin = planos(seccionesPrivacidad(false))
+  assert.equal(con.length, sin.length)
+  const distintos = con.filter((parrafo, i) => parrafo !== sin[i])
+  assert.equal(distintos.length, 1)
+  assert.match(distintos[0], /^Usamos esos datos solo para enviarte esos avisos/)
+})
+
+test('los avisos: por dónde viajan y dónde se guardan', () => {
   const t = texto(porTitulo('Avisos en el celular'))
-  assert.match(t, /solo para enviarte esos avisos/)
   assert.match(t, /cifrad/)
   assert.match(t, /Google, Mozilla, Apple o Microsoft/)
   assert.match(t, /Upstash/)
