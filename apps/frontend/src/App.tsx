@@ -321,7 +321,7 @@ function RootLayout() {
       <main
         id={MAIN_ID}
         tabIndex={-1}
-        className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 focus:outline-none"
+        className="flex-1 max-w-5xl mx-auto w-full px-4 py-6 max-[1088px]:overflow-x-clip focus:outline-none"
       >
         <ErrorBoundary fallbackMessage="Algo falló al mostrar esta página.">
           <Suspense fallback={<div className="flex items-center justify-center h-40 text-[var(--color-muted-foreground)]">Cargando…</div>}>

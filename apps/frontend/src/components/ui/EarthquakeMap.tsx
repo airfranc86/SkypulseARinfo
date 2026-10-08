@@ -35,7 +35,9 @@ export function EarthquakeMap({ events, selectedId, onSelect, center }: Earthqua
   const selectedEvent = events.find(e => e.id === selectedId) ?? null
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ height: 320, border: '1px solid var(--color-border)' }}>
+    // isolate: Leaflet's panes and controls use z-index 400 to 1000; without their own
+    // stacking context they would paint over the sticky header, the location dropdown and the cookie banner.
+    <div className="isolate rounded-xl overflow-hidden" style={{ height: 320, border: '1px solid var(--color-border)' }}>
       <MapContainer
         center={[center.lat, center.lon]}
         zoom={5}

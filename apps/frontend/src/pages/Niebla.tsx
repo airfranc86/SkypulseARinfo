@@ -1,10 +1,12 @@
-import { useState, type ComponentType } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { Eye, Wind, Waves, Mountain, Snowflake, Droplets, Sun, ChevronDown } from 'lucide-react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { useNiebla } from '@/hooks/useWeather'
 import { api } from '@/lib/api'
 import type { NieblaResponse } from '@/lib/api'
 import { FOG_SCALE, normalizeFogColor } from '@/lib/fogScale'
+import { NIEBLA_LEYENDA } from '@/lib/nieblaLeyenda'
+import { GRAFICO_GAP_PX, HORA_FONT_PX, anchoMedido, etiquetasHoraVisibles } from '@/lib/nieblaHoras'
 import type { LocationState } from '@/hooks/useLocation'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
@@ -50,7 +52,7 @@ const FOG_TYPES: FogType[] = [
     danger: 'medium',
     dangerLabel: 'Visibilidad reducida al amanecer',
     description: 'El suelo enfría el aire cercano durante la noche y condensa el vapor de agua. Se forma entre medianoche y el amanecer y desaparece con el sol. La más frecuente en las llanuras argentinas.',
-    tip: 'Espera 2–3 horas después del amanecer — el sol la disipa rápidamente.',
+    tip: 'Esperá 2–3 horas después del amanecer — el sol la disipa rápidamente.',
     Icon: Sun,
   },
   {
@@ -439,18 +441,37 @@ function VisibilityMeter({
   )
 }
 
-/** Abreviaturas para las etiquetas que no entran en el ancho angosto de cada
- *  barra horaria — evita el corte a mitad de palabra. */
-const COMPACT_FOG_LABEL: Record<string, string> = {
-  'Neblina o bruma': 'Nebl.',
-  Despejada:         'Despej.',
-}
-
 // Human-readable labels for hourly data sources
 const HOURLY_SOURCE_LABEL: Record<string, string> = {
   taf:                  'TAF · Aviación',
   openmeteo_inference:  'Estimación',
   openmeteo:            'Pronóstico numérico',
+}
+
+/** Alpha suffix of the bar fill; the legend swatches use the same one so both look identical. */
+const BAR_ALPHA = 'bb'
+
+/**
+ * Width of an element, kept up to date with a ResizeObserver; null until the first measure.
+ * The element is state (callback ref), so the observer attaches whenever the node mounts,
+ * even if it appears after the first render (e.g. the hourly data arrives later).
+ */
+function useAnchoElemento() {
+  const [el, setEl] = useState<HTMLDivElement | null>(null)
+  const [ancho, setAncho] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!el || typeof ResizeObserver === 'undefined') return
+    // ResizeObserver also reports the first size right after observe().
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[entries.length - 1]
+      if (entry) setAncho(anchoMedido(entry.contentRect.width))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [el])
+
+  return [setEl, ancho] as const
 }
 
 /** 12-hour visibility timeline bars */
@@ -461,6 +482,8 @@ function VisibilityTimeline({
   slots: NieblaResponse['hourly']
   hourlySource?: string | null
 }) {
+  const [barrasRef, anchoGrafico] = useAnchoElemento()
+
   if (!slots.length) return null
 
   const maxM    = 10_000
@@ -516,12 +539,13 @@ function VisibilityTimeline({
 
       {/* ── Chart area: bars + reference line ── */}
       <div
+        ref={barrasRef}
         style={{
           position: 'relative',
           height: `${CHART_H}px`,
           display: 'flex',
           alignItems: 'flex-end',
-          gap: '3px',
+          gap: `${GRAFICO_GAP_PX}px`,
         }}
         role="img"
         aria-label="Pronóstico de visibilidad para las próximas 12 horas"
@@ -539,7 +563,7 @@ function VisibilityTimeline({
               style={{
                 flex: 1,
                 height: `${barH}px`,
-                background: `${s.fog_color}bb`,
+                background: `${s.fog_color}${BAR_ALPHA}`,
                 borderRadius: '4px 4px 2px 2px',
                 transition: 'height 0.5s ease',
                 cursor: 'default',
@@ -550,45 +574,80 @@ function VisibilityTimeline({
 
       </div>
 
-      {/* ── Hour labels — outside chart area, never clipped ── */}
-      <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
-        {slots.map((s) => (
+      {/* ── Hour labels — misma grilla que las barras (columnas iguales, mismo gap): nunca más anchas que el gráfico.
+          Si una hora no entra en una barra, se muestra una de cada dos y ocupa dos columnas. ── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${slots.length}, minmax(0, 1fr))`,
+          gap: `${GRAFICO_GAP_PX}px`,
+          marginTop: '4px',
+        }}
+      >
+        {etiquetasHoraVisibles({
+          cantidad: slots.length,
+          anchoPx: anchoGrafico,
+          fontPx: HORA_FONT_PX,
+          largoEtiqueta: Math.max(...slots.map(s => s.hour_label.length)),
+        }).map(({ indice, columnas }) => (
           <span
-            key={s.hour_label}
+            key={slots[indice].hour_label}
             style={{
-              flex: 1,
-              textAlign: 'center',
-              fontSize: '9px',
+              gridColumn: `${indice + 1} / span ${columnas}`,
+              gridRow: 1,
+              textAlign: columnas > 1 ? 'left' : 'center',
+              fontSize: `${HORA_FONT_PX}px`,
+              lineHeight: 1.3,
               color: 'var(--color-muted-foreground)',
-              whiteSpace: 'nowrap',
             }}
           >
-            {s.hour_label}
+            {slots[indice].hour_label}
           </span>
         ))}
       </div>
 
-      {/* ── Fog level label per bar — desambigua cuando los colores son similares ── */}
-      <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
-        {slots.map((s) => (
-          <span
-            key={s.hour_label}
+      {/* ── Color legend — reemplaza el texto de 7 px sobre cada barra; color + nombre + rango ── */}
+      <ul
+        aria-label="Leyenda de colores de la visibilidad"
+        style={{
+          listStyle: 'none',
+          margin: '12px 0 0',
+          padding: 0,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '6px 16px',
+        }}
+      >
+        {NIEBLA_LEYENDA.map(({ label, rango, color }) => (
+          <li
+            key={label}
             style={{
-              flex: 1,
-              textAlign: 'center',
-              fontSize: '7px',
-              fontWeight: 600,
-              color: s.fog_color,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'clip',
-              letterSpacing: '-0.01em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              lineHeight: 1.3,
+              color: 'var(--color-muted-foreground)',
             }}
           >
-            {COMPACT_FOG_LABEL[s.fog_label] ?? s.fog_label}
-          </span>
+            <span
+              aria-hidden="true"
+              style={{
+                width: '12px',
+                height: '12px',
+                flexShrink: 0,
+                borderRadius: '3px',
+                background: `${color}${BAR_ALPHA}`,
+              }}
+            />
+            <span>
+              <span style={{ fontWeight: 600, color: 'var(--color-foreground)' }}>{label}</span>
+              {' '}
+              {rango}
+            </span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   )
 }
