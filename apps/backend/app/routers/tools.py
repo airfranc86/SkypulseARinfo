@@ -270,15 +270,21 @@ async def get_cota_de_nieve(
         temp_850_hpa=temp_850_hpa,
     )
 
+    # El rango abarca todos los métodos disponibles (incluido el de 850 hPa), así el promedio
+    # y cada método quedan siempre adentro.
+    methods = [result.alcaide_m, result.gradiente_m]
+    if result.m850_hpa_m is not None:
+        methods.append(result.m850_hpa_m)
+    lowest, highest = min(methods), max(methods)
     if result.m850_hpa_m is not None:
         description = (
-            f"Cota de nieve estimada entre {result.alcaide_m:.0f} "
-            f"y {result.gradiente_m:.0f} msnm (promedio {result.average_m:.0f} msnm)"
+            f"Cota de nieve estimada entre {lowest:.0f} "
+            f"y {highest:.0f} msnm (promedio {result.average_m:.0f} msnm)"
         )
     else:
         description = (
-            f"Cota de nieve estimada entre {result.alcaide_m:.0f} "
-            f"y {result.gradiente_m:.0f} msnm (sin datos de nivel 850 hPa)"
+            f"Cota de nieve estimada entre {lowest:.0f} "
+            f"y {highest:.0f} msnm (sin datos de nivel 850 hPa)"
         )
 
     return SnowLevelResponse(

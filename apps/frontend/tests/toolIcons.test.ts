@@ -101,11 +101,21 @@ test('the header icon fits inside the 64 px PageHeader square', () => {
   assert.ok(TOOL_HEADER_ICON_SIZE <= 48)
 })
 
-test('Cota de nieve: only a low snow level uses a weather icon (rain)', () => {
-  assert.deepEqual(SNOW_STATUS_ICONS.low, { kind: 'weather', code: 'rain' })
-  assert.deepEqual(SNOW_STATUS_ICONS.excellent, { kind: 'status', name: 'ok' })
-  assert.deepEqual(SNOW_STATUS_ICONS.good, { kind: 'status', name: 'ski' })
-  assert.deepEqual(SNOW_STATUS_ICONS.moderate, { kind: 'status', name: 'warning' })
-  const low = SNOW_STATUS_ICONS.low
-  assert.ok(isWeatherIconCode(low.code))
+test('Cota de nieve: every status icon is a valid weather icon', () => {
+  for (const [band, icon] of Object.entries(SNOW_STATUS_ICONS)) {
+    assert.equal(icon.kind, 'weather', `${band} is not a Meteocon`)
+    assert.ok(isWeatherIconCode(icon.code), `${band} -> ${icon.code} is not a WeatherIcon code`)
+  }
+})
+
+test('Cota de nieve: one neutral thermometer icon for the four bands', () => {
+  // The icon must not claim a phenomenon (rain, snow) for the current state.
+  for (const icon of Object.values(SNOW_STATUS_ICONS)) {
+    assert.deepEqual(icon, { kind: 'weather', code: 'thermometer' })
+  }
+})
+
+test('Cota de nieve: no status icon passes a good or bad judgment', () => {
+  const kinds = new Set(Object.values(SNOW_STATUS_ICONS).map((icon) => icon.kind))
+  assert.deepEqual([...kinds], ['weather'], 'ok / ski / warning glyphs would read as a verdict')
 })
