@@ -43,7 +43,9 @@ class Settings(BaseSettings):
     # "Ahora" del dashboard (FRA-320): METAR de AWC como observación si el aeropuerto está cerca y
     # el dato es reciente. Timeout corto: el dashboard no espera más que esto por el METAR.
     metar_observation_timeout_seconds: float = 4.0
-    metar_max_distance_km: float = 30.0
+    # Un único límite de distancia/antigüedad para el dashboard y para Niebla (inclusivos: 20.0 km y
+    # 90 min todavía pasan).
+    metar_max_distance_km: float = 20.0
     metar_max_age_minutes: int = 90
     checkwx_daily_limit: int = 198     # Free tier: 200/día — 198 deja margen para el aviso Sentry
 

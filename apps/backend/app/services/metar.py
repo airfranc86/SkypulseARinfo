@@ -22,6 +22,7 @@ from cachetools import TTLCache
 from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
+from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +78,17 @@ _AR_AIRPORTS: list[_Airport] = [
 # TTL 30 min para METAR (se actualiza cada 30-60 min)
 # TTL 60 min para TAF   (se enmienda con menos frecuencia)
 # NO se cachea None en errores — permite reintentos en la próxima request
+# El METAR se cachea junto con su hora de observación: la antigüedad se verifica en cada lectura.
 # ---------------------------------------------------------------------------
 
-_metar_cache: TTLCache[str, float]        = TTLCache(maxsize=64, ttl=1800)
+@dataclass(frozen=True)
+class _MetarReading:
+    """Visibilidad de un METAR y la hora (UTC) en que se observó."""
+    visibility_m: float
+    observed_at: datetime
+
+
+_metar_cache: TTLCache[str, _MetarReading] = TTLCache(maxsize=64, ttl=1800)
 _taf_cache:   TTLCache[str, dict]         = TTLCache(maxsize=32, ttl=3600)  # entrada completa de AWC
 
 # Fenómenos de niebla reconocidos en TAF/METAR (WMO / ICAO)
@@ -181,18 +190,40 @@ def _parse_metar_visib_m(visib: object) -> float | None:
 # METAR — visibilidad actual
 # ---------------------------------------------------------------------------
 
-async def get_metar_visibility(icao: str) -> float | None:
+def _obs_time(entry: dict) -> datetime | None:
+    """Hora de observación (UTC) del `obsTime` de AWC (epoch s); None si falta o no es válida."""
+    seconds = parse_float(entry.get("obsTime"))
+    if seconds is None or not math.isfinite(seconds):
+        return None
+    try:
+        return datetime.fromtimestamp(seconds, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _is_recent(observed_at: datetime, now: datetime) -> bool:
+    """True si el reporte no supera `settings.metar_max_age_minutes` (inclusivo: 90 min todavía pasa)."""
+    return now - observed_at <= timedelta(minutes=settings.metar_max_age_minutes)
+
+
+async def _get_metar_reading(icao: str, now: datetime) -> _MetarReading | None:
     """
-    Visibilidad actual (metros) del METAR de un aeropuerto.
+    Último METAR utilizable de un aeropuerto: visibilidad (m) y hora de observación.
 
     - Fuente: AWC, sin API key.
-    - Retorna None si el fetch falla o no hay dato.
-    - Solo cachea resultados EXITOSOS — los errores permiten reintento.
+    - Descarta (None) un reporte sin `obsTime` válido o más viejo que `settings.metar_max_age_minutes`.
+      La antigüedad se verifica en cada lectura, también cuando el dato sale de la caché.
+    - Solo cachea resultados EXITOSOS y vigentes — los errores y los reportes viejos permiten reintento.
     - Cap a 10 km (consistente con el resto del sistema).
     """
-    if icao in _metar_cache:
-        logger.debug("METAR cache hit: %s → %.0f m", icao, _metar_cache[icao])
-        return _metar_cache[icao]
+    cached = _metar_cache.get(icao)
+    if cached is not None:
+        if _is_recent(cached.observed_at, now):
+            logger.debug("METAR cache hit: %s → %.0f m", icao, cached.visibility_m)
+            return cached
+        # Vencido desde que se cacheó: se descarta y se consulta de nuevo a AWC.
+        _metar_cache.pop(icao, None)
+        logger.info("METAR %s: cached report too old (%s) — refetching", icao, cached.observed_at)
 
     try:
         client = get_client()
@@ -209,7 +240,7 @@ async def get_metar_visibility(icao: str) -> float | None:
         logger.warning("METAR fetch failed for %s: %s", icao, exc)
         return None
 
-    if not isinstance(data, list) or len(data) == 0:
+    if not isinstance(data, list) or len(data) == 0 or not isinstance(data[0], dict):
         logger.info("METAR: no data for %s", icao)
         return None
 
@@ -224,12 +255,27 @@ async def get_metar_visibility(icao: str) -> float | None:
         logger.info("METAR: unparseable visib %r for %s", visib_sm, icao)
         return None
 
-    logger.info(
-        "METAR %s: visib %r → %.0f m (obs: %s)",
-        icao, visib_sm, vis_m, entry.get("obsTime", "?"),
-    )
-    _metar_cache[icao] = vis_m   # solo cacheamos éxitos
-    return vis_m
+    observed_at = _obs_time(entry)
+    if observed_at is None:
+        logger.info("METAR: no valid obsTime for %s — discarded", icao)
+        return None
+    if not _is_recent(observed_at, now):
+        logger.info("METAR: report of %s too old (%s) — discarded", icao, observed_at)
+        return None
+
+    logger.info("METAR %s: visib %r → %.0f m (obs: %s)", icao, visib_sm, vis_m, observed_at)
+    reading = _MetarReading(visibility_m=vis_m, observed_at=observed_at)
+    _metar_cache[icao] = reading   # solo cacheamos éxitos vigentes
+    return reading
+
+
+async def get_metar_visibility(icao: str, now: datetime | None = None) -> float | None:
+    """
+    Visibilidad actual (metros) del METAR de un aeropuerto, o None si no hay dato utilizable
+    (fetch fallido, sin `obsTime` válido o reporte de más de `settings.metar_max_age_minutes`).
+    """
+    reading = await _get_metar_reading(icao, now or datetime.now(timezone.utc))
+    return reading.visibility_m if reading else None
 
 
 @dataclass(frozen=True)
@@ -239,24 +285,35 @@ class MetarVisibility:
     icao: str
     station_name: str
     distance_km: float
-    observed_at: datetime | None
+    observed_at: datetime | None   # hora real de observación del METAR (UTC); None si se descartó
 
 
-async def get_nearest_metar_visibility(lat: float, lon: float) -> MetarVisibility:
+async def get_nearest_metar_visibility(
+    lat: float, lon: float, now: datetime | None = None
+) -> MetarVisibility:
     """
     Visibilidad METAR del aeropuerto más cercano.
-    Siempre retorna un objeto; `visibility_m` puede ser None.
+
+    Siempre retorna un objeto; `visibility_m` es None si el aeropuerto está a más de
+    `settings.metar_max_distance_km` (no se llama a AWC) o si el METAR no es utilizable o es viejo
+    (ver `_get_metar_reading`). La estación y la distancia se informan igual.
     """
-    airport = nearest_airport(lat, lon)
-    dist_km = haversine_km(lat, lon, airport.lat, airport.lon)
-    vis_m = await get_metar_visibility(airport.icao)
+    now = now or datetime.now(timezone.utc)
+    airport, dist_km = nearest_airport_with_distance(lat, lon)
+    reading: _MetarReading | None = None
+    if dist_km > settings.metar_max_distance_km:
+        logger.info(
+            "METAR %s not used: %.1f km > %.1f km", airport.icao, dist_km, settings.metar_max_distance_km
+        )
+    else:
+        reading = await _get_metar_reading(airport.icao, now)
 
     return MetarVisibility(
-        visibility_m=vis_m,
+        visibility_m=reading.visibility_m if reading else None,
         icao=airport.icao,
         station_name=airport.name,
         distance_km=round(dist_km, 1),
-        observed_at=datetime.now(timezone.utc) if vis_m is not None else None,
+        observed_at=reading.observed_at if reading else None,
     )
 
 

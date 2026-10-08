@@ -149,7 +149,7 @@ async def fetch_latest_observation(icao: str) -> MetarObservation | None:
 def classify_observation(
     distance_km: float, observation: MetarObservation | None, now: datetime
 ) -> MetarReason:
-    """Whether the METAR can be the dashboard "now"; limits are inclusive (30.0 km / 90 min pass)."""
+    """Whether the METAR can be the dashboard "now"; limits are inclusive (20.0 km / 90 min pass)."""
     if distance_km > settings.metar_max_distance_km:
         return "metar_too_far"
     if observation is None:

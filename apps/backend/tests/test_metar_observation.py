@@ -24,7 +24,9 @@ NOW = OBS_TIME + timedelta(minutes=20)
 _MISSING = object()
 
 # Rosario city centre: SAAR is ~13 km away. Santiago del Estero: nearest airport (SANT) is >100 km.
+# Quilmes: nearest airport (SABE) is ~23.5 km away, inside the old 30 km limit but beyond the 20 km one.
 ROSARIO = (-32.95, -60.65)
+QUILMES = (-34.72, -58.25)
 SANTIAGO_DEL_ESTERO = (-27.78, -64.27)
 
 
@@ -212,16 +214,20 @@ async def test_records_awc_usage(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Selection: 30 km / 90 min
+# Selection: 20 km / 90 min
 # ---------------------------------------------------------------------------
 
-def test_classify_accepts_exactly_thirty_km_and_ninety_minutes():
+def test_classify_accepts_exactly_twenty_km_and_ninety_minutes():
     obs = _observation()
-    assert classify_observation(30.0, obs, OBS_TIME + timedelta(minutes=90)) == "metar_ok"
+    assert classify_observation(20.0, obs, OBS_TIME + timedelta(minutes=90)) == "metar_ok"
 
 
-def test_classify_rejects_beyond_thirty_km():
-    assert classify_observation(30.01, _observation(), NOW) == "metar_too_far"
+def test_classify_rejects_beyond_twenty_km():
+    assert classify_observation(20.01, _observation(), NOW) == "metar_too_far"
+
+
+def test_classify_rejects_what_the_old_thirty_km_limit_accepted():
+    assert classify_observation(25.0, _observation(), NOW) == "metar_too_far"
 
 
 def test_classify_rejects_older_than_ninety_minutes():
@@ -246,7 +252,7 @@ async def test_nearest_selection_uses_the_close_airport():
     assert selection.reason == "metar_ok"
     assert selection.icao == "SAAR"
     assert selection.name == "Rosario"
-    assert 0 < selection.distance_km <= 30
+    assert 0 < selection.distance_km <= 20
     assert selection.observation == _observation()
 
 
@@ -256,6 +262,18 @@ async def test_nearest_selection_does_not_fetch_a_far_airport():
         selection = await get_nearest_metar_observation(*SANTIAGO_DEL_ESTERO, now=NOW)
 
     assert selection.reason == "metar_too_far"
+    assert selection.observation is None
+    assert route.call_count == 0
+
+
+async def test_nearest_selection_does_not_fetch_an_airport_between_20_and_30_km():
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get(AWC_METAR_URL).mock(return_value=httpx.Response(200, json=[_entry()]))
+        selection = await get_nearest_metar_observation(*QUILMES, now=NOW)
+
+    assert selection.reason == "metar_too_far"
+    assert selection.icao == "SABE"
+    assert 20.0 < selection.distance_km < 30.0
     assert selection.observation is None
     assert route.call_count == 0
 
