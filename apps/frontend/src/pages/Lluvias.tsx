@@ -19,9 +19,9 @@ interface CloudRow {
 }
 
 const CLOUDS: CloudRow[] = [
-  { name: 'Cirros',         badge: 'no',    badgeLabel: 'No',             intensity: 0, duration: '—',                     when: 'Todo el año, especialmente antes de frentes' },
-  { name: 'Cirrostratos',   badge: 'yes',   badgeLabel: 'En 12–24 h',     intensity: 1, duration: 'Prolongada',            when: 'Preceden frentes cálidos' },
-  { name: 'Cirrocúmulos',   badge: 'no',    badgeLabel: 'No directa',     intensity: 0, duration: '—',                     when: 'Otoño e invierno, en transiciones entre masas de aire frío' },
+  { name: 'Cirros',         badge: 'no',    badgeLabel: 'No',             intensity: 0, duration: 'No llueve',             when: 'Todo el año, especialmente antes de frentes' },
+  { name: 'Cirrostratos',   badge: 'yes',   badgeLabel: 'Lluvia posible en 12–24 h',     intensity: 1, duration: 'Prolongada',            when: 'Suelen preceder frentes cálidos' },
+  { name: 'Cirrocúmulos',   badge: 'no',    badgeLabel: 'No llueve',      intensity: 0, duration: 'No llueve',             when: 'Otoño e invierno, en transiciones entre masas de aire frío' },
   { name: 'Altocúmulos',    badge: 'maybe', badgeLabel: 'Posible',        intensity: 1, duration: 'Breve',                 when: 'Mañanas inestables; Ac castellanus anuncia tormenta vespertina' },
   { name: 'Altostratos',    badge: 'yes',   badgeLabel: 'Sí',             intensity: 2, duration: 'Prolongada',            when: 'Siguen a los cirrostratos en frentes' },
   { name: 'Estrato',        badge: 'yes',   badgeLabel: 'Sí',             intensity: 1, duration: 'Larga, persistente',    when: 'Días fríos y húmedos, zonas costeras' },
@@ -29,7 +29,7 @@ const CLOUDS: CloudRow[] = [
   { name: 'Nimboestrato',   badge: 'heavy', badgeLabel: 'Sí — continua',  intensity: 3, duration: 'Muchas horas o días',  when: 'Frentes activos, invierno y otoño' },
   { name: 'Cúmulo',         badge: 'maybe', badgeLabel: 'Solo si crecen', intensity: 2, duration: 'Breve (chubasco)',      when: 'Tardes cálidas de verano' },
   { name: 'Cumulonimbo',    badge: 'crit',  badgeLabel: 'Sí — severa',    intensity: 4, duration: 'Corta pero intensa',   when: 'Tardes inestables de primavera y verano, centro y norte del país' },
-  { name: 'Mammatus',       badge: 'crit',  badgeLabel: 'Tormenta activa', intensity: 4, duration: 'Variable, muy intensa', when: 'Al madurar el Cb, durante o tras el pico de tormenta' },
+  { name: 'Mammatus',       badge: 'crit',  badgeLabel: 'Accesorio del Cb', intensity: 4, duration: 'Variable, muy intensa', when: 'Al madurar el Cb, durante o tras el pico de tormenta' },
   { name: 'Niebla',         badge: 'yes',   badgeLabel: 'Llovizna fina',  intensity: 1, duration: 'Hasta que sube el sol', when: 'Madrugada y amanecer en valles' },
 ]
 
@@ -103,7 +103,11 @@ function Badge({ variant, label }: { variant: BadgeVariant; label: string }) {
 function IntensityDots({ level }: { level: IntensityLevel }) {
   const activeColor = INTENSITY_COLORS[level]
   return (
-    <div className="flex items-center gap-1">
+    <div
+      role="img"
+      aria-label={`Intensidad: ${INTENSITY_SCALE[level].label.toLowerCase()}, ${level} de 4`}
+      className="flex items-center gap-1"
+    >
       {([0, 1, 2, 3] as const).map(i => (
         <span
           key={i}
@@ -156,10 +160,10 @@ export function Lluvias() {
           </div>
           <div>
             <p className="text-sm font-bold leading-tight" style={{ color: 'var(--color-crit)' }}>
-              Cumulonimbo y Mammatus — peligro severo
+              Peligro severo
             </p>
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted-foreground)' }}>
-              Son las únicas nubes que producen tormenta severa, granizo y rayos. Si las ves crecer en torres, buscá refugio antes de que lleguen.
+              Cumulonimbo: la única nube que produce tormenta severa, granizo y rayos. Los mammatus cuelgan de su yunque e indican que la tormenta está o estuvo activa. Si ves torres que crecen, buscá refugio antes de que llegue la tormenta.
             </p>
           </div>
         </div>
@@ -181,6 +185,7 @@ export function Lluvias() {
                 ].map(({ label, cls }) => (
                   <th
                     key={label}
+                    scope="col"
                     className={`px-4 py-3 text-left text-[.65rem] font-medium uppercase tracking-wide ${cls}`}
                     style={{ color: 'var(--color-muted-foreground)' }}
                   >
@@ -210,7 +215,7 @@ export function Lluvias() {
                   </td>
                   <td
                     className="px-4 py-3 hidden md:table-cell text-xs"
-                    style={{ color: row.duration === '—' ? 'var(--color-muted-foreground)' : 'var(--color-foreground)' }}
+                    style={{ color: row.badge === 'no' ? 'var(--color-muted-foreground)' : 'var(--color-foreground)' }}
                   >
                     {row.duration}
                   </td>
@@ -245,7 +250,7 @@ export function Lluvias() {
               </div>
               <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs leading-snug">
                 <span style={{ color: 'var(--color-muted-foreground)' }}>
-                  Duración: <span style={{ color: row.duration === '—' ? 'var(--color-muted-foreground)' : 'var(--color-foreground)' }}>{row.duration}</span>
+                  Duración: <span style={{ color: row.badge === 'no' ? 'var(--color-muted-foreground)' : 'var(--color-foreground)' }}>{row.duration}</span>
                 </span>
                 <span style={{ color: 'var(--color-muted-foreground)' }}>
                   Cuándo: <span style={{ color: 'var(--color-foreground)' }}>{row.when}</span>
@@ -318,7 +323,7 @@ export function Lluvias() {
             {[
               { emoji: '🌤', title: 'Nubes finas y altas',   desc: 'Cirros, cirrostratos — sin lluvia hoy, monitorear mañana' },
               { emoji: '🌧', title: 'Capas grises y bajas',  desc: 'Estrato, nimboestrato — llevá paraguas, va a durar' },
-              { emoji: '⛈', title: 'Torres que crecen',     desc: 'Cúmulos en expansión — buscá refugio antes de las 3 hs' },
+              { emoji: '⛈', title: 'Torres que crecen',     desc: 'Cúmulos en expansión — buscá refugio apenas crezcan: la tormenta puede llegar en menos de una hora' },
             ].map(({ emoji, title, desc }) => (
               <div key={title}>
                 <div className="text-2xl mb-2">{emoji}</div>

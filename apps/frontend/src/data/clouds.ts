@@ -2,7 +2,7 @@
  * Cloud catalog for the Nubes page: the cards and the altitude diagram read from here, so a height
  * or a phrase is written once. Pure data (no React): `src/lib/cloudSky.ts` and its tests import it under Node.
  */
-import type { DangerLevel } from '@/components/ui/DangerScale'
+import type { DangerLevel } from '../lib/dangerScale.ts'
 
 export type CloudFamily = 'alta' | 'media' | 'baja' | 'vertical' | 'especial'
 export type BadgeVariant = 'clear' | 'watch' | 'warn' | 'crit' | 'neutral' | 'info'
@@ -84,14 +84,14 @@ export const CLOUDS: readonly CloudItem[] = [
     heightTag: 'Alta · 6–12 km',
     height: '6.000 – 12.000 m',
     composition: 'Cristales de hielo',
-    dangerLevel: 2,
+    dangerLevel: 1,
     badge: 'watch',
-    badgeLabel: 'Posible cambio en 24–48 hs',
+    badgeLabel: 'Posible cambio en 24–48 h',
     imgSrc: 'https://cdn.zmescience.com/wp-content/uploads/2017/07/8690313402_5f76f736b3_k-1.jpg',
     imgAlt: 'Cirros — filamentos blancos en cielo azul',
     description: 'Líneas finas y blancas que parecen pintadas con pincel en el azul. Son puro hielo, no agua. Hoy el tiempo es bueno — pero son el primer aviso de que algo viene en camino. Cuanto más se espesan y bajan, más cercano está el cambio.',
     observeTip: 'luz lateral del amanecer o el atardecer — resaltan en dorado',
-    aeroText: 'Indican corrientes de chorro cercanas y posibles zonas de CAT en crucero. Preceden frentes que afectarán rutas en las próximas 12–24 hs. Si se espesan hacia el horizonte: el deterioro se acerca.',
+    aeroText: 'Indican corrientes de chorro cercanas y posibles zonas de CAT en crucero. Pueden preceder frentes que afectarán rutas en las próximas 24–48 h. Si se espesan hacia el horizonte: el deterioro se acerca.',
     curiosity: 'Cirrus en latín significa "mechón de pelo o bucle". El nombre describe exactamente su aspecto — mirá bien la próxima vez.',
     sky: { shape: 'layer', band: { baseKm: 6, topKm: 12 }, rangeLabel: '6–12 km', accent: '#c8a84b' },
   },
@@ -105,12 +105,12 @@ export const CLOUDS: readonly CloudItem[] = [
     composition: 'Velo continuo de hielo',
     dangerLevel: 2,
     badge: 'watch',
-    badgeLabel: 'Lluvia probable en las próximas horas',
+    badgeLabel: 'Lluvia posible en 12–24 h',
     imgSrc: 'https://cdn.zmescience.com/wp-content/uploads/2017/07/cirrostratus-246295_960_720.jpg',
     imgAlt: 'Cirrostratos con halo solar',
     description: 'Un velo blanquecino que cubre todo el cielo como papel translúcido. El sol o la luna producen un halo brillante de 22°— ese anillo luminoso es su firma inconfundible. Cuando ves el halo: es hora de prepararse.',
     observeTip: 'a plena luz del día con sol — el halo es el indicador más claro',
-    aeroText: 'Preceden frentes cálidos. Cuanto más bajo y denso el velo, más cercana la lluvia. En ruta, marcan el inicio del deterioro progresivo hacia condiciones IFR.',
+    aeroText: 'Suelen preceder frentes cálidos. Cuanto más bajo y denso el velo, más cercana la lluvia. En ruta, marcan el inicio del deterioro progresivo hacia condiciones IFR.',
     curiosity: 'El halo de 22° ocurre por refracción de la luz en cristales de hielo hexagonales orientados al azar — física perfecta, resultado visual mágico.',
     sky: { shape: 'layer', band: { baseKm: 6, topKm: 12 }, rangeLabel: '6–12 km', accent: '#c8a84b', label: `Cirro${SHY}stratos` },
   },
@@ -292,15 +292,15 @@ export const CLOUDS: readonly CloudItem[] = [
     latin: 'Mamma · bajo Cumulonimbus',
     heightTag: 'Especial · Convectiva',
     height: 'Bajo el yunque del Cb',
-    composition: 'Tormenta severa activa',
+    composition: 'Bolsas bajo el yunque del Cb',
     dangerLevel: 5,
     badge: 'crit',
-    badgeLabel: 'Tormenta severa en zona — no aproximarse',
+    badgeLabel: 'Accesorio del Cb: tormenta cercana',
     imgSrc: 'https://scied.ucar.edu/sites/default/files/media/images/mammatus_big.jpg',
-    imgAlt: 'Mammatus — bolsas colgantes bajo la base de un Cumulonimbo',
-    description: 'Bolsas que cuelgan hacia abajo de la base de una nube, como burbujas invertidas o ubres. Espectaculares y perturbadoras. Mamma en latín: ubre o pecho, por su forma característica. Confirman un Cb muy activo en la zona.',
+    imgAlt: 'Mammatus — bolsas colgantes bajo el yunque de un Cb',
+    description: 'Bolsas que cuelgan hacia abajo, bajo el yunque de un Cb, como burbujas invertidas o ubres. Espectaculares y perturbadoras. Mamma en latín: ubre o pecho, por su forma característica. Suelen indicar un Cb activo o reciente en la zona.',
     observeTip: 'siempre están debajo de otra nube — mirá hacia arriba desde un espacio seguro cubierto',
-    aeroText: 'Mammatus = Cb activo garantizado. Turbulencia severa, windshear y granizo son altamente probables. No aproximarse. Desviar ruta con margen generoso.',
+    aeroText: 'Suelen colgar del yunque de un Cb e indicar que la tormenta está o estuvo activa. Cerca del Cb hay que esperar turbulencia severa, windshear y granizo. No aproximarse. Desviar ruta con margen generoso.',
     curiosity: 'Se forman por corrientes descendentes de aire frío dentro del yunque del Cb — exactamente lo opuesto a cómo se forman la mayoría de las nubes.',
     sky: {
       shape: 'accessory',

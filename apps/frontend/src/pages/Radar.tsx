@@ -9,7 +9,7 @@ import { ScanText } from '@/components/animated/ScanText'
 
 const RADAR_SCALE = [
   { color: '#4ade80', label: 'Verde claro',              mmh: '< 5 mm/h',   desc: 'Lluvia ligera — menos de 5 mm/h. Paraguas alcanza. Sin riesgo de vuelo.' },
-  { color: '#a3e635', label: 'Verde intenso / amarillo', mmh: '5–20 mm/h',  desc: 'Lluvia moderada — 5 a 20 mm/h. Se moja fácil. Vuelo VFR empieza a ser incómodo.' },
+  { color: '#a3e635', label: 'Verde intenso',            mmh: '5–20 mm/h',  desc: 'Lluvia moderada — 5 a 20 mm/h. Se moja fácil. Vuelo VFR empieza a ser incómodo.' },
   { color: '#facc15', label: 'Amarillo',                 mmh: '20–35 mm/h', desc: 'Lluvia moderada a intensa — 20 a 35 mm/h. Visibilidad reducida. Evitar salir a volar.' },
   { color: '#f97316', label: 'Naranja',                  mmh: '35–50 mm/h', desc: 'Lluvia intensa — 35 a 50 mm/h. Posibles ráfagas y rayos. Riesgo real en tierra y en vuelo.' },
   { color: '#ef4444', label: 'Rojo',                     mmh: '> 50 mm/h',  desc: 'Lluvia muy intensa o granizo — más de 50 mm/h. Tormentas severas. No salir.' },
@@ -20,7 +20,7 @@ const SAT_SCALE = [
   { tone: '#ffffff', label: 'Blanco brillante',    alt: '≥ 12 km',   altColor: '#ef4444', desc: 'Nubes muy altas y frías: cumulonimbos, yunques. Tormentas activas. Alta probabilidad de lluvia fuerte, granizo y rayos.' },
   { tone: '#d4d4d4', label: 'Gris claro',          alt: '5–8 km',    altColor: '#94a3b8', desc: 'Nubes medias: altostratos, altocúmulos. Lluvia posible pero no severa. Sin peligro inminente.' },
   { tone: '#737373', label: 'Gris medio / oscuro', alt: '1–3 km',    altColor: '#94a3b8', desc: 'Nubes bajas: estratos, estratocúmulos. Cielo cubierto, llovizna posible. Sin tormenta.' },
-  { tone: '#1a1a2e', label: 'Negro / muy oscuro',  alt: 'Despejado', altColor: '#4ade80', desc: 'Cielo despejado o superficie terrestre. Sin nubes en ese punto. Temperatura alta.' },
+  { tone: '#1a1a2e', label: 'Negro / muy oscuro',  alt: 'Despejado', altColor: '#4ade80', desc: 'Cielo despejado: el satélite ve la superficie, más caliente que las nubes. Un estrato bajo o niebla también puede verse oscuro.' },
 ]
 
 const EXERCISES = [
@@ -28,7 +28,7 @@ const EXERCISES = [
     tag: 'Caso 1 — Radar', tagColor: '#f97316',
     question: <>El radar muestra una mancha <strong style={{ color: '#f1f5f9' }}>naranja-roja</strong> con un núcleo morado en el centro, moviéndose hacia tu ciudad. Velocidad estimada: 40 km/h. Llegada: 30 minutos.</>,
     answerTag: 'Interpretación', answerColor: '#ef4444',
-    answer: <>Tormenta severa en camino. El naranja indica lluvia muy intensa; el núcleo morado confirma <strong style={{ color: '#f1f5f9' }}>granizo probable</strong>. Tenés unos 30 minutos para buscar refugio sólido. Suspendé cualquier actividad al aire libre y posponé cualquier vuelo sin excepción. No esperes a que llegue para actuar.</>,
+    answer: <>Tormenta severa en camino. El naranja-rojo indica lluvia intensa a muy intensa (más de 35 mm/h); el núcleo morado confirma <strong style={{ color: '#f1f5f9' }}>granizo probable</strong>. Tenés unos 30 minutos para buscar refugio sólido. Suspendé cualquier actividad al aire libre y posponé cualquier vuelo sin excepción. No esperes a que llegue para actuar.</>,
   },
   {
     tag: 'Caso 2 — Satélite IR', tagColor: '#7dd3fc',
@@ -141,7 +141,7 @@ export function Radar() {
               La escala de colores del radar
             </h2>
             <p className="text-xs mb-5" style={{ color: 'var(--color-muted-foreground)' }}>
-              Del color más tenue al más intenso — la regla es simple: <strong style={{ color: 'var(--color-foreground)' }}>más saturado = más peligroso</strong>.
+              Del color más tenue al más intenso — la regla es simple: <strong style={{ color: 'var(--color-foreground)' }}>más saturado = más peligroso</strong>. Referencia aproximada: los mm/h cambian según el radar y la zona.
             </p>
             <div className="rounded-xl overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
               {RADAR_SCALE.map((row, i) => (
