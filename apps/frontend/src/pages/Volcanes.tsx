@@ -182,10 +182,10 @@ export function Volcanes() {
     <div>
       {/* Header */}
       <PageHeader
-        titleNode={<MeltText text="Volcanes (*Argentina)" fontSize="1.5rem" />}
+        titleNode={<MeltText text="Volcanes" fontSize="1.5rem" />}
         icon={<Mountain size={32} style={{ color: '#e05545' }} />}
-        title="Volcanes (*Argentina)"
-        subtitle="10 volcanes · OAVV-SEGEMAR"
+        title="Volcanes"
+        subtitle="10 volcanes de Argentina y la frontera · OAVV-SEGEMAR"
         accentColor="#e05545"
         modelBadge={<ModelBadge model="segemar" variant="header" />}
       />

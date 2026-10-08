@@ -304,11 +304,6 @@ export function Terremotos({ location }: Props) {
           <div className="space-y-5">
             {/* Escala de referencia al tope */}
             <MagnitudeScaleBar activeMagnitude={maxMagNum} />
-            <p className="text-xs -mt-2" style={{ color: 'var(--color-muted-foreground)' }}>
-              La magnitud mide la energía liberada; cuánto se siente también depende de la
-              profundidad y la distancia — un sismo profundo o lejano se percibe menos aunque
-              tenga la misma magnitud.
-            </p>
 
             <EarthquakeFilters filters={filters} onChange={setFilters} />
 

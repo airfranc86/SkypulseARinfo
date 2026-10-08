@@ -20,7 +20,7 @@ const LEVELS = [
     label: 'M2',
     name: 'Micro',
     emoji: '🟢',
-    /** Qué pasa en tu casa */
+    /** Efecto típico cerca del epicentro */
     comparison: 'Se siente acostado, difícil de notar de pie',
     color: '#3ecf7a',
   },
@@ -174,7 +174,7 @@ export function MagnitudeScaleBar({ activeMagnitude }: MagnitudeScaleBarProps) {
             className="text-xs uppercase tracking-wide"
             style={{ color: 'var(--color-muted-foreground)' }}
           >
-            Escala de magnitud (Mw) · qué pasa en tu casa
+            Escala de magnitud (Mw) · efectos típicos cerca del epicentro
           </p>
 
           {/* Level chips */}
@@ -214,6 +214,12 @@ export function MagnitudeScaleBar({ activeMagnitude }: MagnitudeScaleBarProps) {
               )
             })}
           </div>
+
+          <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+            La magnitud mide la energía liberada; cuánto se siente también depende de la
+            profundidad y la distancia — un sismo profundo o lejano se percibe menos aunque
+            tenga la misma magnitud.
+          </p>
         </div>
       )}
     </div>

@@ -159,7 +159,7 @@ export function TafDecodedCard({ taf }: { taf: TafDecoded }) {
 
       <p className="text-[.7rem] leading-[1.6]" style={{ ...MUTED, opacity: 0.85 }}>
         La categoría (VFR, MVFR, IFR, LIFR) sale de la visibilidad y el techo de cada período con los umbrales
-        de la FAA; pasá el cursor sobre ella para ver los límites.
+        de la FAA; los límites están en «Categorías de vuelo», más abajo en esta página.
       </p>
 
       <details>

@@ -15,6 +15,7 @@ import {
   THERMAL_MESSAGES,
 } from '@/lib/windShear'
 import { explanationLines } from '@/lib/windShearHelpers'
+import { gustSpreadLine } from '@/lib/windShearTexto'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { FOCUS_RING } from './fields'
 
@@ -149,7 +150,7 @@ function Banner({ result, local, reducedMotion }: { result: WindShearResponse; l
   const Icon = visual.icon
   const calc = result.calculations
   const shear = formatNearThreshold(calc.max_shear_kt_per_100ft, SHEAR_THRESHOLDS)
-  const gust = formatNearThreshold(calc.gust_spread_kt, GUST_THRESHOLDS)
+  const gustLine = gustSpreadLine(result.inputs.surface_gust_kt, formatNearThreshold(calc.gust_spread_kt, GUST_THRESHOLDS))
   const layer = `${INT.format(calc.max_layer.from_ft)}–${INT.format(calc.max_layer.to_ft)}`
 
   return (
@@ -187,8 +188,13 @@ function Banner({ result, local, reducedMotion }: { result: WindShearResponse; l
         kt/100 ft en la capa {layer} ft
       </p>
       <p className="text-sm mt-1">
-        Ráfaga menos viento sostenido: <span className="tabular-nums font-semibold">{gust} kt</span>
-        {result.inputs.surface_gust_kt === null && ' (sin ráfaga informada)'}
+        {gustLine.label}
+        {gustLine.value !== null && (
+          <>
+            {' '}
+            <span className="tabular-nums font-semibold">{gustLine.value}</span>
+          </>
+        )}
       </p>
       <p className="text-base font-semibold mt-2 max-w-prose">{LEVEL_MESSAGES[level]}</p>
     </div>
