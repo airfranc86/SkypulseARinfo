@@ -1,4 +1,5 @@
 import { useState, useCallback, type ReactElement, type CSSProperties } from 'react'
+import { ESPACIO_STYLE, PALABRA_STYLE, agruparPorPalabra } from '@/lib/palabrasAnimadas'
 
 interface DriftTextProps {
   text: string
@@ -12,7 +13,6 @@ function randomBetween(min: number, max: number): number {
 
 export function DriftText({ text, fontSize = '1rem', className = '' }: DriftTextProps): ReactElement {
   const [drifting, setDrifting] = useState(false)
-  const chars = [...text]
 
   const handleClick = useCallback(() => {
     if (!drifting) setDrifting(true)
@@ -32,31 +32,39 @@ export function DriftText({ text, fontSize = '1rem', className = '' }: DriftText
         color: 'var(--color-foreground)',
       }}
     >
-      {chars.map((char, i) => {
-        const isSpace = char === ' '
-        // negative → upward
-        const driftRise = -randomBetween(20, 45)
-        const driftX = randomBetween(5, 10) * (Math.random() < 0.5 ? 1 : -1)
-        const duration = randomBetween(1400, 1900)
-        // random stagger — clouds drift at their own pace
-        const delay = randomBetween(0, 400)
-
-        const animStyle: CSSProperties =
-          drifting && !isSpace
-            ? {
-                '--drift-rise': `${driftRise}px`,
-                '--drift-x': `${driftX}px`,
-                animationName: 'charDrift',
-                animationDuration: `${duration}ms`,
-                animationDelay: `${delay}ms`,
-                animationTimingFunction: 'ease-out',
-                animationFillMode: 'forwards',
-              } as CSSProperties
-            : {}
-
+      {/* Cada palabra es un único ítem flex con nowrap: el salto de línea solo cae entre palabras. */}
+      {agruparPorPalabra(text).map(segmento => {
+        if (segmento.tipo === 'espacio') {
+          return <span key={`s${segmento.indice}`} style={ESPACIO_STYLE}>{' '}</span>
+        }
         return (
-          <span key={i} style={{ display: 'inline-block', ...(isSpace ? { minWidth: '0.3em' } : {}), ...animStyle }}>
-            {char}
+          <span key={`w${segmento.letras[0].indice}`} style={PALABRA_STYLE}>
+            {segmento.letras.map(({ char, indice }) => {
+              // negative → upward
+              const driftRise = -randomBetween(20, 45)
+              const driftX = randomBetween(5, 10) * (Math.random() < 0.5 ? 1 : -1)
+              const duration = randomBetween(1400, 1900)
+              // random stagger — clouds drift at their own pace
+              const delay = randomBetween(0, 400)
+
+              const animStyle: CSSProperties = drifting
+                ? ({
+                    '--drift-rise': `${driftRise}px`,
+                    '--drift-x': `${driftX}px`,
+                    animationName: 'charDrift',
+                    animationDuration: `${duration}ms`,
+                    animationDelay: `${delay}ms`,
+                    animationTimingFunction: 'ease-out',
+                    animationFillMode: 'forwards',
+                  } as CSSProperties)
+                : {}
+
+              return (
+                <span key={indice} style={{ display: 'inline-block', ...animStyle }}>
+                  {char}
+                </span>
+              )
+            })}
           </span>
         )
       })}

@@ -1,4 +1,5 @@
 import { useState, useCallback, type ReactElement, type CSSProperties } from 'react'
+import { ESPACIO_STYLE, PALABRA_STYLE, agruparPorPalabra } from '@/lib/palabrasAnimadas'
 
 interface FrostTextProps {
   text: string
@@ -12,7 +13,7 @@ function randomBetween(min: number, max: number): number {
 
 export function FrostText({ text, fontSize = '1rem', className = '' }: FrostTextProps): ReactElement {
   const [frozen, setFrozen] = useState(false)
-  const chars = [...text]
+  const total = [...text].length
 
   const handleClick = useCallback(() => {
     if (!frozen) setFrozen(true)
@@ -32,29 +33,37 @@ export function FrostText({ text, fontSize = '1rem', className = '' }: FrostText
         color: 'var(--color-foreground)',
       }}
     >
-      {chars.map((char, i) => {
-        const isSpace = char === ' '
-        // negative → upward movement (vapor rising)
-        const frostRise = -randomBetween(14, 28)
-        const duration = randomBetween(1200, 1600)
-        // stagger right→left — cold descends from the peaks
-        const delay = (chars.length - 1 - i) * randomBetween(50, 80)
-
-        const animStyle: CSSProperties =
-          frozen && !isSpace
-            ? {
-                '--frost-rise': `${frostRise}px`,
-                animationName: 'charFrost',
-                animationDuration: `${duration}ms`,
-                animationDelay: `${delay}ms`,
-                animationTimingFunction: 'ease-out',
-                animationFillMode: 'forwards',
-              } as CSSProperties
-            : {}
-
+      {/* Cada palabra es un único ítem flex con nowrap: el salto de línea solo cae entre palabras. */}
+      {agruparPorPalabra(text).map(segmento => {
+        if (segmento.tipo === 'espacio') {
+          return <span key={`s${segmento.indice}`} style={ESPACIO_STYLE}>{' '}</span>
+        }
         return (
-          <span key={i} style={{ display: 'inline-block', ...(isSpace ? { minWidth: '0.3em' } : {}), ...animStyle }}>
-            {char}
+          <span key={`w${segmento.letras[0].indice}`} style={PALABRA_STYLE}>
+            {segmento.letras.map(({ char, indice }) => {
+              // negative → upward movement (vapor rising)
+              const frostRise = -randomBetween(14, 28)
+              const duration = randomBetween(1200, 1600)
+              // stagger right→left — cold descends from the peaks
+              const delay = (total - 1 - indice) * randomBetween(50, 80)
+
+              const animStyle: CSSProperties = frozen
+                ? ({
+                    '--frost-rise': `${frostRise}px`,
+                    animationName: 'charFrost',
+                    animationDuration: `${duration}ms`,
+                    animationDelay: `${delay}ms`,
+                    animationTimingFunction: 'ease-out',
+                    animationFillMode: 'forwards',
+                  } as CSSProperties)
+                : {}
+
+              return (
+                <span key={indice} style={{ display: 'inline-block', ...animStyle }}>
+                  {char}
+                </span>
+              )
+            })}
           </span>
         )
       })}
