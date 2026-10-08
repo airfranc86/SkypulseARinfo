@@ -30,7 +30,7 @@ from app.schemas.weather import (
     RainDisagreementSchema,
 )
 from app.services.openmeteo import RAIN_VOTE_THRESHOLD_MM, DailyForecastDataExt
-from app.utils.wmo_codes import resolve_daily_icon
+from app.utils.wmo_codes import CLEAR_BELOW_PCT, PARTLY_UP_TO_PCT, resolve_daily_icon
 
 _T = TypeVar("_T")
 
@@ -42,10 +42,6 @@ _MODEL_KEYS: dict[str, str] = {"gfs": GFS_KEY, "ecmwf": ECMWF_KEY}
 
 # Index (0-based) of the first day that is a trend: days 5, 6 and 7.
 TREND_FIRST_INDEX = 4
-
-# Cloud cover (%) borders of the sky icon: below 25 clear, up to 62 partly cloudy, above overcast.
-_CLEAR_BELOW_PCT = 25.0
-_PARTLY_UP_TO_PCT = 62.0
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +83,15 @@ def is_rain_or_drizzle_code(code: int | None) -> bool:
 
 
 def sky_icon_from_cloud_cover(cloud_cover_pct: float | None) -> str:
-    """Rainless sky icon by mean cloud cover. Without the datum: overcast."""
+    """Rainless sky icon by mean cloud cover (borders: `CLEAR_BELOW_PCT`, `PARTLY_UP_TO_PCT`).
+
+    Without the datum: overcast.
+    """
     if cloud_cover_pct is None:
         return "overcast"
-    if cloud_cover_pct < _CLEAR_BELOW_PCT:
+    if cloud_cover_pct < CLEAR_BELOW_PCT:
         return "clear-day"
-    if cloud_cover_pct <= _PARTLY_UP_TO_PCT:
+    if cloud_cover_pct <= PARTLY_UP_TO_PCT:
         return "partly-cloudy-day"
     return "overcast"
 
@@ -108,11 +107,15 @@ def resolve_row_icon(
     - Rain or drizzle code but the anchor gives <= 0.9 mm: a sky icon by cloud cover.
     - The overcast + high-probability "rain" override only applies when the anchor gives > 0.9 mm.
     - Without an amount nothing can be said about rain: the base icon stays as it is.
+    - Showers, snow showers, storms and hail show the sun when the day's mean cloud cover is low
+      (a localized storm on a sunny day); the day is always shown with the day icons.
     """
     rain_confirmed = rain_verdict(precip_sum)
     if precip_sum is not None and not rain_confirmed and is_rain_or_drizzle_code(code):
         return sky_icon_from_cloud_cover(cloud_cover_mean)
-    return resolve_daily_icon(code, precip_prob, is_day=True, rain_confirmed=rain_confirmed)
+    return resolve_daily_icon(
+        code, precip_prob, is_day=True, rain_confirmed=rain_confirmed, cloud_cover=cloud_cover_mean
+    )
 
 
 def rain_band(precip_prob: float | None) -> RainBand | None:

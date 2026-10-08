@@ -160,16 +160,17 @@ def test_freezing_drizzle_uses_sleet():
 
 
 # ---------------------------------------------------------------------------
-# Granizo — códigos 96/99 (tormenta con granizo) usan ícono 'hail' propio,
-# distinto del 95 (tormenta simple → thunderstorms).
+# Granizo — códigos 96/99 (tormenta con granizo) usan un ícono de tormenta con granizo
+# ('thunderstorms-overcast-hail' sin dato de nubosidad), distinto del 95 (tormenta simple →
+# thunderstorms). El 'hail' suelto (granizo sin tormenta) se retiró del mapa WMO.
 # ---------------------------------------------------------------------------
 
-def test_hail_storm_uses_hail_icon():
+def test_hail_storm_without_cloud_cover_uses_thunderstorms_overcast_hail_icon():
     _, icon96 = describe_wmo(96, is_day=True)
-    assert icon96 == "hail"
+    assert icon96 == "thunderstorms-overcast-hail"
 
     _, icon99 = describe_wmo(99, is_day=True)
-    assert icon99 == "hail"
+    assert icon99 == "thunderstorms-overcast-hail"
 
 
 def test_hail_descriptions_unchanged():
@@ -180,18 +181,18 @@ def test_hail_descriptions_unchanged():
     assert desc99 == "Tormenta intensa con granizo"
 
 
-def test_hail_day_night_agnostic():
-    # 'hail' es neutro (nube + granizo, sin sol) ⇒ mismo ícono día y noche.
+def test_hail_storm_without_cloud_cover_is_thunderstorms_overcast_hail_day_and_night():
+    # Sin dato de nubosidad el ícono es neutro (tormenta + granizo, sin sol) ⇒ igual día y noche.
     _, icon_day = describe_wmo(96, is_day=True)
     _, icon_night = describe_wmo(96, is_day=False)
-    assert icon_day == icon_night == "hail"
+    assert icon_day == icon_night == "thunderstorms-overcast-hail"
 
 
 def test_simple_storm_stays_thunderstorms():
     # Regresión: código 95 (tormenta SIN granizo) NO debe usar 'hail'.
     _, icon_day = describe_wmo(95, is_day=True)
     assert icon_day == "thunderstorms"
-    assert icon_day != "hail"
+    assert "hail" not in icon_day
 
 
 # ---------------------------------------------------------------------------
@@ -206,9 +207,9 @@ def test_snow_grains_description():
 
 
 def test_resolve_daily_icon_hail_storm():
-    # Pronóstico diario: 96/99 caen en 'hail' (code != 3 ⇒ sin override de lluvia).
-    assert resolve_daily_icon(96, 80.0, is_day=True) == "hail"
-    assert resolve_daily_icon(99, 50.0, is_day=False) == "hail"
+    # Pronóstico diario: 96/99 sin nubosidad caen en la tormenta con granizo (code != 3 ⇒ sin override de lluvia).
+    assert resolve_daily_icon(96, 80.0, is_day=True) == "thunderstorms-overcast-hail"
+    assert resolve_daily_icon(99, 50.0, is_day=False) == "thunderstorms-overcast-hail"
 
 
 # ---------------------------------------------------------------------------
