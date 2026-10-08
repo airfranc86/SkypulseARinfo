@@ -2,6 +2,7 @@ import { useState, useId } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { ScanText } from '@/components/animated/ScanText'
+import { RADAR_IMAGENES } from '@/lib/radarImagenes'
 
 // ---------------------------------------------------------------------------
 // Data
@@ -131,6 +132,41 @@ export function Radar() {
                   <p className="text-[.63rem] font-medium tracking-widest uppercase mb-2" style={{ color: accent }}>{title}</p>
                   <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>{body}</p>
                 </div>
+              ))}
+            </div>
+          </section>
+
+          {/* 1b. Reference images */}
+          <section>
+            <h2 className="text-xl font-semibold italic mb-5" style={{ fontFamily: 'var(--font-serif)', color: 'var(--color-foreground)' }}>
+              Cómo se ve cada uno
+            </h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {RADAR_IMAGENES.map(imagen => (
+                <figure
+                  key={imagen.id}
+                  aria-labelledby={`radar-imagen-${imagen.id}-titulo`}
+                  className="min-w-0 rounded-xl overflow-hidden"
+                  style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
+                >
+                  <h3 id={`radar-imagen-${imagen.id}-titulo`} className="text-[.63rem] font-medium tracking-widest uppercase px-4 pt-4 pb-3" style={{ color: 'var(--color-primary)' }}>
+                    {imagen.titulo}
+                  </h3>
+                  <img
+                    src={imagen.src}
+                    alt={imagen.alt}
+                    width={imagen.width}
+                    height={imagen.height}
+                    loading="lazy"
+                    decoding="async"
+                    className="block w-full"
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
+                  <figcaption className="px-4 py-3 space-y-2">
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--color-foreground)' }}>{imagen.frase}</p>
+                    <p className="text-[.75rem] leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>{imagen.credito}</p>
+                  </figcaption>
+                </figure>
               ))}
             </div>
           </section>
