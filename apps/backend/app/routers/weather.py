@@ -193,7 +193,7 @@ async def get_dashboard(
     # CurrentDetailedSchema
     # =========================================================================
     weather_code_current = _get_weather_code_from_current(current)
-    wmo_desc, icon = describe_wmo(weather_code_current, is_day_now)
+    wmo_desc, icon = describe_wmo(weather_code_current, is_day_now, current.cloud_cover)
     # Prefer the original source description (SMN text / OM derived).
     # Fall back to WMO-derived only when the source has no description.
     desc = current.description or wmo_desc

@@ -213,8 +213,12 @@ def test_rain_code_without_amount_is_left_as_is() -> None:
 def test_snow_and_storm_codes_are_never_replaced() -> None:
     assert resolve_row_icon(71, 0.0, 10.0, 10.0) == "partly-cloudy-day-snow"
     assert resolve_row_icon(73, 0.0, 10.0, 10.0) == "snow"
-    assert resolve_row_icon(95, 0.0, 10.0, 10.0) == "thunderstorms"
-    assert resolve_row_icon(99, 0.0, 10.0, 10.0) == "hail"
+    # 95 y 99 siguen la nubosidad media del día (10 %: poca): sol con tormenta, sol con granizo.
+    assert resolve_row_icon(95, 0.0, 10.0, 10.0) == "thunderstorms-mostly-clear-day"
+    assert resolve_row_icon(99, 0.0, 10.0, 10.0) == "thunderstorms-mostly-clear-day-hail"
+    # Sin dato de nubosidad queda el ícono neutro de siempre (el granizo, ahora con tormenta).
+    assert resolve_row_icon(95, 0.0, 10.0, None) == "thunderstorms"
+    assert resolve_row_icon(99, 0.0, 10.0, None) == "thunderstorms-overcast-hail"
 
 
 def test_overcast_override_needs_rain_above_the_threshold() -> None:

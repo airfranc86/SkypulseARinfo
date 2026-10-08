@@ -42,6 +42,10 @@ class Slot:
     freezing_level_m: float | None
     humidity: float | None
     cloud_cover: float | None
+    # Nubosidad de la hora que dio `weather_code` (la peor de las 3 h; en empate, la última): es el
+    # cielo durante el fenómeno, el que elige el ícono. None si esa hora no trae dato, sin tomar el
+    # de otra hora.
+    weather_cloud_cover: float | None = None
 
 
 def window(values: list[_T | None], index: int) -> list[_T]:
@@ -55,6 +59,20 @@ def at(values: list[_T | None], index: int) -> _T | None:
     return values[index] if index < len(values) else None
 
 
+def worst_code_index(codes: list[int | None], index: int) -> int | None:
+    """Índice de la hora con el peor código WMO de las 3 h que terminan en `index`.
+
+    En empate gana la última hora. None si ninguna de las 3 h trae código.
+    """
+    start = max(0, index - SLOT_HOURS + 1)
+    worst: int | None = None
+    for i in range(start, min(index + 1, len(codes))):
+        code = codes[i]
+        if code is not None and (worst is None or code >= codes[worst]):
+            worst = i
+    return worst
+
+
 def three_hour_slots(om: HourlyForecastExt) -> list[Slot]:
     """Una franja cada 3 h, en las horas locales múltiplo de 3. Sin dato no se inventa un cero."""
     slots: list[Slot] = []
@@ -66,6 +84,7 @@ def three_hour_slots(om: HourlyForecastExt) -> list[Slot]:
         codes = window(om.weather_codes, i)
         gusts = window(om.wind_gusts_kmh, i)
         capes = window(om.cape_j_kg, i)
+        worst_hour = worst_code_index(om.weather_codes, i)
         slots.append(
             Slot(
                 timestamp=om.timestamps[i],
@@ -83,6 +102,7 @@ def three_hour_slots(om: HourlyForecastExt) -> list[Slot]:
                 freezing_level_m=at(om.freezing_level_heights_m, i),
                 humidity=at(om.humidities, i),
                 cloud_cover=at(om.cloud_covers, i),
+                weather_cloud_cover=at(om.cloud_covers, worst_hour) if worst_hour is not None else None,
             )
         )
     return slots

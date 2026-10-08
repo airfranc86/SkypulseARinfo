@@ -7,6 +7,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type SVGProps } from 'react'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { glowFilter } from '@/lib/iconGlow'
 import { ICON_VIEW_MARGIN, iconMotion } from '@/lib/iconMotion'
 import { isWeatherIconCode, type WeatherIconCode } from '@/lib/weatherIconCodes'
 
@@ -35,6 +36,19 @@ import Thunderstorms       from '@/assets/meteocons/thunderstorms.svg?react'
 import ThunderstormsDay    from '@/assets/meteocons/thunderstorms-day.svg?react'
 import ThunderstormsNight  from '@/assets/meteocons/thunderstorms-night.svg?react'
 import Hail                from '@/assets/meteocons/hail.svg?react'
+import MostlyClearDay            from '@/assets/meteocons/mostly-clear-day.svg?react'
+import MostlyClearNight          from '@/assets/meteocons/mostly-clear-night.svg?react'
+import MostlyClearDayRain        from '@/assets/meteocons/mostly-clear-day-rain.svg?react'
+import MostlyClearNightRain      from '@/assets/meteocons/mostly-clear-night-rain.svg?react'
+import MostlyClearDaySnow        from '@/assets/meteocons/mostly-clear-day-snow.svg?react'
+import MostlyClearNightSnow      from '@/assets/meteocons/mostly-clear-night-snow.svg?react'
+import ThunderstormsMostlyClearDay       from '@/assets/meteocons/thunderstorms-mostly-clear-day.svg?react'
+import ThunderstormsMostlyClearNight     from '@/assets/meteocons/thunderstorms-mostly-clear-night.svg?react'
+import ThunderstormsMostlyClearDayHail   from '@/assets/meteocons/thunderstorms-mostly-clear-day-hail.svg?react'
+import ThunderstormsMostlyClearNightHail from '@/assets/meteocons/thunderstorms-mostly-clear-night-hail.svg?react'
+import ThunderstormsDayHail      from '@/assets/meteocons/thunderstorms-day-hail.svg?react'
+import ThunderstormsNightHail    from '@/assets/meteocons/thunderstorms-night-hail.svg?react'
+import ThunderstormsOvercastHail from '@/assets/meteocons/thunderstorms-overcast-hail.svg?react'
 import Thermometer         from '@/assets/meteocons/thermometer.svg?react'
 import Humidity            from '@/assets/meteocons/humidity.svg?react'
 import Wind                from '@/assets/meteocons/wind.svg?react'
@@ -86,6 +100,19 @@ const ICON_MAP: Record<WeatherIconCode, SvgComponent> = {
   'thunderstorms-day':            ThunderstormsDay,
   'thunderstorms-night':          ThunderstormsNight,
   'hail':                         Hail,
+  'mostly-clear-day':             MostlyClearDay,
+  'mostly-clear-night':           MostlyClearNight,
+  'mostly-clear-day-rain':        MostlyClearDayRain,
+  'mostly-clear-night-rain':      MostlyClearNightRain,
+  'mostly-clear-day-snow':        MostlyClearDaySnow,
+  'mostly-clear-night-snow':      MostlyClearNightSnow,
+  'thunderstorms-mostly-clear-day':        ThunderstormsMostlyClearDay,
+  'thunderstorms-mostly-clear-night':      ThunderstormsMostlyClearNight,
+  'thunderstorms-mostly-clear-day-hail':   ThunderstormsMostlyClearDayHail,
+  'thunderstorms-mostly-clear-night-hail': ThunderstormsMostlyClearNightHail,
+  'thunderstorms-day-hail':       ThunderstormsDayHail,
+  'thunderstorms-night-hail':     ThunderstormsNightHail,
+  'thunderstorms-overcast-hail':  ThunderstormsOvercastHail,
   'thermometer':                  Thermometer,
   'humidity':                     Humidity,
   'wind':                         Wind,
@@ -121,28 +148,6 @@ interface WeatherIconProps {
   glow?: boolean
   /** Texto alternativo. Con label el ícono se anuncia como imagen; sin él es decorativo (aria-hidden). */
   label?: string
-}
-
-/**
- * Glow tint per phenomenon family, using the project's brand tokens — not generic amber/indigo.
- * Precip variants (rain/drizzle/snow/sleet/hail/thunderstorm) also get brightness+saturate:
- * the Meteocons drop gradient (#0a5ad4-ish blue) reads low-contrast against the app's dark
- * navy background at small sizes — boosting it makes the drops actually visible, not just glowing air around the cloud.
- */
-function glowFilter(code: string): string | undefined {
-  if (code.includes('clear-day') || code.startsWith('partly-cloudy-day')) {
-    return 'drop-shadow(0 0 8px rgba(200,168,75,0.4))' // --color-primary (dorado)
-  }
-  if (code.includes('night') || code.startsWith('moon-')) {
-    return 'drop-shadow(0 0 6px rgba(168,180,234,0.35))' // lavanda suave — nocturno
-  }
-  if (
-    code.includes('rain') || code.includes('drizzle') || code.includes('snow') ||
-    code.includes('sleet') || code.includes('hail') || code.includes('thunderstorm')
-  ) {
-    return 'brightness(1.35) saturate(1.6) drop-shadow(0 0 6px rgba(90,170,216,0.45))' // --color-info (celeste), gotas con más punch
-  }
-  return undefined
 }
 
 /**

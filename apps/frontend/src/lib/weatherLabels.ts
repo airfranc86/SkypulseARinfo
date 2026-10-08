@@ -12,10 +12,16 @@ const PRECIP_KINDS: ReadonlyArray<readonly [string, string]> = [
 
 /** Tipo de precipitación que muestra un código de ícono, o null si el ícono no muestra ninguna. */
 export function precipKind(code: string): string | null {
+  // La tormenta con granizo se nombra completa: "Tormenta" sola perdería el granizo.
+  if (code.includes('thunderstorm') && code.includes('hail')) return 'Tormenta con granizo'
   return PRECIP_KINDS.find(([key]) => code.includes(key))?.[1] ?? null
 }
 
+/** Cielos con sol que se nombran junto a la precipitación ("Lluvia, mayormente despejado"). */
+const SKY_WITH_PRECIP = ['parcialmente nublado', 'mayormente despejado']
+
 function skyKind(code: string): string | null {
+  if (code.includes('mostly-clear')) return 'mayormente despejado'
   if (code.startsWith('partly-cloudy')) return 'parcialmente nublado'
   if (code.startsWith('overcast')) return 'nublado'
   if (code.startsWith('fog')) return 'niebla'
@@ -31,7 +37,7 @@ function skyKind(code: string): string | null {
 export function describeWeatherIcon(code: string): string | null {
   const precip = precipKind(code)
   const sky = skyKind(code)
-  if (precip) return sky === 'parcialmente nublado' ? `${precip}, parcialmente nublado` : precip
+  if (precip) return sky && SKY_WITH_PRECIP.includes(sky) ? `${precip}, ${sky}` : precip
   if (!sky) return null
   return sky.charAt(0).toUpperCase() + sky.slice(1)
 }

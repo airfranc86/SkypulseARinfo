@@ -105,7 +105,70 @@ def test_weather_code_is_the_worst_of_the_window_and_the_icon_follows():
 
     slot = _slot(hourly, 18)
     assert slot.weather_code == 95
+    # La serie de prueba trae 10 % de nubosidad: sol con tormenta.
+    assert slot.icon == "thunderstorms-mostly-clear-day"
+
+
+def test_the_icon_follows_the_cloud_cover_of_the_slot_hour():
+    storm = {16: 3, 17: 51, 18: 95}
+    cloudy = _hourly(weather_codes=storm, cloud_covers={18: 90.0})
+    partly = _hourly(weather_codes=storm, cloud_covers={18: 40.0})
+
+    assert _slot(cloudy, 18).icon == "thunderstorms"
+    assert _slot(partly, 18).icon == "thunderstorms-day"
+
+
+def test_the_night_slot_gets_the_night_variant():
+    hourly = _hourly(weather_codes={21: 99}, cloud_covers={21: 10.0})
+
+    slot = _slot(hourly, 21)
+    assert slot.is_day is False
+    assert slot.icon == "thunderstorms-mostly-clear-night-hail"
+
+
+def test_the_icon_reads_the_sky_of_the_hour_of_the_worst_code_not_the_label_hour():
+    # Tormenta a las 16 h bajo 90 % de nubes; a las 18 h (la hora de la franja) ya despejó.
+    hourly = _hourly(weather_codes={16: 95}, cloud_covers={16: 90.0, 17: 60.0, 18: 5.0})
+
+    slot = _slot(hourly, 18)
+    assert slot.weather_code == 95
     assert slot.icon == "thunderstorms"
+
+
+def test_a_storm_under_a_clear_sky_keeps_the_sun_even_if_the_label_hour_is_cloudy():
+    # Tormenta aislada a las 16 h con cielo despejado; a las 18 h la franja ya está nublada.
+    hourly = _hourly(weather_codes={16: 99}, cloud_covers={16: 5.0, 17: 50.0, 18: 90.0})
+
+    assert _slot(hourly, 18).icon == "thunderstorms-mostly-clear-day-hail"
+
+
+def test_without_cloud_cover_at_the_worst_hour_the_icon_is_neutral_never_another_hours_sky():
+    hourly = _hourly(weather_codes={16: 95}, cloud_covers={16: None, 17: 5.0, 18: 5.0})
+
+    assert _slot(hourly, 18).icon == "thunderstorms"
+
+
+def test_when_the_worst_code_repeats_the_latest_hour_gives_the_sky():
+    # El mismo código 95 a las 16 h (nublado) y a las 17 h (despejado): manda la última hora.
+    hourly = _hourly(weather_codes={16: 95, 17: 95}, cloud_covers={16: 90.0, 17: 5.0, 18: 90.0})
+
+    assert _slot(hourly, 18).icon == "thunderstorms-mostly-clear-day"
+
+
+def test_the_slot_cloud_cover_stays_the_value_of_the_label_hour():
+    # `cloud_cover` de la franja alimenta el aviso de llovizna junto con la humedad: no cambia.
+    from app.services.hourly_slots import three_hour_slots
+
+    hourly = _hourly(weather_codes={16: 95}, cloud_covers={16: 90.0, 18: 5.0})
+    slot = next(s for s in three_hour_slots(hourly) if s.date == "2026-09-19" and s.hour_label == "18:00")
+
+    assert slot.cloud_cover == pytest.approx(5.0)
+
+
+def test_a_slot_without_cloud_cover_keeps_the_neutral_icon():
+    hourly = _hourly(weather_codes={18: 99}, cloud_covers={18: None})
+
+    assert _slot(hourly, 18).icon == "thunderstorms-overcast-hail"
 
 
 def test_a_clear_window_keeps_a_clear_icon():

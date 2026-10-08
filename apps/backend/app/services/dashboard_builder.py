@@ -247,7 +247,7 @@ def build_hourly_schema(om_hourly: HourlyForecastExt | None) -> HourlyConsensusS
             precip_mm=s.precip_mm,
             precip_prob=s.precip_prob,
             weather_code=s.weather_code,
-            icon=describe_wmo(s.weather_code, s.is_day)[1],
+            icon=describe_wmo(s.weather_code, s.is_day, s.weather_cloud_cover)[1],
             is_day=s.is_day,
             # Sin CAPE no se finge un cielo tranquilo (compute_convective_risk(None) daría "low").
             convective_risk=compute_convective_risk(s.cape_j_kg) if s.cape_j_kg is not None else None,
