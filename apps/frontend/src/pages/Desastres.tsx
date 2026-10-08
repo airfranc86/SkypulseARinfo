@@ -216,7 +216,7 @@ const DISASTERS: DisasterCard[] = [
     subtitle: 'Las que reescriben el paisaje · Volcanic eruption',
     img: 'https://upload.wikimedia.org/wikipedia/commons/6/63/Close_u_of_red_hot_lava_flowing_on_a_dirt_road%2C_a_result_of_the_Kilauea_Volcano_eruption_and_lava_flow_in_2014._-_DPLA_-_ced6ae979602bcc6905f497b87d35e8f.JPG',
     imgAlt: 'Erupción volcánica — ríos de lava y columna de ceniza',
-    tags: ['🌋 Hasta 700°C en flujos piroclásticos', '🌍 28 volcanes activos afectan Argentina', '⏱ Aviso variable'],
+    tags: ['🌋 Hasta 700°C en flujos piroclásticos', '🌍 10 volcanes con alerta monitoreada (OAVV)', '⏱ Aviso variable'],
     dangerLevel: 4,
     badge: 'warn',
     badgeLabel: 'Aviso variable · Evacuá la zona de exclusión',
@@ -232,7 +232,7 @@ const DISASTERS: DisasterCard[] = [
 ]
 
 const SECTIONS: { family: Exclude<Family, 'all'>; title: string; subtitle: string }[] = [
-  { family: 'geo',   title: 'Geológicos',          subtitle: 'Origen en la corteza terrestre · Cero aviso · Impacto inmediato' },
+  { family: 'geo',   title: 'Geológicos',          subtitle: 'Origen en la corteza terrestre · Sin aviso para sismos · Impacto inmediato' },
   { family: 'hidro', title: 'Hidrometeorológicos',  subtitle: 'Agua y atmósfera · Aviso variable · Mayor frecuencia global' },
   { family: 'oce',   title: 'Oceánicos',            subtitle: 'Origen en el mar · Aviso escaso · Velocidad de avión en aguas profundas' },
 ]
