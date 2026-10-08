@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   COPY,
+  ENVIO_AUTOMATICO_ACTIVO,
   NOMBRE_CAMPANA,
   RUTA_PRIVACIDAD,
+  copyDe,
   etiquetaProbar,
   lineaCiudad,
   mensajeDeDisponibilidad,
@@ -77,21 +79,25 @@ const PRUEBAS: readonly EstadoPrueba[] = [
   ...ERRORES.map((error): EstadoPrueba => ({ tipo: 'error', error })),
 ]
 
-/** Cada texto de la pantalla, estático o armado por una función, para revisarlos todos juntos. */
-function todosLosTextos(): string[] {
-  const estaticos = Object.values(COPY).flatMap((valor) => (typeof valor === 'string' ? [valor] : []))
+/**
+ * Cada texto de la pantalla, estático o armado por una función, para revisarlos todos juntos. `envio` es el
+ * modo: con el envío automático activo o sin él (por defecto, el que sale a producción).
+ */
+function todosLosTextos(envio: boolean = ENVIO_AUTOMATICO_ACTIVO): string[] {
+  const copy = copyDe(envio)
+  const estaticos = Object.values(copy).flatMap((valor) => (typeof valor === 'string' ? [valor] : []))
   return [
     ...estaticos,
-    COPY.aclaracionOficial.antes,
-    COPY.aclaracionOficial.enlace,
-    COPY.aclaracionOficial.despues,
+    copy.aclaracionOficial.antes,
+    copy.aclaracionOficial.enlace,
+    copy.aclaracionOficial.despues,
     NOMBRE_CAMPANA,
     lineaCiudad('Córdoba'),
     lineaCiudad(null),
     etiquetaProbar(null),
     etiquetaProbar(30),
     notaInstalarIos('16.4'),
-    ...ESTADOS.map((estado) => mensajeDeEstado(estado, 'Córdoba')),
+    ...ESTADOS.map((estado) => mensajeDeEstado(estado, 'Córdoba', envio)),
     ...ERRORES.map((error) => mensajeDeError(error)),
     ...DISPONIBILIDADES.map((disponibilidad) => mensajeDeDisponibilidad(disponibilidad)),
     ...MOTIVOS_NO_ACTIVABLE.map((motivo) => razonDeshabilitado(motivo)),
@@ -101,14 +107,32 @@ function todosLosTextos(): string[] {
 
 // ── Página, leyenda y consentimiento ─────────────────────────────────────────
 
-test('el título de la página es el del ticket', () => {
-  assert.equal(COPY.titulo, 'Avisos de tormenta en tu celular')
+test('con el envío automático activo, el título de la página es el del ticket', () => {
+  assert.equal(copyDe(true).titulo, 'Avisos de tormenta en tu celular')
 })
 
-test('la introducción dice cuándo avisa y el horario en que no manda nada', () => {
-  assert.match(COPY.intro, /21 h/)
-  assert.match(COPY.intro, /tormentas/)
-  assert.match(COPY.intro, /entre las 22 y las 7/)
+test('con el envío automático activo, la introducción dice cuándo avisa y el horario en que no manda nada', () => {
+  const { intro } = copyDe(true)
+  assert.match(intro, /21 h/)
+  assert.match(intro, /tormentas/)
+  assert.match(intro, /entre las 22 y las 7/)
+})
+
+test('sin envío automático, el título y la introducción dicen que los avisos automáticos todavía no están activos', () => {
+  const { titulo, intro } = copyDe(false)
+  assert.match(titulo, /todavía no están activos/)
+  assert.match(intro, /avisos automáticos de tormenta todavía no están activos/)
+  // Lo que sí existe hoy: registrar el celular, mandarse una prueba y desactivar.
+  assert.match(intro, /aviso de prueba/)
+  assert.match(intro, /registrar tu celular/)
+  assert.match(intro, /desactivar/)
+  assert.doesNotMatch(intro, /21 h|entre las 22 y las 7/)
+})
+
+test('copyDe usa por defecto la constante ENVIO_AUTOMATICO_ACTIVO y COPY es ese resultado', () => {
+  assert.deepEqual(copyDe(), copyDe(ENVIO_AUTOMATICO_ACTIVO))
+  assert.deepEqual(COPY, copyDe(ENVIO_AUTOMATICO_ACTIVO))
+  assert.notDeepEqual(copyDe(true), copyDe(false))
 })
 
 test('la leyenda aclara que es un pronóstico de SkyPulse y no un aviso oficial, y manda a smn.gob.ar', () => {
@@ -118,8 +142,8 @@ test('la leyenda aclara que es un pronóstico de SkyPulse y no un aviso oficial,
   assert.equal(`${antes}${enlace}${despues}`.includes('smn.gob.ar'), true)
 })
 
-test('el consentimiento es el texto del ticket: dirección técnica y ciudad, solo para estos avisos, con la baja', () => {
-  const texto = COPY.consentimiento
+test('con el envío automático activo, el consentimiento es el texto del ticket: dirección técnica y ciudad, solo para estos avisos, con la baja', () => {
+  const texto = copyDe(true).consentimiento
   assert.equal(
     texto,
     'Acepto que SkyPulse guarde la dirección técnica de entrega de mi navegador y mi ciudad, solo para enviarme estos avisos. Puedo darme de baja cuando quiera.',
@@ -127,6 +151,14 @@ test('el consentimiento es el texto del ticket: dirección técnica y ciudad, so
   assert.match(texto, /guarde la dirección técnica de entrega de mi navegador y mi ciudad/)
   assert.match(texto, /solo para enviarme estos avisos/)
   assert.match(texto, /darme de baja cuando quiera/)
+})
+
+test('sin envío automático, el consentimiento cubre solo el aviso de prueba, con la baja', () => {
+  const texto = copyDe(false).consentimiento
+  assert.match(texto, /guarde la dirección técnica de entrega de mi navegador y mi ciudad/)
+  assert.match(texto, /aviso de prueba/)
+  assert.match(texto, /darme de baja cuando quiera/)
+  assert.doesNotMatch(texto, /estos avisos/)
 })
 
 test('el enlace de privacidad apunta a /privacidad y tiene texto', () => {
@@ -190,8 +222,31 @@ test('cada estado tiene un mensaje en español, salvo "inactivo" que no dice nad
   }
 })
 
+test('con el envío automático activo, el estado "activo" dice "Avisos activados"', () => {
+  const activo: EstadoAvisos = { tipo: 'activo', id: ID, zona: 'cordoba' }
+  assert.equal(mensajeDeEstado(activo, 'Córdoba', true), 'Avisos activados para Córdoba.')
+  assert.equal(mensajeDeEstado(activo, null, true), 'Avisos activados.')
+})
+
+test('sin envío automático, el estado "activo" registra el celular, aclara que los avisos automáticos no están activos y ofrece la prueba', () => {
+  const activo: EstadoAvisos = { tipo: 'activo', id: ID, zona: 'cordoba' }
+  const conZona = mensajeDeEstado(activo, 'Córdoba', false)
+  const sinZona = mensajeDeEstado(activo, null, false)
+  assert.match(conZona, /^Celular registrado para Córdoba\./)
+  assert.match(sinZona, /^Celular registrado\./)
+  for (const texto of [conZona, sinZona]) {
+    assert.match(texto, /avisos automáticos todavía no están activos/)
+    assert.match(texto, /aviso de prueba/)
+    assert.doesNotMatch(texto, /Avisos activados/i)
+  }
+})
+
+test('el estado "activo" sin tercer argumento usa la constante ENVIO_AUTOMATICO_ACTIVO', () => {
+  const activo: EstadoAvisos = { tipo: 'activo', id: ID, zona: 'cordoba' }
+  assert.equal(mensajeDeEstado(activo, 'Córdoba'), mensajeDeEstado(activo, 'Córdoba', ENVIO_AUTOMATICO_ACTIVO))
+})
+
 test('los mensajes de estado dicen lo que fija el ticket', () => {
-  assert.equal(mensajeDeEstado({ tipo: 'activo', id: ID, zona: 'cordoba' }, 'Córdoba'), 'Avisos activados para Córdoba.')
   assert.equal(
     mensajeDeEstado({ tipo: 'denegado' }, null),
     'No diste permiso para recibir avisos. Podés habilitarlo desde los ajustes de tu navegador.',
@@ -204,8 +259,12 @@ test('los mensajes de estado dicen lo que fija el ticket', () => {
   assert.match(mensajeDeEstado({ tipo: 'pidiendo-permiso' }, null), /^Activando…/)
 })
 
-test('"activo" sin nombre de ciudad igual da un mensaje completo', () => {
-  assert.equal(mensajeDeEstado({ tipo: 'activo', id: ID, zona: 'cordoba' }, null), 'Avisos activados.')
+test('"activo" sin nombre de ciudad igual da un mensaje completo, con y sin envío automático', () => {
+  for (const envio of [true, false]) {
+    const mensaje = mensajeDeEstado({ tipo: 'activo', id: ID, zona: 'cordoba' }, null, envio)
+    assert.match(mensaje, /^[A-ZÁÉÍÓÚ].*\.$/)
+    assert.doesNotMatch(mensaje, /null|undefined/)
+  }
 })
 
 test('un estado de error muestra el mensaje de ese error', () => {
@@ -294,19 +353,28 @@ test('ningún texto menciona códigos HTTP, claves ni jerga técnica', () => {
   // "NaN", "null") solo como palabra suelta, porque "NaN" sin distinguir mayúsculas cae dentro de "funcionan".
   const jergaTecnica = /HTTP|endpoint|VAPID|service ?worker|PushManager/i
   const valoresCrudos = /\b[45]\d\d\b|\bAPI\b|\bundefined\b|\bnull\b|\bNaN\b|\bInfinity\b/
-  for (const texto of todosLosTextos()) {
-    assert.doesNotMatch(texto, jergaTecnica, `texto con jerga: ${texto}`)
-    assert.doesNotMatch(texto, valoresCrudos, `texto con un valor crudo: ${texto}`)
+  for (const envio of [true, false]) {
+    for (const texto of todosLosTextos(envio)) {
+      assert.doesNotMatch(texto, jergaTecnica, `texto con jerga: ${texto}`)
+      assert.doesNotMatch(texto, valoresCrudos, `texto con un valor crudo: ${texto}`)
+    }
+  }
+})
+
+test('sin envío automático ningún texto lleva rayas largas ni emoji', () => {
+  for (const texto of todosLosTextos(false)) {
+    assert.doesNotMatch(texto, /[–—]|\p{Extended_Pictographic}/u, `texto con raya larga o emoji: ${texto}`)
   }
 })
 
 test('los textos conservan tildes, eñes y signos de apertura', () => {
-  const todos = todosLosTextos().join('\n')
+  const todos = [...todosLosTextos(true), ...todosLosTextos(false)].join('\n')
   for (const caracter of ['á', 'é', 'í', 'ó', 'ñ', '¿', '«', '»', '…']) {
     assert.ok(todos.includes(caracter), `falta el carácter ${caracter} en los textos`)
   }
-  assert.ok(COPY.intro.includes('mañana'))
-  assert.ok(COPY.tituloInstalarIos.startsWith('¿'))
+  assert.ok(copyDe(true).intro.includes('mañana'))
+  assert.ok(copyDe(true).tituloInstalarIos.startsWith('¿'))
+  assert.ok(copyDe(false).tituloInstalarIos.startsWith('¿'))
   assert.doesNotMatch(todos, /�|Ã|Â/)
 })
 
@@ -323,7 +391,9 @@ test('los pasos del iPhone vienen de plataforma.ts y no se repiten acá', () => 
 })
 
 test('ningún texto queda vacío ni con espacios sobrantes en los bordes', () => {
-  for (const texto of todosLosTextos()) {
-    assert.equal(texto, texto.trim())
+  for (const envio of [true, false]) {
+    for (const texto of todosLosTextos(envio)) {
+      assert.equal(texto, texto.trim())
+    }
   }
 })

@@ -123,11 +123,15 @@ def texto_aviso_hoy(
 
 
 def texto_prueba(zona: Zona) -> Mensaje:
-    """La notificación de prueba: muestra cómo se ven los avisos y confirma que el envío funciona."""
+    """La notificación de prueba: confirma que el envío funciona y aclara que los avisos automáticos aún no existen.
+
+    Cuando el envío programado (FRA-355/356) esté activo, este texto vuelve al borrador original:
+    "Así vas a ver los avisos de tormenta para {zona}. Si te llegó, está todo listo."
+    """
     return Mensaje(
         titulo="SkyPulse · Prueba",
         cuerpo=(
-            f"Así vas a ver los avisos de tormenta para {zona.nombre}. "
-            "Si te llegó, está todo listo."
+            f"Esto es un aviso de prueba para {zona.nombre}. "
+            "Los avisos automáticos de tormenta todavía no están activos."
         ),
     )

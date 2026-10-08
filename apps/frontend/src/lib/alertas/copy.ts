@@ -23,30 +23,83 @@ export const RUTA_PRIVACIDAD = '/privacidad'
 /** Nombre accesible de la campana del header (un enlace a `/alertas`). */
 export const NOMBRE_CAMPANA = 'Avisos de tormenta'
 
-export const COPY = Object.freeze({
+/**
+ * ¿Existe el envío programado de avisos de tormenta (FRA-355/356)? Mientras sea `false`, todos los textos
+ * describen solo lo que existe hoy: registrar el celular para una ciudad, mandarse un aviso de prueba y
+ * desactivar, y dicen que los avisos automáticos todavía no están activos. Con `true` vuelven los textos
+ * originales (los de `TEXTOS_CON_ENVIO`). Cuando el envío exista, se cambia esta constante.
+ *
+ * Antes de ponerla en `true`: (1) el consentimiento de hoy cubre solo el aviso de prueba, así que hay que pedir
+ * consentimiento nuevo a quienes ya se registraron o darlos de baja (Ley 25.326, finalidad y consentimiento);
+ * (2) la campana (`VITE_ALERTAS_VISIBLE`) no se enciende antes de que el envío exista.
+ */
+export const ENVIO_AUTOMATICO_ACTIVO = false
+
+/** Los textos que dependen de si el envío automático existe, cada uno con su versión según el modo. */
+interface TextosPorModo {
+  titulo: string
+  intro: string
+  consentimiento: string
+  tituloInstalarIos: string
+  /** El estado "activo": con o sin nombre de ciudad. */
+  estadoActivo: (nombreZona: string | null) => string
+}
+
+/** Los textos ORIGINALES, con el envío automático activo. No tocar: es lo que vuelve al activar la constante. */
+const TEXTOS_CON_ENVIO: TextosPorModo = Object.freeze({
   titulo: 'Avisos de tormenta en tu celular',
   intro:
     'SkyPulse avisa a las 21 h cuando se esperan tormentas para mañana y, durante el día, si aparece algo nuevo. No manda nada entre las 22 y las 7.',
-  /** La leyenda va en tres partes para que `smn.gob.ar` sea un enlace; los bordes van sin espacios (los pone quien arma la frase). */
-  aclaracionOficial: Object.freeze({
-    antes: 'Es un pronóstico de SkyPulse, no un aviso oficial. Los avisos oficiales están en',
-    enlace: 'smn.gob.ar',
-    despues: '.',
-  }),
-  etiquetaCiudad: 'Ciudad',
-  opcionCiudad: 'Elegí una ciudad',
   consentimiento:
     'Acepto que SkyPulse guarde la dirección técnica de entrega de mi navegador y mi ciudad, solo para enviarme estos avisos. Puedo darme de baja cuando quiera.',
-  enlacePrivacidad: 'Leer la política de privacidad',
-  activar: 'Activar avisos',
-  activando: 'Activando…',
-  probar: 'Probar aviso',
-  probando: 'Mandando el aviso de prueba…',
-  desactivar: 'Desactivar avisos',
-  desactivando: 'Desactivando…',
-  notaProbar: 'Se puede probar una vez por minuto.',
   tituloInstalarIos: '¿Usás iPhone? Instalá SkyPulse para recibir avisos',
+  estadoActivo: (nombreZona: string | null) => (nombreZona === null ? 'Avisos activados.' : `Avisos activados para ${nombreZona}.`),
 })
+
+/** Los textos de hoy, sin envío automático. */
+const TEXTOS_SIN_ENVIO: TextosPorModo = Object.freeze({
+  titulo: 'Avisos de tormenta: todavía no están activos',
+  intro:
+    'Los avisos automáticos de tormenta todavía no están activos. Por ahora podés registrar tu celular para una ciudad, mandarte un aviso de prueba y desactivar el registro cuando quieras.',
+  consentimiento:
+    'Acepto que SkyPulse guarde la dirección técnica de entrega de mi navegador y mi ciudad, solo para mandarme el aviso de prueba que pida. Puedo darme de baja cuando quiera.',
+  tituloInstalarIos: '¿Usás iPhone? Instalá SkyPulse para probar los avisos',
+  estadoActivo: (nombreZona: string | null) =>
+    `${nombreZona === null ? 'Celular registrado.' : `Celular registrado para ${nombreZona}.`} Los avisos automáticos todavía no están activos. Por ahora podés mandarte un aviso de prueba.`,
+})
+
+/**
+ * Los textos de la pantalla según el modo. `envioAutomatico` es un parámetro (por defecto, la constante) para
+ * que las pruebas puedan pedir cualquiera de los dos sin depender del estado del módulo.
+ */
+export function copyDe(envioAutomatico: boolean = ENVIO_AUTOMATICO_ACTIVO) {
+  const { titulo, intro, consentimiento, tituloInstalarIos } = envioAutomatico ? TEXTOS_CON_ENVIO : TEXTOS_SIN_ENVIO
+  return Object.freeze({
+    titulo,
+    intro,
+    /** La leyenda va en tres partes para que `smn.gob.ar` sea un enlace; los bordes van sin espacios (los pone quien arma la frase). */
+    aclaracionOficial: Object.freeze({
+      antes: 'Es un pronóstico de SkyPulse, no un aviso oficial. Los avisos oficiales están en',
+      enlace: 'smn.gob.ar',
+      despues: '.',
+    }),
+    etiquetaCiudad: 'Ciudad',
+    opcionCiudad: 'Elegí una ciudad',
+    consentimiento,
+    enlacePrivacidad: 'Leer la política de privacidad',
+    activar: 'Activar avisos',
+    activando: 'Activando…',
+    probar: 'Probar aviso',
+    probando: 'Mandando el aviso de prueba…',
+    desactivar: 'Desactivar avisos',
+    desactivando: 'Desactivando…',
+    notaProbar: 'Se puede probar una vez por minuto.',
+    tituloInstalarIos,
+  })
+}
+
+/** Los textos que se publican: los del modo que fija `ENVIO_AUTOMATICO_ACTIVO`. */
+export const COPY = copyDe()
 
 // ── Ciudad ───────────────────────────────────────────────────────────────────
 
@@ -104,7 +157,11 @@ export function mensajeDeError(error: ErrorAvisos): string {
 }
 
 /** El mensaje del estado de la suscripción; vacío en "inactivo" (no hay nada que anunciar). */
-export function mensajeDeEstado(estado: EstadoAvisos, nombreZona: string | null): string {
+export function mensajeDeEstado(
+  estado: EstadoAvisos,
+  nombreZona: string | null,
+  envioAutomatico: boolean = ENVIO_AUTOMATICO_ACTIVO,
+): string {
   switch (estado.tipo) {
     case 'pidiendo-permiso':
       return 'Activando… Respondé el pedido de permiso de tu navegador.'
@@ -115,7 +172,7 @@ export function mensajeDeEstado(estado: EstadoAvisos, nombreZona: string | null)
     case 'denegado':
       return 'No diste permiso para recibir avisos. Podés habilitarlo desde los ajustes de tu navegador.'
     case 'activo':
-      return nombreZona === null ? 'Avisos activados.' : `Avisos activados para ${nombreZona}.`
+      return (envioAutomatico ? TEXTOS_CON_ENVIO : TEXTOS_SIN_ENVIO).estadoActivo(nombreZona)
     case 'error':
       return mensajeDeError(estado.error)
     default:
