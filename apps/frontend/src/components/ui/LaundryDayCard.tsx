@@ -1,6 +1,6 @@
 import { type ReactElement } from 'react'
 import type { LaundryDay } from '@/lib/api'
-import { LABEL_COLOR } from '@/lib/qualityScale'
+import { laundryDayView } from '@/lib/laundryDay'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { BorderGlow } from '@/components/animated/BorderGlow'
 
@@ -13,10 +13,10 @@ export function LaundryDayCard({
   day,
   index,
 }: LaundryDayCardProps): ReactElement {
-  const isBest = day.is_best
-  const labelColor = isBest ? '#c8a84b' : LABEL_COLOR[day.label]
+  const view = laundryDayView(day)
+  const isBest = view.showBestBadge
+  const labelColor = view.labelColor
   const showPrecipChip = day.precip_prob > 0
-  const showLowConfidence = !isBest && day.confidence_pct < 70
 
   const cardContent = (
     <div
@@ -62,40 +62,37 @@ export function LaundryDayCard({
               className="text-sm font-semibold capitalize"
               style={{ color: 'var(--color-foreground)' }}
             >
-              {day.day_label}{' '}
-              <span
-                className="text-xs font-normal"
-                style={{ color: 'var(--color-muted-foreground)' }}
-              >
-                {day.date}
-              </span>
+              {view.dayText}
             </span>
 
-            {isBest ? (
-              <span
-                className="shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full"
-                style={{
-                  background: 'rgba(200,168,75,0.15)',
-                  color: '#c8a84b',
-                  border: '1px solid rgba(200,168,75,0.35)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                ✦ Mejor día
-              </span>
-            ) : showLowConfidence ? (
-              <span
-                className="shrink-0 text-xs px-2 py-0.5 rounded-full"
-                style={{
-                  background: 'rgba(240,160,48,0.12)',
-                  color: '#f0a030',
-                  border: '1px solid rgba(240,160,48,0.3)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                ⚠ Baja confianza
-              </span>
-            ) : null}
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              {isBest && (
+                <span
+                  className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: 'rgba(200,168,75,0.15)',
+                    color: '#c8a84b',
+                    border: '1px solid rgba(200,168,75,0.35)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <span aria-hidden="true">✦</span> Mejor día
+                </span>
+              )}
+              {view.confidenceText && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full"
+                  style={{
+                    background: 'var(--color-muted)',
+                    color: 'var(--color-muted-foreground)',
+                    border: '1px solid var(--color-border)',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {view.confidenceText}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Headline */}
