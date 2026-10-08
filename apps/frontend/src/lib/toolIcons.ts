@@ -6,6 +6,7 @@
  */
 import type { SnowBandKey } from './cotaDeNieve.ts'
 import type { WeatherIconCode } from './weatherIconCodes.ts'
+import { uvCategory } from './uvScale.ts'
 
 /** Header icon of each tool page: a Meteocon inside the 64 px `PageHeader` square. */
 export const TOOL_HEADER_ICON_CODES = {
@@ -50,15 +51,14 @@ export const SPORT_FACTOR_ICON_CODES = {
 
 export type SportFactor = keyof typeof SPORT_FACTOR_ICON_CODES
 
-const UV_HIGH = 6
-const UV_MODERATE = 3
-
-/** Icon of the "Sol" chip: night, strong UV, direct sun, or moderate sun. */
+/** Icon of the "Sol" chip: night, strong UV, direct sun, or moderate sun. The UV is classified
+    like the chip text (`uvCategory`, on the rounded number), so icon and text never disagree. */
 export function sunIconCode(isDay: boolean, uvIndex: number | null): WeatherIconCode {
   if (!isDay) return 'clear-night'
-  if (uvIndex !== null && uvIndex >= UV_HIGH) return 'uv-index'
-  if (uvIndex !== null && uvIndex >= UV_MODERATE) return 'clear-day'
-  return 'partly-cloudy-day'
+  const level = uvCategory(uvIndex)?.level
+  if (level === undefined || level === 'bajo') return 'partly-cloudy-day'
+  if (level === 'moderado') return 'clear-day'
+  return 'uv-index'
 }
 
 // ── Cota de nieve ────────────────────────────────────────────────────────────

@@ -280,7 +280,7 @@ def score_tender_ropa(
             label="No apto",
             color="red",
             headline="Tormenta eléctrica — no tiendas ropa afuera",
-            reason="Riesgo de tormenta severa o granizo en el pronóstico.",
+            reason="Tormenta eléctrica en el pronóstico.",
             temp=temp_c,
             humidity=humidity,
             wind_speed=wind_speed_kmh,
@@ -452,6 +452,20 @@ def score_tender_ropa(
 # HacerDeporte
 # ---------------------------------------------------------------------------
 
+def _format_decimal(value: float) -> str:
+    """Una cifra decimal con coma ("25,3")."""
+    return f"{value:.1f}".replace(".", ",")
+
+
+def _format_mm(mm: float) -> str:
+    """Milímetros en castellano rioplatense: "2 mm", "0,5 mm"; lo que redondea a cero no se muestra como "0 mm"."""
+    rounded = round(mm, 1)
+    if rounded == 0:
+        return "menos de 0,1 mm"
+    text = f"{rounded:.1f}".removesuffix(".0").replace(".", ",")
+    return f"{text} mm"
+
+
 def score_hacer_deporte(
     temp_c: float | None,
     humidity: float | None,
@@ -473,7 +487,7 @@ def score_hacer_deporte(
             label="No apto",
             color="red",
             headline="Tormenta eléctrica — no hagas deporte al aire libre",
-            reason="Riesgo de tormenta severa o granizo en el pronóstico.",
+            reason="Tormenta eléctrica en el pronóstico.",
             temp=temp_c,
             humidity=humidity,
             wind_speed=wind_speed_kmh,
@@ -482,22 +496,37 @@ def score_hacer_deporte(
 
     score = 0
     factors: list[str] = []
+    # Lo que resta puntos, con el dato que lo causa: sin esto el motivo de un
+    # "Regular" listaba solo lo bueno. Un dato faltante no es una penalización.
+    penalties: list[str] = []
 
     if temp_c is not None and 10 <= temp_c <= 25:
         score += 30
         factors.append("temperatura óptima")
+    elif temp_c is not None and temp_c > 25:
+        # Una cifra decimal; nunca redondea hacia adentro del rango (25,04 no puede leerse "25,0 por encima").
+        penalties.append(f"Calor: {_format_decimal(max(round(temp_c, 1), 25.1))} °C, por encima del rango ideal")
+    elif temp_c is not None:
+        penalties.append(f"Frío: {_format_decimal(min(round(temp_c, 1), 9.9))} °C, por debajo del rango ideal")
 
     if humidity is not None and humidity < 70:
         score += 25
         factors.append("humedad tolerable")
+    elif humidity is not None:
+        penalties.append(f"Humedad de {round(humidity)}%")
 
     if precip is not None and precip == 0:
         score += 25
         factors.append("sin lluvia")
+    elif precip is not None and precip > 0:
+        # `precip` es el acumulado de las próximas 12 h (_SPORT_OUTLOOK_HOURS en routers/tools.py).
+        penalties.append(f"Lluvia prevista: {_format_mm(precip)} en 12 h")
 
     if wind_speed_kmh is not None and wind_speed_kmh < 20:
         score += 20
         factors.append("viento suave")
+    elif wind_speed_kmh is not None:
+        penalties.append(f"Viento de {round(wind_speed_kmh)} km/h")
 
     # Veto: el bloque de arriba solo le resta el bonus de "sin lluvia" (25 pts)
     # a la lluvia — con el resto de los factores ideales eso deja el score
@@ -520,7 +549,10 @@ def score_hacer_deporte(
     else:
         headline = "No es recomendable hacer deporte hoy"
 
-    reason = f"Factores favorables: {', '.join(factors)}." if factors else "Condiciones desfavorables para deporte."
+    sentences = [f"{penalty}." for penalty in penalties]
+    if factors:
+        sentences.append(f"Factores favorables: {', '.join(factors)}.")
+    reason = " ".join(sentences) if sentences else "Condiciones desfavorables para deporte."
 
     return ToolResult(
         tool="hacer-deporte",
@@ -560,8 +592,8 @@ def score_lavar_coche(
             score=5,
             label="No apto",
             color="red",
-            headline="Riesgo de granizo — no laves el auto hoy",
-            reason="Tormenta severa o granizo en el pronóstico.",
+            headline="Tormenta eléctrica — no laves el auto hoy",
+            reason="Tormenta eléctrica en el pronóstico.",
             temp=temp_max_c,
             humidity=humidity,
             wind_speed=wind_speed_kmh,
