@@ -80,9 +80,10 @@ test('mammatus: la insignia y la composición no lo presentan como la tormenta m
   assert.doesNotMatch(m.composition, /Tormenta severa/i)
 })
 
-test('mammatus: todos los textos dicen que cuelgan bajo el yunque de un Cb', () => {
+test('mammatus: la descripción y el texto aeronáutico dicen que cuelgan bajo el yunque de un Cb', () => {
   const m = cloud('mammatus')
-  assert.equal(m.imgAlt, 'Mammatus — bolsas colgantes bajo el yunque de un Cb')
+  // El alt describe lo que muestra la foto (bolsas naranjas desenfocadas, sin yunque a la vista), no la teoría.
+  assert.equal(m.imgAlt, 'Mammatus — bolsas colgantes redondeadas, teñidas de naranja')
   assert.match(m.description, /bajo el yunque de un Cb/)
   assert.match(m.aeroText, /yunque de un Cb/)
   for (const text of [m.imgAlt, m.description, m.aeroText]) {

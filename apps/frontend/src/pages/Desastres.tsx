@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { Dither } from '@/components/animated/Dither'
 import { DangerScale } from '../components/ui/DangerScale'
+import { TEXTO_CAMBIOS, creditoDe, textoCredito } from '@/lib/creditosFotos'
 
 // ---------------------------------------------------------------------------
 // Types & Data
@@ -34,8 +35,8 @@ const DISASTERS: DisasterCard[] = [
     family: 'geo',
     title: 'Terremotos',
     subtitle: 'Los catastróficos · Sismo · Seísmo',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/5/52/2010_Haiti_Earthquake_%28After%29.jpg',
-    imgAlt: 'Terremoto — daños en Port-au-Prince, Haiti 2010',
+    img: '/fotos/terremotos.webp',
+    imgAlt: 'Terremoto — imagen satelital de Puerto Príncipe, Haití, después del sismo de 2010',
     tags: ['⚡ Corteza terrestre', '🌍 Distribución global', '⏱ 0 segundos de aviso'],
     dangerLevel: 5,
     badge: 'crit',
@@ -54,7 +55,7 @@ const DISASTERS: DisasterCard[] = [
     family: 'hidro',
     title: 'Inundaciones',
     subtitle: 'Las que todo lo cubren · Flood',
-    img: 'https://images.unsplash.com/photo-1547683905-f686c993aae5?w=600&q=80',
+    img: '/fotos/inundaciones.webp',
     imgAlt: 'Inundación — calles cubiertas de agua marrón',
     tags: ['💧 Ríos / Lluvias extremas', '🌍 El desastre más frecuente', '⏱ Horas a días de aviso'],
     dangerLevel: 4,
@@ -74,8 +75,8 @@ const DISASTERS: DisasterCard[] = [
     family: 'hidro',
     title: 'Tornados',
     subtitle: 'Los imprevisibles · Twister · Manga',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/9/96/Altus_Oklahoma_Tornado.jpg',
-    imgAlt: 'Tornado — columna giratoria en Altus, Oklahoma',
+    img: '/fotos/tornados.webp',
+    imgAlt: 'Tornado F5 — embudo bajo una tormenta sobre un campo',
     tags: ['🌪 Hasta 500 km/h', '🌍 75% en EE.UU.', '⏱ Minutos de aviso'],
     dangerLevel: 5,
     badge: 'crit',
@@ -94,7 +95,7 @@ const DISASTERS: DisasterCard[] = [
     family: 'hidro',
     title: 'Huracanes',
     subtitle: 'Los gigantes del mar · Ciclón · Tifón',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/0/04/Hurricane_Isabel_from_ISS.jpg',
+    img: '/fotos/huracanes.webp',
     imgAlt: 'Huracán Isabel — espiral vista desde la ISS, 2003',
     tags: ['🌀 +119 km/h sostenidos', '🌊 Marejadas ciclónicas', '⏱ Días de aviso'],
     dangerLevel: 4,
@@ -114,8 +115,8 @@ const DISASTERS: DisasterCard[] = [
     family: 'hidro',
     title: 'Incendios',
     subtitle: 'Los que no tienen freno · Wildfire',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/d/d8/Deerfire_high_res_edit.jpg',
-    imgAlt: 'Incendio forestal — llamas y cielo naranja (Deer Fire, California)',
+    img: '/fotos/incendios.webp',
+    imgAlt: 'Incendio forestal — ladera de bosque en llamas y dos ciervos cruzando un río',
     tags: ['🔥 +20 km/h de avance', '🌡 Temperatura + viento + sequía', '⏱ Aviso variable'],
     dangerLevel: 4,
     badge: 'warn',
@@ -134,8 +135,8 @@ const DISASTERS: DisasterCard[] = [
     family: 'oce',
     title: 'Tsunamis',
     subtitle: 'Los de las profundidades · Maremoto',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/2/2b/2004_Indian_Ocean_earthquake_Maldives_tsunami_wave.jpg',
-    imgAlt: 'Tsunami — ola inundando Malé, Maldivas, 26 diciembre 2004',
+    img: '/fotos/tsunamis.webp',
+    imgAlt: 'Tsunami — ola rompiendo contra un muro costero en Malé, Maldivas, 26 de diciembre de 2004',
     tags: ['🌊 800 km/h en mar abierto', '📍 Costas del Pacífico / Índico', '⏱ Minutos de aviso'],
     dangerLevel: 5,
     badge: 'crit',
@@ -154,7 +155,7 @@ const DISASTERS: DisasterCard[] = [
     family: 'oce',
     title: 'Micro tsunamis',
     subtitle: 'Los invisibles · Meteotsunami · Seiche',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/4/49/High_waves_in_Lake_Michigan_along_the_Chicago_shoreline_%2816807304806%29.jpg',
+    img: '/fotos/micro-tsunamis.webp',
     imgAlt: 'Olas inusuales en la costa de Chicago sobre el lago Michigan',
     tags: ['🌤 Días soleados, sin tormenta', '⚡ Presión atmosférica', '⏱ Sin aviso en superficie'],
     dangerLevel: 2,
@@ -174,7 +175,7 @@ const DISASTERS: DisasterCard[] = [
     family: 'hidro',
     title: 'Ola de calor',
     subtitle: 'Las silenciosas · Heat wave · Canícula',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/5/52/Ladakh%2C_India_%2814687115252%29.jpg',
+    img: '/fotos/ola-de-calor.webp',
     imgAlt: 'Ola de calor — tierra reseca y agrietada bajo sol extremo',
     tags: ['🌡 +3 días de temperatura extrema', '🌍 Más letal que huracanes por año', '⏱ Aviso de días'],
     dangerLevel: 3,
@@ -194,7 +195,7 @@ const DISASTERS: DisasterCard[] = [
     family: 'hidro',
     title: 'Granizo severo',
     subtitle: 'Los proyectiles del cielo · Hailstorm · Pedrisco',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/94/Granizo.jpg/1280px-Granizo.jpg',
+    img: '/fotos/granizo-severo.webp',
     imgAlt: 'Granizo severo — piedra de granizo grande junto a una regla que muestra su tamaño',
     tags: ['🌨 Hasta 150 km/h al caer', '🌍 Argentina lidera el Corredor del Granizo', '⏱ Minutos de aviso'],
     dangerLevel: 3,
@@ -214,8 +215,8 @@ const DISASTERS: DisasterCard[] = [
     family: 'geo',
     title: 'Erupción volcánica',
     subtitle: 'Las que reescriben el paisaje · Volcanic eruption',
-    img: 'https://upload.wikimedia.org/wikipedia/commons/6/63/Close_u_of_red_hot_lava_flowing_on_a_dirt_road%2C_a_result_of_the_Kilauea_Volcano_eruption_and_lava_flow_in_2014._-_DPLA_-_ced6ae979602bcc6905f497b87d35e8f.JPG',
-    imgAlt: 'Erupción volcánica — ríos de lava y columna de ceniza',
+    img: '/fotos/erupcion-volcanica.webp',
+    imgAlt: 'Erupción volcánica — colada de lava gris con un borde incandescente sobre un camino de tierra',
     tags: ['🌋 Hasta 700°C en flujos piroclásticos', '🌍 10 volcanes con alerta monitoreada (OAVV)', '⏱ Aviso variable'],
     dangerLevel: 4,
     badge: 'warn',
@@ -250,22 +251,44 @@ const BADGE_STYLE: Record<BadgeVariant, { color: string; bg: string; border: str
 
 function Card({ card }: { card: DisasterCard }) {
   const badge = BADGE_STYLE[card.badge]
+  const credito = creditoDe(card.id)
   return (
     <article className="py-8 border-b last:border-0" style={{ borderColor: 'var(--color-border)' }}>
       <div className="flex flex-col md:flex-row gap-6">
-        {/* Image */}
+        {/* Image + credit */}
+        <figure className="m-0 shrink-0" style={{ width: '100%', maxWidth: '300px' }}>
         <div
-          className="shrink-0 rounded-xl overflow-hidden"
-          style={{ width: '100%', maxWidth: '300px', height: '200px', background: 'var(--color-card)' }}
+          className="rounded-xl overflow-hidden"
+          style={{ width: '100%', height: '200px', background: 'var(--color-card)' }}
         >
           <img
             src={card.img}
             alt={card.imgAlt}
+            title={textoCredito(credito)}
             loading="lazy"
-            referrerPolicy="no-referrer"
             className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
           />
         </div>
+        <figcaption
+          data-credito-foto
+          className="mt-1.5 text-xs leading-snug"
+          style={{ color: 'var(--color-muted-foreground)' }}
+        >
+          Foto: {credito.autor},{' '}
+          {credito.licencia.url ? (
+            <a href={credito.licencia.url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">
+              {credito.licencia.nombre}
+            </a>
+          ) : (
+            credito.licencia.nombre
+          )}
+          ,{' '}
+          <a href={credito.fuente.url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">
+            {credito.fuente.nombre}
+          </a>
+          {credito.redimensionada ? `, ${TEXTO_CAMBIOS}` : ''}
+        </figcaption>
+        </figure>
 
         {/* Body */}
         <div className="flex-1 flex flex-col gap-3">

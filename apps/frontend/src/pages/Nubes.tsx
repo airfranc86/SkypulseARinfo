@@ -15,6 +15,7 @@ import {
   type CloudItem,
 } from '@/data/clouds'
 import { type DangerLevel, DangerScale } from '../components/ui/DangerScale'
+import { TEXTO_CAMBIOS, creditoDe, textoCredito } from '@/lib/creditosFotos'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -156,6 +157,7 @@ const cloudCardId = (id: CloudId) => `nube-${id}`
 function CloudCardItem({ cloud }: { cloud: CloudItem }) {
   const [aeroOpen, setAeroOpen] = useState(false)
   const aeroContentId = useId()
+  const credito = creditoDe(cloud.id)
 
   return (
     <article
@@ -171,15 +173,16 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
       }}
     >
       <div className="flex flex-col sm:flex-row gap-0">
-        {/* Image */}
+        {/* Image + credit */}
+        <figure className="m-0 shrink-0 w-full sm:w-[280px]">
         <div
-          className="relative rounded overflow-hidden shrink-0 bg-[#0f2240] w-full sm:w-[280px] h-[195px] sm:h-[200px]"
+          className="relative rounded overflow-hidden bg-[#0f2240] w-full h-[195px] sm:h-[200px]"
         >
           <img
             className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-            referrerPolicy="no-referrer"
             src={cloud.imgSrc}
             alt={cloud.imgAlt}
+            title={textoCredito(credito)}
             loading="lazy"
           />
           <span
@@ -189,6 +192,26 @@ function CloudCardItem({ cloud }: { cloud: CloudItem }) {
             {cloud.heightTag}
           </span>
         </div>
+        <figcaption
+          data-credito-foto
+          className="mt-1.5 text-xs leading-snug"
+          style={{ color: 'var(--color-muted-foreground)' }}
+        >
+          Foto: {credito.autor},{' '}
+          {credito.licencia.url ? (
+            <a href={credito.licencia.url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">
+              {credito.licencia.nombre}
+            </a>
+          ) : (
+            credito.licencia.nombre
+          )}
+          ,{' '}
+          <a href={credito.fuente.url} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">
+            {credito.fuente.nombre}
+          </a>
+          {credito.redimensionada ? `, ${TEXTO_CAMBIOS}` : ''}
+        </figcaption>
+        </figure>
 
         {/* Body */}
         <div className="flex flex-col gap-3 justify-center sm:pl-8 pt-5 sm:pt-0">

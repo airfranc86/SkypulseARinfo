@@ -1,8 +1,10 @@
 import { DATA_SOURCES } from '@/data/dataSources'
 import { CafecitoButton } from '@/components/ui/CafecitoButton'
 import { OPEN_METEO_LICENCE_URL, OPEN_METEO_URL } from '@/lib/siteLinks'
+import { CREDITOS_FOTOS, FOTOS_COMPARTIR_IGUAL, TEXTO_CAMBIOS } from '@/lib/creditosFotos'
 
 const LINK_CLASS = 'inline-flex min-h-[44px] items-center underline hover:opacity-80'
+const CREDIT_LINK_CLASS = 'underline hover:opacity-80'
 
 /**
  * "De dónde salen los datos" (FRA-347): the main views never name a weather model, so whoever wants to
@@ -53,6 +55,32 @@ export function DatosFuentes() {
         <a href={OPEN_METEO_LICENCE_URL} target="_blank" rel="noopener noreferrer" className={LINK_CLASS} style={{ color: 'var(--color-muted-foreground)' }}>
           Ver la licencia de Open-Meteo
         </a>
+
+        <h3 className="pt-3 text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
+          Fotos
+        </h3>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+          Las fotos de Nubes y Desastres están alojadas en SkyPulse y cada una conserva el crédito de su autor y su licencia. Las fotos se convirtieron a WebP y se recortan para encajar en las tarjetas. Las fotos con licencia CC BY-SA ({FOTOS_COMPARTIR_IGUAL.map(foto => foto.tema).join('; ')}) se comparten bajo la misma licencia; la licencia de cada foto no cambia la del resto del sitio.
+        </p>
+        <ul className="space-y-1 text-sm leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+          {CREDITOS_FOTOS.map(credito => (
+            <li key={credito.id}>
+              {credito.tema}: {credito.autor},{' '}
+              {credito.licencia.url ? (
+                <a href={credito.licencia.url} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK_CLASS}>
+                  {credito.licencia.nombre}
+                </a>
+              ) : (
+                credito.licencia.nombre
+              )}
+              ,{' '}
+              <a href={credito.fuente.url} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK_CLASS}>
+                {credito.fuente.nombre}
+              </a>
+              {credito.redimensionada ? `, ${TEXTO_CAMBIOS}` : ''}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section id="apoya" className="space-y-1.5">
