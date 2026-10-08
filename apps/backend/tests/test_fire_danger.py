@@ -64,18 +64,48 @@ class TestComputeFireRisk:
         assert 60 <= score < 75
         assert label == "Alto"
 
-    def test_muy_alto_label_between_75_and_90(self):
+    def test_muy_alto_label_between_75_and_80(self):
         # temp=40→30pts, hum=0→30pts, wind=30→15pts = 75
         score, label = compute_fire_risk(temp_c=40.0, humidity=0.0, wind_kmh=30.0, precip_mm=0.0)
-        assert 75 <= score < 90
+        assert 75 <= score < 80
         assert label == "Muy alto"
 
-    def test_extremo_label_at_or_above_90(self):
-        # temp: min((temp-10)/30*30, 30) → máx 30; hum: máx 30 con hum=0; wind: máx 25 con wind>=50.
-        # El máximo teórico es 30+30+25 = 85 → "Muy alto": con la fórmula actual "Extremo" no se alcanza.
-        score, label = compute_fire_risk(temp_c=100.0, humidity=0.0, wind_kmh=100.0, precip_mm=0.0)
-        assert score <= 100.0
+    def test_just_below_80_is_still_muy_alto(self):
+        # temp=40→30pts, hum=0→30pts, wind=39.8→19.9pts = 79.9
+        score, label = compute_fire_risk(temp_c=40.0, humidity=0.0, wind_kmh=39.8, precip_mm=0.0)
+        assert score == 79.9
         assert label == "Muy alto"
+
+    def test_extremo_starts_at_exactly_80(self):
+        # temp=40→30pts, hum=0→30pts, wind=40→20pts = 80: con 40 °C, aire seco y 40 km/h ya es Extremo.
+        score, label = compute_fire_risk(temp_c=40.0, humidity=0.0, wind_kmh=40.0, precip_mm=0.0)
+        assert score == 80.0
+        assert label == "Extremo"
+
+    def test_a_score_that_rounds_to_80_is_extremo(self):
+        # Puntaje crudo 79.99 → se muestra 80.0: el nivel tiene que ser el del número que ve la persona.
+        score, label = compute_fire_risk(temp_c=39.99, humidity=0.0, wind_kmh=40.0, precip_mm=0.0)
+        assert score == 80.0
+        assert label == "Extremo"
+
+    def test_a_score_that_rounds_to_75_is_muy_alto(self):
+        # Mismo criterio en el corte de 75: crudo 74.96 (30 + 30 + 14.96) → se muestra 75.0, que ya es "Muy alto".
+        score, label = compute_fire_risk(temp_c=40.0, humidity=0.0, wind_kmh=29.92, precip_mm=0.0)
+        assert score == 75.0
+        assert label == "Muy alto"
+
+    def test_extremo_is_reachable_up_to_the_theoretical_maximum(self):
+        # temp: min((temp-10)/30*30, 30) → máx 30; hum: máx 30 con hum=0; wind: máx 25 con wind>=50.
+        # El máximo teórico es 30+30+25 = 85: el corte de Extremo tiene que quedar por debajo.
+        score, label = compute_fire_risk(temp_c=100.0, humidity=0.0, wind_kmh=100.0, precip_mm=0.0)
+        assert score == 85.0
+        assert label == "Extremo"
+
+    def test_rain_pulls_an_extremo_hour_down_to_alto(self):
+        # 85 − 20 de la lluvia reciente = 65 → deja de ser Extremo.
+        score, label = compute_fire_risk(temp_c=100.0, humidity=0.0, wind_kmh=100.0, precip_mm=5.0)
+        assert score == 65.0
+        assert label == "Alto"
 
     def test_precipitation_reduces_score(self):
         score_dry, _ = compute_fire_risk(temp_c=35.0, humidity=30.0, wind_kmh=20.0, precip_mm=0.0)

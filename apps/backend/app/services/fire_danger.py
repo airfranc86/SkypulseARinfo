@@ -69,8 +69,12 @@ def compute_fire_risk(
         score += min(wind_kmh / 50 * 25, 25)          # max 25 pts
     if precip_mm is not None and precip_mm > 2:
         score = max(score - 20, 0)                    # lluvia reciente reduce riesgo
-    score = max(0.0, min(100.0, score))
+    # Se redondea ANTES de clasificar: el nivel tiene que ser el del número que ve la persona
+    # (un crudo de 79.99 se muestra como 80.0 y por lo tanto es "Extremo").
+    score = round(max(0.0, min(100.0, score)), 1)
 
+    # Cortes de cada nivel. El puntaje máximo alcanzable es 85 (30 + 30 + 25): "Extremo" tiene que
+    # empezar por debajo de eso (80), o el nivel más alto nunca saldría.
     if score < 20:
         label = "Muy bajo"
     elif score < 40:
@@ -79,12 +83,12 @@ def compute_fire_risk(
         label = "Moderado"
     elif score < 75:
         label = "Alto"
-    elif score < 90:
+    elif score < 80:
         label = "Muy alto"
     else:
         label = "Extremo"
 
-    return round(score, 1), label
+    return score, label
 
 
 # ---------------------------------------------------------------------------
