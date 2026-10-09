@@ -4,9 +4,11 @@ import { useWeatherDashboard, useSmnAlertas, isColdStart, isProviderSaturated, i
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import type { LocationState } from '@/hooks/useLocation'
 import { forecastNotes, formatClock } from '@/lib/weatherLabels'
+import { forecastUpdatedIso } from '@/lib/forecastAge'
 import { buildVerdict, entriesFromNow, rainWindowsByDate } from '@/lib/weatherVerdict'
 import { criticalLevel, isSmnUnavailable, showSmnSourceLink } from '@/lib/smnAlertas'
 import { FadeContent } from '@/components/animated/FadeContent'
+import { ForecastAgeNotice } from '@/components/clima/ForecastAgeNotice'
 import { WeatherHero } from '@/components/clima/WeatherHero'
 import { NextDays } from '@/components/clima/NextDays'
 import { SmnAlertasBlock } from '@/components/clima/SmnAlertasBlock'
@@ -70,7 +72,9 @@ export function PrevisionClima({ location }: Props) {
   useEffect(() => () => window.clearTimeout(scrollTimer.current), [])
 
   const notes = data ? forecastNotes(data) : []
-  const updatedAt = formatClock(data?.fetched_at)
+  // "Actualizado" es la hora del pronóstico, no la de armado de la respuesta: durante una caída del
+  // proveedor se sirve una copia guardada (hasta 6 h) y la de armado diría "ahora" sobre un dato viejo.
+  const updatedAt = data ? formatClock(forecastUpdatedIso(data)) : null
 
   // Sin dato del SMN, "sin avisos" sería una afirmación que no podemos hacer.
   const alertasUnavailable = isSmnUnavailable(alertasError, alertasData)
@@ -187,6 +191,7 @@ export function PrevisionClima({ location }: Props) {
         // FINISH: unreviewed and undocumented is unfinished.
         <FadeContent>
           <div className="space-y-4">
+            <ForecastAgeNotice forecastFetchedAt={data.forecast_fetched_at} />
             {notes.length > 0 && <SourceNotes notes={notes} />}
 
             {/* Hero (SMN) — el primer viewport es esto y nada más.

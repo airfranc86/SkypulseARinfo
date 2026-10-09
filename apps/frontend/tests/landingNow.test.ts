@@ -15,6 +15,7 @@ import {
   locationAfterGeoFailure,
   nowAttribution,
   nowFooter,
+  nowFooterFor,
   nowHeadline,
   nowState,
   type NowQueryInput,
@@ -293,4 +294,37 @@ test('no helper text names GFS, ECMWF or Open-Meteo', () => {
     assert.ok(text.length > 0)
     assert.doesNotMatch(text, FORBIDDEN, text)
   }
+})
+
+// ── Edad del pronóstico (forecast_fetched_at) ────────────────────────────────
+
+const BUILT_AT = '2026-10-08T18:00:00Z' // 15:00 AR: cuando el servidor armó la respuesta
+const FORECAST_AT = '2026-10-08T15:00:00Z' // 12:00 AR: cuando se pidió el pronóstico (3 h antes)
+const SMN_NOW = { source: 'smn' as const, station: null }
+
+test('footer: muestra la hora del pronóstico y no la del armado de la respuesta', () => {
+  assert.equal(
+    plain(nowFooterFor({ current: SMN_NOW, fetched_at: BUILT_AT, forecast_fetched_at: FORECAST_AT } as never)),
+    'Medido por el Servicio Meteorológico Nacional · Actualizado 12:00',
+  )
+})
+
+test('footer: sin forecast_fetched_at (backend viejo o copia sin fecha) conserva la hora de armado', () => {
+  assert.equal(
+    plain(nowFooterFor({ current: SMN_NOW, fetched_at: BUILT_AT } as never)),
+    'Medido por el Servicio Meteorológico Nacional · Actualizado 15:00',
+  )
+  assert.equal(
+    plain(nowFooterFor({ current: SMN_NOW, fetched_at: BUILT_AT, forecast_fetched_at: null } as never)),
+    'Medido por el Servicio Meteorológico Nacional · Actualizado 15:00',
+  )
+})
+
+test('headline: sigue contando desde la hora de armado, no desde la del pronóstico viejo', () => {
+  const fresh = nowHeadline(dashboard({ 3: 1, 4: 1 }))
+  const oldForecast = nowHeadline({
+    ...(dashboard({ 3: 1, 4: 1 }) as object),
+    forecast_fetched_at: '2026-09-18T14:47:00Z', // 3 h antes de fetched_at
+  } as never)
+  assert.deepEqual(oldForecast, fresh)
 })

@@ -341,7 +341,12 @@ class WeatherDashboardResponse(BaseModel):
     # Modelos con datos en `forecast_7d` ("gfs", "ecmwf"). Si falta uno (falla parcial de Open-Meteo)
     # la interfaz puede avisarlo. Vive acá y no en cada día porque aplica a toda la semana.
     forecast_models: list[ForecastModelName] = Field(default_factory=list)
+    # Hora en que el servidor armó esta respuesta (no la del pronóstico: ver `forecast_fetched_at`).
     fetched_at: datetime
+    # Hora del pedido a Open-Meteo del dato MÁS VIEJO que alimenta el pronóstico (UTC). Una copia del
+    # último dato bueno puede tener horas: la interfaz muestra esta hora y avisa si pasó el umbral.
+    # None = edad desconocida (copias guardadas antes de este campo): la interfaz no avisa nada.
+    forecast_fetched_at: datetime | None = None
     # Origen del pronóstico principal. El dashboard siempre responde "openmeteo".
     forecast_source: str = "unknown"
     # True si `current` es un dato stale (ver SourceMeta.stale). Ya no hay fuente de respaldo que

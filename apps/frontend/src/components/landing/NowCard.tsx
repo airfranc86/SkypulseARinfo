@@ -6,10 +6,11 @@ import { useWeatherDashboard } from '@/hooks/useWeather'
 import type { LocationState } from '@/hooks/useLocation'
 import type { WeatherDashboardResponse } from '@/lib/api'
 import {
-  CHANGE_CITY_LABEL, NOW_STATE_TEXT, fallbackNotice, nowAttribution, nowFooter, nowHeadline, nowState, type NowState,
+  CHANGE_CITY_LABEL, NOW_STATE_TEXT, fallbackNotice, nowAttribution, nowFooterFor, nowHeadline, nowState, type NowState,
 } from '@/lib/landingNow'
 import type { VerdictTone } from '@/lib/weatherVerdict'
 import { WeatherIcon } from '@/components/ui/WeatherIcon'
+import { ForecastAgeNotice } from '@/components/clima/ForecastAgeNotice'
 import { FallbackCityNotice } from './FallbackCityNotice'
 import { focusCitySearch } from './focusCitySearch'
 
@@ -143,9 +144,12 @@ function NowData({ data }: { data: WeatherDashboardResponse }) {
         </p>
       )}
 
+      {/* Past 2 h the data is a stored copy served during an outage: say so, with its age. */}
+      <ForecastAgeNotice forecastFetchedAt={data.forecast_fetched_at} className="mt-4" />
+
       <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 pt-3">
         <p className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-          {nowFooter(current, data.fetched_at)}
+          {nowFooterFor(data)}
           {attribution && <span className="block text-[0.6875rem]">{attribution}</span>}
         </p>
         <Link
