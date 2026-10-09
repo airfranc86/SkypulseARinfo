@@ -70,11 +70,13 @@ async def test_the_request_does_not_send_hours_because_awc_answers_400(saco) -> 
 
 
 @pytest.mark.asyncio
-async def test_a_400_from_awc_is_not_cached_and_returns_none() -> None:
+async def test_a_400_from_awc_stores_no_entry_and_returns_none() -> None:
     with respx.mock(assert_all_called=False) as router:
         router.get(AWC_TAF_BASE).mock(return_value=httpx.Response(400, text="Unexpected query parameter"))
         assert await get_taf_for_icao("SACO") is None
-    assert "SACO" not in taf_module._taf_cache
+    assert "SACO" not in taf_module._taf_cache._cache
+    assert "SACO" not in taf_module._taf_cache._stale_cache
+    assert "SACO" not in taf_module._no_taf_cache   # a failure is not "there is no TAF"
 
 
 # ---------------------------------------------------------------- visibilidad
@@ -162,7 +164,8 @@ async def test_an_airport_without_taf_is_none_not_an_error(payload) -> None:
     with respx.mock(assert_all_called=False) as router:
         router.get(AWC_TAF_BASE).mock(return_value=httpx.Response(200, json=payload))
         assert await fetch_taf_entry("SAXX") is None
-    assert "SAXX" not in taf_module._taf_cache
+    assert "SAXX" not in taf_module._taf_cache._cache
+    assert "SAXX" not in taf_module._taf_cache._stale_cache
 
 
 @pytest.mark.asyncio
@@ -176,12 +179,14 @@ async def test_an_airport_without_taf_is_none_not_an_error(payload) -> None:
         httpx.ReadTimeout("lento"),
     ],
 )
-async def test_failures_raise_taf_fetch_error_and_are_not_cached(response) -> None:
+async def test_failures_raise_taf_fetch_error_and_store_no_entry(response) -> None:
     with respx.mock(assert_all_called=False) as router:
         router.get(AWC_TAF_BASE).mock(side_effect=[response])
         with pytest.raises(TafFetchError):
             await fetch_taf_entry("SACO")
-    assert "SACO" not in taf_module._taf_cache
+    assert "SACO" not in taf_module._taf_cache._cache
+    assert "SACO" not in taf_module._taf_cache._stale_cache
+    assert "SACO" not in taf_module._no_taf_cache   # a failure is not "there is no TAF"
 
 
 @pytest.mark.asyncio

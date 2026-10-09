@@ -3,13 +3,15 @@
 Routers and services import from here, never from the submodules' private names:
 
 - `awc`         the one place that builds AWC requests (`get_source` / `set_source`, `AwcError`)
+- `awc_budget`  admission of a new AWC request: the 429 pause and the call budget (not re-exported here)
 - `aeropuertos` Argentine airports, ICAO codes and the nearest-airport lookup (pure)
 - `awc_metar`    the one AWC METAR request and cache per station, shared by Niebla and the dashboard
 - `metar`       current visibility from the METAR of the nearest airport
 - `taf`         the TAF entry and its hourly visibility projection
 
-`clear_caches()` empties the shared METAR cache and the TAF cache (used by tests). The TAF cache and the
-AWC budget will merge with it in Phase 1c-2.
+`clear_caches()` empties the shared METAR cache and the TAF caches (entries, failures and "no TAF"); tests use it.
+The 429 pause and the call budget of AWC are not caches and stay. `AwcHttpError`, `AwcRefused` and `TafBusyError`
+live in `awc`, `awc_budget` and `taf`; the facade does not re-export them yet.
 """
 from __future__ import annotations
 

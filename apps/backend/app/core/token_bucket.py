@@ -177,6 +177,15 @@ class ClientAndGlobalBudget:
             return REFUSED_BY_GLOBAL
         return None
 
+    def give_back(self, client: str) -> None:
+        """Return the client's token and the global one for a call that was admitted but then refused elsewhere."""
+        dedicated = self._dedicated.get(client)
+        if dedicated is not None:
+            dedicated.give_back()
+        else:
+            self._clients.give_back(client)
+        self._global.give_back()
+
     def reset(self) -> None:
         """Every client and the global bucket back to full, as brand new."""
         self._clients.reset()
