@@ -14,9 +14,9 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.core.rate_limit import limiter
-from app.routers.metar import _validate_icao
 from app.schemas.taf import TafDecoded
 from app.services.metar import TafFetchError, fetch_taf_entry
+from app.services.reportes_aeronauticos.aeropuertos import normalize_icao
 from app.services.taf_decoded import normalize_taf
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,9 @@ async def get_taf(
     request: Request,
     icao: Annotated[str, Query(min_length=4, max_length=4)],
 ) -> TafDecoded:
-    code = _validate_icao(icao)
+    code = normalize_icao(icao)
+    if code is None:
+        raise HTTPException(status_code=422, detail="invalid_icao")
     try:
         entry = await fetch_taf_entry(code)
     except TafFetchError as exc:

@@ -24,13 +24,13 @@ from app.services.openmeteo import (
     MultiModelDailyData,
     VisibilityData,
     _cap_vis,
-    _classify_visibility,
     get_daily_forecast_ext,
     get_fog_inference_forecast,
     get_hourly_forecast_ext,
     get_multi_model_daily,
     get_visibility_forecast,
 )
+from app.services.visibilidad import classify_visibility as _classify_visibility
 
 
 # ---------------------------------------------------------------------------

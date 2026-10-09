@@ -21,13 +21,14 @@ from app.core.config import Settings
 from app.core.rate_limit import limiter
 from app.services.metar import get_metar_visibility, get_nearest_metar_visibility
 from app.services.openmeteo import VisibilityData
+from app.services.reportes_aeronauticos.aeropuertos import AR_AIRPORTS
 
 NOW = datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc)
 
 ROSARIO = (-32.95, -60.65)                # SAAR ~13 km
 QUILMES = (-34.72, -58.25)                # SABE ~23.5 km: entre 20 y 30 km (antes pasaba, ahora no)
 SANTIAGO_DEL_ESTERO = (-27.78, -64.27)    # SANT a más de 100 km
-SAAR = next(a for a in metar_module._AR_AIRPORTS if a.icao == "SAAR")
+SAAR = next(a for a in AR_AIRPORTS if a.icao == "SAAR")
 
 
 def _ts(moment: datetime) -> int:

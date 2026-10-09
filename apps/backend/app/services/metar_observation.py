@@ -22,7 +22,7 @@ from app.core.cache import SingleFlightCache
 from app.core.config import settings
 from app.core.http_client import get_client
 from app.schemas.weather import MetarReason
-from app.services.metar import nearest_airport_with_distance
+from app.services.reportes_aeronauticos.aeropuertos import nearest_airport_with_distance
 from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)

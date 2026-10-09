@@ -9,7 +9,6 @@ GET /api/metar/nearest?lat=&lon=   → aeropuerto AR más cercano (lookup puro, 
 from __future__ import annotations
 
 import logging
-import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -20,20 +19,14 @@ from app.core.params import LatParam, LonParam
 from app.core.rate_limit import client_key, limiter
 from app.schemas.metar import NearestAirportResponse
 from app.services import checkwx as checkwx_svc
-from app.services.metar import nearest_airport_with_distance
+from app.services.reportes_aeronauticos.aeropuertos import (
+    nearest_airport_with_distance,
+    normalize_icao,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_ICAO_RE = re.compile(r"^[A-Z0-9]{4}$")
-
-
-def _validate_icao(code: str) -> str:
-    upper = code.strip().upper()
-    if not _ICAO_RE.match(upper):
-        raise HTTPException(status_code=422, detail="invalid_icao")
-    return upper
 
 
 @router.get("/nearest", summary="Aeropuerto argentino más cercano (para precargar METAR)")
@@ -64,7 +57,9 @@ async def get_metar(
     if not settings.checkwx_api_key:
         raise HTTPException(status_code=503, detail="checkwx_not_configured")
 
-    code = _validate_icao(icao)
+    code = normalize_icao(icao)
+    if code is None:
+        raise HTTPException(status_code=422, detail="invalid_icao")
 
     try:
         return await checkwx_svc.fetch_metar(code, kind=type, client=client_key(request))

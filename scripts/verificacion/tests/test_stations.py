@@ -11,7 +11,8 @@ import pytest
 from stations import STATIONS, STATIONS_BY_NAME, Station, get_station
 
 METAR_PATH = (
-    Path(__file__).resolve().parents[3] / "apps" / "backend" / "app" / "services" / "metar.py"
+    Path(__file__).resolve().parents[3]
+    / "apps" / "backend" / "app" / "services" / "reportes_aeronauticos" / "aeropuertos.py"
 )
 
 
@@ -86,10 +87,10 @@ def test_table_is_a_tuple_of_stations() -> None:
     assert all(isinstance(s, Station) for s in STATIONS)
 
 
-@pytest.mark.skipif(not METAR_PATH.exists(), reason="metar.py not available")
+@pytest.mark.skipif(not METAR_PATH.exists(), reason="aeropuertos.py not available")
 def test_coordinates_match_metar_for_stations_whose_icao_is_in_metar() -> None:
     source = METAR_PATH.read_text(encoding="utf-8")
-    pattern = re.compile(r'_Airport\("(\w{4})",\s*"[^"]*",\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)\)')
+    pattern = re.compile(r'Airport\("(\w{4})",\s*"[^"]*",\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)\)')
     in_metar = {m[1]: (float(m[2]), float(m[3])) for m in pattern.finditer(source)}
 
     shared = [s for s in STATIONS if s.icao in in_metar]

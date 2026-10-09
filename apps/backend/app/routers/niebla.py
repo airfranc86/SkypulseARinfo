@@ -25,9 +25,9 @@ from app.schemas.niebla import NieblaResponse, VisibilityHourlySlot
 from app.services.openmeteo import (
     get_visibility_forecast,
     get_fog_inference_forecast,
-    _classify_visibility,
 )
 from app.services.metar import get_nearest_metar_visibility, get_nearest_taf_hourly
+from app.services.visibilidad import classify_visibility
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ async def get_niebla(
         metar_dist      = metar_result.distance_km
         logger.info("METAR %s no disponible — usando Open-Meteo para visibilidad actual", metar_result.icao)
 
-    level, label, color = _classify_visibility(current_m)
+    level, label, color = classify_visibility(current_m)
 
     # ── Pronóstico horario 12h ─────────────────────────────────────────────
     hourly_slots: list[VisibilityHourlySlot]
@@ -99,7 +99,7 @@ async def get_niebla(
                 visibility_m=slot.visibility_m,
                 **dict(zip(
                     ["fog_level", "fog_label", "fog_color"],
-                    _classify_visibility(slot.visibility_m),
+                    classify_visibility(slot.visibility_m),
                 )),
             )
             for slot in taf_slots
@@ -115,7 +115,7 @@ async def get_niebla(
                 visibility_m=slot.visibility_m,
                 **dict(zip(
                     ["fog_level", "fog_label", "fog_color"],
-                    _classify_visibility(slot.visibility_m),
+                    classify_visibility(slot.visibility_m),
                 )),
             )
             for slot in fog_slots
@@ -131,7 +131,7 @@ async def get_niebla(
                 visibility_m=m,
                 **dict(zip(
                     ["fog_level", "fog_label", "fog_color"],
-                    _classify_visibility(m),
+                    classify_visibility(m),
                 )),
             )
             for lbl, m in zip(vis.hourly_labels, vis.hourly_m)

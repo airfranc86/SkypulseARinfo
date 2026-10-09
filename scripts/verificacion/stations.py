@@ -2,7 +2,8 @@
 
 Source: AWC ``stationinfo`` API (aviationweather.gov/api/data/stationinfo), checked by the
 coordinator on 2026-10-05. The 8 stations that were first copied from
-``_AR_AIRPORTS`` in ``apps/backend/app/services/metar.py`` are kept as they were because
+``_AR_AIRPORTS`` (now ``AR_AIRPORTS`` in
+``apps/backend/app/services/reportes_aeronauticos/aeropuertos.py``) are kept as they were because
 they differ from AWC by less than 0.01 degrees (SACO: -31.323 vs -31.324 in AWC; SAZM:
 -37.934/-57.573 vs -37.932/-57.581 in AWC).
 

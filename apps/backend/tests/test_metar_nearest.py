@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from app.services.metar import haversine_km, nearest_airport_with_distance
+from app.services.reportes_aeronauticos.aeropuertos import haversine_km, nearest_airport_with_distance
 
 URL = "/api/metar/nearest"
 
