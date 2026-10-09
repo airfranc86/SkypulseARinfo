@@ -11,7 +11,7 @@ from httpx import AsyncClient
 
 from app.core.rate_limit import limiter
 from app.schemas.weather import SourceMeta, WeatherCurrentResponse
-from app.services.metar_observation import AWC_METAR_URL
+from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE as AWC_METAR_URL
 from app.services.openmeteo import OpenMeteoCurrent
 from tests.test_dashboard_integration import _daily_ext, _hourly, _multi_model
 

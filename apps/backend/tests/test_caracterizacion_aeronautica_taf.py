@@ -12,7 +12,7 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-from app.services.metar import AWC_TAF_BASE
+from app.services.reportes_aeronauticos.awc import AWC_TAF_BASE
 from tests.helpers_caracterizacion_aeronautica import load_taf, reset_aeronautical_state
 
 pytestmark = pytest.mark.integration

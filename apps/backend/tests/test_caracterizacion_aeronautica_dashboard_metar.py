@@ -17,7 +17,7 @@ import respx
 from httpx import AsyncClient
 
 from app.schemas.weather import SourceMeta, WeatherCurrentResponse
-from app.services.metar_observation import AWC_METAR_URL
+from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE as AWC_METAR_URL
 from app.services.openmeteo import OpenMeteoCurrent
 from tests.helpers_caracterizacion_aeronautica import (
     FROZEN_NOW,

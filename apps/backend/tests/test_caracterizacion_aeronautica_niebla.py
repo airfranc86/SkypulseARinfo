@@ -1,7 +1,7 @@
 """Characterization of GET /api/niebla: the response content, frozen as literal JSON.
 
 AWC (METAR and TAF) is mocked with respx; the Open-Meteo functions are patched the same way the
-sibling niebla tests do. The clock of `app.services.metar` is frozen, so the METAR ages, the TAF
+sibling niebla tests do. The clock of `reportes_aeronauticos.metar` and `.taf` is frozen, so the METAR ages, the TAF
 slots and their hour labels are deterministic. These tests pin CONTENT only: no cache TTLs,
 lookback windows, timeouts or number of AWC requests.
 """
@@ -15,7 +15,7 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-from app.services.metar import AWC_METAR_BASE, AWC_TAF_BASE
+from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE, AWC_TAF_BASE
 from app.services.openmeteo import FogInferenceSlot, VisibilityData
 from tests.helpers_caracterizacion_aeronautica import (
     FROZEN_NOW,
@@ -87,7 +87,7 @@ OPEN_METEO_ROSARIO = {
 @pytest.fixture(autouse=True)
 def _state(monkeypatch):
     reset_aeronautical_state()
-    freeze_clock(monkeypatch, FROZEN_NOW, "app.services.metar")
+    freeze_clock(monkeypatch, FROZEN_NOW, "app.services.reportes_aeronauticos.metar", "app.services.reportes_aeronauticos.taf")
     yield
     reset_aeronautical_state()
 
@@ -247,7 +247,7 @@ async def test_no_metar_and_no_open_meteo_is_503_visibility_unavailable(
 
 async def test_hourly_from_the_taf_of_the_nearest_airport(async_client: AsyncClient, open_meteo, monkeypatch) -> None:
     # 03:30 in Argentina: the 12 slots start at 04:00 local (07:00Z) on the real TAF of SASA.
-    freeze_clock(monkeypatch, datetime(2026, 10, 7, 6, 30, tzinfo=timezone.utc), "app.services.metar")
+    freeze_clock(monkeypatch, datetime(2026, 10, 7, 6, 30, tzinfo=timezone.utc), "app.services.reportes_aeronauticos.metar", "app.services.reportes_aeronauticos.taf")
     metar = httpx.Response(
         200,
         json=awc_metar(datetime(2026, 10, 7, 6, 20, tzinfo=timezone.utc), "SASA", visib=4.35, wxString="BR"),
@@ -285,7 +285,7 @@ async def test_hourly_from_the_taf_of_the_nearest_airport(async_client: AsyncCli
 
 
 async def test_taf_takes_priority_over_the_fog_inference(async_client: AsyncClient, open_meteo, monkeypatch) -> None:
-    freeze_clock(monkeypatch, datetime(2026, 10, 7, 6, 30, tzinfo=timezone.utc), "app.services.metar")
+    freeze_clock(monkeypatch, datetime(2026, 10, 7, 6, 30, tzinfo=timezone.utc), "app.services.reportes_aeronauticos.metar", "app.services.reportes_aeronauticos.taf")
     monkeypatch.setattr("app.routers.niebla.get_fog_inference_forecast", AsyncMock(return_value=INFERENCE))
     metar = httpx.Response(
         200,

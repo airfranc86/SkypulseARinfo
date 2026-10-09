@@ -1,7 +1,7 @@
 """TAF decodificado por períodos a partir del JSON de AWC (FRA-365).
 
 Función pura: recibe una entrada de `aviationweather.gov/api/data/taf?format=json` y devuelve un
-`TafDecoded`, o `None` si no hay nada utilizable. No hace red; el pedido vive en `services/metar.py`.
+`TafDecoded`, o `None` si no hay nada utilizable. No hace red; el pedido vive en `reportes_aeronauticos/taf.py`.
 
 Supuestos sobre AWC, verificados con el TAF real de SACO (tests/fixtures/awc_taf/):
 - `fcstChange` es None (grupo base), "BECMG", "TEMPO" (también para "PROB40 TEMPO", con

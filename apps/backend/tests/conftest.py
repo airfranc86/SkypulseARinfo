@@ -152,6 +152,27 @@ def clear_metar_observation_cache():
     metar_obs_module._CACHE.clear()
 
 
+@pytest.fixture
+def awc_fixtures():
+    """Factory that swaps the AWC source for an in-memory `FixtureAwcSource`.
+
+    `awc_fixtures(metar={icao: json}, taf={icao: json}, fail=False)` installs it and returns it (its
+    `calls` list records every request). The source that was active is put back after the test.
+    """
+    from app.services.reportes_aeronauticos import awc
+    from tests.awc_fixture_source import FixtureAwcSource
+
+    original = awc.get_source()
+
+    def install(*, metar=None, taf=None, fail: bool = False) -> FixtureAwcSource:
+        source = FixtureAwcSource(metar=metar, taf=taf, fail=fail)
+        awc.set_source(source)
+        return source
+
+    yield install
+    awc.set_source(original)
+
+
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",

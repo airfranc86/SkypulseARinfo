@@ -5,10 +5,13 @@ The nearest Argentine airport's latest METAR replaces the model reading when the
 
     GET https://aviationweather.gov/api/data/metar?ids=<ICAO>&format=json&hours=3   (no key)
 
+The request itself goes out through `reportes_aeronauticos.awc` (`get_source().metar`), the single
+place that builds AWC requests.
+
 AWC fields used: `obsTime` (epoch s), `temp`/`dewp` (°C), `wdir` (degrees or "VRB"), `wspd`/`wgst`
 (kt), `wxString`, `rawOb`. Every failure returns None and is logged: the dashboard never breaks or
-waits longer than `settings.metar_observation_timeout_seconds` because of the METAR. Only the
-visibility/TAF client lives in `services/metar.py`; this module never uses the TAF.
+waits longer than `settings.metar_observation_timeout_seconds` because of the METAR. The visibility
+and TAF readers live in `reportes_aeronauticos` (`metar.py`, `taf.py`); this module never uses the TAF.
 """
 from __future__ import annotations
 
@@ -17,19 +20,17 @@ import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from app.core import usage_counter
 from app.core.cache import SingleFlightCache
 from app.core.config import settings
-from app.core.http_client import get_client
 from app.schemas.weather import MetarReason
 from app.services.reportes_aeronauticos.aeropuertos import nearest_airport_with_distance
+from app.services.reportes_aeronauticos.awc import AwcError, get_source
 from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)
 
-AWC_METAR_URL = "https://aviationweather.gov/api/data/metar"
 _KT_TO_KMH = 1.852
-_LOOKBACK_HOURS = "3"
+_LOOKBACK_HOURS = 3
 
 # Valid reports live 5 min (AWC publishes hourly at :00, ~4 min later); failures 1 min, so a down
 # AWC is not hit — nor waited on — by every dashboard request.
@@ -127,15 +128,10 @@ def _latest(icao: str, data: object) -> MetarObservation | None:
 
 async def _fetch(icao: str) -> MetarObservation | None:
     try:
-        usage_counter.record("metar_awc")
-        response = await get_client().get(
-            AWC_METAR_URL,
-            params={"ids": icao, "format": "json", "hours": _LOOKBACK_HOURS},
-            timeout=settings.metar_observation_timeout_seconds,
+        data = await get_source().metar(
+            icao, hours=_LOOKBACK_HOURS, timeout=settings.metar_observation_timeout_seconds
         )
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:   # timeout, HTTP error, invalid JSON: the dashboard falls back
+    except AwcError as exc:   # timeout, HTTP error, invalid JSON: the dashboard falls back
         logger.warning("METAR observation fetch failed for %s: %r", icao, exc)
         return None
     return _latest(icao, data)

@@ -4,7 +4,7 @@ WARNING: never call CheckWX outside this module, it would bypass the quota gate.
 
 Provider: CheckWX (https://www.checkwxapi.com)
 Quota: 200 requests/day on the Free plan; the internal gate is 198 (settings.checkwx_daily_limit).
-Not to be confused with services/metar.py (AWC/NOAA, no quota).
+Not to be confused with services/reportes_aeronauticos (AWC/NOAA, no quota).
 
 How a request is served (the quota is the scarce resource, so each step protects it):
 

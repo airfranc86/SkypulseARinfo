@@ -26,7 +26,7 @@ from app.services.openmeteo import (
     get_visibility_forecast,
     get_fog_inference_forecast,
 )
-from app.services.metar import get_nearest_metar_visibility, get_nearest_taf_hourly
+from app.services.reportes_aeronauticos import get_nearest_metar_visibility, get_nearest_taf_hourly
 from app.services.visibilidad import classify_visibility
 
 logger = logging.getLogger(__name__)

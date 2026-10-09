@@ -16,12 +16,13 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-import app.services.metar as metar_module
+import app.services.reportes_aeronauticos.metar as metar_module
 from app.core.config import Settings
 from app.core.rate_limit import limiter
-from app.services.metar import get_metar_visibility, get_nearest_metar_visibility
 from app.services.openmeteo import VisibilityData
 from app.services.reportes_aeronauticos.aeropuertos import AR_AIRPORTS
+from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE
+from app.services.reportes_aeronauticos.metar import get_metar_visibility, get_nearest_metar_visibility
 
 NOW = datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc)
 
@@ -83,7 +84,7 @@ def test_default_limits_are_20_km_and_90_minutes():
 @pytest.mark.asyncio
 async def test_airport_between_20_and_30_km_is_discarded_without_calling_awc():
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE).mock(
+        route = mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_payload(NOW - timedelta(minutes=10), "SABE"))
         )
         result = await get_nearest_metar_visibility(*QUILMES, now=NOW)
@@ -99,7 +100,7 @@ async def test_airport_between_20_and_30_km_is_discarded_without_calling_awc():
 @pytest.mark.asyncio
 async def test_far_airport_is_discarded_without_calling_awc():
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE).mock(
+        route = mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_payload(NOW - timedelta(minutes=10), "SANT"))
         )
         result = await get_nearest_metar_visibility(*SANTIAGO_DEL_ESTERO, now=NOW)
@@ -114,7 +115,7 @@ async def test_far_airport_is_discarded_without_calling_awc():
 async def test_exactly_20_km_still_uses_the_metar(at_distance):
     at_distance(20.0)
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE).mock(
+        route = mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_payload(NOW - timedelta(minutes=10)))
         )
         result = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
@@ -128,7 +129,7 @@ async def test_exactly_20_km_still_uses_the_metar(at_distance):
 async def test_a_hair_beyond_20_km_is_discarded(at_distance):
     at_distance(20.01)
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE).mock(
+        route = mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_payload(NOW - timedelta(minutes=10)))
         )
         result = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
@@ -143,7 +144,7 @@ async def test_a_hair_beyond_20_km_is_discarded(at_distance):
 async def test_a_close_fresh_metar_is_used_and_carries_its_observation_time():
     obs = NOW - timedelta(minutes=25)
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
+        mock.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
         result = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
 
     assert result.visibility_m == 10_000.0
@@ -159,7 +160,7 @@ async def test_a_close_fresh_metar_is_used_and_carries_its_observation_time():
 async def test_exactly_90_minutes_old_still_passes():
     obs = NOW - timedelta(minutes=90)
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
+        mock.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
         result = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
 
     assert result.visibility_m == 10_000.0
@@ -170,7 +171,7 @@ async def test_exactly_90_minutes_old_still_passes():
 async def test_older_than_90_minutes_is_discarded():
     obs = NOW - timedelta(minutes=90, seconds=1)
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
+        mock.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
         result = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
 
     assert result.visibility_m is None
@@ -182,7 +183,7 @@ async def test_older_than_90_minutes_is_discarded():
 @pytest.mark.asyncio
 async def test_stale_report_is_not_cached_so_a_newer_one_is_picked_up_next_time():
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE)
+        route = mock.get(AWC_METAR_BASE)
         route.mock(return_value=httpx.Response(200, json=_payload(NOW - timedelta(hours=3))))
         first = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
         assert "SAAR" not in metar_module._metar_cache
@@ -199,7 +200,7 @@ async def test_stale_report_is_not_cached_so_a_newer_one_is_picked_up_next_time(
 async def test_cache_hit_within_the_limit_makes_no_request_and_keeps_the_observation_time():
     obs = NOW - timedelta(minutes=60)
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE).mock(
+        route = mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_payload(obs))
         )
         first = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
@@ -214,7 +215,7 @@ async def test_cache_hit_within_the_limit_makes_no_request_and_keeps_the_observa
 async def test_cache_hit_that_has_become_older_than_90_minutes_is_discarded():
     obs = NOW - timedelta(minutes=60)
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE).mock(
+        route = mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_payload(obs))
         )
         first = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
@@ -232,7 +233,7 @@ async def test_stale_cache_hit_is_replaced_by_a_newer_report_from_awc():
     old = NOW - timedelta(minutes=60)
     newer = NOW + timedelta(minutes=25)
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE)
+        route = mock.get(AWC_METAR_BASE)
         route.mock(return_value=httpx.Response(200, json=_payload(old)))
         await get_nearest_metar_visibility(*ROSARIO, now=NOW)
 
@@ -247,7 +248,7 @@ async def test_stale_cache_hit_is_replaced_by_a_newer_report_from_awc():
 async def test_get_metar_visibility_applies_the_age_limit_too():
     obs = NOW - timedelta(minutes=120)
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
+        mock.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_payload(obs)))
         assert await get_metar_visibility("SAAR", now=NOW) is None
         assert await get_metar_visibility("SAAR", now=obs + timedelta(minutes=90)) == 10_000.0
 
@@ -263,7 +264,7 @@ async def test_missing_or_invalid_obs_time_is_discarded_and_not_cached(obs_time)
     if obs_time is not None:
         entry["obsTime"] = obs_time
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=[entry]))
+        mock.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=[entry]))
         result = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
 
     assert result.visibility_m is None
@@ -295,7 +296,7 @@ def stub_other_sources(monkeypatch):
 @pytest.mark.asyncio
 async def test_endpoint_uses_a_close_fresh_metar(async_client: AsyncClient, stub_other_sources):
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_fresh_payload()))
+        mock.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=_fresh_payload()))
         resp = await async_client.get("/api/niebla", params={"lat": ROSARIO[0], "lon": ROSARIO[1]})
 
     body = resp.json()
@@ -310,7 +311,7 @@ async def test_endpoint_falls_back_to_open_meteo_when_the_airport_is_beyond_20_k
     async_client: AsyncClient, stub_other_sources,
 ):
     with respx.mock(assert_all_called=False) as mock:
-        route = mock.get(metar_module.AWC_METAR_BASE).mock(
+        route = mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_fresh_payload("SABE"))
         )
         resp = await async_client.get("/api/niebla", params={"lat": QUILMES[0], "lon": QUILMES[1]})
@@ -331,7 +332,7 @@ async def test_endpoint_falls_back_to_open_meteo_when_the_metar_is_older_than_90
 ):
     stale = _payload(datetime.now(timezone.utc) - timedelta(hours=2))
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=stale))
+        mock.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=stale))
         resp = await async_client.get("/api/niebla", params={"lat": ROSARIO[0], "lon": ROSARIO[1]})
 
     body = resp.json()
@@ -348,7 +349,7 @@ async def test_endpoint_falls_back_to_open_meteo_when_the_metar_has_no_obs_time(
     async_client: AsyncClient, stub_other_sources,
 ):
     with respx.mock(assert_all_called=False) as mock:
-        mock.get(metar_module.AWC_METAR_BASE).mock(
+        mock.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=_payload(None))
         )
         resp = await async_client.get("/api/niebla", params={"lat": ROSARIO[0], "lon": ROSARIO[1]})

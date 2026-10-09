@@ -9,8 +9,8 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-import app.services.metar as metar_module
-from app.services.metar import AWC_TAF_BASE
+import app.services.reportes_aeronauticos.taf as taf_module
+from app.services.reportes_aeronauticos.awc import AWC_TAF_BASE
 
 pytestmark = pytest.mark.integration
 
@@ -19,9 +19,9 @@ FIXTURE = Path(__file__).parent / "fixtures" / "awc_taf" / "SACO.json"
 
 @pytest.fixture(autouse=True)
 def _clean_caches():
-    metar_module._taf_cache.clear()
+    taf_module._taf_cache.clear()
     yield
-    metar_module._taf_cache.clear()
+    taf_module._taf_cache.clear()
 
 
 @pytest.fixture

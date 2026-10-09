@@ -28,4 +28,4 @@ class NieblaResponse(BaseModel):
     metar_distance_km: float | None = None
 
     # Fuente del pronóstico horario
-    hourly_source: str = "openmeteo"     # "taf" | "openmeteo_inference" | "openmeteo"
+    hourly_source: str = "openmeteo"     # "taf" | "openmeteo_inference" | "openmeteo" | "none" (no hourly data at all)
