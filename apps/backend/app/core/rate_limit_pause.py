@@ -76,6 +76,20 @@ class RateLimitPause:
             self._probe_until = 0.0
             self._call_took_probe = False
 
+    def probe_ticket(self) -> float | None:
+        """Identifies the probe window the last `allow_request` took (None if it did not take the probe).
+
+        Read it right after `allow_request`. A pedido que se cancela con la prueba en vuelo se la devuelve a
+        `release_probe_ticket`; el boleto evita liberar la prueba de OTRO pedido si ya hubo un `trip`/éxito y
+        otro llamador tomó una ventana nueva.
+        """
+        return self._probe_until if self._call_took_probe else None
+
+    def release_probe_ticket(self, ticket: float | None) -> None:
+        """Libera la prueba si todavía es la ventana de `ticket` (la de un pedido que no llegó a resolver)."""
+        if ticket is not None and self._probe_until == ticket:
+            self._probe_until = 0.0
+
     def trip(self, retry_after: float | None = None) -> None:
         """Abre (o renueva) la pausa tras un 429. Una pausa en curso nunca se acorta.
 
@@ -123,3 +137,7 @@ class RateLimitPause:
 
 # Instancia única de Open-Meteo: ``services/openmeteo.py`` la consulta antes de cada llamada.
 openmeteo_pause = RateLimitPause()
+
+# Instancia única de AWC (aviationweather.gov): ``services/reportes_aeronauticos/awc.py`` la consulta antes de
+# cada pedido de METAR o TAF y un 429 la abre para ambos.
+awc_pause = RateLimitPause()

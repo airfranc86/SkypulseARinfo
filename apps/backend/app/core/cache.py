@@ -83,12 +83,17 @@ class _InFlight(Generic[T]):
     ``data`` o ``error`` se asignan ANTES de ``event.set()``, de modo que las
     coroutines que esperan leen un estado consistente al despertar.
     ``from_cache`` indica si ``data`` fue servido desde la copia stale (fetch fallido).
+    ``settled`` se marca al asignar ``data`` o ``error``. Si el responsable termina sin haberlo hecho (lo
+    cancelaron, por ejemplo porque su cliente cerró la conexión) queda ``abandoned``: ni ``data`` ni ``error``
+    significan algo y quienes esperaban reintentan por su cuenta.
     """
 
     event: asyncio.Event = field(default_factory=asyncio.Event)
     data: T | None = None
     error: Exception | None = None
     from_cache: bool = False
+    settled: bool = False
+    abandoned: bool = False
 
 
 def _report(outcome: CacheOutcome | None, hit: bool) -> None:
@@ -200,6 +205,10 @@ class SingleFlightCache(Generic[T]):
         # --- Camino de la coroutine que espera ---
         if responsible_slot is None:
             await waiter.event.wait()  # type: ignore[union-attr]
+            if waiter.abandoned:  # type: ignore[union-attr]
+                # El responsable se canceló (por ejemplo, su cliente cerró la conexión): no produjo nada. La
+                # cancelación es suya; quien espera pide el dato de nuevo y uno de ellos pasa a ser el responsable.
+                return await self.get_or_fetch(key, fetch, outcome=outcome, persist=persist)
             if waiter.error is not None:  # type: ignore[union-attr]
                 raise waiter.error  # type: ignore[union-attr]
             _report(outcome, waiter.from_cache)  # type: ignore[union-attr]
@@ -229,6 +238,7 @@ class SingleFlightCache(Generic[T]):
                 result = await self._recover_persisted(key)
                 responsible_slot.from_cache = result is not None
             responsible_slot.data = result
+            responsible_slot.settled = True
             _report(outcome, responsible_slot.from_cache)
             return result
         except Exception as exc:
@@ -244,15 +254,21 @@ class SingleFlightCache(Generic[T]):
                 logger.warning("%s fetch lanzó excepción — sirviendo stale: %s (%s)", self._name, key, exc)
                 responsible_slot.data = stale
                 responsible_slot.from_cache = True
+                responsible_slot.settled = True
                 _report(outcome, True)
                 return stale
             # El error se registra para que las coroutines que esperan lo
             # reciban en vez de un KeyError por cache vacía.
             responsible_slot.error = exc
+            responsible_slot.settled = True
             raise
         finally:
-            async with self._lock:
-                self._inflight.pop(key, None)
+            # Sin resultado ni error: la cancelación (u otra excepción que no es `Exception`) es solo del
+            # responsable; quienes esperaban lo piden de nuevo en vez de recibir `None`.
+            responsible_slot.abandoned = not responsible_slot.settled
+            # Sin `await` (ni el candado) entre el marcado y estas dos líneas: otra cancelación del responsable
+            # no puede dejar un vuelo fantasma ni a quienes esperaban colgados. Es atómico dentro del event loop.
+            self._inflight.pop(key, None)
             responsible_slot.event.set()
 
     # --- Persistencia opcional del último dato bueno -----------------------------------------

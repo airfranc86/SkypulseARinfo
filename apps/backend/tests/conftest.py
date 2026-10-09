@@ -180,6 +180,44 @@ def metar_clock(monkeypatch):
     return clock
 
 
+@pytest.fixture(autouse=True)
+def reset_awc_protection_state():
+    """Fresh TAF caches, 429 pause and call budget of AWC (all global to the process) around each test."""
+    from app.core.rate_limit_pause import awc_pause
+    from app.services.reportes_aeronauticos import awc_budget
+    from app.services.reportes_aeronauticos.taf import clear_taf_cache
+
+    def _reset() -> None:
+        awc_pause.reset()
+        awc_budget._reset_for_tests()
+        clear_taf_cache()
+
+    _reset()
+    yield
+    _reset()
+
+
+@pytest.fixture
+def taf_clock(monkeypatch):
+    """Rebuild the TTL stores of the TAF caches (entries, failures, stale copy, "no TAF") with a clock the test drives.
+
+    Same ttl as the real ones: advancing `taf_clock.now` by N seconds plays the passage of N real seconds.
+    """
+    from cachetools import TTLCache
+
+    from app.services.reportes_aeronauticos import taf as taf_module
+
+    clock = _MetarCacheClock()
+    for name in ("_cache", "_failure_cache", "_stale_cache"):
+        old = getattr(taf_module._taf_cache, name)
+        monkeypatch.setattr(taf_module._taf_cache, name, TTLCache(maxsize=old.maxsize, ttl=old.ttl, timer=clock))
+    old_no_taf = taf_module._no_taf_cache
+    monkeypatch.setattr(
+        taf_module, "_no_taf_cache", TTLCache(maxsize=old_no_taf.maxsize, ttl=old_no_taf.ttl, timer=clock)
+    )
+    return clock
+
+
 @pytest.fixture
 def awc_fixtures():
     """Factory that swaps the AWC source for an in-memory `FixtureAwcSource`.
@@ -752,4 +790,13 @@ def openmeteo_budget_clock(monkeypatch) -> FakeClock:
     import app.services.openmeteo as om_module
     clock = FakeClock()
     monkeypatch.setattr(om_module, "_budget_now", clock)
+    return clock
+
+
+@pytest.fixture
+def awc_budget_clock(monkeypatch) -> FakeClock:
+    """Replace the clock of the AWC call budget (buckets and log throttle) with a manual one."""
+    from app.services.reportes_aeronauticos import awc_budget
+    clock = FakeClock()
+    monkeypatch.setattr(awc_budget, "_budget_now", clock)
     return clock

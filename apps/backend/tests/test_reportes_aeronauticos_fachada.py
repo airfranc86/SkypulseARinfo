@@ -61,10 +61,10 @@ def test_the_facade_exports_exactly_the_public_names() -> None:
 
 def test_clear_caches_empties_both_the_metar_and_the_taf_cache() -> None:
     metar_entries_cache._cache["SAAR"] = object()   # type: ignore[assignment]
-    taf_module._taf_cache["SACO"] = {"fcsts": [{}]}
+    taf_module._taf_cache._cache["SACO"] = {"fcsts": [{}]}
     clear_caches()
     assert "SAAR" not in metar_entries_cache._cache
-    assert "SACO" not in taf_module._taf_cache
+    assert "SACO" not in taf_module._taf_cache._cache
 
 
 # ---------------------------------------------------------------- fetch_taf_entry over the seam
@@ -79,26 +79,30 @@ async def test_fetch_taf_entry_returns_the_entry_and_caches_it(awc_fixtures) -> 
     assert [call[0] for call in source.calls] == ["taf"]   # second answer came from the cache
 
 
-async def test_fetch_taf_entry_is_none_when_the_airport_has_no_taf_and_is_not_cached(awc_fixtures) -> None:
+async def test_fetch_taf_entry_is_none_when_the_airport_has_no_taf_and_is_remembered_for_5_minutes(awc_fixtures) -> None:
     source = awc_fixtures(taf={})
     assert await fetch_taf_entry("SAXX") is None
     assert await fetch_taf_entry("SAXX") is None
-    assert len(source.calls) == 2
-    assert "SAXX" not in taf_module._taf_cache
+    assert len(source.calls) == 1
+    assert "SAXX" not in taf_module._taf_cache._cache
 
 
-async def test_fetch_taf_entry_without_periods_is_none_and_not_cached(awc_fixtures) -> None:
+async def test_fetch_taf_entry_without_periods_is_none_stores_no_entry_and_is_remembered_as_no_taf(awc_fixtures) -> None:
     awc_fixtures(taf={"SACO": [{"icaoId": "SACO", "fcsts": []}]})
     assert await fetch_taf_entry("SACO") is None
-    assert "SACO" not in taf_module._taf_cache
+    assert "SACO" not in taf_module._taf_cache._cache
+    assert "SACO" not in taf_module._taf_cache._stale_cache
+    assert "SACO" in taf_module._no_taf_cache
 
 
-async def test_fetch_taf_entry_turns_an_awc_failure_into_taf_fetch_error_and_does_not_cache(awc_fixtures) -> None:
+async def test_fetch_taf_entry_turns_an_awc_failure_into_taf_fetch_error_and_stores_no_entry(awc_fixtures) -> None:
     awc_fixtures(fail=True)
     with pytest.raises(TafFetchError) as caught:
         await fetch_taf_entry("SACO")
     assert isinstance(caught.value.__cause__, AwcError)
-    assert "SACO" not in taf_module._taf_cache
+    assert "SACO" not in taf_module._taf_cache._cache
+    assert "SACO" not in taf_module._taf_cache._stale_cache
+    assert "SACO" not in taf_module._no_taf_cache   # a failure is not "there is no TAF"
 
 
 async def test_get_taf_for_icao_is_tolerant_and_returns_the_periods(awc_fixtures) -> None:

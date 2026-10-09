@@ -88,6 +88,24 @@ class Settings(BaseSettings):
     # does not protect the daily one; 90 is a margin against bursts, not a daily budget.
     openmeteo_calls_per_minute: int = Field(default=90, ge=1)
 
+    # Budget of NEW requests to the Aviation Weather Center (METAR and TAF share it), same mechanism as the
+    # Open-Meteo one above: token buckets refilled continuously, only requests that carry a client key are
+    # capped, and a refused request behaves like an unavailable one (the caches serve their last good copy;
+    # `/api/taf` answers 429 `taf_busy` only when it has nothing cached). `/api/taf?icao=` accepts any 4-character
+    # code, so without a budget a sweep of made-up codes spends AWC's limit and AWC then answers 429 to Niebla and
+    # the dashboard as well. A user normally costs 1 METAR + 1 TAF request per NEW station (about 20 stations
+    # exist and the caches absorb the rest: 5 min for the METAR, 60 min for the TAF), so 6 allows three new
+    # stations a minute per client.
+    awc_calls_per_client_per_minute: int = Field(default=6, ge=1)
+    # Global ceiling across every client: the whole warm-up of the ~20 stations (40 requests) fits in one minute;
+    # the steady state is about 5 requests a minute. AWC's own limit is not verified here (we recall ~100/min).
+    awc_calls_per_minute: int = Field(default=40, ge=1)
+    # Codes that are NOT in the local airports list (`/api/taf?icao=` accepts any 4 characters) also need a token of
+    # this separate global bucket, so a sweep of made-up codes can only ever take this many of the global tokens a
+    # minute: known stations keep at least `awc_calls_per_minute - awc_unknown_calls_per_minute` (32 by default).
+    # Real stations that are missing from the list are rare and cached after the first answer.
+    awc_unknown_calls_per_minute: int = Field(default=8, ge=1)
+
     # Alertas push (FRA-354). La clave privada VAPID firma cada envío: solo vive en el entorno (Render),
     # nunca en el repo, y `repr=False` evita que salga en un `repr(settings)` o en un log. Acepta el valor
     # crudo de 32 bytes en base64url (el formato corto que se pega en Render) o un PEM; ver

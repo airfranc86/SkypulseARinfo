@@ -17,6 +17,10 @@ Lifetimes (`SingleFlightCache`, no persistence):
 - when a refresh fails the last good list is served for at most `_STALE_TTL_SECONDS`. That never lets a
   consumer accept an old report: both re-check the age of the chosen report against their own clock on
   every read (the copy is 30 minutes counted from the fetch, not from the report time).
+
+A request that the AWC protection refuses (429 pause or call budget: `awc.AwcRefused`, a `FetchRefused`) is not
+a failure of the station: the cache does not remember it, serves the last good list when there is one and
+otherwise `fetch_metar_entries` answers None for that call only, like any other unavailable AWC.
 """
 from __future__ import annotations
 
@@ -26,7 +30,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from app.core.cache import SingleFlightCache
+from app.core.cache import FetchRefused, SingleFlightCache
 from app.core.config import settings
 from app.services.reportes_aeronauticos.awc import AwcError, get_source
 from app.utils.parsing import parse_float
@@ -107,10 +111,15 @@ async def fetch_metar_entries(icao: str) -> tuple[dict, ...] | None:
     """The METAR reports AWC has for `icao` (last 3 h), or None when there is nothing usable. Never raises.
 
     One request per station is shared by every caller: concurrent callers wait for the same request and
-    later ones read the cache (5 min; a failure is remembered for 1 min). The reports are not copied: do
-    not modify them.
+    later ones read the cache (5 min; a failure is remembered for 1 min). The code is trimmed and upper-cased
+    first, so "saar" and "SAAR" are one station. The reports are not copied: do not modify them.
     """
-    return await metar_entries_cache.get_or_fetch(icao, lambda: _request(icao))
+    code = icao.strip().upper()
+    try:
+        return await metar_entries_cache.get_or_fetch(code, lambda: _request(code))
+    except FetchRefused:   # the AWC protection said no and there is no copy to serve: unavailable, this call only
+        logger.debug("METAR %s: request refused, no copy to serve", code)
+        return None
 
 
 def clear_metar_entries_cache() -> None:

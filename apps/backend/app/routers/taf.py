@@ -4,7 +4,9 @@ GET /api/taf?icao=SACO
 
 Datos de Aviation Weather Center (NOAA) vía `reportes_aeronauticos.fetch_taf_entry`; no usa CheckWX, así
 que no necesita su clave ni gasta su cupo. Las respuestas distinguen "ese aeropuerto no publica
-TAF" (404) de "no pudimos consultarlo" (503).
+TAF" (404) de "no pudimos consultarlo" (503) y de "ahora no se hacen más consultas nuevas a AWC" (429
+`taf_busy`, con `Retry-After`): este último solo si el tope de pedidos o la pausa ante el 429 de AWC rechazan un
+pedido NUEVO y no hay un TAF en caché ni un "sin TAF" recordado con que responder.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from app.services.reportes_aeronauticos import (
     normalize_icao,
     normalize_taf,
 )
+from app.services.reportes_aeronauticos.taf import TafBusyError
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,14 @@ async def get_taf(
         raise HTTPException(status_code=422, detail="invalid_icao")
     try:
         entry = await fetch_taf_entry(code)
+    except TafBusyError as exc:
+        # Debug on purpose: during a pause or a sweep every request lands here (the budget logs a summary a minute).
+        logger.debug("GET /api/taf %s: AWC request refused, retry in %d s", code, exc.retry_after)
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "taf_busy", "retry_after": exc.retry_after},
+            headers={"Retry-After": str(exc.retry_after)},
+        ) from exc
     except TafFetchError as exc:
         logger.warning("GET /api/taf %s: AWC failed: %s", code, exc)
         raise HTTPException(status_code=503, detail="taf_unavailable") from exc
