@@ -22,6 +22,8 @@ from app.services.openmeteo import (
 )
 from tests.hourly_fixtures import AR, make_hourly
 
+pytestmark = pytest.mark.usefixtures("frozen_ar_today")
+
 
 # ---------------------------------------------------------------------------
 # Helpers — datos de ejemplo

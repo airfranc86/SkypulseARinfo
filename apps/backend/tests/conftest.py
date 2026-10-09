@@ -516,3 +516,23 @@ async def suscribir(alertas_redis, fake_upstash):
         return SuscripcionGuardada(sub_id, registro, receptor, zona)
 
     return _suscribir
+
+
+@pytest.fixture
+def frozen_ar_today():
+    """Argentine "today" of the dashboard builder fixed at 2026-05-20, the date the fixtures start on.
+
+    `build_7d_forecast` drops past days, and the fixtures use fixed dates: without this they would
+    all be in the past. A `datetime` subclass keeps `fromisoformat` and the rest working.
+    """
+    from datetime import datetime as real_datetime
+    from unittest.mock import patch
+
+    class _FrozenDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            fixed = real_datetime(2026, 5, 20, 12, 0)
+            return fixed.replace(tzinfo=tz) if tz is not None else fixed
+
+    with patch("app.services.dashboard_builder.datetime", _FrozenDatetime):
+        yield

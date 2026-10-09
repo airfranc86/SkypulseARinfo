@@ -296,6 +296,10 @@ def build_7d_forecast(
 
         date_obj = _Date.fromisoformat(date_str)
         days_ahead = (date_obj - today).days
+        if days_ahead < 0:
+            # A stored copy that crossed Argentine midnight starts on a past day: it would get a
+            # weekday label and nobody would be "Hoy". The loop index `i` stays: it addresses the arrays.
+            continue
         if days_ahead == 0:
             day_label = "Hoy"
         elif days_ahead == 1:

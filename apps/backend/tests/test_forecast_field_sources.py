@@ -29,6 +29,8 @@ from app.services.dashboard_builder import build_7d_forecast
 from app.services.openmeteo import DailyForecastDataExt, MultiModelDailyData
 from tests.hourly_fixtures import AR, make_hourly
 
+pytestmark = pytest.mark.usefixtures("frozen_ar_today")
+
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
