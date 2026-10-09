@@ -1,4 +1,4 @@
-"""Los aeropuertos de `_AR_AIRPORTS` coinciden con la referencia verificada (FRA-327).
+"""Los aeropuertos de `AR_AIRPORTS` coinciden con la referencia verificada (FRA-327).
 
 La lista tenía varios códigos ICAO equivocados (SARS, SAVB, SAWO, SASJ, SAWC,
 SAVT, SAWP) con coordenadas y nombres de la ciudad correcta: AWC devolvía el
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.metar import _AR_AIRPORTS
+from app.services.reportes_aeronauticos.aeropuertos import AR_AIRPORTS as _AR_AIRPORTS
 
 # ICAO -> (lat, lon) según AWC stationinfo.
 _REFERENCE: dict[str, tuple[float, float]] = {

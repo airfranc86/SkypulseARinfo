@@ -26,7 +26,7 @@ from app.schemas.taf import (
     TafTemperature,
     TafWind,
 )
-from app.services.metar import _MAX_VIS_M, _SM_TO_M, _parse_taf_visib_sm
+from app.services.visibilidad import MAX_VISIBILITY_M, SM_TO_M, is_open_ended, parse_visibility_sm
 
 _CHANGES = {"FM": "from", "BECMG": "becoming", "TEMPO": "tempo", "PROB": "prob"}
 # Los grupos que pasan a ser lo vigente: lo que declaran lo heredan los grupos siguientes.
@@ -100,13 +100,12 @@ def _wind(period: dict[str, Any]) -> TafWind | None:
 
 def _visibility(visib: object) -> tuple[int | None, bool, float | None]:
     """(metros a 100 m, es "6 o más", millas para la categoría)."""
-    miles = _parse_taf_visib_sm(visib)
+    miles = parse_visibility_sm(visib)
     if miles is None:
         return None, False, None
-    raw = str(visib).strip().upper()
-    if "+" in raw or raw.startswith("P"):
-        return int(_MAX_VIS_M), True, _OPEN_SKY_SM
-    meters = min(miles * _SM_TO_M, _MAX_VIS_M)
+    if is_open_ended(visib):
+        return int(MAX_VISIBILITY_M), True, _OPEN_SKY_SM
+    meters = min(miles * SM_TO_M, MAX_VISIBILITY_M)
     return round(meters / 100.0) * 100, False, miles
 
 

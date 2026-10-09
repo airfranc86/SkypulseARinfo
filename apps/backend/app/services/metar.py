@@ -22,6 +22,11 @@ from cachetools import TTLCache
 from app.core import usage_counter
 from app.core.config import settings
 from app.core.http_client import get_client
+from app.services.reportes_aeronauticos.aeropuertos import (
+    nearest_airport,
+    nearest_airport_with_distance,
+)
+from app.services.visibilidad import awc_visibility_m
 from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)
@@ -30,48 +35,11 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_SM_TO_M    = 1609.344    # statute miles → metros
-_MAX_VIS_M  = 10_000.0    # cap de visibilidad en metros (consistente con OM)
 # Argentina time zone offset (no DST)
 _AR_TZ = timezone(timedelta(hours=-3))
 
 AWC_METAR_BASE = "https://aviationweather.gov/api/data/metar"
 AWC_TAF_BASE   = "https://aviationweather.gov/api/data/taf"
-
-# ---------------------------------------------------------------------------
-# Aeropuertos argentinos con coordenadas
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class _Airport:
-    icao: str
-    name: str
-    lat: float
-    lon: float
-
-
-_AR_AIRPORTS: list[_Airport] = [
-    _Airport("SAEZ", "Ezeiza",             -34.822, -58.536),
-    _Airport("SABE", "Aeroparque",         -34.559, -58.416),
-    _Airport("SACO", "Córdoba",            -31.323, -64.208),
-    _Airport("SAME", "Mendoza",            -32.832, -68.793),
-    _Airport("SAAR", "Rosario",            -32.919, -60.785),
-    _Airport("SANT", "Tucumán",            -26.841, -65.105),
-    _Airport("SASA", "Salta",              -24.856, -65.486),
-    _Airport("SANU", "San Juan",           -31.572, -68.418),
-    _Airport("SAZS", "Bariloche",          -41.151, -71.157),
-    _Airport("SAVC", "Comodoro Rivadavia", -45.785, -67.499),
-    _Airport("SAWG", "Río Gallegos",       -51.609, -69.313),
-    _Airport("SAZN", "Neuquén",            -38.949, -68.156),
-    _Airport("SAWH", "Ushuaia",            -54.843, -68.295),
-    _Airport("SAAC", "Concordia",         -31.297, -57.997),
-    _Airport("SAAG", "Gualeguaychú",      -33.011, -58.611),
-    _Airport("SAZR", "Santa Rosa",        -36.588, -64.276),
-    _Airport("SAVV", "Viedma",            -40.869, -63.000),
-    _Airport("SAMM", "Malargüe",          -35.493, -69.574),
-    _Airport("SAMR", "San Rafael",        -34.588, -68.404),
-    _Airport("SAZM", "Mar del Plata",     -37.934, -57.573),
-]
 
 # ---------------------------------------------------------------------------
 # Caches
@@ -99,66 +67,6 @@ _FOG_WX_CODES: frozenset[str] = frozenset({"FG", "MIFG", "BCFG", "FZFG", "BR"})
 # Helpers
 # ---------------------------------------------------------------------------
 
-def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Distancia en km entre dos coordenadas (Haversine)."""
-    R = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    )
-    return R * 2 * math.asin(math.sqrt(a))
-
-
-def nearest_airport(lat: float, lon: float) -> _Airport:
-    """Retorna el aeropuerto argentino más cercano a (lat, lon)."""
-    return min(_AR_AIRPORTS, key=lambda a: haversine_km(lat, lon, a.lat, a.lon))
-
-
-def nearest_airport_with_distance(lat: float, lon: float) -> tuple[_Airport, float]:
-    """Aeropuerto argentino más cercano y la distancia real en km (lookup puro, sin red)."""
-    airport = nearest_airport(lat, lon)
-    return airport, haversine_km(lat, lon, airport.lat, airport.lon)
-
-
-def _parse_taf_visib_sm(visib: object) -> float | None:
-    """
-    Convierte el campo `visib` de un TAF a statute miles.
-
-    Formatos reconocidos:
-      - numérico:  6, 3.0, 0.5
-      - string:   "6SM", "P6SM", "1/2SM", "1 1/2SM", "6+", "3/4"
-    """
-    if visib is None:
-        return None
-    # Intento directo (int/float)
-    try:
-        return float(visib)
-    except (TypeError, ValueError):
-        pass
-    s = str(visib).strip().upper()
-    s = s.replace("SM", "").replace("+", "").strip()
-    if s.startswith("P"):
-        s = s[1:].strip()
-    # Número mixto: "1 1/2" → 1.5
-    parts = s.split()
-    total = 0.0
-    for part in parts:
-        if "/" in part:
-            try:
-                n, d = part.split("/", 1)
-                total += float(n) / float(d)
-            except (ValueError, ZeroDivisionError):
-                return None
-        else:
-            try:
-                total += float(part)
-            except ValueError:
-                return None
-    return total if total > 0 else None
-
-
 def _has_fog(wx_string: object) -> bool:
     """True si el `wxString` de AWC ("-RA BR", "+TSRA FG") trae algún fenómeno de niebla.
 
@@ -167,23 +75,6 @@ def _has_fog(wx_string: object) -> bool:
     if not isinstance(wx_string, str):
         return False
     return any(code.lstrip("+-") in _FOG_WX_CODES for code in wx_string.upper().split())
-
-
-def _parse_metar_visib_m(visib: object) -> float | None:
-    """
-    Convierte el campo `visib` de un METAR (AWC) a metros, topado a `_MAX_VIS_M`.
-
-    AWC manda "6+" (o "P6SM") cuando el METAR trae CAVOK / 6 o más millas: eso vale el tope
-    de 10 km, no 6 SM = 9.656 m (la clasificación de niebla separa "Despejada" de "Buena" en
-    los 10 km). El resto se parsea como en el TAF. Devuelve None si el valor no es utilizable.
-    """
-    raw = str(visib).strip().upper() if visib is not None else ""
-    if "+" in raw or raw.startswith("P"):
-        return _MAX_VIS_M if _parse_taf_visib_sm(visib) is not None else None
-    visib_sm = _parse_taf_visib_sm(visib)
-    if visib_sm is None or not math.isfinite(visib_sm) or visib_sm < 0:
-        return None
-    return min(visib_sm * _SM_TO_M, _MAX_VIS_M)
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +141,7 @@ async def _get_metar_reading(icao: str, now: datetime) -> _MetarReading | None:
         logger.info("METAR: no visib field for %s", icao)
         return None
 
-    vis_m = _parse_metar_visib_m(visib_sm)
+    vis_m = awc_visibility_m(visib_sm)
     if vis_m is None:
         logger.info("METAR: unparseable visib %r for %s", visib_sm, icao)
         return None
@@ -436,7 +327,7 @@ async def get_nearest_taf_hourly(
             any_period_found = True
 
             # "6+" (6 millas o más) vale el tope de 10 km, no 6 SM = 9.656 m.
-            vis_m = _parse_metar_visib_m(period.get("visib"))
+            vis_m = awc_visibility_m(period.get("visib"))
             if vis_m is not None:
                 # Conservador: tomar la visibilidad más baja entre períodos solapados
                 if best_vis_m is None or vis_m < best_vis_m:

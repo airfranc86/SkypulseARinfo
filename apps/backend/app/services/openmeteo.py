@@ -22,6 +22,7 @@ from app.core.persistent_cache import RedisLastGoodStore
 from app.core.rate_limit import UNVERIFIED_CLIENT_KEY
 from app.core.rate_limit_pause import openmeteo_pause
 from app.core.token_bucket import REFUSED_BY_CLIENT, REFUSED_BY_GLOBAL, ClientAndGlobalBudget
+from app.services.visibilidad import MAX_VISIBILITY_M, classify_visibility
 from app.utils.parsing import parse_float
 
 _DAY_LABELS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
@@ -886,35 +887,11 @@ class VisibilityData:
     hourly_labels: list[str]       # "14:00", …
 
 
-# Open-Meteo returns raw model visibility in meters without a physical cap.
-# Atmospheric visibility maxes out at 10 km for practical purposes — values
-# beyond that don't differentiate "clear" conditions meaningfully.
-_MAX_VIS_M: float = 10_000.0
-
-
+# Open-Meteo returns raw model visibility in meters without a physical cap: the 10 km cap and the
+# fog scale live in `services/visibilidad.py`, shared with the AWC sources.
 def _cap_vis(raw: float | None) -> float | None:
     """Clamp raw visibility to a physically plausible maximum."""
-    return min(raw, _MAX_VIS_M) if raw is not None else None
-
-
-def _classify_visibility(v: float | None) -> tuple[int, str, str]:
-    """Returns (level, label, color) from visibility in meters.
-
-    Official METAR/SMN scale (4 levels, no separate dry-haze category):
-      Niebla (FG)          < 1 km
-      Neblina o bruma (BR) 1 km to < 5 km  (in Argentina neblina == bruma)
-      Buena                5 km to < 10 km
-      Despejada            >= 10 km
-    """
-    if v is None:
-        return 0, "Sin datos", "#90aabb"
-    if v >= 10_000:
-        return 0, "Despejada",       "#3ecf7a"
-    if v >= 5_000:
-        return 1, "Buena",           "#5aaad8"
-    if v >= 1_000:
-        return 2, "Neblina o bruma", "#f0a020"
-    return     3, "Niebla",          "#e03535"
+    return min(raw, MAX_VISIBILITY_M) if raw is not None else None
 
 
 # get_visibility_forecast y get_fog_inference_forecast piden variables disjuntas
@@ -976,7 +953,7 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
         wc_raw = current.get("weather_code")
         weather_code = int(wc_raw) if wc_raw is not None else None
 
-        level, label, color = _classify_visibility(current_m)
+        level, label, color = classify_visibility(current_m)
 
         # Empezar desde la próxima hora AR redonda para consistencia con TAF/fog inference
         all_times: list[str] = hourly.get("time", [])
@@ -1032,7 +1009,7 @@ async def get_fog_inference_forecast(
       4. T - Td < 5°C + HR ≥ 80 %                     → neblina o bruma  (3000 m)
       5. Resto                                          → despejada        (10 000 m)
 
-    Los valores se clasifican con la escala oficial METAR/SMN (_classify_visibility):
+    Los valores se clasifican con la escala oficial METAR/SMN (classify_visibility):
     niebla < 1 km, neblina o bruma 1–5 km.
     """
     data = await _fetch_niebla_combined(lat, lon)
