@@ -56,12 +56,15 @@ async def fetch_with_retry(
     *,
     max_attempts: int = 2,
     retry_after_cap: float = 3.0,
+    no_retry_statuses: frozenset[int] = frozenset(),
     **kwargs: Any,
 ) -> httpx.Response:
     """HTTP request with transparent retry on transient errors.
 
     Retries on: TimeoutException, TransportError, HTTP 429, HTTP 5xx.
     On 429 + Retry-After > retry_after_cap: aborts immediately without waiting.
+    A response whose status is in ``no_retry_statuses`` raises right away through ``raise_for_status``
+    (no retry, no wait). Empty by default, so every other caller behaves exactly as before.
     Raises on final failure — caller decides how to degrade.
     """
     for attempt in range(max_attempts):
@@ -73,6 +76,9 @@ async def fetch_with_retry(
                 raise
             await asyncio.sleep(_backoff_delay(attempt))
             continue
+
+        if response.status_code in no_retry_statuses:
+            response.raise_for_status()
 
         # 2xx / 3xx / non-retryable 4xx
         if response.status_code != 429 and response.status_code < 500:

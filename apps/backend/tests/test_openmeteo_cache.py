@@ -485,3 +485,191 @@ async def test_stats_empty_cache_hit_rate_is_zero():
     cache: SingleFlightCache = SingleFlightCache(maxsize=8, ttl=60, name="stats_empty")
     stats = cache.stats()
     assert stats == {"hits": 0, "fetches": 0, "hit_rate": 0.0}
+
+
+# ---------------------------------------------------------------------------
+# Las cachés de Open-Meteo con Upstash (falso, con estado) de punta a punta
+# ---------------------------------------------------------------------------
+
+from types import SimpleNamespace  # noqa: E402
+
+from app.core import upstash  # noqa: E402
+from app.core.cache import CacheOutcome, SingleFlightCache  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.persistent_cache import SCHEMA_VERSION  # noqa: E402
+from app.core.upstash import UpstashRedis  # noqa: E402
+from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL, FakeUpstash  # noqa: E402
+
+_PREFIX = "skypulse:om_last_good:"
+
+
+@pytest.fixture
+def world():
+    """Open-Meteo y Upstash falsos en el mismo router; el handle de Upstash queda configurado."""
+    fake = FakeUpstash()
+    with respx.mock(assert_all_called=False) as router:
+        router.post(url__startswith=FAKE_UPSTASH_URL).mock(side_effect=fake.handle)
+        om = router.get(OM_URL)
+        om.mock(return_value=httpx.Response(200, json=_CURRENT_PAYLOAD))
+        upstash.configure_redis(UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN))
+        try:
+            yield SimpleNamespace(fake=fake, om=om, router=router)
+        finally:
+            upstash.configure_redis(None)
+
+
+def _restart(*caches: SingleFlightCache) -> None:
+    """Simula un reinicio de Render: la memoria se pierde, Redis no."""
+    for cache in caches:
+        cache.clear()
+    for store in om_module._LAST_GOOD_STORES:
+        store.reset()
+
+
+def _persisted_keys(fake: FakeUpstash) -> list[str]:
+    return [k for k in fake.strings if k.startswith(_PREFIX)]
+
+
+def _rate_limited(world) -> None:
+    world.om.mock(return_value=httpx.Response(429, json={"error": True}))
+
+
+async def test_current_is_saved_with_the_current_ttl(world) -> None:
+    assert await om_module.get_current(-31.4, -64.2) is not None
+    await om_module._CACHE_CURRENT.flush_persistence()
+    (key,) = _persisted_keys(world.fake)
+    assert key.startswith(f"{_PREFIX}v{SCHEMA_VERSION}:om_current:")
+    assert world.fake.ttls[key] == settings.openmeteo_last_good_ttl_current_seconds == 10800
+    assert all(cmd[0] == "SET" for cmd in world.fake.commands)
+
+
+async def test_the_dashboard_survives_a_restart_while_open_meteo_answers_429(world) -> None:
+    first = await om_module.get_current(-31.4, -64.2)
+    await om_module._CACHE_CURRENT.flush_persistence()
+    _restart(om_module._CACHE_CURRENT)
+    _rate_limited(world)
+
+    outcome = CacheOutcome()
+    again = await om_module.get_current(-31.4, -64.2, cache_outcome=outcome)
+    assert again == first
+    assert again.fetched_at == first.fetched_at       # la edad real viaja con el dato
+    assert outcome.hit is True
+
+
+async def test_forecast_values_use_the_long_ttl_and_come_back_after_a_restart(world) -> None:
+    world.om.mock(return_value=httpx.Response(200, json=_DAILY_EXT_PAYLOAD))
+    first = await om_module.get_daily_forecast_ext(-31.4, -64.2)
+    await om_module._CACHE_FORECAST.flush_persistence()
+    (key,) = _persisted_keys(world.fake)
+    assert world.fake.ttls[key] == settings.openmeteo_last_good_ttl_forecast_seconds == 21600
+
+    _restart(om_module._CACHE_FORECAST)
+    _rate_limited(world)
+    assert await om_module.get_daily_forecast_ext(-31.4, -64.2) == first
+
+
+async def test_multi_model_is_rebuilt_from_persisted_models_and_not_saved_itself(
+    world, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    attempted: list[str] = []
+    real_save = om_module._STORE_FORECAST.save
+
+    async def spy(key: str, value) -> None:
+        attempted.append(type(value).__name__)
+        await real_save(key, value)
+
+    monkeypatch.setattr(om_module._STORE_FORECAST, "save", spy)
+    world.om.mock(return_value=httpx.Response(200, json=_DAILY_EXT_PAYLOAD))
+    first = await om_module.get_multi_model_daily(-31.4, -64.2)
+    await om_module._CACHE_FORECAST.flush_persistence()
+    # Solo se guardan los dos modelos: el consenso es derivado y guardarlo reiniciaría el reloj del dato.
+    assert sorted(attempted) == ["DailyForecastDataExt", "DailyForecastDataExt"]
+    assert len(_persisted_keys(world.fake)) == 2
+
+    _restart(om_module._CACHE_FORECAST)
+    _rate_limited(world)
+    again = await om_module.get_multi_model_daily(-31.4, -64.2)
+    assert again == first
+
+
+async def test_niebla_raw_payload_is_persisted_in_the_nowcast_bucket(world) -> None:
+    world.om.mock(return_value=httpx.Response(200, json=_VISIBILITY_PAYLOAD))
+    first = await om_module.get_visibility_forecast(-31.4, -64.2)
+    await om_module._CACHE_NOWCAST.flush_persistence()
+    (key,) = _persisted_keys(world.fake)
+    assert ":om_nowcast:" in key
+    assert world.fake.ttls[key] == settings.openmeteo_last_good_ttl_current_seconds
+
+    _restart(om_module._CACHE_NOWCAST)
+    _rate_limited(world)
+    assert await om_module.get_visibility_forecast(-31.4, -64.2) == first
+
+
+async def test_saves_are_throttled_across_expiring_fresh_entries(world) -> None:
+    await om_module.get_current(-31.4, -64.2)
+    om_module._CACHE_CURRENT._cache.clear()           # venció el TTL fresco: nuevo fetch exitoso
+    await om_module.get_current(-31.4, -64.2)
+    await om_module._CACHE_CURRENT.flush_persistence()
+    assert [c[0] for c in world.fake.commands].count("SET") == 1
+
+
+async def test_redis_is_read_only_when_the_fetch_fails(world) -> None:
+    await om_module.get_current(-31.4, -64.2)
+    await om_module._CACHE_CURRENT.flush_persistence()
+    assert "GET" not in [c[0] for c in world.fake.commands]
+
+
+async def test_open_meteo_failure_with_nothing_persisted_still_returns_none(world) -> None:
+    _rate_limited(world)
+    assert await om_module.get_current(-31.4, -64.2) is None
+    assert [c[0] for c in world.fake.commands] == ["GET"]
+
+
+async def test_redis_down_changes_nothing_for_the_caller(world) -> None:
+    first = await om_module.get_current(-31.4, -64.2)
+    await om_module._CACHE_CURRENT.flush_persistence()
+    _restart(om_module._CACHE_CURRENT)
+    world.fake.down = True
+    _rate_limited(world)
+    assert await om_module.get_current(-31.4, -64.2) is None
+    from app.core import rate_limit_pause
+
+    rate_limit_pause.openmeteo_pause.reset()          # el 429 de arriba abrió una pausa
+    world.om.mock(return_value=httpx.Response(200, json=_CURRENT_PAYLOAD))
+    om_module._CACHE_CURRENT.clear()
+    assert (await om_module.get_current(-31.4, -64.2)).temp_c == first.temp_c
+    await om_module._CACHE_CURRENT.flush_persistence()
+
+
+async def test_without_upstash_configured_no_redis_traffic_happens() -> None:
+    assert upstash.get_redis() is None
+    with respx.mock(assert_all_called=False) as router:
+        route = router.get(OM_URL)
+        route.mock(return_value=httpx.Response(200, json=_CURRENT_PAYLOAD))
+        assert await om_module.get_current(-31.4, -64.2) is not None
+        await om_module._CACHE_CURRENT.flush_persistence()
+        route.mock(return_value=httpx.Response(429))
+        om_module._CACHE_CURRENT._cache.clear()
+        om_module._CACHE_CURRENT._failure_cache.clear()
+        assert await om_module.get_current(-31.4, -64.2) is not None   # stale en memoria, como hoy
+        assert {c.request.url.host for c in router.calls} == {"api.open-meteo.com"}
+
+
+async def test_a_pause_serves_the_persisted_value_without_touching_open_meteo(world) -> None:
+    from app.core import rate_limit_pause
+
+    first = await om_module.get_current(-31.4, -64.2)
+    await om_module._CACHE_CURRENT.flush_persistence()
+    _restart(om_module._CACHE_CURRENT)
+    rate_limit_pause.openmeteo_pause.trip()
+    calls_before = world.om.call_count
+    assert await om_module.get_current(-31.4, -64.2) == first
+    assert world.om.call_count == calls_before
+
+
+def test_the_store_factory_wires_the_budget_and_timeout_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "openmeteo_last_good_writes_per_minute", 7)
+    monkeypatch.setattr(settings, "openmeteo_last_good_timeout_seconds", 0.7)
+    store = om_module._last_good_store("om_x", 100)
+    assert store._bucket_capacity == 7
+    assert store._timeout == 0.7

@@ -7,10 +7,17 @@ import logging
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
+# HTTPStatusError se importa a mano: el modulo no usa `httpx` completo, pero el `except` de la pausa
+# ante el 429 necesita la clase (ver el gotcha del cliente httpx compartido en CLAUDE.md).
+from httpx import HTTPStatusError, Response
+
 from app.core import usage_counter
 from app.core.cache import CacheOutcome, SingleFlightCache
 from app.core.config import settings
+from app.core.dataclass_codec import DataclassCodec
 from app.core.http_client import fetch_with_retry, get_client
+from app.core.persistent_cache import RedisLastGoodStore
+from app.core.rate_limit_pause import openmeteo_pause
 from app.utils.parsing import parse_float
 
 _DAY_LABELS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
@@ -54,9 +61,59 @@ def _cache_key(params: dict) -> str:
     return json.dumps(normalized, sort_keys=True)
 
 
-_CACHE_CURRENT: SingleFlightCache = SingleFlightCache(maxsize=256, ttl=600, name="om_current")
-_CACHE_FORECAST: SingleFlightCache = SingleFlightCache(maxsize=256, ttl=1800, name="om_forecast")
-_CACHE_NOWCAST: SingleFlightCache = SingleFlightCache(maxsize=256, ttl=900, name="om_nowcast")
+# Las cachés (`_CACHE_*`) se definen más abajo, después de las dataclasses que guardan: el códec de la
+# persistencia registra esas clases por nombre.
+
+
+# ---------------------------------------------------------------------------
+# Pedido HTTP único a Open-Meteo, con la pausa ante el 429
+# ---------------------------------------------------------------------------
+
+_NO_RETRY_STATUSES = frozenset({429})
+
+
+def _retry_after_seconds(response: Response) -> float | None:
+    """`Retry-After` en segundos, o None si falta o no es un número (la forma de fecha HTTP no se usa)."""
+    raw = response.headers.get("Retry-After")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+async def _get_json(params: dict, failure_message: str, *log_args: object) -> dict | None:
+    """Pide `params` a Open-Meteo y devuelve el JSON, o None ante cualquier fallo (con `failure_message`).
+
+    Con la pausa ante el 429 abierta no sale a la red: ni pedido, ni reintento, ni suma al contador
+    `open_meteo`; devuelve None para que la caché sirva el último dato bueno. Un 429 abre la pausa
+    (según `Retry-After` si es razonable) y una respuesta exitosa la cierra.
+    """
+    if not openmeteo_pause.allow_request():
+        logger.info(
+            "Open-Meteo en pausa por 429 (faltan %.0f s): sin llamada de red", openmeteo_pause.remaining()
+        )
+        return None
+    started_generation = openmeteo_pause.generation
+    try:
+        client = get_client()
+        usage_counter.record("open_meteo")
+        response = await fetch_with_retry(
+            client, "GET", settings.openmeteo_base_url,
+            params=params,
+            timeout=settings.http_timeout_seconds,
+            # Un 429 es por IP compartida: reintentar medio segundo después solo suma carga. Sube de inmediato
+            # y `_get_json` abre la pausa.
+            no_retry_statuses=_NO_RETRY_STATUSES,
+        )
+        openmeteo_pause.record_success(started_generation)
+        return response.json()
+    except Exception as exc:
+        if isinstance(exc, HTTPStatusError) and exc.response.status_code == 429:
+            openmeteo_pause.trip(_retry_after_seconds(exc.response))
+        logger.warning(failure_message, *log_args, exc)
+        return None
 
 
 @dataclass(frozen=True)
@@ -118,17 +175,8 @@ async def get_current(
     key = _cache_key(params)
 
     async def _fetch() -> OpenMeteoCurrent | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo fetch failed: %s", exc)
+        data = await _get_json(params, "Open-Meteo fetch failed: %s")
+        if data is None:
             return None
 
         try:
@@ -213,17 +261,8 @@ async def get_daily_forecast_ext(
     key = _cache_key(params)
 
     async def _fetch() -> DailyForecastDataExt | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo daily_ext forecast failed (model=%s): %s", model, exc)
+        data = await _get_json(params, "Open-Meteo daily_ext forecast failed (model=%s): %s", model)
+        if data is None:
             return None
 
         try:
@@ -348,7 +387,9 @@ async def get_multi_model_daily(
             rain_consensus_per_day=consensus_label,
         )
 
-    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
+    # `persist=False`: el consenso se recalcula desde los dos modelos, que ya se guardan cada uno. Guardarlo
+    # también duplicaría el espacio y "renovaría" la edad de un dato servido desde una copia vieja.
+    return await _CACHE_FORECAST.get_or_fetch(key, _fetch, persist=False)
 
 
 # ---------------------------------------------------------------------------
@@ -375,6 +416,49 @@ class HourlyForecastExt:
     cloud_covers: list[float | None] = field(default_factory=list)     # % de nubosidad total
     wind_dirs_deg: list[float | None] = field(default_factory=list)    # de dónde sopla, en grados
     elevation_m: float | None = None                                   # altitud del punto (cota de nieve)
+
+
+# ---------------------------------------------------------------------------
+# Cachés (Fix 1) y su copia persistente del último dato bueno
+# Tres buckets de TTL: current (10 min), forecast (30 min), nowcast (15 min). Cada uno guarda su último
+# resultado exitoso en Upstash Redis (si está configurado) y lo recupera cuando Open-Meteo falla y la
+# memoria no tiene copia (reinicio de Render, 429 sostenido).
+# ---------------------------------------------------------------------------
+
+_LAST_GOOD_CODEC = DataclassCodec(OpenMeteoCurrent, DailyForecastDataExt, HourlyForecastExt)
+
+
+def _last_good_store(name: str, ttl_seconds: int) -> RedisLastGoodStore:
+    return RedisLastGoodStore(
+        name=name,
+        codec=_LAST_GOOD_CODEC,
+        ttl_seconds=ttl_seconds,
+        write_interval_seconds=settings.openmeteo_last_good_write_interval_seconds,
+        max_writes_per_minute=settings.openmeteo_last_good_writes_per_minute,
+        redis_timeout_seconds=settings.openmeteo_last_good_timeout_seconds,
+    )
+
+
+_STORE_CURRENT = _last_good_store("om_current", settings.openmeteo_last_good_ttl_current_seconds)
+_STORE_FORECAST = _last_good_store("om_forecast", settings.openmeteo_last_good_ttl_forecast_seconds)
+_STORE_NOWCAST = _last_good_store("om_nowcast", settings.openmeteo_last_good_ttl_current_seconds)
+_LAST_GOOD_STORES = (_STORE_CURRENT, _STORE_FORECAST, _STORE_NOWCAST)
+
+
+def _flight_cache(maxsize: int, ttl: float, name: str, store: RedisLastGoodStore) -> SingleFlightCache:
+    return SingleFlightCache(
+        maxsize=maxsize,
+        ttl=ttl,
+        name=name,
+        persistence=store,
+        # Red de seguridad por encima del tope propio del almacén (que es el que registra la demora).
+        persistence_timeout=settings.openmeteo_last_good_timeout_seconds + 1.0,
+    )
+
+
+_CACHE_CURRENT: SingleFlightCache = _flight_cache(256, 600, "om_current", _STORE_CURRENT)
+_CACHE_FORECAST: SingleFlightCache = _flight_cache(256, 1800, "om_forecast", _STORE_FORECAST)
+_CACHE_NOWCAST: SingleFlightCache = _flight_cache(256, 900, "om_nowcast", _STORE_NOWCAST)
 
 
 def _parse_hourly_payload(data: dict) -> HourlyForecastExt:
@@ -460,17 +544,8 @@ async def get_hourly_forecast_ext(
     key = _cache_key(params)
 
     async def _fetch() -> HourlyForecastExt | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo hourly_ext forecast failed: %s", exc)
+        data = await _get_json(params, "Open-Meteo hourly_ext forecast failed: %s")
+        if data is None:
             return None
 
         try:
@@ -531,17 +606,8 @@ async def get_hourly_forecast_ecmwf(
     key = _cache_key(params)
 
     async def _fetch() -> HourlyForecastExt | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            data = response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo hourly ECMWF forecast failed: %s", exc)
+        data = await _get_json(params, "Open-Meteo hourly ECMWF forecast failed: %s")
+        if data is None:
             return None
 
         try:
@@ -722,18 +788,7 @@ async def _fetch_niebla_combined(lat: float, lon: float) -> dict | None:
     key = _cache_key(params)
 
     async def _fetch() -> dict | None:
-        try:
-            client = get_client()
-            usage_counter.record("open_meteo")
-            response = await fetch_with_retry(
-                client, "GET", settings.openmeteo_base_url,
-                params=params,
-                timeout=settings.http_timeout_seconds,
-            )
-            return response.json()
-        except Exception as exc:
-            logger.warning("Open-Meteo niebla combined fetch failed: %s", exc)
-            return None
+        return await _get_json(params, "Open-Meteo niebla combined fetch failed: %s")
 
     return await _CACHE_NOWCAST.get_or_fetch(key, _fetch)
 

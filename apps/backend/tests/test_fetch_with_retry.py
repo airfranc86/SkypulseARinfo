@@ -254,10 +254,25 @@ async def test_404_not_retried(mock_client):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_get_current_recovers_from_429():
-    """get_current debe devolver datos si el primer intento da 429 y el segundo 200."""
+async def test_get_current_does_not_retry_a_429():
+    """Un 429 de Open-Meteo es por IP: reintentar no ayuda y suma pedidos.
+
+    get_current devuelve None tras UNA sola llamada (antes reintentaba una vez) y la pausa
+    ante el 429 evita nuevas llamadas. Los 5xx y los timeouts siguen reintentandose."""
+    with respx.mock(assert_all_called=False) as mock, \
+         patch("app.core.http_client.asyncio.sleep", new_callable=AsyncMock):
+        route = mock.get(OM_URL).mock(return_value=httpx.Response(429))
+        result = await get_current(-31.4, -64.2)
+
+    assert result is None
+    assert route.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_get_current_still_recovers_from_a_503():
+    """El reintento por 5xx se conserva: 503 y luego 200 devuelve datos."""
     responses = [
-        httpx.Response(429),
+        httpx.Response(503),
         httpx.Response(200, json=OPENMETEO_SAMPLE_PAYLOAD),
     ]
 
