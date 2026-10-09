@@ -8,15 +8,20 @@ Not counted: standard-library and third-party imports (`from os import _exit`), 
 importing from itself.
 
 Known limit: only `from x import _name` statements are detected. Reaching a private name through a
-module attribute (`import app.services.metar as m; m._x`, `from app.services import metar; metar._x`)
+module attribute (`import app.services.openmeteo as m; m._x`, `from app.services import openmeteo; openmeteo._x`)
 or through `importlib` is NOT detected; today a search of `app/` finds none.
 """
 from __future__ import annotations
 
 import ast
+import importlib
+import importlib.util
 from pathlib import Path
 
+import pytest
+
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
+TESTS_DIR = Path(__file__).resolve().parent
 
 # (file relative to `app/`, imported-from module, imported name) allowed to stay for now.
 # Each entry needs a comment saying who owns the cleanup. The cases of Phase 1b-1
@@ -115,3 +120,67 @@ def test_the_detector_finds_private_imports_and_ignores_the_rest(tmp_path: Path)
         ("services/a.py", "app.services", "_module"),
         ("services/a.py", "app.routers.x", "_up"),
     }
+
+
+# ---------------------------------------------------------------------------
+# `app.services.metar` was deleted in Phase 1b-2 (METAR and TAF live in `reportes_aeronauticos`).
+# Nothing may import it again: an old patch target must fail loudly, not silently patch nothing.
+# ---------------------------------------------------------------------------
+
+DELETED_MODULE = "app.services.metar"
+
+
+def deleted_module_imports(root: Path) -> list[tuple[str, int]]:
+    """(file relative to `root`, line) of every import of `app.services.metar` under `root`."""
+    found: list[tuple[str, int]] = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                hit = any(a.name == DELETED_MODULE or a.name.startswith(DELETED_MODULE + ".") for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                target = _target_module(node, path, root)
+                hit = target is not None and (
+                    target == DELETED_MODULE
+                    or target.startswith(DELETED_MODULE + ".")
+                    or (target == "app.services" and any(a.name == "metar" for a in node.names))
+                )
+            else:
+                continue
+            if hit:
+                found.append((path.relative_to(root).as_posix(), node.lineno))
+    return found
+
+
+def test_the_services_metar_module_no_longer_exists() -> None:
+    assert importlib.util.find_spec(DELETED_MODULE) is None
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(DELETED_MODULE)
+
+
+@pytest.mark.parametrize("root", [APP_DIR, TESTS_DIR], ids=["app", "tests"])
+def test_nothing_imports_the_deleted_services_metar_module(root: Path) -> None:
+    offenders = [f"{file}:{line}" for file, line in deleted_module_imports(root)]
+    assert offenders == [], "imports of the deleted app.services.metar:\n" + "\n".join(offenders)
+
+
+def test_the_deleted_module_detector_finds_every_import_form(tmp_path: Path) -> None:
+    """Guard against a detector that silently finds nothing."""
+    app = tmp_path / "app"
+    (app / "services").mkdir(parents=True)
+    for package in (app, app / "services"):
+        (package / "__init__.py").write_text("", encoding="utf-8")
+    (app / "services" / "a.py").write_text(
+        "import app.services.metar\n"
+        "import app.services.metar as m\n"
+        "from app.services.metar import x\n"
+        "from app.services import metar\n"
+        "from . import metar as relative\n"
+        "from .metar import y\n"
+        "import app.services.metar_observation\n"  # a different module with the same prefix
+        "from app.services.metar_observation import z\n"
+        "from app.services import openmeteo\n"
+        "from app.services.reportes_aeronauticos.metar import w\n",
+        encoding="utf-8",
+    )
+    assert [line for _, line in deleted_module_imports(app)] == [1, 2, 3, 4, 5, 6]

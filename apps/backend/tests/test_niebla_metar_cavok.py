@@ -9,9 +9,10 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-import app.services.metar as metar_module
+import app.services.reportes_aeronauticos.metar as metar_module
 from app.core.rate_limit import limiter
 from app.services.openmeteo import VisibilityData
+from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE
 
 ROSARIO = (-32.95, -60.65)  # SAAR ~13 km
 
@@ -46,7 +47,7 @@ def stub_other_sources(monkeypatch):
 @pytest.mark.asyncio
 async def test_cavok_metar_is_used_and_does_not_fall_back_to_open_meteo(async_client: AsyncClient):
     with respx.mock:
-        respx.get(metar_module.AWC_METAR_BASE).mock(
+        respx.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=[{"icao": "SAAR", "visib": "6+", "obsTime": int(time.time()) - 600}])
         )
         resp = await async_client.get("/api/niebla", params={"lat": ROSARIO[0], "lon": ROSARIO[1]})
@@ -62,7 +63,7 @@ async def test_cavok_metar_is_used_and_does_not_fall_back_to_open_meteo(async_cl
 @pytest.mark.asyncio
 async def test_unparseable_metar_still_falls_back_to_open_meteo(async_client: AsyncClient):
     with respx.mock:
-        respx.get(metar_module.AWC_METAR_BASE).mock(
+        respx.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=[{"icao": "SAAR", "visib": "abc"}])
         )
         resp = await async_client.get("/api/niebla", params={"lat": ROSARIO[0], "lon": ROSARIO[1]})

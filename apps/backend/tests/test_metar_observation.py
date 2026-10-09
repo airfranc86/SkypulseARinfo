@@ -11,13 +11,14 @@ import respx
 
 import app.services.metar_observation as mo
 from app.services.metar_observation import (
-    AWC_METAR_URL,
     MetarObservation,
     classify_observation,
     fetch_latest_observation,
     get_nearest_metar_observation,
     relative_humidity,
 )
+from app.services.reportes_aeronauticos import awc
+from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE as AWC_METAR_URL
 
 OBS_TIME = datetime(2026, 10, 5, 21, 0, tzinfo=timezone.utc)
 NOW = OBS_TIME + timedelta(minutes=20)
@@ -206,7 +207,7 @@ def test_cache_ttls_are_five_minutes_and_one_minute():
 
 async def test_records_awc_usage(monkeypatch):
     recorder = MagicMock()
-    monkeypatch.setattr(mo.usage_counter, "record", recorder)
+    monkeypatch.setattr(awc.usage_counter, "record", recorder)
 
     await _fetch_with([_entry()])
 

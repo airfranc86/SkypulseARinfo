@@ -2,7 +2,7 @@
 
 GET /api/taf?icao=SACO
 
-Datos de Aviation Weather Center (NOAA) vía `services/metar.fetch_taf_entry`; no usa CheckWX, así
+Datos de Aviation Weather Center (NOAA) vía `reportes_aeronauticos.fetch_taf_entry`; no usa CheckWX, así
 que no necesita su clave ni gasta su cupo. Las respuestas distinguen "ese aeropuerto no publica
 TAF" (404) de "no pudimos consultarlo" (503).
 """
@@ -15,9 +15,12 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.core.rate_limit import limiter
 from app.schemas.taf import TafDecoded
-from app.services.metar import TafFetchError, fetch_taf_entry
-from app.services.reportes_aeronauticos.aeropuertos import normalize_icao
-from app.services.taf_decoded import normalize_taf
+from app.services.reportes_aeronauticos import (
+    TafFetchError,
+    fetch_taf_entry,
+    normalize_icao,
+    normalize_taf,
+)
 
 logger = logging.getLogger(__name__)
 

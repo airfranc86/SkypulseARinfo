@@ -24,14 +24,14 @@ FIXTURES = Path(__file__).parent / "fixtures" / "awc_taf"
 
 
 def reset_aeronautical_state() -> None:
-    """Clear every cache these routes read, plus the shared rate limiter (30 req/min per session)."""
-    import app.services.metar as metar_module
+    """Clear every cache these routes read, the shared rate limiter (30 req/min per session) and the AWC source."""
     import app.services.metar_observation as observation_module
+    from app.services.reportes_aeronauticos import HttpAwcSource, clear_caches, set_source
 
     limiter.reset()
-    metar_module._metar_cache.clear()
-    metar_module._taf_cache.clear()
-    observation_module._CACHE.clear()
+    clear_caches()
+    observation_module._CACHE.clear()   # until Phase 1c merges it with the METAR/TAF caches
+    set_source(HttpAwcSource())         # a test that installed a fixture source must not leak it
 
 
 def load_taf(icao: str) -> list[dict]:

@@ -13,8 +13,9 @@ import httpx
 import pytest
 import respx
 
-import app.services.metar as metar_module
-from app.services.metar import get_metar_visibility
+import app.services.reportes_aeronauticos.metar as metar_module
+from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE
+from app.services.reportes_aeronauticos.metar import get_metar_visibility
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +32,7 @@ def _fresh_obs_time() -> int:
 
 async def _visibility_for(entry: dict, icao: str = "SAEZ") -> float | None:
     with respx.mock:
-        respx.get(metar_module.AWC_METAR_BASE).mock(
+        respx.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=[{"icao": icao, "obsTime": _fresh_obs_time(), **entry}])
         )
         return await get_metar_visibility(icao)
@@ -69,14 +70,14 @@ async def test_missing_or_garbage_visib_is_none(entry):
 @pytest.mark.asyncio
 async def test_empty_list_is_none():
     with respx.mock:
-        respx.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=[]))
+        respx.get(AWC_METAR_BASE).mock(return_value=httpx.Response(200, json=[]))
         assert await get_metar_visibility("SAEZ") is None
 
 
 @pytest.mark.asyncio
 async def test_http_error_is_none_and_not_cached():
     with respx.mock:
-        respx.get(metar_module.AWC_METAR_BASE).mock(return_value=httpx.Response(500))
+        respx.get(AWC_METAR_BASE).mock(return_value=httpx.Response(500))
         assert await get_metar_visibility("SAEZ") is None
     assert "SAEZ" not in metar_module._metar_cache
 
@@ -84,7 +85,7 @@ async def test_http_error_is_none_and_not_cached():
 @pytest.mark.asyncio
 async def test_cavok_value_is_cached_second_call_makes_no_request():
     with respx.mock:
-        route = respx.get(metar_module.AWC_METAR_BASE).mock(
+        route = respx.get(AWC_METAR_BASE).mock(
             return_value=httpx.Response(200, json=[{"icao": "SAAR", "visib": "6+", "obsTime": _fresh_obs_time()}])
         )
         first = await get_metar_visibility("SAAR")

@@ -15,10 +15,10 @@ import httpx
 import pytest
 import respx
 
-import app.services.metar as metar_module
-from app.services.metar import (
+import app.services.reportes_aeronauticos.taf as taf_module
+from app.services.reportes_aeronauticos.awc import AWC_TAF_BASE
+from app.services.reportes_aeronauticos.taf import (
     _AR_TZ,
-    AWC_TAF_BASE,
     TafFetchError,
     fetch_taf_entry,
     get_nearest_taf_hourly,
@@ -32,9 +32,9 @@ NOW_AR = datetime(2026, 10, 6, 15, 30, tzinfo=_AR_TZ)
 
 @pytest.fixture(autouse=True)
 def _clean_caches():
-    metar_module._taf_cache.clear()
+    taf_module._taf_cache.clear()
     yield
-    metar_module._taf_cache.clear()
+    taf_module._taf_cache.clear()
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def frozen_now(monkeypatch: pytest.MonkeyPatch) -> None:
         def now(cls, tz=None):
             return NOW_AR if tz is None else NOW_AR.astimezone(tz)
 
-    monkeypatch.setattr(metar_module, "datetime", FrozenDatetime)
+    monkeypatch.setattr(taf_module, "datetime", FrozenDatetime)
 
 
 def _slots_by_label(slots) -> dict[str, object]:
@@ -74,7 +74,7 @@ async def test_a_400_from_awc_is_not_cached_and_returns_none() -> None:
     with respx.mock(assert_all_called=False) as router:
         router.get(AWC_TAF_BASE).mock(return_value=httpx.Response(400, text="Unexpected query parameter"))
         assert await get_taf_for_icao("SACO") is None
-    assert "SACO" not in metar_module._taf_cache
+    assert "SACO" not in taf_module._taf_cache
 
 
 # ---------------------------------------------------------------- visibilidad
@@ -162,7 +162,7 @@ async def test_an_airport_without_taf_is_none_not_an_error(payload) -> None:
     with respx.mock(assert_all_called=False) as router:
         router.get(AWC_TAF_BASE).mock(return_value=httpx.Response(200, json=payload))
         assert await fetch_taf_entry("SAXX") is None
-    assert "SAXX" not in metar_module._taf_cache
+    assert "SAXX" not in taf_module._taf_cache
 
 
 @pytest.mark.asyncio
@@ -181,7 +181,7 @@ async def test_failures_raise_taf_fetch_error_and_are_not_cached(response) -> No
         router.get(AWC_TAF_BASE).mock(side_effect=[response])
         with pytest.raises(TafFetchError):
             await fetch_taf_entry("SACO")
-    assert "SACO" not in metar_module._taf_cache
+    assert "SACO" not in taf_module._taf_cache
 
 
 @pytest.mark.asyncio
