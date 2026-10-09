@@ -13,7 +13,7 @@ comercial, cupo compartido) y las observaciones del archivo `regtemp` del SMN.
 Todos los comandos desde la raíz del repo, con el venv del backend (trae `httpx` y `pytest`):
 
 ```
-PY=G:/Developer/1Proyectos/SkypulseAR/apps/backend/.venv/Scripts/python.exe
+PY=apps/backend/.venv/Scripts/python.exe
 
 # 1) Plan sin red: llamadas HTTP, peso estimado y cuántas ya están en caché
 $PY scripts/verificacion/medir_tmax_tmin.py --dry-run
@@ -46,7 +46,7 @@ entrega el último día, así que un día que no se archiva a tiempo no se puede
 conviene correrlo una vez al día.
 
 ```
-PY=G:/Developer/1Proyectos/SkypulseAR/apps/backend/.venv/Scripts/python.exe
+PY=apps/backend/.venv/Scripts/python.exe
 $PY scripts/verificacion/archivar_datohorario.py --dry-run   # descarga y valida, no escribe
 $PY scripts/verificacion/archivar_datohorario.py
 ```
@@ -68,7 +68,7 @@ $PY scripts/verificacion/archivar_datohorario.py
 ## Tests
 
 ```
-G:/Developer/1Proyectos/SkypulseAR/apps/backend/.venv/Scripts/python.exe -m pytest scripts/verificacion/tests -q -p no:cacheprovider
+apps/backend/.venv/Scripts/python.exe -m pytest scripts/verificacion/tests -q -p no:cacheprovider
 ```
 
 Los tests no usan red: un cliente falso sirve un mundo sintético (ventanas y sesgos
