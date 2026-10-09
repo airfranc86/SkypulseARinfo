@@ -123,6 +123,25 @@ def clear_openmeteo_caches():
 
 
 @pytest.fixture(autouse=True)
+def reset_openmeteo_resilience_state():
+    """Reinicia la pausa ante el 429 y las memorias de las copias en Redis (globales al proceso).
+
+    Sin esto, un test que provoque un 429 dejaría el módulo en pausa para los siguientes.
+    """
+    import app.services.openmeteo as om_module
+    from app.core import rate_limit_pause
+
+    def _reset() -> None:
+        rate_limit_pause.openmeteo_pause.reset()
+        for store in om_module._LAST_GOOD_STORES:
+            store.reset()
+
+    _reset()
+    yield
+    _reset()
+
+
+@pytest.fixture(autouse=True)
 def clear_metar_observation_cache():
     """Limpia la caché del METAR del "ahora" del dashboard (FRA-320) antes y después de cada test."""
     import app.services.metar_observation as metar_obs_module

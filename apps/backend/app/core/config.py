@@ -52,6 +52,17 @@ class Settings(BaseSettings):
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
 
+    # Último dato bueno de Open-Meteo en Upstash Redis (sin URL/token de Upstash queda apagado). El "ahora" y
+    # la niebla duran poco (un "ahora" de muchas horas engaña); el pronóstico, más. La escritura se limita a
+    # una por clave cada `write_interval` por proceso para cuidar el presupuesto de comandos del plan gratis.
+    # 6 h y no más: el "Actualizado HH:MM" de la web sale de la hora de armado de la respuesta, así que una
+    # copia muy vieja pasaría por actual (la edad real del pronóstico llegará en otro cambio).
+    openmeteo_last_good_ttl_forecast_seconds: int = 21600    # 6 horas — pronóstico diario y horario
+    openmeteo_last_good_ttl_current_seconds: int = 10800     # 3 horas — "ahora" y niebla
+    openmeteo_last_good_write_interval_seconds: float = 1800.0  # 30 minutos entre escrituras de una clave
+    openmeteo_last_good_timeout_seconds: float = 2.0         # tope de cada lectura/escritura a Redis
+    openmeteo_last_good_writes_per_minute: int = 60          # tope global de SET por minuto, además de la ventana por clave
+
     # Alertas push (FRA-354). La clave privada VAPID firma cada envío: solo vive en el entorno (Render),
     # nunca en el repo, y `repr=False` evita que salga en un `repr(settings)` o en un log. Acepta el valor
     # crudo de 32 bytes en base64url (el formato corto que se pega en Render) o un PEM; ver
