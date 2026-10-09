@@ -56,7 +56,7 @@ def _client_answering(precip_mm_by_model: dict[str, float]) -> MagicMock:
 
 async def _consensus_for(precip_mm_by_model: dict[str, float]) -> MultiModelDailyData:
     with patch(
-        "app.services.openmeteo.get_client",
+        "app.services.openmeteo_source.get_client",
         return_value=_client_answering(precip_mm_by_model),
     ):
         result = await get_multi_model_daily(-34.6, -58.4, days=1)

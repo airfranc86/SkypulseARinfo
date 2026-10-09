@@ -775,21 +775,31 @@ def frozen_ar_today():
 @pytest.fixture(autouse=True)
 def reset_openmeteo_budget():
     """Fresh budget buckets, refusal counters and log throttle around each test, and no client key."""
-    import app.services.openmeteo as om_module
     from app.core.client_context import set_client_key
+    from app.services import openmeteo_budget
 
-    om_module._reset_budget_for_tests()
+    openmeteo_budget._reset_budget_for_tests()
     set_client_key(None)  # a sync test that forgot to clean up cannot leak its key into the next one
     yield
-    om_module._reset_budget_for_tests()
+    openmeteo_budget._reset_budget_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def reset_openmeteo_source():
+    """The real HTTP source of Open-Meteo around each test: a test that installed a fake must not leak it."""
+    from app.services import openmeteo_source
+
+    openmeteo_source.set_source(openmeteo_source.HttpOpenMeteoSource())
+    yield
+    openmeteo_source.set_source(openmeteo_source.HttpOpenMeteoSource())
 
 
 @pytest.fixture
 def openmeteo_budget_clock(monkeypatch) -> FakeClock:
     """Replace the clock of the Open-Meteo budget (buckets and log throttle) with a manual one."""
-    import app.services.openmeteo as om_module
+    from app.services import openmeteo_budget
     clock = FakeClock()
-    monkeypatch.setattr(om_module, "_budget_now", clock)
+    monkeypatch.setattr(openmeteo_budget, "_budget_now", clock)
     return clock
 
 

@@ -29,7 +29,6 @@ from app.core.config import settings
 from app.core.rate_limit_pause import openmeteo_pause as pause
 from app.core.upstash import UpstashRedis
 from app.services.openmeteo import (
-    budget_refusals,
     get_current,
     get_daily_forecast_ext,
     get_fog_inference_forecast,
@@ -38,6 +37,7 @@ from app.services.openmeteo import (
     get_multi_model_daily,
     get_visibility_forecast,
 )
+from app.services.openmeteo_budget import _reset_budget_for_tests, budget_refusals
 from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL, FakeClock, FakeUpstash
 from tests._om_payloads import (
     _CURRENT_PAYLOAD,
@@ -326,7 +326,7 @@ async def test_multi_model_with_a_refused_model_is_none_and_is_not_remembered_as
         assert pause.allow_request() is True                                    # a refusal never opens the pause
 
         monkeypatch.setattr(settings, "openmeteo_calls_per_client_per_minute", 100)
-        om_module._reset_budget_for_tests()
+        _reset_budget_for_tests()
         result = await get_multi_model_daily(LAT, LON)
         assert result is not None and len(result.models) == 2                   # the refusal was not remembered
         assert om.call_count == 2                                               # only the refused model went out

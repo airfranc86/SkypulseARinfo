@@ -135,7 +135,7 @@ class RateLimitPause:
         self.clock = self._default_clock
 
 
-# Instancia única de Open-Meteo: ``services/openmeteo.py`` la consulta antes de cada llamada.
+# Instancia única de Open-Meteo: ``services/openmeteo_source.py`` la consulta antes de cada llamada.
 openmeteo_pause = RateLimitPause()
 
 # Instancia única de AWC (aviationweather.gov): ``services/reportes_aeronauticos/awc.py`` la consulta antes de

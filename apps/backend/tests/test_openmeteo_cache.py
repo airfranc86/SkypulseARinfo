@@ -17,13 +17,13 @@ import respx
 
 import app.services.openmeteo as om_module
 from app.services.openmeteo import (
-    _cache_key,
     get_current,
     get_daily_forecast_ext,
     get_fog_inference_forecast,
     get_hourly_forecast_ext,
     get_visibility_forecast,
 )
+from app.services.openmeteo_source import cache_key as _cache_key
 
 
 # ---------------------------------------------------------------------------

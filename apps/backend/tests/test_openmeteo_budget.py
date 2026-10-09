@@ -1,4 +1,4 @@
-"""Call budget for Open-Meteo: a share per client AND a global cap, spent in `_get_json`.
+"""Call budget for Open-Meteo: a share per client AND a global cap, spent in `HttpOpenMeteoSource.get_json`.
 
 Why: the cache key rounds lat/lon to 2 decimals, so one client can ask for millions of distinct cells.
 Every cell is ~5 calls to Open-Meteo; a sweep would drain the free plan and the first 429 would pause
@@ -28,13 +28,14 @@ import respx
 from pydantic import ValidationError
 
 import app.services.openmeteo as om_module
+import app.services.openmeteo_budget as budget_module
+from app.core import usage_counter
 from app.core.cache import CacheOutcome
 from app.core.client_context import reset_client_key, set_client_key
 from app.core.config import Settings, settings
 from app.core.rate_limit import UNVERIFIED_CLIENT_KEY
 from app.core.rate_limit_pause import openmeteo_pause as pause
 from app.services.openmeteo import (
-    budget_refusals,
     get_current,
     get_daily_forecast_ext,
     get_fog_inference_forecast,
@@ -43,6 +44,7 @@ from app.services.openmeteo import (
     get_multi_model_daily,
     get_visibility_forecast,
 )
+from app.services.openmeteo_budget import budget_refusals
 from tests.conftest import FakeClock
 from tests.test_openmeteo_cache import (
     _CURRENT_PAYLOAD,
@@ -66,7 +68,7 @@ def om():
 def counted(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record each `usage_counter.record` instead of sending it to Upstash."""
     calls: list[str] = []
-    monkeypatch.setattr(om_module.usage_counter, "record", calls.append)
+    monkeypatch.setattr(usage_counter, "record", calls.append)
     return calls
 
 
@@ -359,7 +361,7 @@ async def test_b4_the_refusal_log_is_throttled_to_one_line_a_minute_without_addr
     def warnings() -> list[logging.LogRecord]:
         return [
             r for r in caplog.records
-            if r.name == "app.services.openmeteo" and r.levelno == logging.WARNING
+            if r.name == "app.services.openmeteo_budget" and r.levelno == logging.WARNING
         ]
 
     with as_client("203.0.113.9"):
@@ -468,13 +470,13 @@ def test_b7_the_caps_come_from_the_environment(monkeypatch: pytest.MonkeyPatch):
 
 
 async def test_b7_the_number_of_tracked_clients_is_bounded(om, counted, monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(om_module, "_MAX_TRACKED_CLIENTS", 4)
+    monkeypatch.setattr(budget_module, "_MAX_TRACKED_CLIENTS", 4)
 
     for index in range(10):
         with as_client(f"client-{index}"):
             assert await get_current(*_cell(index)) is not None
 
-    assert om_module._budget().tracked_clients == 4
+    assert budget_module._budget().tracked_clients == 4
 
 
 # ---------------------------------------------------------------------------

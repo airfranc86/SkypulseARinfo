@@ -17,10 +17,10 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-import app.services.openmeteo as om_module
+from app.core import usage_counter
 from app.core.config import settings
 from app.core.rate_limit_pause import openmeteo_pause as pause
-from app.services.openmeteo import budget_refusals
+from app.services.openmeteo_budget import budget_refusals
 from tests.test_dashboard import _make_current_response
 from tests.test_openmeteo_cache import OM_URL
 
@@ -89,7 +89,7 @@ def other_sources(monkeypatch: pytest.MonkeyPatch):
         "app.routers.weather.aggregate_current",
         AsyncMock(return_value=_make_current_response()),
     )
-    monkeypatch.setattr(om_module.usage_counter, "record", lambda provider: None)
+    monkeypatch.setattr(usage_counter, "record", lambda provider: None)
 
 
 async def _dashboard(client: AsyncClient, headers: dict[str, str], cell: int) -> httpx.Response:
