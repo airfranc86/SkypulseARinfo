@@ -53,7 +53,7 @@ test('NIEBLA_LEYENDA: el módulo no escribe colores a mano (los toma de FOG_SCAL
 })
 
 test('NIEBLA_LEYENDA: los colores son los que manda el backend a las barras horarias', () => {
-  const backend = new URL('../../backend/app/services/openmeteo.py', import.meta.url)
+  const backend = new URL('../../backend/app/services/visibilidad.py', import.meta.url)
   if (!existsSync(backend)) return // frontend aislado: la alineación con el backend la cubre fogScale.test.ts
   const py = readFileSync(backend, 'utf8')
   for (const e of NIEBLA_LEYENDA) {
