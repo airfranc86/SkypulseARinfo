@@ -29,7 +29,7 @@ comando `GET`). No usa dependencias externas: alcanza con Python 3.12 o más.
 Desde la raíz del repo, con el Python del venv del backend:
 
 ```
-PY=G:/Developer/1Proyectos/SkypulseAR/apps/backend/.venv/Scripts/python.exe
+PY=apps/backend/.venv/Scripts/python.exe
 $PY scripts/admin/monitor.py --env-file RUTA/AL/ARCHIVO.env
 ```
 

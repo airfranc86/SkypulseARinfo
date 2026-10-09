@@ -1,7 +1,7 @@
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
-_DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app,https://skypulseinfo.vercel.app"
+_DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app"
 
 
 class Settings(BaseSettings):

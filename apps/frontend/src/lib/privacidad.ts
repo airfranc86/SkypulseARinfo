@@ -20,16 +20,68 @@ export interface SeccionPrivacidad {
   contacto?: boolean
 }
 
+/** Nombre de la variable de entorno de Vite (Vercel) con la dirección de contacto. No hay ninguna en el repo. */
+export const VARIABLE_CONTACTO_PRIVACIDAD = 'VITE_PRIVACY_CONTACT_EMAIL'
+
 export const CONTACTO_PRIVACIDAD = Object.freeze({
-  email: 'franciscoaucar@gmail.com',
   asunto: 'SkyPulse: consulta sobre mis datos',
   cuerpo: 'Hola, quiero hacer una consulta sobre mis datos en SkyPulse (avisos en el celular).\n\n',
 })
 
-/** El enlace `mailto:` que abre el correo que la persona tenga configurado (Gmail, Outlook, el del celular...). */
-export function mailtoPrivacidad(): string {
-  const { email, asunto, cuerpo } = CONTACTO_PRIVACIDAD
-  return `mailto:${email}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`
+export interface ContactoPrivacidad {
+  email: string
+  /** El enlace `mailto:` ya armado, con el asunto y el cuerpo codificados. */
+  mailto: string
+}
+
+const MAX_LARGO_EMAIL = 254
+// Conservadora a propósito: la dirección termina dentro de un `mailto:`, así que no admite nada que pueda abrir
+// parámetros (`?`, `&`), inyectar encabezados (`%`, saltos de línea) o sumar destinatarios (`,`, `;`, espacios).
+const USUARIO = /^[A-Za-z0-9](?:[A-Za-z0-9._+-]*[A-Za-z0-9])?$/
+const ETIQUETA_DOMINIO = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/
+const TLD = /^[A-Za-z]{2,}$/
+
+/**
+ * La dirección recortada si es una dirección de email simple y segura para un `mailto:`; null si falta, no es texto
+ * o tiene cualquier forma dudosa. Nunca lanza.
+ */
+export function emailContactoValido(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null
+  const email = valor.trim()
+  if (email === '' || email.length > MAX_LARGO_EMAIL) return null
+  const partes = email.split('@')
+  if (partes.length !== 2) return null
+  const [usuario, dominio] = partes
+  if (!USUARIO.test(usuario)) return null
+  const etiquetas = dominio.split('.')
+  if (etiquetas.length < 2) return null
+  if (!etiquetas.every((etiqueta) => ETIQUETA_DOMINIO.test(etiqueta))) return null
+  return TLD.test(etiquetas[etiquetas.length - 1]) ? email : null
+}
+
+/**
+ * El enlace `mailto:` que abre el correo que la persona tenga configurado (el del navegador, el del celular...).
+ * Devuelve null si la dirección no es válida: sin dirección no hay enlace.
+ */
+export function mailtoPrivacidad(email: unknown): string | null {
+  const valida = emailContactoValido(email)
+  if (valida === null) return null
+  const { asunto, cuerpo } = CONTACTO_PRIVACIDAD
+  return `mailto:${valida}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`
+}
+
+/**
+ * El contacto de privacidad que sale del entorno de build (`VITE_PRIVACY_CONTACT_EMAIL`, definida en Vercel). Es
+ * pura: el entorno entra por parámetro (quien llama pasa `import.meta.env`), igual que `leerConfigAlertas`, así
+ * `node --test` la cubre sin tocar Vite. Devuelve null si la variable falta, está en blanco o no es una dirección
+ * válida: la página muestra entonces el texto sin botón y sin inventar ninguna dirección.
+ */
+export function leerContactoPrivacidad(env: Record<string, unknown> | undefined): ContactoPrivacidad | null {
+  const entorno = typeof env === 'object' && env !== null ? env : {}
+  const email = emailContactoValido(entorno[VARIABLE_CONTACTO_PRIVACIDAD])
+  if (email === null) return null
+  const mailto = mailtoPrivacidad(email)
+  return mailto === null ? null : Object.freeze({ email, mailto })
 }
 
 /**

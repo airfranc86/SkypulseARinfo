@@ -32,6 +32,8 @@ node_modules/
 dist/
 .vite/
 *.local
+# Permisos locales de Claude Code (la regla *.local no cubre *.local.json)
+.claude/settings.local.json
 
 # ── IDE ──────────────────────────────────────────────────────────────────────
 .vscode/
