@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from app.core.config import settings
 from app.core.counter import seconds_until_next_cycle
 from app.core.params import LatParam, LonParam
-from app.core.rate_limit import limiter
+from app.core.rate_limit import client_key, limiter
 from app.schemas.metar import NearestAirportResponse
 from app.services import checkwx as checkwx_svc
 from app.services.metar import nearest_airport_with_distance
@@ -67,7 +67,7 @@ async def get_metar(
     code = _validate_icao(icao)
 
     try:
-        return await checkwx_svc.fetch_metar(code, kind=type)
+        return await checkwx_svc.fetch_metar(code, kind=type, client=client_key(request))
     except checkwx_svc.CheckWXQuotaExceededError as exc:
         retry_after = seconds_until_next_cycle()
         raise HTTPException(
@@ -81,5 +81,18 @@ async def get_metar(
             },
             headers={"Retry-After": str(retry_after)},
         )
-    except checkwx_svc.CheckWXUnavailableError:
-        raise HTTPException(status_code=503, detail="metar_unavailable")
+    except checkwx_svc.CheckWXBusyError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "error": "metar_busy",
+                "message": "Demasiadas consultas nuevas de METAR en este momento",
+                "limit_per_minute": settings.checkwx_new_calls_per_minute,
+                "retry_after": exc.retry_after,
+            },
+            headers={"Retry-After": str(exc.retry_after)},
+        )
+    except checkwx_svc.CheckWXUnavailableError as exc:
+        # A failure remembered by the service says how long it will be remembered; a fresh one does not.
+        headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
+        raise HTTPException(status_code=503, detail="metar_unavailable", headers=headers)

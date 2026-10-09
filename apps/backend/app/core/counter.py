@@ -60,6 +60,12 @@ class MemoryCounter:
             self._counters[cycle] = self._counters.get(cycle, 0) + 1
             return self._counters[cycle]
 
+    async def decr(self, cycle: str) -> int:
+        """Give a reserved unit back. Floors at zero, like RedisCounter.decr (which repairs a negative)."""
+        async with self._lock:
+            self._counters[cycle] = max(self._counters.get(cycle, 0) - 1, 0)
+            return self._counters[cycle]
+
     async def alert_already_sent(self, cycle: str, threshold: int) -> bool:
         async with self._lock:
             return (cycle, threshold) in self._alerts
@@ -110,6 +116,28 @@ class RedisCounter:
             except UpstashUnavailableError:
                 logger.warning("checkwx_counter_degraded op=expire cycle=%s", cycle)
         return new_val
+
+    async def decr(self, cycle: str) -> int:
+        """Give a reserved unit back. Floors at zero, like MemoryCounter.decr. Never raises.
+
+        If the key was already gone (expired at midnight, evicted) Redis creates it at -1 with no TTL: the
+        value is put back to 0 and given a TTL, so it neither under-counts nor lives forever. With Upstash
+        down the unit simply stays spent (returns 0).
+        """
+        key = self._counter_key(cycle)
+        try:
+            new_val = await self._r.decr(key)
+        except (UpstashUnavailableError, TypeError, ValueError):
+            logger.warning("checkwx_counter_degraded op=decr cycle=%s — unidad no devuelta", cycle)
+            return 0
+        if new_val >= 0:
+            return new_val
+        try:
+            await self._r.incr(key)
+            await self._r.expire(key, seconds_until_next_cycle())
+        except (UpstashUnavailableError, TypeError, ValueError):
+            logger.warning("checkwx_counter_degraded op=decr_repair cycle=%s", cycle)
+        return 0
 
     async def alert_already_sent(self, cycle: str, threshold: int) -> bool:
         try:

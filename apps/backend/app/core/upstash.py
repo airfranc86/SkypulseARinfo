@@ -53,6 +53,10 @@ class UpstashRedis:
     async def incr(self, key: str) -> int:
         return int(await self._call("INCR", key))
 
+    async def decr(self, key: str) -> int:
+        """DECR key. The result can be negative when the key did not exist (Redis creates it at -1)."""
+        return int(await self._call("DECR", key))
+
     async def expire(self, key: str, seconds: int) -> None:
         await self._call("EXPIRE", key, str(seconds))
 
