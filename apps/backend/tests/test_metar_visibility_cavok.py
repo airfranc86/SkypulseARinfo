@@ -13,16 +13,16 @@ import httpx
 import pytest
 import respx
 
-import app.services.reportes_aeronauticos.metar as metar_module
 from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE
+from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
 from app.services.reportes_aeronauticos.metar import get_metar_visibility
 
 
 @pytest.fixture(autouse=True)
 def clear_metar_caches():
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
     yield
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
 
 
 def _fresh_obs_time() -> int:
@@ -64,7 +64,8 @@ async def test_numeric_and_fractional_values_convert_to_meters(visib, expected_m
 @pytest.mark.parametrize("entry", [{}, {"visib": None}, {"visib": "abc"}, {"visib": ""}, {"visib": "1/0"}])
 async def test_missing_or_garbage_visib_is_none(entry):
     assert await _visibility_for(entry) is None
-    assert "SAEZ" not in metar_module._metar_cache
+    # The shared cache holds the RAW list (a success: the dashboard still needs it); the visibility is derived on every read.
+    assert "SAEZ" in metar_entries_cache._cache
 
 
 @pytest.mark.asyncio
@@ -79,7 +80,7 @@ async def test_http_error_is_none_and_not_cached():
     with respx.mock:
         respx.get(AWC_METAR_BASE).mock(return_value=httpx.Response(500))
         assert await get_metar_visibility("SAEZ") is None
-    assert "SAEZ" not in metar_module._metar_cache
+    assert "SAEZ" not in metar_entries_cache._cache
 
 
 @pytest.mark.asyncio

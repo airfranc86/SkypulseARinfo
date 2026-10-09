@@ -25,7 +25,7 @@ from app.services.reportes_aeronauticos import (
     get_taf_for_icao,
     taf_hourly_slots,
 )
-from app.services.reportes_aeronauticos import metar as metar_module
+from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
 from app.services.reportes_aeronauticos import taf as taf_module
 from tests.helpers_caracterizacion_aeronautica import FROZEN_NOW, awc_metar, load_taf, reset_aeronautical_state
 
@@ -60,10 +60,10 @@ def test_the_facade_exports_exactly_the_public_names() -> None:
 
 
 def test_clear_caches_empties_both_the_metar_and_the_taf_cache() -> None:
-    metar_module._metar_cache["SAAR"] = object()   # type: ignore[assignment]
+    metar_entries_cache._cache["SAAR"] = object()   # type: ignore[assignment]
     taf_module._taf_cache["SACO"] = {"fcsts": [{}]}
     clear_caches()
-    assert "SAAR" not in metar_module._metar_cache
+    assert "SAAR" not in metar_entries_cache._cache
     assert "SACO" not in taf_module._taf_cache
 
 
@@ -161,7 +161,7 @@ async def test_metar_visibility_goes_through_the_installed_source(awc_fixtures) 
     source = awc_fixtures(metar={"SAAR": awc_metar(obs, "SAAR", visib="6+")})
     assert await get_metar_visibility("SAAR", now=FROZEN_NOW) == 10_000.0
     assert await get_metar_visibility("SAAR", now=FROZEN_NOW) == 10_000.0   # cached
-    assert source.calls == [("metar", "SAAR", 2, settings.metar_timeout_seconds)]
+    assert source.calls == [("metar", "SAAR", 3, settings.metar_observation_timeout_seconds)]
 
 
 async def test_metar_visibility_is_none_when_the_source_fails(awc_fixtures) -> None:

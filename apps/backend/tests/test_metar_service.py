@@ -15,18 +15,18 @@ import httpx
 import pytest
 import respx
 
-import app.services.reportes_aeronauticos.metar as metar_module
 import app.services.reportes_aeronauticos.taf as taf_module
 from app.services.reportes_aeronauticos import awc, get_metar_visibility, get_taf_for_icao
 from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE, AWC_TAF_BASE
+from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
 
 
 @pytest.fixture(autouse=True)
 def clear_metar_caches():
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
     taf_module._taf_cache.clear()
     yield
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
     taf_module._taf_cache.clear()
 
 

@@ -4,11 +4,12 @@ Routers and services import from here, never from the submodules' private names:
 
 - `awc`         the one place that builds AWC requests (`get_source` / `set_source`, `AwcError`)
 - `aeropuertos` Argentine airports, ICAO codes and the nearest-airport lookup (pure)
+- `awc_metar`    the one AWC METAR request and cache per station, shared by Niebla and the dashboard
 - `metar`       current visibility from the METAR of the nearest airport
 - `taf`         the TAF entry and its hourly visibility projection
 
-`clear_caches()` empties the METAR and TAF caches (used by tests). The caches and the AWC budget will
-merge into one in Phase 1c.
+`clear_caches()` empties the shared METAR cache and the TAF cache (used by tests). The TAF cache and the
+AWC budget will merge with it in Phase 1c-2.
 """
 from __future__ import annotations
 
@@ -26,9 +27,9 @@ from app.services.reportes_aeronauticos.awc import (
     get_source,
     set_source,
 )
+from app.services.reportes_aeronauticos.awc_metar import clear_metar_entries_cache
 from app.services.reportes_aeronauticos.metar import (
     MetarVisibility,
-    clear_metar_cache,
     get_metar_visibility,
     get_nearest_metar_visibility,
 )
@@ -70,5 +71,5 @@ __all__ = [
 
 def clear_caches() -> None:
     """Empty the METAR and the TAF caches."""
-    clear_metar_cache()
+    clear_metar_entries_cache()
     clear_taf_cache()

@@ -22,6 +22,7 @@ from app.core.rate_limit import limiter
 from app.services.openmeteo import VisibilityData
 from app.services.reportes_aeronauticos.aeropuertos import AR_AIRPORTS
 from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE
+from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
 from app.services.reportes_aeronauticos.metar import get_metar_visibility, get_nearest_metar_visibility
 
 NOW = datetime(2026, 10, 8, 15, 0, tzinfo=timezone.utc)
@@ -52,10 +53,10 @@ def _fresh_payload(icao: str = "SAAR") -> list[dict]:
 def fresh_state():
     """/api/niebla permite 30 req/min con un limiter compartido por toda la sesión."""
     limiter.reset()
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
     yield
     limiter.reset()
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
 
 
 @pytest.fixture
@@ -181,13 +182,14 @@ async def test_older_than_90_minutes_is_discarded():
 
 
 @pytest.mark.asyncio
-async def test_stale_report_is_not_cached_so_a_newer_one_is_picked_up_next_time():
+async def test_stale_report_list_is_cached_five_minutes_then_a_newer_one_is_picked_up(metar_clock):
     with respx.mock(assert_all_called=False) as mock:
         route = mock.get(AWC_METAR_BASE)
         route.mock(return_value=httpx.Response(200, json=_payload(NOW - timedelta(hours=3))))
         first = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
-        assert "SAAR" not in metar_module._metar_cache
+        assert "SAAR" in metar_entries_cache._cache   # the raw list is shared and cached 5 min (decision Q2)
 
+        metar_clock.now += 301   # the shared cache expires: the next call asks AWC again
         route.mock(return_value=httpx.Response(200, json=_payload(NOW - timedelta(minutes=5))))
         second = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
 
@@ -212,7 +214,7 @@ async def test_cache_hit_within_the_limit_makes_no_request_and_keeps_the_observa
 
 
 @pytest.mark.asyncio
-async def test_cache_hit_that_has_become_older_than_90_minutes_is_discarded():
+async def test_cache_hit_that_has_become_older_than_90_minutes_is_discarded(metar_clock):
     obs = NOW - timedelta(minutes=60)
     with respx.mock(assert_all_called=False) as mock:
         route = mock.get(AWC_METAR_BASE).mock(
@@ -220,6 +222,7 @@ async def test_cache_hit_that_has_become_older_than_90_minutes_is_discarded():
         )
         first = await get_nearest_metar_visibility(*ROSARIO, now=NOW)
         later = NOW + timedelta(minutes=31)                                       # el reporte ya tiene 91 min
+        metar_clock.now += 31 * 60   # la lista cruda ya salió de la caché (5 min): el pedido nuevo vuelve a traer el mismo reporte viejo
         second = await get_nearest_metar_visibility(*ROSARIO, now=later)
 
     assert first.visibility_m == 10_000.0
@@ -229,7 +232,7 @@ async def test_cache_hit_that_has_become_older_than_90_minutes_is_discarded():
 
 
 @pytest.mark.asyncio
-async def test_stale_cache_hit_is_replaced_by_a_newer_report_from_awc():
+async def test_stale_cache_hit_is_replaced_by_a_newer_report_from_awc(metar_clock):
     old = NOW - timedelta(minutes=60)
     newer = NOW + timedelta(minutes=25)
     with respx.mock(assert_all_called=False) as mock:
@@ -238,6 +241,7 @@ async def test_stale_cache_hit_is_replaced_by_a_newer_report_from_awc():
         await get_nearest_metar_visibility(*ROSARIO, now=NOW)
 
         route.mock(return_value=httpx.Response(200, json=_payload(newer, visib="3")))
+        metar_clock.now += 31 * 60   # la lista cruda ya salió de la caché (5 min): se pide de nuevo y llega el reporte nuevo
         second = await get_nearest_metar_visibility(*ROSARIO, now=NOW + timedelta(minutes=31))
 
     assert second.visibility_m == pytest.approx(4_828.032, abs=0.5)
@@ -269,7 +273,7 @@ async def test_missing_or_invalid_obs_time_is_discarded_and_not_cached(obs_time)
 
     assert result.visibility_m is None
     assert result.observed_at is None
-    assert "SAAR" not in metar_module._metar_cache
+    assert "SAAR" not in metar_entries_cache._cache
 
 
 # ---------------------------------------------------------------------------

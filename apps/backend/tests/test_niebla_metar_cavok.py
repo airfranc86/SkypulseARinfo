@@ -9,10 +9,10 @@ import pytest
 import respx
 from httpx import AsyncClient
 
-import app.services.reportes_aeronauticos.metar as metar_module
 from app.core.rate_limit import limiter
 from app.services.openmeteo import VisibilityData
 from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE
+from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
 
 ROSARIO = (-32.95, -60.65)  # SAAR ~13 km
 
@@ -21,10 +21,10 @@ ROSARIO = (-32.95, -60.65)  # SAAR ~13 km
 def fresh_state():
     """/api/niebla permite 30 req/min con un limiter compartido por toda la sesión."""
     limiter.reset()
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
     yield
     limiter.reset()
-    metar_module._metar_cache.clear()
+    metar_entries_cache.clear()
 
 
 @pytest.fixture(autouse=True)

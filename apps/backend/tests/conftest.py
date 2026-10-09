@@ -145,11 +145,39 @@ def reset_openmeteo_resilience_state():
 
 @pytest.fixture(autouse=True)
 def clear_metar_observation_cache():
-    """Limpia la caché del METAR del "ahora" del dashboard (FRA-320) antes y después de cada test."""
-    import app.services.metar_observation as metar_obs_module
-    metar_obs_module._CACHE.clear()
+    """Limpia la caché única del METAR de AWC (Niebla y "ahora" del dashboard) antes y después de cada test."""
+    from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
+    metar_entries_cache.clear()
     yield
-    metar_obs_module._CACHE.clear()
+    metar_entries_cache.clear()
+
+
+class _MetarCacheClock:
+    """Hand-driven clock for the TTL stores of the shared AWC METAR cache (`now` is in seconds)."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+@pytest.fixture
+def metar_clock(monkeypatch):
+    """Rebuild the three TTL stores of the shared AWC METAR cache with the SAME ttl but a clock the test drives.
+
+    Advancing `metar_clock.now` by N seconds plays the passage of N real seconds for the cache, which the
+    tests that pass a logical `now` to the services cannot do by themselves.
+    """
+    from cachetools import TTLCache
+
+    from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
+
+    clock = _MetarCacheClock()
+    for name in ("_cache", "_failure_cache", "_stale_cache"):
+        old = getattr(metar_entries_cache, name)
+        monkeypatch.setattr(metar_entries_cache, name, TTLCache(maxsize=old.maxsize, ttl=old.ttl, timer=clock))
+    return clock
 
 
 @pytest.fixture

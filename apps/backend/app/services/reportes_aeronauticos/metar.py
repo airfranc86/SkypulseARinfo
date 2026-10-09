@@ -1,22 +1,19 @@
 """Current visibility from the METAR of the nearest Argentine airport (AWC, no API key).
 
-The request goes out through `awc.get_source().metar(...)`; this module owns the 30-minute cache of
-usable readings and the rules that decide whether a report can be shown (distance, age, `visib`).
+The reports come from `awc_metar.fetch_metar_entries`, the one AWC request and cache shared with the
+dashboard "now"; this module owns the rules that decide whether the latest report can be shown
+(distance, age, `visib`) and how its visibility is read.
 """
 from __future__ import annotations
 
 import logging
-import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from cachetools import TTLCache
-
 from app.core.config import settings
 from app.services.reportes_aeronauticos.aeropuertos import nearest_airport_with_distance
-from app.services.reportes_aeronauticos.awc import AwcError, get_source
+from app.services.reportes_aeronauticos.awc_metar import fetch_metar_entries, latest_valid_entry
 from app.services.visibilidad import awc_visibility_m
-from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)
 
@@ -28,27 +25,6 @@ class _MetarReading:
     observed_at: datetime
 
 
-# METAR is refreshed every 30-60 min, so readings live 30 min.
-# A reading is cached together with its observation time: its age is checked on every read.
-# Failures and old reports are NEVER cached, so the next request retries.
-_metar_cache: TTLCache[str, _MetarReading] = TTLCache(maxsize=64, ttl=1800)
-
-
-def clear_metar_cache() -> None:
-    _metar_cache.clear()
-
-
-def _obs_time(entry: dict) -> datetime | None:
-    """Observation time (UTC) from AWC `obsTime` (epoch seconds); None if missing or not valid."""
-    seconds = parse_float(entry.get("obsTime"))
-    if seconds is None or not math.isfinite(seconds):
-        return None
-    try:
-        return datetime.fromtimestamp(seconds, tz=timezone.utc)
-    except (OverflowError, OSError, ValueError):
-        return None
-
-
 def _is_recent(observed_at: datetime, now: datetime) -> bool:
     """True if the report is not older than `settings.metar_max_age_minutes` (inclusive: 90 min still passes)."""
     return now - observed_at <= timedelta(minutes=settings.metar_max_age_minutes)
@@ -58,34 +34,22 @@ async def _get_metar_reading(icao: str, now: datetime) -> _MetarReading | None:
     """
     Latest usable METAR of an airport: visibility (m) and observation time.
 
-    - Source: AWC, no API key.
-    - Drops (None) a report without a valid `obsTime` or older than `settings.metar_max_age_minutes`.
-      The age is checked on every read, also when the data comes from the cache.
-    - Only SUCCESSFUL, recent results are cached; errors and old reports allow a retry.
+    - Source: the shared AWC list (`fetch_metar_entries`); the report is the one with the highest `obsTime`.
+    - Drops (None) a missing or failed list, a latest report without `visib`, or one older than
+      `settings.metar_max_age_minutes`. The age is checked on every read, also when the list is cached.
     - Visibility is capped at 10 km (consistent with the rest of the system).
     """
-    cached = _metar_cache.get(icao)
-    if cached is not None:
-        if _is_recent(cached.observed_at, now):
-            logger.debug("METAR cache hit: %s → %.0f m", icao, cached.visibility_m)
-            return cached
-        # Expired since it was cached: discard it and ask AWC again.
-        _metar_cache.pop(icao, None)
-        logger.info("METAR %s: cached report too old (%s) — refetching", icao, cached.observed_at)
-
-    try:
-        data = await get_source().metar(icao, hours=2, timeout=settings.metar_timeout_seconds)
-    except AwcError as exc:
-        # None is NOT cached: the next request retries
-        logger.warning("METAR fetch failed for %s: %s", icao, exc)
-        return None
-
-    if not isinstance(data, list) or len(data) == 0 or not isinstance(data[0], dict):
+    entries = await fetch_metar_entries(icao)
+    if entries is None:
         logger.info("METAR: no data for %s", icao)
         return None
 
-    entry = data[0]
-    visib_sm = entry.get("visib")
+    latest = latest_valid_entry(entries)
+    if latest is None:
+        logger.info("METAR: no valid obsTime for %s — discarded", icao)
+        return None
+
+    visib_sm = latest.entry.get("visib")
     if visib_sm is None:
         logger.info("METAR: no visib field for %s", icao)
         return None
@@ -95,18 +59,13 @@ async def _get_metar_reading(icao: str, now: datetime) -> _MetarReading | None:
         logger.info("METAR: unparseable visib %r for %s", visib_sm, icao)
         return None
 
-    observed_at = _obs_time(entry)
-    if observed_at is None:
-        logger.info("METAR: no valid obsTime for %s — discarded", icao)
-        return None
+    observed_at = latest.observed_at
     if not _is_recent(observed_at, now):
         logger.info("METAR: report of %s too old (%s) — discarded", icao, observed_at)
         return None
 
     logger.info("METAR %s: visib %r → %.0f m (obs: %s)", icao, visib_sm, vis_m, observed_at)
-    reading = _MetarReading(visibility_m=vis_m, observed_at=observed_at)
-    _metar_cache[icao] = reading   # only recent successes are cached
-    return reading
+    return _MetarReading(visibility_m=vis_m, observed_at=observed_at)
 
 
 async def get_metar_visibility(icao: str, now: datetime | None = None) -> float | None:
