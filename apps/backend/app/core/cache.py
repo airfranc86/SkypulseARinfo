@@ -36,6 +36,16 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+class FetchRefused(Exception):
+    """A fetch that was deliberately not attempted (for example a call budget said no).
+
+    It says nothing about the data source, so unlike any other failure it is NOT remembered: no entry in the
+    failure cache, no "key failed" for the next caller, and it is not counted as a real fetch. The caller that
+    led the flight (and those that waited for it) get the stale or persisted copy when there is one; otherwise
+    ``get_or_fetch`` re-raises it so the caller can answer "unavailable" for THIS request only.
+    """
+
+
 @dataclass(frozen=True)
 class Persisted(Generic[T]):
     """Valor leído del almacén externo, con la vida que le queda allí (None = sin tope conocido)."""
@@ -222,9 +232,11 @@ class SingleFlightCache(Generic[T]):
             _report(outcome, responsible_slot.from_cache)
             return result
         except Exception as exc:
+            refused = isinstance(exc, FetchRefused)
             async with self._lock:
-                self._fetches += 1
-                self._failure_cache[key] = True
+                if not refused:  # a refusal is not a fetch and not a failure of the key
+                    self._fetches += 1
+                    self._failure_cache[key] = True
                 stale = self._stale_get(key)
             if stale is None and use_persistence:
                 stale = await self._recover_persisted(key)

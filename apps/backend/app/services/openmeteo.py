@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
@@ -12,12 +13,15 @@ from datetime import datetime, timedelta, timezone
 from httpx import HTTPStatusError, Response
 
 from app.core import usage_counter
-from app.core.cache import CacheOutcome, SingleFlightCache
+from app.core.cache import CacheOutcome, FetchRefused, SingleFlightCache
+from app.core.client_context import current_client_key
 from app.core.config import settings
 from app.core.dataclass_codec import DataclassCodec
 from app.core.http_client import fetch_with_retry, get_client
 from app.core.persistent_cache import RedisLastGoodStore
+from app.core.rate_limit import UNVERIFIED_CLIENT_KEY
 from app.core.rate_limit_pause import openmeteo_pause
+from app.core.token_bucket import REFUSED_BY_CLIENT, REFUSED_BY_GLOBAL, ClientAndGlobalBudget
 from app.utils.parsing import parse_float
 
 _DAY_LABELS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
@@ -66,6 +70,112 @@ def _cache_key(params: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Call budget: a share per client and a global cap on what goes out to the network
+# ---------------------------------------------------------------------------
+# The cache key rounds lat/lon to 2 decimals (~7 million cells in Argentina) and a new cell costs ~5 calls,
+# so without a budget one client could drain the free plan and the 429 that follows would pause EVERYBODY.
+# Only calls made while serving an HTTP request are capped (`current_client_key()` is None for scripts and
+# scheduled jobs). A refused call returns None, exactly like a failed one: the cache serves the last good copy
+# and the routers keep answering what they already answer when Open-Meteo is unavailable.
+
+_MAX_TRACKED_CLIENTS = 1024
+# If `CF-Connecting-IP` is missing and the proxy-hop setting is wrong, EVERY request lands on the shared
+# "unverified" key (see `core/rate_limit.py`). Exempting it would be a silent fail-open, and one ordinary share
+# would take the whole site down, so it gets a larger dedicated share: half of the global cap (never less than
+# an ordinary share). The global bucket still bounds it.
+_REFUSAL_LOG_INTERVAL_SECONDS = 60.0
+
+_budget_state: ClientAndGlobalBudget | None = None
+_refusals: dict[str, int] = {REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0}  # since startup
+_unreported: dict[str, int] = {REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0}  # since the last log line
+_last_refusal_log: float | None = None
+
+
+def _budget_now() -> float:
+    return time.monotonic()
+
+
+def _budget_clock() -> float:
+    return _budget_now()  # resolved on every read so tests can replace `_budget_now`
+
+
+def _budget() -> ClientAndGlobalBudget:
+    """The buckets, built from the settings on first use (both caps per minute, refilled continuously)."""
+    global _budget_state
+    if _budget_state is None:
+        _budget_state = ClientAndGlobalBudget(
+            per_client_capacity=settings.openmeteo_calls_per_client_per_minute,
+            global_capacity=settings.openmeteo_calls_per_minute,
+            per_seconds=60.0,
+            clock=_budget_clock,
+            max_clients=_MAX_TRACKED_CLIENTS,
+            dedicated_capacities={
+                UNVERIFIED_CLIENT_KEY: max(
+                    settings.openmeteo_calls_per_minute // 2, settings.openmeteo_calls_per_client_per_minute
+                )
+            },
+        )
+    return _budget_state
+
+
+def budget_refusals() -> dict[str, int]:
+    """Calls refused by the budget since startup, by reason (``client`` or ``global``). A copy."""
+    return dict(_refusals)
+
+
+def _note_refusal(reason: str) -> None:
+    """Count a refusal and log it at most once a minute (counts and reason only: never an address or a key)."""
+    global _last_refusal_log
+    _refusals[reason] += 1
+    _unreported[reason] += 1
+    now = _budget_now()
+    if _last_refusal_log is not None and now - _last_refusal_log < _REFUSAL_LOG_INTERVAL_SECONDS:
+        return
+    _last_refusal_log = now
+    logger.warning(
+        "open_meteo_budget_refused client=%d global=%d (limits per minute: client %d, global %d)",
+        _unreported[REFUSED_BY_CLIENT],
+        _unreported[REFUSED_BY_GLOBAL],
+        settings.openmeteo_calls_per_client_per_minute,
+        settings.openmeteo_calls_per_minute,
+    )
+    _unreported.update({REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0})
+
+
+def _admit_network_call() -> bool:
+    """Spend the budget for ONE call to Open-Meteo. False = refused: the caller must not go out."""
+    client = current_client_key()
+    if client is None:
+        return True  # not an HTTP request: scripts and scheduled jobs are not capped
+    reason = _budget().try_acquire(client)
+    if reason is None:
+        return True
+    _note_refusal(reason)
+    return False
+
+
+async def _cached_or_none(cache: SingleFlightCache, key: str, fetch, **kwargs):
+    """`get_or_fetch` for the public fetch functions.
+
+    A budget refusal with no copy to serve means "unavailable" (None) for THIS request only: the cache has
+    already refused to remember it as a failure of the key (`FetchRefused`).
+    """
+    try:
+        return await cache.get_or_fetch(key, fetch, **kwargs)
+    except FetchRefused:
+        return None
+
+
+def _reset_budget_for_tests() -> None:
+    """Forget every bucket, counter and the log throttle. Tests only."""
+    global _budget_state, _last_refusal_log
+    _budget_state = None
+    _last_refusal_log = None
+    _refusals.update({REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0})
+    _unreported.update({REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0})
+
+
+# ---------------------------------------------------------------------------
 # Pedido HTTP único a Open-Meteo, con la pausa ante el 429
 # ---------------------------------------------------------------------------
 
@@ -89,12 +199,22 @@ async def _get_json(params: dict, failure_message: str, *log_args: object) -> di
     Con la pausa ante el 429 abierta no sale a la red: ni pedido, ni reintento, ni suma al contador
     `open_meteo`; devuelve None para que la caché sirva el último dato bueno. Un 429 abre la pausa
     (según `Retry-After` si es razonable) y una respuesta exitosa la cierra.
+
+    Después de la pausa (que no gasta nada) y antes de la red y del contador, un pedido atendiendo a un
+    cliente gasta una ficha de su parte y otra del tope global (ver `_admit_network_call`). Si el
+    presupuesto lo rechaza, no hay llamada, no suma al contador, no abre la pausa y libera el lugar de la
+    prueba si lo tenía. En vez de None LEVANTA `FetchRefused`: la caché no debe recordar un rechazo como una
+    falla de la celda (envenenaría la celda para los demás clientes); sirve la copia vieja si la hay y, si no,
+    el llamador público lo traduce en None solo para este pedido (`_cached_or_none`).
     """
     if not openmeteo_pause.allow_request():
         logger.info(
             "Open-Meteo en pausa por 429 (faltan %.0f s): sin llamada de red", openmeteo_pause.remaining()
         )
         return None
+    if not _admit_network_call():
+        openmeteo_pause.release_probe()  # a refused call must not hold the half-open probe slot
+        raise FetchRefused("Open-Meteo call budget exhausted")
     started_generation = openmeteo_pause.generation
     try:
         client = get_client()
@@ -204,7 +324,7 @@ async def get_current(
             logger.warning("Open-Meteo payload parse error: %s", exc)
             return None
 
-    return await _CACHE_CURRENT.get_or_fetch(key, _fetch, outcome=cache_outcome)
+    return await _cached_or_none(_CACHE_CURRENT, key, _fetch, outcome=cache_outcome)
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +365,19 @@ async def get_daily_forecast_ext(
     Pronóstico diario extendido para el dashboard.
     Si model=None, Open-Meteo usa best_match automáticamente.
     """
+    try:
+        return await _daily_forecast_ext_or_raise(lat, lon, days, model)
+    except FetchRefused:
+        return None
+
+
+async def _daily_forecast_ext_or_raise(
+    lat: float,
+    lon: float,
+    days: int,
+    model: str | None,
+) -> DailyForecastDataExt | None:
+    """Como `get_daily_forecast_ext`, pero deja pasar `FetchRefused` (el consenso necesita distinguirlo)."""
     params: dict = {
         "latitude": lat,
         "longitude": lon,
@@ -344,7 +477,7 @@ async def get_multi_model_daily(
 
     async def _fetch() -> MultiModelDailyData | None:
         model_names = ["gfs_seamless", "ecmwf_ifs025"]
-        tasks = [get_daily_forecast_ext(lat, lon, days, m) for m in model_names]
+        tasks = [_daily_forecast_ext_or_raise(lat, lon, days, m) for m in model_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         successful: dict[str, DailyForecastDataExt] = {
@@ -352,6 +485,11 @@ async def get_multi_model_daily(
             for name, r in zip(model_names, results)
             if isinstance(r, DailyForecastDataExt)
         }
+
+        if any(isinstance(r, FetchRefused) for r in results):
+            # Not a failure of the cell and not a degraded consensus to cache for 30 min: the model that did
+            # come back is already in its own cache entry. Serves the stale consensus, or None for this request.
+            raise FetchRefused("Open-Meteo call budget exhausted")
 
         if not successful:
             logger.warning("get_multi_model_daily: todos los modelos fallaron para (%s, %s)", lat, lon)
@@ -393,7 +531,7 @@ async def get_multi_model_daily(
 
     # `persist=False`: el consenso se recalcula desde los dos modelos, que ya se guardan cada uno. Guardarlo
     # también duplicaría el espacio y "renovaría" la edad de un dato servido desde una copia vieja.
-    return await _CACHE_FORECAST.get_or_fetch(key, _fetch, persist=False)
+    return await _cached_or_none(_CACHE_FORECAST, key, _fetch, persist=False)
 
 
 # ---------------------------------------------------------------------------
@@ -562,7 +700,7 @@ async def get_hourly_forecast_ext(
             logger.warning("Open-Meteo hourly_ext parse error: %s", exc)
             return None
 
-    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
+    return await _cached_or_none(_CACHE_FORECAST, key, _fetch)
 
 
 # ---------------------------------------------------------------------------
@@ -624,7 +762,7 @@ async def get_hourly_forecast_ecmwf(
             logger.warning("Open-Meteo hourly ECMWF parse error: %s", exc)
             return None
 
-    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
+    return await _cached_or_none(_CACHE_FORECAST, key, _fetch)
 
 
 def oldest_forecast_fetched_at(*fetched: datetime | None) -> datetime | None:
@@ -818,7 +956,7 @@ async def _fetch_niebla_combined(lat: float, lon: float) -> dict | None:
     async def _fetch() -> dict | None:
         return await _get_json(params, "Open-Meteo niebla combined fetch failed: %s")
 
-    return await _CACHE_NOWCAST.get_or_fetch(key, _fetch)
+    return await _cached_or_none(_CACHE_NOWCAST, key, _fetch)
 
 
 async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | None:

@@ -174,3 +174,54 @@ def test_an_old_request_finishing_during_the_probe_does_not_close_the_pause(
     assert pause.allow_request() is True          # sale la prueba
     pause.record_success(straggler)               # termina un pedido anterior al 429
     assert pause.allow_request() is False         # la prueba sigue en vuelo, la pausa sigue
+
+
+# ---------------------------------------------------------------------------
+# release_probe: a probe that never went out gives its slot back
+# ---------------------------------------------------------------------------
+
+def test_release_probe_lets_the_next_caller_take_the_probe(pause: RateLimitPause, clock: FakeClock) -> None:
+    pause.trip()
+    clock.advance(120.0)
+    assert pause.allow_request() is True    # this call took the probe slot
+    pause.release_probe()                   # ...and never went out
+
+    assert pause.allow_request() is True    # the next caller is the probe
+    assert pause.allow_request() is False   # and only one
+
+
+def test_release_probe_does_nothing_when_this_call_did_not_take_the_probe(
+    pause: RateLimitPause, clock: FakeClock
+) -> None:
+    pause.trip()
+    clock.advance(120.0)
+    assert pause.allow_request() is True    # A takes the probe
+    assert pause.allow_request() is False   # B is turned away
+    pause.release_probe()                   # B releases: not its slot
+
+    assert pause.allow_request() is False   # A's probe is still the one in flight
+
+
+def test_release_probe_is_harmless_without_a_pause_or_during_one(pause: RateLimitPause, clock: FakeClock) -> None:
+    assert pause.allow_request() is True
+    pause.release_probe()
+    assert pause.allow_request() is True
+
+    pause.trip()
+    assert pause.allow_request() is False
+    pause.release_probe()
+    assert pause.allow_request() is False
+    assert pause.remaining() == pytest.approx(120.0)
+
+
+def test_release_probe_twice_frees_the_slot_only_once(pause: RateLimitPause, clock: FakeClock) -> None:
+    pause.trip()
+    clock.advance(120.0)
+    assert pause.allow_request() is True
+    pause.release_probe()
+    assert pause.allow_request() is True    # a new probe
+    pause.release_probe()                   # the flag of this call is its own: frees it
+    pause.release_probe()                   # but a second release has nothing to free
+
+    assert pause.allow_request() is True
+    assert pause.allow_request() is False

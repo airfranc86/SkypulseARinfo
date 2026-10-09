@@ -76,6 +76,18 @@ class Settings(BaseSettings):
     openmeteo_last_good_timeout_seconds: float = 2.0         # tope de cada lectura/escritura a Redis
     openmeteo_last_good_writes_per_minute: int = 60          # tope global de SET por minuto, además de la ventana por clave
 
+    # Budget of calls that actually go out to Open-Meteo (a cache hit or a shared flight costs nothing). The
+    # cache key rounds lat/lon to 2 decimals, so one client can ask for millions of distinct cells at ~5 calls
+    # each; this bounds what one client and the whole process may send per minute (token buckets, refilled
+    # continuously). Only requests that carry a client key are capped (see `core/client_context.py`): scripts and
+    # scheduled jobs are not. A refused call behaves like a failed one: the cache serves the last good copy.
+    # A normal visit to one location costs ~6 calls, so 12 leaves room for about two new locations a minute.
+    openmeteo_calls_per_client_per_minute: int = Field(default=12, ge=1)
+    # Global ceiling across every client. Open-Meteo's free plan also has per-hour and per-day ceilings (we
+    # recall 600/min, 5,000/h and 10,000/day: unverified, check their pricing page), so a per-minute cap alone
+    # does not protect the daily one; 90 is a margin against bursts, not a daily budget.
+    openmeteo_calls_per_minute: int = Field(default=90, ge=1)
+
     # Alertas push (FRA-354). La clave privada VAPID firma cada envío: solo vive en el entorno (Render),
     # nunca en el repo, y `repr=False` evita que salga en un `repr(settings)` o en un log. Acepta el valor
     # crudo de 32 bytes en base64url (el formato corto que se pega en Render) o un PEM; ver

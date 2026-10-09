@@ -41,6 +41,7 @@ class RateLimitPause:
         self._paused_until = 0.0
         self._probe_until = 0.0
         self._generation = 0
+        self._call_took_probe = False
 
     @property
     def generation(self) -> int:
@@ -48,7 +49,12 @@ class RateLimitPause:
         return self._generation
 
     def allow_request(self) -> bool:
-        """True si se puede salir a la red. Tras la pausa concede una sola prueba por ventana."""
+        """True si se puede salir a la red. Tras la pausa concede una sola prueba por ventana.
+
+        Recuerda si ESTA llamada tomó el lugar de la prueba, para que `release_probe` (que va a continuación,
+        sin ningún `await` de por medio) lo libere solo en ese caso.
+        """
+        self._call_took_probe = False
         if self._paused_until == 0.0:
             return True
         now = self.clock()
@@ -57,7 +63,18 @@ class RateLimitPause:
         if now < self._probe_until:
             return False  # ya hay una prueba en vuelo: el resto espera su resultado
         self._probe_until = now + self._probe_window
+        self._call_took_probe = True
         return True
+
+    def release_probe(self) -> None:
+        """Devuelve el lugar de la prueba si la última `allow_request` lo tomó y el pedido no llegó a salir.
+
+        Sin efecto si esa llamada no tomó la prueba (otro pedido sigue con la suya) o si ya se liberó. Hay que
+        llamarla justo después de `allow_request`, sin ceder el control entre una y otra.
+        """
+        if self._call_took_probe:
+            self._probe_until = 0.0
+            self._call_took_probe = False
 
     def trip(self, retry_after: float | None = None) -> None:
         """Abre (o renueva) la pausa tras un 429. Una pausa en curso nunca se acorta.
@@ -75,6 +92,7 @@ class RateLimitPause:
             seconds = max(retry_after, self._min_retry_after)
         self._paused_until = max(self._paused_until, self.clock() + seconds)
         self._probe_until = 0.0
+        self._call_took_probe = False
 
     def record_success(self, generation: int | None = None) -> None:
         """La llamada salió bien: se cierra la pausa y el tráfico vuelve a fluir.
@@ -87,6 +105,7 @@ class RateLimitPause:
             return
         self._paused_until = 0.0
         self._probe_until = 0.0
+        self._call_took_probe = False
 
     def remaining(self) -> float:
         """Segundos que faltan para que termine la pausa (0 si no hay pausa)."""
@@ -98,6 +117,7 @@ class RateLimitPause:
         """Vuelve al estado inicial y restaura el reloj del constructor. Lo usan los tests."""
         self._paused_until = 0.0
         self._probe_until = 0.0
+        self._call_took_probe = False
         self.clock = self._default_clock
 
 
