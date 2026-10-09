@@ -5,6 +5,7 @@ const TITLES: Record<string, string> = {
   '/':             'SkyPulse — Inicio',
   '/prevision':    'SkyPulse — Previsión del clima',
   '/tender-ropa':  'SkyPulse — Tender ropa',
+  '/hacer-deporte':'SkyPulse — Hacer deporte',
   '/lavar-auto':   'SkyPulse — Lavar el auto',
   '/terremotos':   'SkyPulse — Terremotos',
   '/volcanes':     'SkyPulse — Volcanes',
