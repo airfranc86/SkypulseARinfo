@@ -71,6 +71,16 @@ class Settings(BaseSettings):
     # Contacto que declara el VAPID ante los servicios push: `https://...` o `mailto:...`.
     vapid_subject: str = "https://skypulse-ar.vercel.app"
 
+    # Clave del límite de pedidos por IP (ver `core/rate_limit.py::client_key`). Render pone Cloudflare delante:
+    # Cloudflare escribe `CF-Connecting-IP` con la IP real y agrega al `X-Forwarded-For` (el valor de la
+    # izquierda lo manda el cliente). `RATE_LIMIT_TRUST_CF_HEADER=false` ignora `CF-Connecting-IP` (si el
+    # servicio llegara a quedar expuesto sin Cloudflare). `RATE_LIMIT_XFF_HOPS` es la posición, contada
+    # desde la DERECHA del `X-Forwarded-For`, de la IP del cliente cuando no hay `CF-Connecting-IP`
+    # (1 = el último; 3 según una medición de terceros, a confirmar con el registro diagnóstico; máximo 16).
+    # Si no coincide con la cadena real y falta `CF-Connecting-IP`, todos comparten una clave ("unverified").
+    rate_limit_trust_cf_header: bool = True
+    rate_limit_xff_hops: int = Field(default=3, ge=1, le=16)
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
 

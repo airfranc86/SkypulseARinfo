@@ -30,12 +30,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 
 from .core.config import settings
 from .core.counter import MemoryCounter, RedisCounter
 from .core.http_client import create_client, close_client
-from .core.rate_limit import limiter
+from .core.rate_limit import client_key, limiter
 from .core.upstash import UpstashRedis, configure_redis as configure_alertas_redis
 from .core import usage_counter
 from .routers import aeronautica, alertas, earthquakes, incendios, metar, niebla, smn_alertas, taf, tools, volcanes, weather
@@ -143,7 +142,7 @@ async def request_logging(request: Request, call_next) -> Response:
         request.url.path,
         response.status_code,
         duration_ms,
-        get_remote_address(request),
+        client_key(request),
     )
     return response
 
