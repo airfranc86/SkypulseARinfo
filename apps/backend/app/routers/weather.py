@@ -53,6 +53,7 @@ from app.services.openmeteo import (
     get_hourly_forecast_ecmwf,
     get_hourly_forecast_ext,
     merge_hourly_ecmwf,
+    oldest_forecast_fetched_at,
     DailyForecastDataExt,
     HourlyForecastExt,
 )
@@ -361,6 +362,12 @@ async def get_dashboard(
         forecast_7d=forecast_7d,
         forecast_models=available_model_names(daily_multi.models),
         fetched_at=now,
+        forecast_fetched_at=oldest_forecast_fetched_at(
+            *(daily.fetched_at for daily in daily_multi.models.values()),
+            # La serie horaria ya viene mezclada: su fecha es la más vieja entre best_match y ECMWF,
+            # y solo cuenta ECMWF si de verdad se superpuso.
+            om_hourly_data.fetched_at if om_hourly_data is not None else None,
+        ),
         forecast_source=SOURCE_OPENMETEO_FORECAST,
         degraded=degraded,
     )

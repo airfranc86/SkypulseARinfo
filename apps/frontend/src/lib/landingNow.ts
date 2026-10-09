@@ -7,6 +7,7 @@
 import type { LocationState } from '@/hooks/useLocation'
 import type { CurrentDetailed, WeatherDashboardResponse } from '@/lib/api'
 import { isColdStart, isProviderSaturated } from './apiErrors.ts'
+import { forecastUpdatedIso } from './forecastAge.ts'
 import { formatClock } from './weatherLabels.ts'
 import { buildVerdict, type VerdictLine } from './weatherVerdict.ts'
 
@@ -128,6 +129,14 @@ export function nowFooter(current: SourceInput, fetchedAt: string | null | undef
   const updated = describeUpdatedAt(fetchedAt)
   const source = describeNowSource(current)
   return updated ? `${source} · ${updated}` : source
+}
+
+/**
+ * The footer for a dashboard response. "Actualizado" is the forecast's own time (`forecast_fetched_at`),
+ * not when the server built the response: a stored copy served during an outage would read "now".
+ */
+export function nowFooterFor(data: Pick<WeatherDashboardResponse, 'current' | 'fetched_at' | 'forecast_fetched_at'>): string {
+  return nowFooter(data.current, forecastUpdatedIso(data))
 }
 
 // ── Headline ─────────────────────────────────────────────────────────────────

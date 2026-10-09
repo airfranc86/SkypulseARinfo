@@ -438,7 +438,10 @@ export interface WeatherDashboardResponse {
   forecast_7d: DailyEntry[]
   /** Models that contributed to `forecast_7d`; one entry when the other model did not answer. */
   forecast_models: ForecastModelName[]
+  /** Hora en que el servidor armó la respuesta (no la del pronóstico). */
   fetched_at: string
+  /** Hora del pedido del dato MÁS VIEJO del pronóstico; null = edad desconocida; ausente = backend viejo. */
+  forecast_fetched_at?: string | null
   // Todo el pronóstico sale de Open-Meteo.
   forecast_source?: 'openmeteo'
   degraded?: boolean

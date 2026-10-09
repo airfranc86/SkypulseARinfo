@@ -230,6 +230,9 @@ class DailyForecastDataExt:
     wind_dir_dominant: list[float | None] = field(default_factory=list)
     # % de nubosidad media del día (por modelo). Vacía si la respuesta no la trae (caché vieja).
     cloud_cover_mean: list[float | None] = field(default_factory=list)
+    # Hora UTC real del pedido a Open-Meteo (no la de armado de la respuesta). None en las copias
+    # guardadas antes de este campo: edad desconocida.
+    fetched_at: datetime | None = None
 
 
 async def get_daily_forecast_ext(
@@ -301,6 +304,7 @@ async def get_daily_forecast_ext(
                 sunset=list(daily.get("sunset", [])),
                 daylight_seconds=daylight_seconds,
                 cloud_cover_mean=[parse_float(v) for v in daily.get("cloud_cover_mean", [])],
+                fetched_at=datetime.now(timezone.utc),
             )
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo daily_ext parse error (model=%s): %s", model, exc)
@@ -416,6 +420,8 @@ class HourlyForecastExt:
     cloud_covers: list[float | None] = field(default_factory=list)     # % de nubosidad total
     wind_dirs_deg: list[float | None] = field(default_factory=list)    # de dónde sopla, en grados
     elevation_m: float | None = None                                   # altitud del punto (cota de nieve)
+    # Hora UTC real del pedido a Open-Meteo. None en las copias guardadas antes de este campo.
+    fetched_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -461,11 +467,12 @@ _CACHE_FORECAST: SingleFlightCache = _flight_cache(256, 1800, "om_forecast", _ST
 _CACHE_NOWCAST: SingleFlightCache = _flight_cache(256, 900, "om_nowcast", _STORE_NOWCAST)
 
 
-def _parse_hourly_payload(data: dict) -> HourlyForecastExt:
+def _parse_hourly_payload(data: dict, fetched_at: datetime | None = None) -> HourlyForecastExt:
     """Arma un `HourlyForecastExt` desde la respuesta horaria de Open-Meteo.
 
     Toda variable que la respuesta no trae queda como lista vacía (p. ej. el pedido a un solo modelo
-    pide menos variables). Lanza KeyError/TypeError si falta o viene mal formado `hourly`.
+    pide menos variables). `fetched_at` es la hora del pedido (la pone cada `_fetch`). Lanza
+    KeyError/TypeError si falta o viene mal formado `hourly`.
     """
     hourly = data["hourly"]
     time_list: list[str] = hourly.get("time", [])
@@ -511,6 +518,7 @@ def _parse_hourly_payload(data: dict) -> HourlyForecastExt:
         cloud_covers=[parse_float(v) for v in hourly.get("cloud_cover", [])],
         wind_dirs_deg=[parse_float(v) for v in hourly.get("wind_direction_10m", [])],
         elevation_m=parse_float(data.get("elevation")),
+        fetched_at=fetched_at,
     )
 
 
@@ -549,7 +557,7 @@ async def get_hourly_forecast_ext(
             return None
 
         try:
-            return _parse_hourly_payload(data)
+            return _parse_hourly_payload(data, fetched_at=datetime.now(timezone.utc))
         except (KeyError, TypeError) as exc:
             logger.warning("Open-Meteo hourly_ext parse error: %s", exc)
             return None
@@ -611,12 +619,27 @@ async def get_hourly_forecast_ecmwf(
             return None
 
         try:
-            return _parse_hourly_payload(data)
+            return _parse_hourly_payload(data, fetched_at=datetime.now(timezone.utc))
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             logger.warning("Open-Meteo hourly ECMWF parse error: %s", exc)
             return None
 
     return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
+
+
+def oldest_forecast_fetched_at(*fetched: datetime | None) -> datetime | None:
+    """La hora de pedido MÁS VIEJA entre las series que alimentan el pronóstico (UTC con zona).
+
+    Un solo dato viejo hace viejo al pronóstico entero, así que se queda con el mínimo. Ignora las
+    series sin fecha (copias guardadas antes del campo); sin ninguna fecha devuelve None = edad
+    desconocida. Una fecha sin zona se lee como UTC en vez de romper la comparación.
+    """
+    dated = [
+        d if d.tzinfo is not None else d.replace(tzinfo=timezone.utc)
+        for d in fetched
+        if isinstance(d, datetime)
+    ]
+    return min(dated) if dated else None
 
 
 def merge_hourly_ecmwf(
@@ -637,6 +660,8 @@ def merge_hourly_ecmwf(
     - Un valor nulo de ECMWF, o una lista de ECMWF vacía para ese campo, deja el valor de `base` en
       ese índice. Si `base` no trae el campo (lista vacía) y ECMWF sí, el resultado se completa con
       None en los instantes que ECMWF no cubre (las lecturas puntuales ya toleran listas cortas).
+    - `fetched_at` del resultado es la hora de pedido más vieja de las dos series (la edad del dato
+      más viejo que alimenta la tira); sin fechas queda None.
     - Sin `ecmwf` (None) devuelve una copia del contenido de `base`.
     - No muta ninguna de las dos entradas: el resultado trae listas nuevas (la serie best_match es la
       que las herramientas comparten por caché).
@@ -652,6 +677,9 @@ def merge_hourly_ecmwf(
         "freezing_level_heights_m", "temps_850_c", "humidities", "cloud_covers",
     ):
         updates[name] = list(getattr(base, name))
+    updates["fetched_at"] = oldest_forecast_fetched_at(
+        base.fetched_at, ecmwf.fetched_at if ecmwf is not None else None
+    )
     return replace(base, **updates)
 
 
