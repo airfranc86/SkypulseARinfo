@@ -20,6 +20,8 @@ from tests.test_daily_anchor import _om
 from tests.test_dashboard_integration import _hourly
 from tests.test_dashboard import _make_current_response
 
+pytestmark = pytest.mark.usefixtures("frozen_ar_today")
+
 _N = 7
 
 # Fields the production frontend reads today: none of them may disappear.

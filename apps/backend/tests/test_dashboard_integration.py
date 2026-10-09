@@ -19,6 +19,8 @@ from app.schemas.weather import SourceMeta, StationMeta, WeatherCurrentResponse
 from app.services.openmeteo import DailyForecastDataExt, HourlyForecastExt, MultiModelDailyData
 from tests.hourly_fixtures import make_hourly
 
+pytestmark = pytest.mark.usefixtures("frozen_ar_today")
+
 
 # ---------------------------------------------------------------------------
 # Shared helpers
