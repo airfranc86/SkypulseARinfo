@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
+from .core.client_context import reset_client_key, set_client_key
 from .core.config import settings
 from .core.counter import MemoryCounter, RedisCounter
 from .core.http_client import create_client, close_client
@@ -132,9 +133,20 @@ async def security_headers(request: Request, call_next) -> Response:
 
 @app.middleware("http")
 async def request_logging(request: Request, call_next) -> Response:
-    """Loguea método, path, status code y duración de cada request."""
+    """Loguea método, path, status code y duración de cada request.
+
+    También publica la clave del cliente (la misma del límite por IP) para los servicios que gastan un
+    presupuesto por cliente (`core/client_context.py`). Se fija ANTES de `call_next`, porque Starlette corre el
+    resto de la app en una tarea nueva que hereda una copia del contexto en el momento de crearse, y se limpia
+    al terminar, también ante un error.
+    """
     start = time.perf_counter()
-    response: Response = await call_next(request)
+    key = client_key(request)
+    token = set_client_key(key)
+    try:
+        response: Response = await call_next(request)
+    finally:
+        reset_client_key(token)
     duration_ms = (time.perf_counter() - start) * 1000
     logger.info(
         "%s %s -> %d (%.1fms) client=%s",
@@ -142,7 +154,7 @@ async def request_logging(request: Request, call_next) -> Response:
         request.url.path,
         response.status_code,
         duration_ms,
-        client_key(request),
+        key,
     )
     return response
 

@@ -678,3 +678,29 @@ def frozen_ar_today():
 
     with patch("app.services.dashboard_builder.datetime", _FrozenDatetime):
         yield
+
+
+# ---------------------------------------------------------------------------
+# Open-Meteo call budget (a share per client + a global cap): state isolated per test and a hand-driven
+# clock. The budget has its own tests in test_openmeteo_budget.py and test_openmeteo_budget_e2e.py.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def reset_openmeteo_budget():
+    """Fresh budget buckets, refusal counters and log throttle around each test, and no client key."""
+    import app.services.openmeteo as om_module
+    from app.core.client_context import set_client_key
+
+    om_module._reset_budget_for_tests()
+    set_client_key(None)  # a sync test that forgot to clean up cannot leak its key into the next one
+    yield
+    om_module._reset_budget_for_tests()
+
+
+@pytest.fixture
+def openmeteo_budget_clock(monkeypatch) -> FakeClock:
+    """Replace the clock of the Open-Meteo budget (buckets and log throttle) with a manual one."""
+    import app.services.openmeteo as om_module
+    clock = FakeClock()
+    monkeypatch.setattr(om_module, "_budget_now", clock)
+    return clock

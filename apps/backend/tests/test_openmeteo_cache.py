@@ -673,3 +673,144 @@ def test_the_store_factory_wires_the_budget_and_timeout_settings(monkeypatch: py
     store = om_module._last_good_store("om_x", 100)
     assert store._bucket_capacity == 7
     assert store._timeout == 0.7
+
+
+# ---------------------------------------------------------------------------
+# FetchRefused: a fetch that was not attempted on purpose (a budget said no) is NOT a failure of the key
+# ---------------------------------------------------------------------------
+
+def _refusal() -> Exception:
+    from app.core.cache import FetchRefused
+
+    return FetchRefused("budget")
+
+
+async def _refuse():
+    raise _refusal()
+
+
+async def _value(value):
+    return value
+
+
+class _StoredBackend:
+    """Persistent backend that only knows how to hand back one value."""
+
+    def __init__(self, value) -> None:
+        self.value = value
+
+    async def load(self, key: str):
+        return self.value
+
+    async def save(self, key: str, value) -> None:
+        self.value = value
+
+
+def _flight_cache(**kwargs):
+    from app.core.cache import SingleFlightCache
+
+    return SingleFlightCache(maxsize=8, ttl=60, name="t", **kwargs)
+
+
+async def test_a_refused_flight_leaves_no_failure_entry_and_the_next_caller_fetches():
+    from app.core.cache import FetchRefused
+
+    cache = _flight_cache()
+    with pytest.raises(FetchRefused):
+        await cache.get_or_fetch("k", _refuse)
+
+    assert "k" not in cache._failure_cache
+    calls: list[int] = []
+
+    async def ok():
+        calls.append(1)
+        return "v"
+
+    assert await cache.get_or_fetch("k", ok) == "v"
+    assert calls == [1]  # not served a remembered failure: it went to the source
+
+
+async def test_a_refused_flight_serves_the_stale_copy_without_marking_the_key_failed():
+    cache = _flight_cache()
+    assert await cache.get_or_fetch("k", lambda: _value("old")) == "old"
+    cache._cache.clear()  # the fresh TTL expired; the stale copy stays
+    outcome = CacheOutcome()
+
+    assert await cache.get_or_fetch("k", _refuse, outcome=outcome) == "old"
+
+    assert outcome.hit is True
+    assert "k" not in cache._failure_cache
+    assert await cache.get_or_fetch("k", lambda: _value("new")) == "new"  # the next caller refreshes it
+
+
+async def test_a_refused_flight_serves_the_persisted_copy_without_marking_the_key_failed():
+    cache = _flight_cache(persistence=_StoredBackend("persisted"))
+
+    assert await cache.get_or_fetch("k", _refuse) == "persisted"
+
+    assert "k" not in cache._failure_cache
+
+
+async def test_the_waiters_of_a_refused_flight_get_the_same_outcome():
+    from app.core.cache import FetchRefused
+
+    cache = _flight_cache()
+    gate = asyncio.Event()
+
+    async def refused_after_the_gate():
+        await gate.wait()
+        raise _refusal()
+
+    leader = asyncio.create_task(cache.get_or_fetch("k", refused_after_the_gate))
+    await asyncio.sleep(0)
+    waiter = asyncio.create_task(cache.get_or_fetch("k", lambda: _value("unused")))
+    await asyncio.sleep(0)
+    gate.set()
+    outcomes = await asyncio.gather(leader, waiter, return_exceptions=True)
+
+    assert all(isinstance(outcome, FetchRefused) for outcome in outcomes)
+    assert "k" not in cache._failure_cache
+
+
+async def test_the_waiters_of_a_refused_flight_share_the_stale_copy():
+    cache = _flight_cache()
+    await cache.get_or_fetch("k", lambda: _value("old"))
+    cache._cache.clear()
+    gate = asyncio.Event()
+
+    async def refused_after_the_gate():
+        await gate.wait()
+        raise _refusal()
+
+    first, second = CacheOutcome(), CacheOutcome()
+    leader = asyncio.create_task(cache.get_or_fetch("k", refused_after_the_gate, outcome=first))
+    await asyncio.sleep(0)
+    waiter = asyncio.create_task(cache.get_or_fetch("k", lambda: _value("unused"), outcome=second))
+    await asyncio.sleep(0)
+    gate.set()
+
+    assert await asyncio.gather(leader, waiter) == ["old", "old"]
+    assert first.hit is True and second.hit is True
+
+
+async def test_a_refusal_is_not_counted_as_a_real_fetch():
+    from app.core.cache import FetchRefused
+
+    cache = _flight_cache()
+    with pytest.raises(FetchRefused):
+        await cache.get_or_fetch("k", _refuse)
+
+    assert cache.stats()["fetches"] == 0
+
+
+async def test_a_real_failure_is_still_negative_cached():
+    cache = _flight_cache()
+    assert await cache.get_or_fetch("none", lambda: _value(None)) is None
+    assert "none" in cache._failure_cache
+
+    async def boom():
+        raise RuntimeError("upstream down")
+
+    with pytest.raises(RuntimeError):
+        await cache.get_or_fetch("raise", boom)
+    assert "raise" in cache._failure_cache

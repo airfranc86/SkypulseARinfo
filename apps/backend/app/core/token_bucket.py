@@ -8,12 +8,14 @@ Nothing here reads settings or a module-level clock, so callers decide the numbe
   keys are tracked; the least recently used key is dropped first. A dropped key comes back with a full
   bucket, which only helps whoever floods the structure with more than ``max_keys`` distinct keys, and
   each of those keys already owns a full bucket anyway.
+- ``ClientAndGlobalBudget``: a ``KeyedTokenBuckets`` share per client plus one global ``TokenBucket``; a call
+  must fit in both.
 """
 from __future__ import annotations
 
 import math
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 # Absorbs float noise so that a wait of exactly N seconds is not reported as N + 1.
 _EPSILON = 1e-9
@@ -103,3 +105,81 @@ class KeyedTokenBuckets:
 
     def reset(self) -> None:
         self._buckets.clear()
+
+
+# Why ``ClientAndGlobalBudget.try_acquire`` refused. Plain strings so callers can count and log them as is.
+REFUSED_BY_CLIENT = "client"
+REFUSED_BY_GLOBAL = "global"
+
+
+class ClientAndGlobalBudget:
+    """Admission for a call that must fit in the caller's own share AND in one bucket shared by everybody.
+
+    ``try_acquire(client)`` takes one token from ``client``'s bucket and then one from the global bucket:
+
+    - A client over its share is refused WITHOUT touching the global bucket, so one flooder cannot drain
+      the tokens of everybody else by trying again and again.
+    - If the global bucket refuses, the client's token is handed back: nobody pays for a call that did not
+      go out.
+
+    Both buckets refill continuously (``capacity`` tokens per ``per_seconds``) and start full. The number of
+    tracked clients is capped (``KeyedTokenBuckets``). Synchronous like the buckets it is made of, so the
+    two checks and the spending are atomic under asyncio.
+
+    ``dedicated_capacities`` gives chosen keys their own share size (for example a key that many people share).
+    Those keys live outside the capped LRU structure, so a flood of other keys can never evict them; they are
+    still subject to the global bucket.
+    """
+
+    def __init__(
+        self,
+        per_client_capacity: float,
+        global_capacity: float,
+        per_seconds: float,
+        clock: Callable[[], float],
+        max_clients: int,
+        dedicated_capacities: Mapping[str, float] | None = None,
+    ) -> None:
+        self._clients = KeyedTokenBuckets(per_client_capacity, per_seconds, clock, max_keys=max_clients)
+        self._global = TokenBucket(global_capacity, per_seconds, clock)
+        self._dedicated = {
+            key: TokenBucket(capacity, per_seconds, clock)
+            for key, capacity in (dedicated_capacities or {}).items()
+        }
+
+    @property
+    def per_client_capacity(self) -> float:
+        return self._clients.capacity
+
+    @property
+    def global_capacity(self) -> float:
+        return self._global.capacity
+
+    @property
+    def max_clients(self) -> int:
+        return self._clients.max_keys
+
+    @property
+    def tracked_clients(self) -> int:
+        return len(self._clients)
+
+    def try_acquire(self, client: str) -> str | None:
+        """``None`` if admitted; otherwise ``REFUSED_BY_CLIENT`` or ``REFUSED_BY_GLOBAL``."""
+        dedicated = self._dedicated.get(client)
+        taken = dedicated.try_acquire() if dedicated is not None else self._clients.try_acquire(client)
+        if taken is not None:
+            return REFUSED_BY_CLIENT
+        if self._global.try_acquire() is not None:
+            if dedicated is not None:
+                dedicated.give_back()
+            else:
+                self._clients.give_back(client)
+            return REFUSED_BY_GLOBAL
+        return None
+
+    def reset(self) -> None:
+        """Every client and the global bucket back to full, as brand new."""
+        self._clients.reset()
+        self._global.reset()
+        for bucket in self._dedicated.values():
+            bucket.reset()

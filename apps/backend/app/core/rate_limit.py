@@ -39,7 +39,9 @@ logger = logging.getLogger("skypulse.rate_limit")
 _MAX_VALUE_LENGTH = 256          # longest header value / chain entry that is parsed at all
 _WARNING_INTERVAL_SECONDS = 60.0  # at most one "invalid headers" warning per interval per process
 _UNKNOWN = "unknown"
-_UNVERIFIED = "unverified"        # shared key used when forwarding headers exist but are unusable
+# Shared key used when forwarding headers exist but are unusable. Public: the Open-Meteo call budget gives it a
+# larger dedicated share (if the proxy chain is misconfigured EVERYONE lands on it).
+UNVERIFIED_CLIENT_KEY = "unverified"
 _IPV6_PREFIX_LENGTH = 64
 _MAX_DIAGNOSTICS = 10             # distinct (cf_present, xff_entries, step) lines logged per process
 
@@ -148,7 +150,7 @@ def _resolve(request: Request) -> _Resolution:
     if xff_ip is not None:
         return _Resolution(xff_ip, _STEP_XFF, cf_present, cf_present, xff_entries)
     if cf_present or xff_entries > 0:  # forwarding headers exist but none is usable: fail closed
-        return _Resolution(_UNVERIFIED, _STEP_UNVERIFIED, cf_present, cf_present, xff_entries)
+        return _Resolution(UNVERIFIED_CLIENT_KEY, _STEP_UNVERIFIED, cf_present, cf_present, xff_entries)
     return _Resolution(_client_host(request), _STEP_CLIENT, False, False, 0)
 
 
@@ -191,7 +193,7 @@ def client_key(request: Request) -> str:
     try:
         resolution = _resolve(request)
     except Exception:  # noqa: BLE001 - never a 500; unreadable headers may hide forwarding ones: fail closed
-        return _UNVERIFIED
+        return UNVERIFIED_CLIENT_KEY
     try:
         _report(resolution)
     except Exception:  # noqa: BLE001 - logging must never break a request

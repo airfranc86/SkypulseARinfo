@@ -508,3 +508,23 @@ def test_same_header_shape_with_a_different_outcome_is_logged_separately(caplog)
     client_key(make_request({"X-Forwarded-For": f"{FAKE}, garbage, {CF_EDGE}, {INTERNAL}"}))    # step=unverified
     steps = [r.getMessage().rsplit("step=", 1)[1] for r in _records(caplog, logging.INFO)]
     assert steps == ["xff", "unverified"]
+
+
+# ---------------------------------------------------------------------------
+# The shared fail-closed key is public (the Open-Meteo budget gives it a larger share)
+# ---------------------------------------------------------------------------
+
+def test_the_shared_key_is_a_public_constant_with_the_value_client_key_returns():
+    from app.core.rate_limit import UNVERIFIED_CLIENT_KEY
+
+    assert UNVERIFIED_CLIENT_KEY == UNVERIFIED == "unverified"
+    assert client_key(make_request({"CF-Connecting-IP": "garbage"})) == UNVERIFIED_CLIENT_KEY
+
+
+def test_a_request_without_client_info_keeps_the_ordinary_unknown_key():
+    from app.core.rate_limit import UNVERIFIED_CLIENT_KEY
+
+    key = client_key(make_request(client=None))
+
+    assert key == "unknown"
+    assert key != UNVERIFIED_CLIENT_KEY
