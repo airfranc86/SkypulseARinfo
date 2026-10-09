@@ -157,3 +157,38 @@ async def test_a_non_integer_result_for_a_counting_command_is_unavailable(
         respx.post(f"{_URL}/").mock(return_value=_ok(None))
         with pytest.raises(UpstashUnavailableError):
             await redis.scard("alertas:ids")
+
+
+# ---------------------------------------------------------------------------
+# DECR: gives back a unit reserved with INCR (CheckWX quota counter)
+# ---------------------------------------------------------------------------
+
+async def test_decr_uses_the_url_path_like_incr_and_returns_an_int(redis: UpstashRedis) -> None:
+    key = "skypulse:checkwx:counter:2026-10-08"
+    with respx.mock:
+        route = respx.post(f"{_URL}/DECR/{key}").mock(return_value=_ok(4))
+        assert await redis.decr(key) == 4
+    assert route.calls.last.request.headers["authorization"] == f"Bearer {_TOKEN}"
+
+
+async def test_decr_reports_a_negative_result_as_is(redis: UpstashRedis) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/DECR/k").mock(return_value=_ok(-1))
+        assert await redis.decr("k") == -1
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [httpx.ConnectError("sin red"), httpx.ReadTimeout("lento"), Response(500, json={"error": "boom"})],
+    ids=["connect-error", "timeout", "http-500"],
+)
+async def test_decr_failures_raise_unavailable(redis: UpstashRedis, failure) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/DECR/k")
+        if isinstance(failure, Exception):
+            route.mock(side_effect=failure)
+        else:
+            route.mock(return_value=failure)
+        with pytest.raises(UpstashUnavailableError):
+            await redis.decr("k")
+

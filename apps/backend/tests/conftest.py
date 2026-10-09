@@ -1,9 +1,11 @@
 """Fixtures comunes para toda la suite."""
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
+import httpx
 import pytest
 import pytest_asyncio
 import respx
@@ -215,6 +217,146 @@ def clear_emsc_cache():
     emsc_module._event_cache.clear()
     yield
     emsc_module._event_cache.clear()
+
+
+# ---------------------------------------------------------------------------
+# CheckWX: process-wide state (caches, failure memo, in-flight calls, call
+# bucket) isolated per test, plus a hand-driven clock and a counter fixture.
+# ---------------------------------------------------------------------------
+
+class FakeClock:
+    """Monotonic clock a test advances by hand (CheckWX TTLs and call bucket)."""
+
+    def __init__(self, start: float = 1_000.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+@pytest.fixture(autouse=True)
+def reset_checkwx_state():
+    """Clear every CheckWX in-process state before and after each test."""
+    import app.services.checkwx as checkwx_module
+    checkwx_module._reset_for_tests()
+    yield
+    checkwx_module._reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def relax_checkwx_client_share(monkeypatch):
+    """The per-client share of new CheckWX calls has its own tests (test_checkwx_client_share.py).
+
+    Every other test calls the service without a client key, which is ONE shared anonymous client, so it
+    gets a share that nobody exhausts.
+    """
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "checkwx_new_calls_per_client_per_minute", 10_000, raising=False)
+
+
+@pytest.fixture
+def checkwx_clock(monkeypatch) -> FakeClock:
+    """Replace the CheckWX clock (caches, failure TTL, call bucket) with a manual one."""
+    import app.services.checkwx as checkwx_module
+    clock = FakeClock()
+    monkeypatch.setattr(checkwx_module, "_now", clock)
+    return clock
+
+
+@pytest.fixture
+def checkwx_counter(monkeypatch):
+    """API key configured and a fresh in-memory quota counter wired into the service."""
+    import app.core.config as cfg
+    import app.services.checkwx as checkwx_module
+    from app.core.counter import MemoryCounter
+
+    monkeypatch.setattr(cfg.settings, "checkwx_api_key", "test-key", raising=False)
+    monkeypatch.setattr(cfg.settings, "checkwx_daily_limit", 198, raising=False)
+    counter = MemoryCounter()
+    checkwx_module.set_counter(counter)
+    yield counter
+    checkwx_module.set_counter(None)  # type: ignore[arg-type]
+
+
+@pytest.fixture
+def checkwx_roomy_bucket(monkeypatch):
+    """Lift the per-minute cap on new CheckWX calls (it has its own tests in test_checkwx_call_budget.py)."""
+    import app.core.config as cfg
+    monkeypatch.setattr(cfg.settings, "checkwx_new_calls_per_minute", 10_000, raising=False)
+
+
+@pytest.fixture
+def fresh_rate_limit():
+    """Reset the shared per-IP rate limiter around a test that sends several requests to /api/metar."""
+    from app.core.rate_limit import limiter
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
+def checkwx_payload(kind: str, icao: str) -> dict:
+    """Minimal CheckWX body for one station (the service passes it through untouched)."""
+    return {"results": 1, "data": [{"icao": icao, "raw_text": f"{kind.upper()} {icao} 011200Z 24010KT 9999"}]}
+
+
+class FakeCheckWX:
+    """Scripted CheckWX upstream: counts every call, can delay it, and fails chosen stations.
+
+    An outcome is 200 (default), an HTTP status code, an Exception instance to raise
+    (timeouts, network errors), "bad_json" (a 200 whose body is not JSON) or "not_an_object"
+    (a 200 whose JSON is not an object).
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+        self.delay = 0.0
+        self.active = 0
+        self.max_active = 0
+        self.default_outcome: object = 200
+        self.router = None
+        self._outcomes: dict[tuple[str, str], object] = {}
+
+    def set(self, icao: str, outcome: object, kind: str = "metar") -> None:
+        self._outcomes[(kind, icao)] = outcome
+
+    def count(self, kind: str | None = None, icao: str | None = None) -> int:
+        return sum(1 for k, i in self.calls if kind in (None, k) and icao in (None, i))
+
+    async def handle(self, request):
+        _, kind, icao, *_ = request.url.path.split("/")
+        self.calls.append((kind, icao))
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            if self.delay:
+                await asyncio.sleep(self.delay)
+        finally:
+            self.active -= 1
+        outcome = self._outcomes.get((kind, icao), self.default_outcome)
+        if isinstance(outcome, Exception):
+            raise outcome
+        if outcome == "bad_json":
+            return httpx.Response(200, content=b"<html>not json</html>")
+        if outcome == "not_an_object":
+            return httpx.Response(200, json=["unexpected"])
+        if outcome == 200:
+            return httpx.Response(200, json=checkwx_payload(kind, icao))
+        return httpx.Response(int(outcome), json={"error": "upstream"})
+
+
+@pytest.fixture
+def checkwx_upstream():
+    """Intercept every CheckWX URL with a FakeCheckWX (no real network is ever touched)."""
+    fake = FakeCheckWX()
+    with respx.mock(assert_all_called=False) as router:
+        fake.router = router  # a test that also needs a fake Upstash adds its routes here (one active router)
+        router.get(url__regex=r"^https://api\.checkwx\.com/(metar|taf)/[A-Z0-9]{4}(/decoded)?$").mock(
+            side_effect=fake.handle
+        )
+        yield fake
 
 
 # ---------------------------------------------------------------------------

@@ -48,6 +48,19 @@ class Settings(BaseSettings):
     metar_max_distance_km: float = 20.0
     metar_max_age_minutes: int = 90
     checkwx_daily_limit: int = 198     # Free tier: 200/día — 198 deja margen para el aviso Sentry
+    # Global cap of NEW CheckWX calls per minute (token bucket). Cached stations are always served; above the
+    # cap new ones get 429 `metar_busy`. Slows a sweep of made-up ICAO codes even if the per-IP limit is dodged.
+    checkwx_new_calls_per_minute: int = Field(default=12, ge=1)
+    # A failed CheckWX call (5xx, timeout, 401...) is remembered this long: repeating that station neither
+    # calls CheckWX nor spends quota. 15 s is the window the frontend retry policy assumes
+    # (apps/frontend/src/lib/loadError.ts and retryPolicy.ts).
+    checkwx_failure_ttl_seconds: float = Field(default=15.0, ge=1.0)
+    # Share of that cap one client (the per-IP rate-limit key) may start per minute, so a single sweeper
+    # cannot drain the global bucket for everybody else. A client over its share gets the same `metar_busy`.
+    checkwx_new_calls_per_client_per_minute: int = Field(default=3, ge=1)
+    # Overall bound of one CheckWX flight (counter reservation + HTTP call + refund): above the HTTP timeout
+    # (`metar_timeout_seconds`) and the Upstash timeout, below the point where callers give up.
+    checkwx_flight_deadline_seconds: float = Field(default=20.0, ge=1.0)
 
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
