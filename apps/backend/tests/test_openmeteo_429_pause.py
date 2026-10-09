@@ -13,7 +13,7 @@ import pytest
 import respx
 
 import app.services.openmeteo as om_module
-from app.core import rate_limit_pause
+from app.core import rate_limit_pause, usage_counter
 from app.core.cache import CacheOutcome
 from app.services.openmeteo import (
     get_current,
@@ -62,7 +62,7 @@ def clock() -> FakeClock:
 def counted(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Registra cada `usage_counter.record` en vez de mandarlo a Upstash."""
     calls: list[str] = []
-    monkeypatch.setattr(om_module.usage_counter, "record", calls.append)
+    monkeypatch.setattr(usage_counter, "record", calls.append)
     return calls
 
 

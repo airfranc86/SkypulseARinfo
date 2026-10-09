@@ -9,6 +9,7 @@ import respx
 import httpx
 
 import app.services.openmeteo as om_module
+from app.core import usage_counter
 from app.core.cache import CacheOutcome
 from app.services.openmeteo import get_current
 from tests.conftest import OPENMETEO_SAMPLE_PAYLOAD
@@ -162,7 +163,7 @@ async def test_get_current_records_open_meteo_usage(monkeypatch):
     from unittest.mock import MagicMock
 
     mock_record = MagicMock()
-    monkeypatch.setattr(om_module.usage_counter, "record", mock_record)
+    monkeypatch.setattr(usage_counter, "record", mock_record)
 
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://api.open-meteo.com/v1/forecast").mock(

@@ -2,26 +2,16 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
-# HTTPStatusError se importa a mano: el modulo no usa `httpx` completo, pero el `except` de la pausa
-# ante el 429 necesita la clase (ver el gotcha del cliente httpx compartido en CLAUDE.md).
-from httpx import HTTPStatusError, Response
-
-from app.core import usage_counter
 from app.core.cache import CacheOutcome, FetchRefused, SingleFlightCache
-from app.core.client_context import current_client_key
 from app.core.config import settings
 from app.core.dataclass_codec import DataclassCodec
-from app.core.http_client import fetch_with_retry, get_client
 from app.core.persistent_cache import RedisLastGoodStore
-from app.core.rate_limit import UNVERIFIED_CLIENT_KEY
-from app.core.rate_limit_pause import openmeteo_pause
-from app.core.token_bucket import REFUSED_BY_CLIENT, REFUSED_BY_GLOBAL, ClientAndGlobalBudget
+from app.services.openmeteo_source import CacheLevel, SeriesRequest, bind_caches, cache_key, fetch_series, get_source
 from app.services.visibilidad import MAX_VISIBILITY_M, classify_visibility
 from app.utils.parsing import parse_float
 
@@ -33,7 +23,7 @@ _AR_TZ = timezone(timedelta(hours=-3))
 
 logger = logging.getLogger(__name__)
 
-_CURRENT_FIELDS = ",".join([
+_CURRENT_FIELDS = (
     "temperature_2m",
     "relative_humidity_2m",
     "apparent_temperature",
@@ -45,118 +35,19 @@ _CURRENT_FIELDS = ",".join([
     "precipitation",
     "cloud_cover",
     "weather_code",
-])
+)
 
 # ---------------------------------------------------------------------------
 # Cache infrastructure — Fix 1
 # Three TTL buckets: current (10 min), forecast (30 min), nowcast (15 min).
 # ---------------------------------------------------------------------------
 
-def _cache_key(params: dict) -> str:
-    """Canonical cache key from a request params dict.
-
-    Rounds lat/lon to 2 decimals (~1.1 km) to raise the cache hit rate for nearby
-    coordinates without meaningfully changing the weather returned; sorts all
-    keys so insertion order never produces a different key for the same request.
-    """
-    normalized = {
-        k: (round(v, 2) if k in ("latitude", "longitude") and isinstance(v, float) else v)
-        for k, v in params.items()
-    }
-    return json.dumps(normalized, sort_keys=True)
-
-
 # Las cachés (`_CACHE_*`) se definen más abajo, después de las dataclasses que guardan: el códec de la
 # persistencia registra esas clases por nombre.
 
 
-# ---------------------------------------------------------------------------
-# Call budget: a share per client and a global cap on what goes out to the network
-# ---------------------------------------------------------------------------
-# The cache key rounds lat/lon to 2 decimals (~7 million cells in Argentina) and a new cell costs ~5 calls,
-# so without a budget one client could drain the free plan and the 429 that follows would pause EVERYBODY.
-# Only calls made while serving an HTTP request are capped (`current_client_key()` is None for scripts and
-# scheduled jobs). A refused call returns None, exactly like a failed one: the cache serves the last good copy
-# and the routers keep answering what they already answer when Open-Meteo is unavailable.
-
-_MAX_TRACKED_CLIENTS = 1024
-# If `CF-Connecting-IP` is missing and the proxy-hop setting is wrong, EVERY request lands on the shared
-# "unverified" key (see `core/rate_limit.py`). Exempting it would be a silent fail-open, and one ordinary share
-# would take the whole site down, so it gets a larger dedicated share: half of the global cap (never less than
-# an ordinary share). The global bucket still bounds it.
-_REFUSAL_LOG_INTERVAL_SECONDS = 60.0
-
-_budget_state: ClientAndGlobalBudget | None = None
-_refusals: dict[str, int] = {REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0}  # since startup
-_unreported: dict[str, int] = {REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0}  # since the last log line
-_last_refusal_log: float | None = None
-
-
-def _budget_now() -> float:
-    return time.monotonic()
-
-
-def _budget_clock() -> float:
-    return _budget_now()  # resolved on every read so tests can replace `_budget_now`
-
-
-def _budget() -> ClientAndGlobalBudget:
-    """The buckets, built from the settings on first use (both caps per minute, refilled continuously)."""
-    global _budget_state
-    if _budget_state is None:
-        _budget_state = ClientAndGlobalBudget(
-            per_client_capacity=settings.openmeteo_calls_per_client_per_minute,
-            global_capacity=settings.openmeteo_calls_per_minute,
-            per_seconds=60.0,
-            clock=_budget_clock,
-            max_clients=_MAX_TRACKED_CLIENTS,
-            dedicated_capacities={
-                UNVERIFIED_CLIENT_KEY: max(
-                    settings.openmeteo_calls_per_minute // 2, settings.openmeteo_calls_per_client_per_minute
-                )
-            },
-        )
-    return _budget_state
-
-
-def budget_refusals() -> dict[str, int]:
-    """Calls refused by the budget since startup, by reason (``client`` or ``global``). A copy."""
-    return dict(_refusals)
-
-
-def _note_refusal(reason: str) -> None:
-    """Count a refusal and log it at most once a minute (counts and reason only: never an address or a key)."""
-    global _last_refusal_log
-    _refusals[reason] += 1
-    _unreported[reason] += 1
-    now = _budget_now()
-    if _last_refusal_log is not None and now - _last_refusal_log < _REFUSAL_LOG_INTERVAL_SECONDS:
-        return
-    _last_refusal_log = now
-    logger.warning(
-        "open_meteo_budget_refused client=%d global=%d (limits per minute: client %d, global %d)",
-        _unreported[REFUSED_BY_CLIENT],
-        _unreported[REFUSED_BY_GLOBAL],
-        settings.openmeteo_calls_per_client_per_minute,
-        settings.openmeteo_calls_per_minute,
-    )
-    _unreported.update({REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0})
-
-
-def _admit_network_call() -> bool:
-    """Spend the budget for ONE call to Open-Meteo. False = refused: the caller must not go out."""
-    client = current_client_key()
-    if client is None:
-        return True  # not an HTTP request: scripts and scheduled jobs are not capped
-    reason = _budget().try_acquire(client)
-    if reason is None:
-        return True
-    _note_refusal(reason)
-    return False
-
-
 async def _cached_or_none(cache: SingleFlightCache, key: str, fetch, **kwargs):
-    """`get_or_fetch` for the public fetch functions.
+    """`get_or_fetch` for the public fetch functions that are not behind `fetch_series` yet.
 
     A budget refusal with no copy to serve means "unavailable" (None) for THIS request only: the cache has
     already refused to remember it as a failure of the key (`FetchRefused`).
@@ -167,74 +58,12 @@ async def _cached_or_none(cache: SingleFlightCache, key: str, fetch, **kwargs):
         return None
 
 
-def _reset_budget_for_tests() -> None:
-    """Forget every bucket, counter and the log throttle. Tests only."""
-    global _budget_state, _last_refusal_log
-    _budget_state = None
-    _last_refusal_log = None
-    _refusals.update({REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0})
-    _unreported.update({REFUSED_BY_CLIENT: 0, REFUSED_BY_GLOBAL: 0})
+async def _get_json(params: dict, failure_message: str, *log_args: object) -> Any:
+    """Pide `params` a la fuente activa (ver `openmeteo_source`). Solo para los fetch que aún no usan `fetch_series`.
 
-
-# ---------------------------------------------------------------------------
-# Pedido HTTP único a Open-Meteo, con la pausa ante el 429
-# ---------------------------------------------------------------------------
-
-_NO_RETRY_STATUSES = frozenset({429})
-
-
-def _retry_after_seconds(response: Response) -> float | None:
-    """`Retry-After` en segundos, o None si falta o no es un número (la forma de fecha HTTP no se usa)."""
-    raw = response.headers.get("Retry-After")
-    if raw is None:
-        return None
-    try:
-        return float(raw)
-    except ValueError:
-        return None
-
-
-async def _get_json(params: dict, failure_message: str, *log_args: object) -> dict | None:
-    """Pide `params` a Open-Meteo y devuelve el JSON, o None ante cualquier fallo (con `failure_message`).
-
-    Con la pausa ante el 429 abierta no sale a la red: ni pedido, ni reintento, ni suma al contador
-    `open_meteo`; devuelve None para que la caché sirva el último dato bueno. Un 429 abre la pausa
-    (según `Retry-After` si es razonable) y una respuesta exitosa la cierra.
-
-    Después de la pausa (que no gasta nada) y antes de la red y del contador, un pedido atendiendo a un
-    cliente gasta una ficha de su parte y otra del tope global (ver `_admit_network_call`). Si el
-    presupuesto lo rechaza, no hay llamada, no suma al contador, no abre la pausa y libera el lugar de la
-    prueba si lo tenía. En vez de None LEVANTA `FetchRefused`: la caché no debe recordar un rechazo como una
-    falla de la celda (envenenaría la celda para los demás clientes); sirve la copia vieja si la hay y, si no,
-    el llamador público lo traduce en None solo para este pedido (`_cached_or_none`).
+    Devuelve el JSON o None ante cualquier fallo; LEVANTA `FetchRefused` si el tope de pedidos lo rechaza.
     """
-    if not openmeteo_pause.allow_request():
-        logger.info(
-            "Open-Meteo en pausa por 429 (faltan %.0f s): sin llamada de red", openmeteo_pause.remaining()
-        )
-        return None
-    if not _admit_network_call():
-        openmeteo_pause.release_probe()  # a refused call must not hold the half-open probe slot
-        raise FetchRefused("Open-Meteo call budget exhausted")
-    started_generation = openmeteo_pause.generation
-    try:
-        client = get_client()
-        usage_counter.record("open_meteo")
-        response = await fetch_with_retry(
-            client, "GET", settings.openmeteo_base_url,
-            params=params,
-            timeout=settings.http_timeout_seconds,
-            # Un 429 es por IP compartida: reintentar medio segundo después solo suma carga. Sube de inmediato
-            # y `_get_json` abre la pausa.
-            no_retry_statuses=_NO_RETRY_STATUSES,
-        )
-        openmeteo_pause.record_success(started_generation)
-        return response.json()
-    except Exception as exc:
-        if isinstance(exc, HTTPStatusError) and exc.response.status_code == 429:
-            openmeteo_pause.trip(_retry_after_seconds(exc.response))
-        logger.warning(failure_message, *log_args, exc)
-        return None
+    return await get_source().get_json(params, failure_message, *log_args)
 
 
 @dataclass(frozen=True)
@@ -271,6 +100,42 @@ def _parse_observation_time(raw: object) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _current_request(lat: float, lon: float) -> SeriesRequest:
+    # No se especifica "models" → Open-Meteo usa best_match automáticamente.
+    # ecmwf_ifs04 tiene delay de publicación y devuelve nulls para el slot actual.
+    return SeriesRequest(
+        lat=lat,
+        lon=lon,
+        level=CacheLevel.CURRENT,
+        current=_CURRENT_FIELDS,
+        wind_speed_unit_kmh=True,
+    )
+
+
+def _parse_current(data: dict) -> OpenMeteoCurrent:
+    """Arma el `OpenMeteoCurrent`. El error de un payload mal formado lo traduce `fetch_series` en None."""
+    current = data["current"]
+    wc_raw = current.get("weather_code")
+    weather_code = int(wc_raw) if wc_raw is not None else None
+    return OpenMeteoCurrent(
+        temp_c=parse_float(current.get("temperature_2m")),
+        feels_like_c=parse_float(current.get("apparent_temperature")),
+        humidity=parse_float(current.get("relative_humidity_2m")),
+        wind_speed_kmh=parse_float(current.get("wind_speed_10m")),
+        wind_dir_deg=(lambda d: d % 360 if d is not None else None)(
+            parse_float(current.get("wind_direction_10m"))
+        ),
+        pressure_hpa=parse_float(current.get("surface_pressure")),
+        precip_1h_mm=parse_float(current.get("precipitation")),
+        cloud_cover=parse_float(current.get("cloud_cover")),
+        weather_code=weather_code,
+        description=None,
+        fetched_at=datetime.now(timezone.utc),
+        observed_at=_parse_observation_time(current.get("time")),
+        wind_gust_kmh=parse_float(current.get("wind_gusts_10m")),
+    )
+
+
 async def get_current(
     lat: float,
     lon: float,
@@ -284,48 +149,7 @@ async def get_current(
     `cache_outcome` (opcional) recibe si el dato salió de la caché: el objeto cacheado es
     compartido e inmutable, así que la procedencia no puede viajar dentro de él.
     """
-    # No se especifica "models" → Open-Meteo usa best_match automáticamente.
-    # ecmwf_ifs04 tiene delay de publicación y devuelve nulls para el slot actual.
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "current": _CURRENT_FIELDS,
-        "timezone": "America/Argentina/Buenos_Aires",
-        "wind_speed_unit": "kmh",
-    }
-    key = _cache_key(params)
-
-    async def _fetch() -> OpenMeteoCurrent | None:
-        data = await _get_json(params, "Open-Meteo fetch failed: %s")
-        if data is None:
-            return None
-
-        try:
-            current = data["current"]
-            wc_raw = current.get("weather_code")
-            weather_code = int(wc_raw) if wc_raw is not None else None
-            return OpenMeteoCurrent(
-                temp_c=parse_float(current.get("temperature_2m")),
-                feels_like_c=parse_float(current.get("apparent_temperature")),
-                humidity=parse_float(current.get("relative_humidity_2m")),
-                wind_speed_kmh=parse_float(current.get("wind_speed_10m")),
-                wind_dir_deg=(lambda d: d % 360 if d is not None else None)(
-                    parse_float(current.get("wind_direction_10m"))
-                ),
-                pressure_hpa=parse_float(current.get("surface_pressure")),
-                precip_1h_mm=parse_float(current.get("precipitation")),
-                cloud_cover=parse_float(current.get("cloud_cover")),
-                weather_code=weather_code,
-                description=None,
-                fetched_at=datetime.now(timezone.utc),
-                observed_at=_parse_observation_time(current.get("time")),
-                wind_gust_kmh=parse_float(current.get("wind_gusts_10m")),
-            )
-        except (KeyError, TypeError) as exc:
-            logger.warning("Open-Meteo payload parse error: %s", exc)
-            return None
-
-    return await _cached_or_none(_CACHE_CURRENT, key, _fetch, outcome=cache_outcome)
+    return await fetch_series(_current_request(lat, lon), _parse_current, outcome=cache_outcome)
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +219,7 @@ async def _daily_forecast_ext_or_raise(
     }
     if model:
         params["models"] = model
-    key = _cache_key(params)
+    key = cache_key(params)
 
     async def _fetch() -> DailyForecastDataExt | None:
         data = await _get_json(params, "Open-Meteo daily_ext forecast failed (model=%s): %s", model)
@@ -474,7 +298,7 @@ async def get_multi_model_daily(
     Si ambos fallan retorna None; si solo uno falla, el consenso usa el modelo disponible.
     """
     # Synthetic key — captures all inputs including the hardcoded model list.
-    key = _cache_key({"latitude": lat, "longitude": lon, "forecast_days": days, "models": "gfs_seamless,ecmwf_ifs025"})
+    key = cache_key({"latitude": lat, "longitude": lon, "forecast_days": days, "models": "gfs_seamless,ecmwf_ifs025"})
 
     async def _fetch() -> MultiModelDailyData | None:
         model_names = ["gfs_seamless", "ecmwf_ifs025"]
@@ -605,6 +429,13 @@ _CACHE_CURRENT: SingleFlightCache = _flight_cache(256, 600, "om_current", _STORE
 _CACHE_FORECAST: SingleFlightCache = _flight_cache(256, 1800, "om_forecast", _STORE_FORECAST)
 _CACHE_NOWCAST: SingleFlightCache = _flight_cache(256, 900, "om_nowcast", _STORE_NOWCAST)
 
+# `fetch_series` elige la caché por nivel: se las enlaza acá, donde se definen (el módulo de pedidos no importa este).
+bind_caches({
+    CacheLevel.CURRENT: _CACHE_CURRENT,
+    CacheLevel.FORECAST: _CACHE_FORECAST,
+    CacheLevel.NOWCAST: _CACHE_NOWCAST,
+})
+
 
 def _parse_hourly_payload(data: dict, fetched_at: datetime | None = None) -> HourlyForecastExt:
     """Arma un `HourlyForecastExt` desde la respuesta horaria de Open-Meteo.
@@ -688,7 +519,7 @@ async def get_hourly_forecast_ext(
         "timezone": "America/Argentina/Buenos_Aires",
         "wind_speed_unit": "kmh",
     }
-    key = _cache_key(params)
+    key = cache_key(params)
 
     async def _fetch() -> HourlyForecastExt | None:
         data = await _get_json(params, "Open-Meteo hourly_ext forecast failed: %s")
@@ -750,7 +581,7 @@ async def get_hourly_forecast_ecmwf(
         "timezone": "America/Argentina/Buenos_Aires",
         "wind_speed_unit": "kmh",
     }
-    key = _cache_key(params)
+    key = cache_key(params)
 
     async def _fetch() -> HourlyForecastExt | None:
         data = await _get_json(params, "Open-Meteo hourly ECMWF forecast failed: %s")
@@ -904,14 +735,32 @@ def _cap_vis(raw: float | None) -> float | None:
 # días siempre hay 12 horas desde la próxima, también con la respuesta cacheada
 # (15 min) después de medianoche. Sigue siendo un único pedido.
 _NIEBLA_FORECAST_DAYS = 2
-_NIEBLA_HOURLY_FIELDS = ",".join([
+_NIEBLA_HOURLY_FIELDS = (
     "visibility",
     "relative_humidity_2m",
     "dew_point_2m",
     "temperature_2m",
     "wind_speed_10m",
     "weather_code",
-])
+)
+
+
+def _niebla_request(lat: float, lon: float) -> SeriesRequest:
+    return SeriesRequest(
+        lat=lat,
+        lon=lon,
+        level=CacheLevel.NOWCAST,
+        current=("visibility", "weather_code"),
+        hourly=_NIEBLA_HOURLY_FIELDS,
+        forecast_days=_NIEBLA_FORECAST_DAYS,
+    )
+
+
+def _require_object(payload: object) -> dict:
+    """El JSON crudo de la niebla se cachea tal cual (cada lector parsea su porción): solo se exige un objeto."""
+    if not isinstance(payload, dict):
+        raise TypeError(f"expected a JSON object, got {type(payload).__name__}")
+    return payload
 
 
 async def _fetch_niebla_combined(lat: float, lon: float) -> dict | None:
@@ -920,20 +769,12 @@ async def _fetch_niebla_combined(lat: float, lon: float) -> dict | None:
     get_fog_inference_forecast (unión de sus variables current/hourly).
     Devuelve el JSON crudo (o None ante error); cacheado en _CACHE_NOWCAST.
     """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "current": "visibility,weather_code",
-        "hourly": _NIEBLA_HOURLY_FIELDS,
-        "timezone": "America/Argentina/Buenos_Aires",
-        "forecast_days": _NIEBLA_FORECAST_DAYS,
-    }
-    key = _cache_key(params)
-
-    async def _fetch() -> dict | None:
-        return await _get_json(params, "Open-Meteo niebla combined fetch failed: %s")
-
-    return await _cached_or_none(_CACHE_NOWCAST, key, _fetch)
+    return await fetch_series(
+        _niebla_request(lat, lon),
+        _require_object,
+        failure_message="Open-Meteo niebla combined fetch failed: %s",
+        parse_error_message="Open-Meteo niebla combined payload parse error: %s",
+    )
 
 
 async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | None:
