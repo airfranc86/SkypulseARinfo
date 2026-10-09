@@ -3,10 +3,11 @@
 The nearest Argentine airport's latest METAR replaces the model reading when the airport is close
 (`settings.metar_max_distance_km`) and the report is recent (`settings.metar_max_age_minutes`).
 
-    GET https://aviationweather.gov/api/data/metar?ids=<ICAO>&format=json&hours=3   (no key)
-
-The request itself goes out through `reportes_aeronauticos.awc` (`get_source().metar`), the single
-place that builds AWC requests.
+This module owns the dashboard's rules only: which airport, how a report becomes a `MetarObservation`
+(SI units, humidity) and why a report is or is not used (`MetarSelection.reason`). It makes no request and
+keeps no cache: the reports come from `reportes_aeronauticos.awc_metar.fetch_metar_entries`, the one AWC
+request and cache per station shared with Niebla, and `latest_valid_entry` picks the report with the
+highest `obsTime`.
 
 AWC fields used: `obsTime` (epoch s), `temp`/`dewp` (°C), `wdir` (degrees or "VRB"), `wspd`/`wgst`
 (kt), `wxString`, `rawOb`. Every failure returns None and is logged: the dashboard never breaks or
@@ -20,23 +21,15 @@ import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from app.core.cache import SingleFlightCache
 from app.core.config import settings
 from app.schemas.weather import MetarReason
 from app.services.reportes_aeronauticos.aeropuertos import nearest_airport_with_distance
-from app.services.reportes_aeronauticos.awc import AwcError, get_source
+from app.services.reportes_aeronauticos.awc_metar import fetch_metar_entries, latest_valid_entry
 from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)
 
 _KT_TO_KMH = 1.852
-_LOOKBACK_HOURS = 3
-
-# Valid reports live 5 min (AWC publishes hourly at :00, ~4 min later); failures 1 min, so a down
-# AWC is not hit — nor waited on — by every dashboard request.
-_CACHE: SingleFlightCache[MetarObservation] = SingleFlightCache(
-    maxsize=64, ttl=300, failure_ttl=60, name="metar_observation"
-)
 
 
 @dataclass(frozen=True)
@@ -88,11 +81,6 @@ def _wind_direction(wdir: object, speed_kmh: float | None) -> float | None:
     return None if degrees is None else degrees % 360
 
 
-def _obs_time(entry: dict) -> datetime | None:
-    seconds = parse_float(entry.get("obsTime"))
-    return None if seconds is None else datetime.fromtimestamp(seconds, tz=timezone.utc)
-
-
 def _parse_entry(icao: str, entry: dict, observed_at: datetime) -> MetarObservation:
     temp_c = parse_float(entry.get("temp"))
     dewpoint_c = parse_float(entry.get("dewp"))
@@ -113,33 +101,13 @@ def _parse_entry(icao: str, entry: dict, observed_at: datetime) -> MetarObservat
     )
 
 
-def _latest(icao: str, data: object) -> MetarObservation | None:
-    """The most recent entry by `obsTime`; None if the payload has no dated entry."""
-    if not isinstance(data, list):
-        logger.warning("METAR observation %s: unexpected payload type %s", icao, type(data).__name__)
-        return None
-    dated = [(t, e) for e in data if isinstance(e, dict) and (t := _obs_time(e)) is not None]
-    if not dated:
-        logger.info("METAR observation %s: no dated report in the last %s h", icao, _LOOKBACK_HOURS)
-        return None
-    observed_at, entry = max(dated, key=lambda pair: pair[0])
-    return _parse_entry(icao, entry, observed_at)
-
-
-async def _fetch(icao: str) -> MetarObservation | None:
-    try:
-        data = await get_source().metar(
-            icao, hours=_LOOKBACK_HOURS, timeout=settings.metar_observation_timeout_seconds
-        )
-    except AwcError as exc:   # timeout, HTTP error, invalid JSON: the dashboard falls back
-        logger.warning("METAR observation fetch failed for %s: %r", icao, exc)
-        return None
-    return _latest(icao, data)
-
-
 async def fetch_latest_observation(icao: str) -> MetarObservation | None:
-    """Latest METAR of `icao` (cached 5 min; failures cached 1 min). Never raises."""
-    return await _CACHE.get_or_fetch(icao, lambda: _fetch(icao))
+    """Latest METAR of `icao` as an observation, from the shared AWC list (cached there). Never raises."""
+    entries = await fetch_metar_entries(icao)
+    latest = None if entries is None else latest_valid_entry(entries)
+    if latest is None:
+        return None
+    return _parse_entry(icao, latest.entry, latest.observed_at)
 
 
 def classify_observation(

@@ -5,12 +5,12 @@ Callers (METAR visibility, TAF, the dashboard METAR observation) never touch htt
 Tests swap the source with `set_source` (see `tests/awc_fixture_source.py`); the real one is
 `HttpAwcSource`, which owns the URL, the query parameters, the `User-Agent` and the usage counter.
 
-    METAR: GET https://aviationweather.gov/api/data/metar?ids=SAEZ&format=json&hours=2
+    METAR: GET https://aviationweather.gov/api/data/metar?ids=SAEZ&format=json&hours=3   (one request per station, shared: `awc_metar.py`)
     TAF:   GET https://aviationweather.gov/api/data/taf?ids=SAEZ&format=json
            (no `hours`: AWC answers HTTP 400 if it is sent; the TAF already carries its validity)
 
-No API key. Caching, rate budget and single-flight of AWC requests are NOT here yet (Phase 1c): each
-caller still keeps its own cache.
+No API key. The METAR cache and single-flight live in `awc_metar.py` (one request and one cache per station,
+Phase 1c-1); the TAF keeps its own cache. The rate budget of AWC is NOT here yet (Phase 1c-2).
 """
 from __future__ import annotations
 

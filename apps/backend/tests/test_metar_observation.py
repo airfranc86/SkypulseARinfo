@@ -9,7 +9,6 @@ import httpx
 import pytest
 import respx
 
-import app.services.metar_observation as mo
 from app.services.metar_observation import (
     MetarObservation,
     classify_observation,
@@ -19,6 +18,7 @@ from app.services.metar_observation import (
 )
 from app.services.reportes_aeronauticos import awc
 from app.services.reportes_aeronauticos.awc import AWC_METAR_BASE as AWC_METAR_URL
+from app.services.reportes_aeronauticos.awc_metar import metar_entries_cache
 
 OBS_TIME = datetime(2026, 10, 5, 21, 0, tzinfo=timezone.utc)
 NOW = OBS_TIME + timedelta(minutes=20)
@@ -201,8 +201,8 @@ async def test_failure_is_cached_briefly():
 
 
 def test_cache_ttls_are_five_minutes_and_one_minute():
-    assert mo._CACHE._cache.ttl == 300
-    assert mo._CACHE._failure_cache.ttl == 60
+    assert metar_entries_cache._cache.ttl == 300
+    assert metar_entries_cache._failure_cache.ttl == 60
 
 
 async def test_records_awc_usage(monkeypatch):
