@@ -46,6 +46,8 @@ from app.services.openmeteo_source import (
     SeriesRequest,
     bind_caches,
     cache_key,
+    fetch_derived,
+    fetch_derived_or_raise,
     fetch_series,
     fetch_series_or_raise,
     get_source,
@@ -373,6 +375,208 @@ async def test_a_refusal_serves_the_stale_copy_when_there_is_one(install, clock)
     outcome = CacheOutcome()
     assert await fetch_series(_request(), _parse_value, outcome=outcome) == {"value": 1}
     assert outcome.hit is True
+
+
+# ---------------------------------------------------------------------------
+# fetch_derived: a value computed from other cached requests
+# ---------------------------------------------------------------------------
+
+DERIVED_KEY = {"latitude": LAT, "longitude": LON, "forecast_days": 7, "models": "a,b"}
+
+
+class Compute:
+    """A `compute` that counts its calls and answers in order (the last answer repeats); an exception instance is raised."""
+
+    def __init__(self, *answers: object) -> None:
+        self._answers = list(answers) or [None]
+        self.calls = 0
+
+    async def __call__(self) -> Any:
+        answer = self._answers[min(self.calls, len(self._answers) - 1)]
+        self.calls += 1
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+
+async def test_a_derived_value_is_computed_once_and_then_served_from_its_cache() -> None:
+    compute = Compute({"v": 1})
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
+    assert compute.calls == 1
+
+
+async def test_a_derived_value_lives_in_the_cache_of_the_level_asked(own_caches) -> None:
+    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute({"v": 1}))
+    held = {level: list(cache._cache) for level, cache in own_caches.caches.items()}
+    assert held == {CacheLevel.CURRENT: [], CacheLevel.FORECAST: [cache_key(DERIVED_KEY)], CacheLevel.NOWCAST: []}
+
+
+async def test_the_derived_key_rounds_the_coordinates_like_a_series_key() -> None:
+    compute = Compute({"v": 1})
+    await fetch_derived({**DERIVED_KEY, "latitude": -31.404}, CacheLevel.FORECAST, compute)
+    await fetch_derived({**DERIVED_KEY, "latitude": -31.396}, CacheLevel.FORECAST, compute)   # same 2-decimal cell
+    assert compute.calls == 1
+    await fetch_derived({**DERIVED_KEY, "forecast_days": 5}, CacheLevel.FORECAST, compute)    # another input: another entry
+    assert compute.calls == 2
+
+
+async def test_a_derived_value_is_not_persisted_unless_asked(own_caches) -> None:
+    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute({"v": 1}))
+    await fetch_derived({**DERIVED_KEY, "models": "kept"}, CacheLevel.FORECAST, Compute({"v": 2}), persist=True)
+    await own_caches.caches[CacheLevel.FORECAST].flush_persistence()
+    assert own_caches.backend.saved == [cache_key({**DERIVED_KEY, "models": "kept"})]
+
+
+async def test_the_or_raise_form_does_not_persist_by_default_either(own_caches) -> None:
+    await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, Compute({"v": 1}))
+    await own_caches.caches[CacheLevel.FORECAST].flush_persistence()
+    assert own_caches.backend.saved == []
+
+
+async def test_an_unpersisted_derived_value_does_not_read_the_backend_when_compute_has_nothing(own_caches) -> None:
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute(None)) is None
+    assert own_caches.backend.loaded == []
+
+
+async def test_the_outcome_says_whether_the_derived_value_came_from_the_cache() -> None:
+    compute = Compute({"v": 1})
+    first, second = CacheOutcome(), CacheOutcome()
+    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=first)
+    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=second)
+    assert (first.hit, second.hit) == (False, True)
+
+
+async def test_concurrent_identical_derived_calls_share_one_compute() -> None:
+    async def slow() -> dict:
+        await asyncio.sleep(0.01)
+        slow.calls += 1                                                  # type: ignore[attr-defined]
+        return {"v": 1}
+
+    slow.calls = 0                                                       # type: ignore[attr-defined]
+    results = await asyncio.gather(*(fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, slow) for _ in range(5)))
+    assert results == [{"v": 1}] * 5
+    assert slow.calls == 1                                               # type: ignore[attr-defined]
+
+
+async def test_a_derived_none_is_remembered_for_the_failure_window() -> None:
+    compute = Compute(None, {"v": 1})
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
+    assert compute.calls == 1
+
+
+async def test_a_stale_derived_copy_is_served_when_compute_has_nothing_after_the_ttl(clock) -> None:
+    compute = Compute({"v": 1}, None)
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
+    clock.advance(1801)
+    outcome = CacheOutcome()
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=outcome) == {"v": 1}
+    assert compute.calls == 2 and outcome.hit is True
+
+
+# --- a refusal is not a failure ---------------------------------------------------------------------------------
+
+async def test_a_derived_refusal_is_none_for_that_call_only_and_is_not_remembered() -> None:
+    compute = Compute(FetchRefused("budget"), {"v": 1})
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}      # nothing was negative-cached
+    assert compute.calls == 2
+
+
+async def test_the_or_raise_form_lets_the_refusal_through_and_does_not_remember_it() -> None:
+    compute = Compute(FetchRefused("budget"), {"v": 1})
+    with pytest.raises(FetchRefused):
+        await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, compute)
+    assert await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
+    assert compute.calls == 2
+
+
+async def test_a_derived_refusal_serves_the_stale_copy_when_there_is_one(clock) -> None:
+    compute = Compute({"v": 1}, FetchRefused("budget"))
+    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute)
+    clock.advance(1801)
+    outcome = CacheOutcome()
+    assert await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=outcome) == {"v": 1}
+    assert outcome.hit is True
+
+
+async def test_concurrent_derived_calls_all_get_the_refusal_of_the_one_compute() -> None:
+    async def refuse() -> dict:
+        await asyncio.sleep(0.01)
+        refuse.calls += 1                                                # type: ignore[attr-defined]
+        raise FetchRefused("budget")
+
+    refuse.calls = 0                                                     # type: ignore[attr-defined]
+    results = await asyncio.gather(*(fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, refuse) for _ in range(3)))
+    assert results == [None, None, None]
+    assert refuse.calls == 1                                             # type: ignore[attr-defined]
+
+
+async def test_an_error_of_compute_that_is_not_a_refusal_is_not_swallowed() -> None:
+    with pytest.raises(RuntimeError, match="bug"):
+        await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute(RuntimeError("bug")))
+
+
+# --- the key and the level --------------------------------------------------------------------------------------
+
+def test_a_derived_key_cannot_look_like_the_query_of_a_series() -> None:
+    wire_like = _request().params()                                      # every SeriesRequest has a `timezone`
+    with pytest.raises(ValueError, match="derived"):
+        asyncio.run(fetch_derived(wire_like, CacheLevel.CURRENT, Compute({"v": 1})))
+
+
+async def test_a_derived_key_never_collides_with_a_series_key(install, own_caches) -> None:
+    install({"value": 1})
+    request = _request(CacheLevel.FORECAST)
+    await fetch_series(request, _parse_value)
+    await fetch_derived({"latitude": LAT, "longitude": LON, "current": "temperature_2m"}, CacheLevel.FORECAST, Compute({"v": 1}))
+    assert len(own_caches.caches[CacheLevel.FORECAST]._cache) == 2
+
+
+async def test_an_unbound_level_fails_clearly_and_computes_nothing(monkeypatch) -> None:
+    monkeypatch.setattr(source_module, "_caches", {})
+    compute = Compute({"v": 1})
+    with pytest.raises(CacheNotBoundError, match="FORECAST"):
+        await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute)
+    assert compute.calls == 0
+
+
+# --- the real use: a value computed from two cached series ------------------------------------------------------
+
+def _two_models(key: dict) -> Any:
+    """A `compute` that asks the same two series a consensus asks, with `fetch_series_or_raise` inside."""
+
+    async def compute() -> dict | None:
+        requests = [
+            SeriesRequest(lat=LAT, lon=LON, level=CacheLevel.FORECAST, daily=("precipitation_sum",), models=m)
+            for m in ("a", "b")
+        ]
+        results = await asyncio.gather(
+            *(fetch_series_or_raise(r, _parse_value) for r in requests), return_exceptions=True
+        )
+        if any(isinstance(r, FetchRefused) for r in results):
+            raise FetchRefused("one model was refused")
+        return {"models": [r for r in results if isinstance(r, dict)]}
+
+    return compute
+
+
+async def test_a_consensus_with_a_refused_series_is_not_cached_but_the_series_that_came_back_is(install) -> None:
+    def respond(params: dict) -> object:
+        return FetchRefused("budget") if params["models"] == "b" and not respond.b_ok else {"value": params["models"]}  # type: ignore[attr-defined]
+
+    respond.b_ok = False                                                 # type: ignore[attr-defined]
+    fake = install(respond=respond)
+    compute = _two_models(DERIVED_KEY)
+
+    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
+    assert sorted(c.params["models"] for c in fake.calls) == ["a", "b"]
+
+    respond.b_ok = True                                                  # type: ignore[attr-defined]
+    result = await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute)
+    assert result == {"models": [{"value": "a"}, {"value": "b"}]}        # not the one-model consensus
+    assert sorted(c.params["models"] for c in fake.calls) == ["a", "b", "b"]   # "a" was served from its own entry
 
 
 # ---------------------------------------------------------------------------

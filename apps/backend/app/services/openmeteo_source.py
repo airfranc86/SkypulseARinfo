@@ -15,6 +15,11 @@ with `set_source` (see `FakeOpenMeteoSource` in `tests/test_openmeteo_source.py`
 A call the source refuses on purpose (`FetchRefused`: the call budget said no) is `None` for THAT call only: the
 cache does not remember it as a failure of the key and serves its last good copy when it has one.
 
+    fetch_derived(request_key, level, compute) -> T | None
+        for a value computed from other requests (a consensus of several models): it makes no request of its own.
+        `compute` asks the series it needs (with `fetch_series_or_raise`, so each keeps its own cache entry) and
+        raises `FetchRefused` when one was refused, so a consensus with a model missing is never cached.
+
 This module must not import `openmeteo.py` (that module imports this one and binds its caches here).
 """
 from __future__ import annotations
@@ -22,7 +27,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol, TypeVar
@@ -306,5 +311,46 @@ async def fetch_series(
             parse_error_message=parse_error_message,
             log_args=log_args,
         )
+    except FetchRefused:
+        return None
+
+
+async def fetch_derived_or_raise(
+    request_key: Mapping[str, object],
+    level: CacheLevel,
+    compute: Callable[[], Awaitable[T | None]],
+    *,
+    persist: bool = False,
+    outcome: CacheOutcome | None = None,
+) -> T | None:
+    """Answer from the `level` cache a value that `compute` builds from other requests; None when it has no data.
+
+    The module sends nothing here: `compute` asks the series it needs (with `fetch_series_or_raise`, so each one
+    keeps its own cache entry and its own call budget) and returns the value to cache. `request_key` holds every
+    input of the value (the coordinates are rounded like a series key); it must not look like the query of a
+    series (it never has `timezone`), so a derived entry can never take the place of a series entry.
+
+    `compute` raises `FetchRefused` when one of the series it needs was refused: nothing is cached (not even as a
+    failure of the key), the cache serves its last good copy when it has one and otherwise the refusal reaches the
+    caller. Any other error of `compute` is a bug and propagates. `persist` is False by default: a derived value is
+    recomputed from series that are already persisted, and saving it would renew the age of a copy served stale.
+    """
+    if "timezone" in request_key:
+        raise ValueError("a derived key must not look like the query of a series (it has `timezone`)")
+    cache = _cache_for(level)
+    return await cache.get_or_fetch(cache_key(request_key), compute, outcome=outcome, persist=persist)
+
+
+async def fetch_derived(
+    request_key: Mapping[str, object],
+    level: CacheLevel,
+    compute: Callable[[], Awaitable[T | None]],
+    *,
+    persist: bool = False,
+    outcome: CacheOutcome | None = None,
+) -> T | None:
+    """`fetch_derived_or_raise`, with a refusal translated into None for THIS call only (nothing is remembered)."""
+    try:
+        return await fetch_derived_or_raise(request_key, level, compute, persist=persist, outcome=outcome)
     except FetchRefused:
         return None
