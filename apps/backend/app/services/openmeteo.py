@@ -11,7 +11,15 @@ from app.core.cache import CacheOutcome, FetchRefused, SingleFlightCache
 from app.core.config import settings
 from app.core.dataclass_codec import DataclassCodec
 from app.core.persistent_cache import RedisLastGoodStore
-from app.services.openmeteo_source import CacheLevel, SeriesRequest, bind_caches, cache_key, fetch_series, get_source
+from app.services.openmeteo_source import (
+    CacheLevel,
+    SeriesRequest,
+    bind_caches,
+    cache_key,
+    fetch_derived,
+    fetch_series,
+    get_source,
+)
 from app.services.visibilidad import MAX_VISIBILITY_M, classify_visibility
 from app.utils.parsing import parse_float
 
@@ -297,8 +305,9 @@ async def get_multi_model_daily(
     La caché del Fix 1 absorbe el doble de llamadas sin riesgo de rate-limit.
     Si ambos fallan retorna None; si solo uno falla, el consenso usa el modelo disponible.
     """
-    # Synthetic key — captures all inputs including the hardcoded model list.
-    key = cache_key({"latitude": lat, "longitude": lon, "forecast_days": days, "models": "gfs_seamless,ecmwf_ifs025"})
+    # The consensus makes no request of its own: it is cached as a value derived from the two model requests.
+    # Its key captures every input, including the hardcoded model list.
+    key = {"latitude": lat, "longitude": lon, "forecast_days": days, "models": "gfs_seamless,ecmwf_ifs025"}
 
     async def _fetch() -> MultiModelDailyData | None:
         model_names = ["gfs_seamless", "ecmwf_ifs025"]
@@ -354,9 +363,10 @@ async def get_multi_model_daily(
             rain_consensus_per_day=consensus_label,
         )
 
-    # `persist=False`: el consenso se recalcula desde los dos modelos, que ya se guardan cada uno. Guardarlo
-    # también duplicaría el espacio y "renovaría" la edad de un dato servido desde una copia vieja.
-    return await _cached_or_none(_CACHE_FORECAST, key, _fetch, persist=False)
+    # Sin persistir (el valor por defecto de `fetch_derived`): el consenso se recalcula desde los dos modelos, que
+    # ya se guardan cada uno. Guardarlo también duplicaría el espacio y "renovaría" la edad de un dato servido
+    # desde una copia vieja.
+    return await fetch_derived(key, CacheLevel.FORECAST, _fetch)
 
 
 # ---------------------------------------------------------------------------
