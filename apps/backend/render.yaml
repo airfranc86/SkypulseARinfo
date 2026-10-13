@@ -28,8 +28,17 @@ services:
         sync: false
       - key: ALERTAS_EVALUAR_URL
         sync: false
-      # El envío automático nace apagado; encenderlo es un cambio explícito de esta variable. OJO: un `value`
-      # fijo en el blueprint se vuelve a escribir en cada sync. Para encenderlo desde el panel de Render, antes
-      # hay que quitar o cambiar este valor en el blueprint; si no, el próximo sync lo apaga de nuevo.
+      # El envío automático nace apagado; encenderlo es un cambio explícito de esta variable. OJO: el servicio
+      # real de Render NO se sincroniza desde este blueprint (su comando de inicio y su nombre difieren), así
+      # que este archivo documenta las variables y sus valores iniciales: lo que vale es el valor cargado en el
+      # panel de Render, y cambiarlo ahí no se pisa solo.
       - key: ALERTAS_ENVIO_ACTIVO
+        value: "false"
+      # Evaluación en seco (PR5b): con "true" el endpoint /evaluar consulta a Open-Meteo y CUENTA las zonas con
+      # tormenta, pero no manda ninguna notificación. Nace apagada; se enciende cambiando el valor en el panel de
+      # Render (que es el que vale, ver arriba). La clave `alertas:apagado` de Upstash la detiene en cualquier
+      # momento. Tienen valor por defecto y no hace falta declararlas: ALERTAS_MAX_ZONAS_POR_CORRIDA (50, el
+      # catálogo), ALERTAS_LOCK_TTL_SEGUNDOS (600) y ALERTAS_PLAZO_CORRIDA_SEGUNDOS (480, tiene que ser menor que
+      # la vida del lock).
+      - key: ALERTAS_EVALUAR_EN_SECO
         value: "false"

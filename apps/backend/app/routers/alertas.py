@@ -3,7 +3,7 @@
 POST /api/alertas/suscripcion  -> 201 {id, zona}
 POST /api/alertas/baja         -> 204
 POST /api/alertas/prueba       -> 200 {enviada}
-POST /api/alertas/evaluar      -> 200 {estado} | 401   (lo llama QStash, firmado; ver `/evaluar` abajo)
+POST /api/alertas/evaluar      -> 200 {estado, ...contadores} | 401   (lo llama QStash, firmado; ver `/evaluar` abajo)
 
 Falla cerrado: sin Upstash, sin clave VAPID usable o con el tope de suscripciones alcanzado responde 503,
 nunca 500. No se loguea el endpoint, las claves, el id ni el cuerpo (el middleware de requests solo
@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from py_vapid import Vapid
 from starlette.requests import ClientDisconnect
 
-from app.core.client_context import sin_clave_de_cliente
+from app.core.client_context import ALERTAS_JOB_CLIENT_KEY, con_clave_de_cliente
 from app.core.rate_limit import limiter
 from app.core.upstash import UpstashRedis, UpstashUnavailableError, get_redis
 from app.schemas.alertas import (
@@ -30,7 +30,7 @@ from app.schemas.alertas import (
     SuscripcionCreada,
     SuscripcionRequest,
 )
-from app.services.alertas import envio, evaluacion, firma_qstash, interruptor
+from app.services.alertas import envio, evaluacion, firma_qstash
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.firma_qstash import motivo_de_rechazo
 
@@ -194,27 +194,40 @@ async def _motivo_de_rechazo_del_pedido(request: Request) -> str | None:
     return motivo_de_rechazo(firma, cuerpo)
 
 
+def _ahora_utc() -> datetime:
+    """The clock of the run: the one place that reads the wall clock. The evaluation receives it as a parameter."""
+    return datetime.now(timezone.utc)
+
+
 @router.post(
     "/evaluar",
     summary="Evaluación programada de alertas (lo llama QStash, firmado)",
     include_in_schema=False,
 )
 @limiter.limit("30/minute")
-async def post_evaluar(request: Request) -> dict[str, str]:
-    """Verifica la firma de QStash sobre el cuerpo crudo y, solo entonces, mira el interruptor y evalúa.
+async def post_evaluar(request: Request) -> dict[str, str | int]:
+    """Verifica la firma de QStash sobre el cuerpo crudo y, solo entonces, mira el interruptor y evalúa en seco.
 
     - 401 `no_autorizado` si falta la firma o no vale (misma respuesta para toda causa; el motivo, un código
       fijo sin valores, queda solo en el registro del servidor).
-    - 200 `{"estado": "apagado"}` si el envío está apagado (200 para que QStash no reintente).
-    - 200 `{"estado": <resultado de la evaluación>}` si está activo (hoy `listo`; la evaluación llega en la 5b).
+    - 200 `{"estado": "apagado"}` si ni `ALERTAS_ENVIO_ACTIVO` ni `ALERTAS_EVALUAR_EN_SECO` están encendidos, si
+      la clave `alertas:apagado` de Upstash existe o no se puede leer, o si no hay Upstash (200 para que QStash no
+      reintente; con los dos interruptores apagados no se toca Upstash ni Open-Meteo).
+    - 200 `{"estado": ..., <contadores>}` con el resultado de la evaluación (`evaluada`, `fuera_de_ventana`,
+      `en_curso`, `upstash_no_disponible`, `apagado_a_mitad`): solo el estado y números de zonas, nunca ids,
+      endpoints ni claves. En esta etapa la evaluación NUNCA manda una notificación, con cualquiera de los dos
+      interruptores.
+
+    Todo corre con la clave de cliente fija del trabajo (`job:alertas`): las llamadas a Open-Meteo no gastan la
+    parte de la IP que entregó el pedido, y SIGUE valiendo el tope global de Open-Meteo.
     """
     motivo = await _motivo_de_rechazo_del_pedido(request)
     if motivo is not None:
         logger.warning("alertas: /evaluar rechazó un pedido sin firma válida motivo=%s", motivo)
         raise HTTPException(status_code=401, detail=_NO_AUTORIZADO)
     redis = get_redis()
-    with sin_clave_de_cliente():
-        if not await interruptor.envio_activo(redis) or redis is None:
-            return {"estado": "apagado"}
-        resultado = await evaluacion.evaluar(redis, datetime.now(timezone.utc))
-        return {"estado": resultado.estado}
+    with con_clave_de_cliente(ALERTAS_JOB_CLIENT_KEY):
+        if not await evaluacion.evaluacion_permitida(redis) or redis is None:
+            return {"estado": evaluacion.ESTADO_APAGADO}
+        resultado = await evaluacion.evaluar(redis, _ahora_utc())
+        return resultado.como_respuesta()

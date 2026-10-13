@@ -19,6 +19,11 @@ from contextvars import ContextVar, Token
 
 _client_key: ContextVar[str | None] = ContextVar("skypulse_client_key", default=None)
 
+# The fixed client key of the scheduled alert evaluation (FRA-355). It is not an address, so no HTTP request can
+# ever carry it (``core.rate_limit.client_key`` only returns an IP, ``unverified`` or the socket host), and the
+# Open-Meteo budget (``openmeteo_budget``) gives it its own dedicated share while the GLOBAL cap still applies.
+ALERTAS_JOB_CLIENT_KEY = "job:alertas"
+
 
 def set_client_key(key: str | None) -> Token[str | None]:
     """Make ``key`` the client of the current context; give the returned token to ``reset_client_key``."""
@@ -44,10 +49,28 @@ def sin_clave_de_cliente() -> Iterator[None]:
 
     WARNING: with no client key the Open-Meteo budget removes BOTH its per-client cap AND the global one (only
     requests that carry a key are capped, see ``openmeteo_budget``). A job that makes many calls must not run
-    under this helper unprotected: either give it its own fixed client key (for example ``"job:alertas"``, via
-    ``set_client_key``) so the GLOBAL bucket still applies, or cap the number of zones it queries and pace the run.
+    under this helper unprotected: give it its own fixed client key with ``con_clave_de_cliente`` (the alert
+    evaluation uses ``ALERTAS_JOB_CLIENT_KEY``) so the GLOBAL bucket still applies.
     """
     token = set_client_key(None)
+    try:
+        yield
+    finally:
+        reset_client_key(token)
+
+
+@contextmanager
+def con_clave_de_cliente(clave: str) -> Iterator[None]:
+    """Inside the block the client key is ``clave``; on exit (also on an error) the previous one comes back.
+
+    For scheduled work that makes many Open-Meteo calls (``ALERTAS_JOB_CLIENT_KEY``): a fixed key keeps the
+    GLOBAL cap of the budget applying, which ``sin_clave_de_cliente`` would switch off. ``clave`` must be a
+    non-empty string: ``None`` would mean "not a client request" and the budget would not cap it, so it is
+    refused instead of silently switching the budget off.
+    """
+    if not isinstance(clave, str) or not clave:
+        raise ValueError("a job client key must be a non-empty string")
+    token = set_client_key(clave)
     try:
         yield
     finally:

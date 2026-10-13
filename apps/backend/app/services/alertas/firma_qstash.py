@@ -21,12 +21,12 @@ sirve para el registro del servidor. Hacia afuera la respuesta es siempre la mis
 sale en la respuesta HTTP. `firma_valida` es la versión booleana.
 
 LIMITACIÓN CONOCIDA (repetición): una firma válida se puede volver a presentar durante su vida (~5 minutos)
-y esta función la acepta cada vez. No hay claim `jti` obligatorio ni registro de los ya vistos. Hoy no
-importa (el endpoint no hace nada), pero la 5b DEBE, antes de evaluar: (a) tomar el lock de la corrida con
-`set_nx("alertas:evaluar:lock", ...)` y (b) registrar el `jti` con `set_nx("alertas:jti:<jti>", "1",
-ex=<vida que le queda>)`, fallando cerrado si Upstash no responde. Exigir `jti` espera a capturar un
-reintento real que muestre si QStash firma cada reintento con un `jti` nuevo (si reusara el mismo, el
-registro rechazaría un reintento legítimo).
+y esta función la acepta cada vez. No hay claim `jti` obligatorio ni registro de los ya vistos: decisión
+tomada en la 5b, que NO exige ni registra el `jti` hasta capturar un reintento real de QStash (si QStash
+reusara el mismo `jti` en un reintento, un registro rechazaría un reintento legítimo). La repetición dentro de
+la vida de la firma la frena el lock de la corrida, `alertas:lock:evaluar` (`services/alertas/evaluacion.py`):
+se toma con SET NX EX, dura más que la firma (`alertas_lock_ttl_segundos`, 600 s por defecto) y NO se libera,
+se deja vencer.
 
 Los digests y la URL se comparan con `hmac.compare_digest` (tiempo constante); la firma HMAC del JWT la
 compara PyJWT de la misma forma.

@@ -505,6 +505,12 @@ def _parse_hourly_payload(data: dict) -> HourlyForecastExt:
     )
 
 
+def parse_hourly_forecast(data: dict) -> HourlyForecastExt:
+    """Public entry point of the hourly payload parser, for services that build their own `SeriesRequest`
+    (the alert evaluation asks for `weather_code` and `cape` only). Same contract as `_parse_hourly_payload`."""
+    return _parse_hourly_payload(data)
+
+
 _HOURLY_FIELDS = (
     "temperature_2m",
     "precipitation",

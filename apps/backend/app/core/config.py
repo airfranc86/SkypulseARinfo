@@ -1,4 +1,4 @@
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 _DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app"
@@ -127,6 +127,30 @@ class Settings(BaseSettings):
     # Interruptor de apagado nº 1: el envío automático nace APAGADO. El nº 2 es la clave `alertas:apagado`
     # en Upstash (si existe, apaga; se maneja desde su consola sin redeploy). Apaga cualquiera de los dos.
     alertas_envio_activo: bool = False
+    # Evaluación en seco (FRA-355, PR5b): con `true` el endpoint evalúa las zonas y CUENTA, pero no manda nada
+    # (el envío real es otra pieza). Apagada por defecto. La clave `alertas:apagado` también la detiene.
+    alertas_evaluar_en_seco: bool = False
+    # Tope de zonas que consulta cada corrida (una consulta a Open-Meteo por zona); las que sobran quedan
+    # `diferidas` (primero van las zonas con más suscriptores). El valor por defecto es el catálogo entero (50
+    # ciudades) y no puede pasarlo. El presupuesto de Open-Meteo del trabajo (`job:alertas`) nunca es menor que
+    # este tope (ver `services/openmeteo_budget.py`); el tope GLOBAL sigue valiendo para todos.
+    alertas_max_zonas_por_corrida: int = Field(default=50, ge=1, le=50)
+    # Vida del lock de la corrida (`alertas:lock:evaluar`), en segundos: no se libera, se deja vencer. Tiene que
+    # durar más que la firma de QStash (~5 min = 300 s), así que el mismo mensaje no evalúa dos veces: de ahí el
+    # mínimo de 330 s.
+    alertas_lock_ttl_segundos: int = Field(default=600, ge=330, le=3600)
+    # Plazo de la corrida, en segundos: pasado ese tiempo se deja de evaluar zonas y las que faltaron quedan
+    # `diferidas` (estado `evaluada_incompleta`). Tiene que ser MENOR que la vida del lock (si no, el lock vencería
+    # con la corrida todavía andando).
+    alertas_plazo_corrida_segundos: int = Field(default=480, ge=60)
+
+    @model_validator(mode="after")
+    def _plazo_menor_que_el_lock(self) -> "Settings":
+        if self.alertas_plazo_corrida_segundos >= self.alertas_lock_ttl_segundos:
+            raise ValueError(
+                "alertas_plazo_corrida_segundos (el plazo de la corrida) tiene que ser menor que alertas_lock_ttl_segundos"
+            )
+        return self
 
     # Clave del límite de pedidos por IP (ver `core/rate_limit.py::client_key`). Render pone Cloudflare delante:
     # Cloudflare escribe `CF-Connecting-IP` con la IP real y agrega al `X-Forwarded-For` (el valor de la
