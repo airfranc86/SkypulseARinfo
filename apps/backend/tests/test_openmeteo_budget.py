@@ -14,6 +14,9 @@ B7 - Settings are validated; the structure that tracks clients is bounded.
 B8 - A refusal is not a failure of the cell: nothing is negative-cached, another client can refresh it.
 B9 - A refused half-open probe gives its slot back.
 B10 - The shared `unverified` key gets a larger dedicated share, still bounded by the global bucket.
+B11 - The alert job (`job:alertas`, FRA-355) gets its own dedicated share (half the global cap, never less than an
+      ordinary share nor than the zones it may query per run), still bounded by the global bucket, and nobody can
+      reach it through request headers.
 """
 from __future__ import annotations
 
@@ -26,14 +29,15 @@ import httpx
 import pytest
 import respx
 from pydantic import ValidationError
+from starlette.requests import Request
 
 import app.services.openmeteo as om_module
 import app.services.openmeteo_budget as budget_module
 from app.core import usage_counter
 from app.core.cache import CacheOutcome
-from app.core.client_context import reset_client_key, set_client_key
+from app.core.client_context import ALERTAS_JOB_CLIENT_KEY, reset_client_key, set_client_key
 from app.core.config import Settings, settings
-from app.core.rate_limit import UNVERIFIED_CLIENT_KEY
+from app.core.rate_limit import UNVERIFIED_CLIENT_KEY, client_key
 from app.core.rate_limit_pause import openmeteo_pause as pause
 from app.services.openmeteo import (
     get_current,
@@ -79,6 +83,16 @@ def set_caps(monkeypatch: pytest.MonkeyPatch):
             monkeypatch.setattr(settings, "openmeteo_calls_per_client_per_minute", client)
         if overall is not None:
             monkeypatch.setattr(settings, "openmeteo_calls_per_minute", overall)
+
+    return _set
+
+
+@pytest.fixture
+def set_zone_cap(monkeypatch: pytest.MonkeyPatch):
+    """`alertas_max_zonas_por_corrida`: the alert job's dedicated share is never below it."""
+
+    def _set(zones: int) -> None:
+        monkeypatch.setattr(settings, "alertas_max_zonas_por_corrida", zones)
 
     return _set
 
@@ -621,3 +635,120 @@ async def test_b10_the_unknown_key_is_an_ordinary_client(om, counted):
         results = await _calls(13)
 
     assert _succeeded(results) == [True] * 12 + [False]
+
+
+# ---------------------------------------------------------------------------
+# B11 - the alert job key (`job:alertas`)
+# ---------------------------------------------------------------------------
+
+def test_b11_the_job_key_is_the_documented_one():
+    assert ALERTAS_JOB_CLIENT_KEY == "job:alertas"
+
+
+async def test_b11_the_job_gets_half_the_global_cap_and_others_keep_their_share(om, counted, set_zone_cap):
+    set_zone_cap(10)  # a cap below half the global cap: the half is what counts
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(46)
+    assert _succeeded(results) == [True] * 45 + [False]  # 90 // 2
+
+    with as_client("alice"):
+        results = await _calls(13, start=100)
+    assert _succeeded(results) == [True] * 12 + [False]
+
+
+async def test_b11_the_job_is_still_bounded_by_the_global_bucket(om, counted, set_caps, set_zone_cap):
+    set_zone_cap(1)
+    set_caps(client=3, overall=10)  # job share = max(10 // 2, 3, 1) = 5
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(6)
+    assert _succeeded(results) == [True] * 5 + [False]
+    with as_client("alice"):
+        assert all(_succeeded(await _calls(3, start=10)))  # global: 8 of 10 used
+    with as_client("bob"):
+        results = await _calls(3, start=20)
+
+    assert _succeeded(results) == [True, True, False]
+    assert budget_refusals()["global"] == 1
+
+
+async def test_b11_a_global_refusal_of_the_job_is_counted_as_global(om, counted, set_caps, set_zone_cap):
+    set_zone_cap(1)
+    set_caps(client=3, overall=4)  # job share = max(4 // 2, 3, 1) = 3
+    with as_client("alice"):
+        assert all(_succeeded(await _calls(3, start=10)))  # global: 3 of 4 used
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(3)  # one global token left: only the first call gets it
+        assert _succeeded(results) == [True, False, False]
+    assert budget_refusals() == {"client": 0, "global": 2}
+
+
+async def test_b11_the_job_share_is_never_below_the_ordinary_one(om, counted, set_caps, set_zone_cap):
+    set_zone_cap(1)
+    set_caps(client=8, overall=10)  # 10 // 2 = 5 would be less than an ordinary client's 8
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(9)
+
+    assert _succeeded(results) == [True] * 8 + [False]
+
+
+async def test_b11_the_job_and_the_unverified_key_do_not_share_a_bucket(om, counted):
+    with as_client(UNVERIFIED_CLIENT_KEY):
+        assert _succeeded(await _calls(45)) == [True] * 45  # the whole unverified share
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(45, start=200)  # its own full share, and the other 45 global tokens
+    assert _succeeded(results) == [True] * 45
+    assert budget_refusals() == {"client": 0, "global": 0}
+
+
+async def test_b11_the_default_share_covers_the_default_number_of_zones_per_run(om, counted):
+    assert settings.alertas_max_zonas_por_corrida == 50
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(settings.alertas_max_zonas_por_corrida)
+    assert all(_succeeded(results))
+
+
+async def test_b11_the_share_is_never_below_the_zones_a_run_may_query(om, counted, set_caps, set_zone_cap):
+    set_zone_cap(50)
+    set_caps(client=12, overall=60)  # half the global cap is 30: the 50 zones of the cap are what counts
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(50)
+    assert _succeeded(results) == [True] * 50
+    assert budget_refusals() == {"client": 0, "global": 0}  # the dedicated share refused nobody
+
+
+async def test_b11_with_a_global_cap_below_the_zone_cap_only_the_global_bucket_refuses(om, counted, set_caps, set_zone_cap):
+    set_zone_cap(50)
+    set_caps(client=12, overall=40)
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(45)
+    assert _succeeded(results) == [True] * 40 + [False] * 5
+    assert budget_refusals() == {"client": 0, "global": 5}  # the 5 refusals are the GLOBAL bucket's
+
+
+async def test_b11_a_cap_below_the_other_terms_does_not_lower_the_share(om, counted, set_caps, set_zone_cap):
+    set_zone_cap(1)
+    set_caps(client=12, overall=90)
+    with as_client(ALERTAS_JOB_CLIENT_KEY):
+        results = await _calls(46)
+    assert _succeeded(results) == [True] * 45 + [False]  # still 90 // 2
+
+
+@pytest.mark.parametrize(
+    "cabeceras",
+    [
+        {"cf-connecting-ip": "job:alertas"},
+        {"x-forwarded-for": "job:alertas"},
+        {"cf-connecting-ip": "job:alertas", "x-forwarded-for": "1.2.3.4, job:alertas"},
+    ],
+    ids=["cf", "xff", "ambos"],
+)
+def test_b11_no_request_can_claim_the_job_key_through_its_headers(cabeceras):
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/x",
+        "query_string": b"",
+        "headers": [(k.encode(), v.encode()) for k, v in cabeceras.items()],
+        "client": ("203.0.113.9", 4000),
+    }
+    assert client_key(Request(scope)) != ALERTAS_JOB_CLIENT_KEY

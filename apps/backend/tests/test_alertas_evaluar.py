@@ -1,10 +1,14 @@
-"""POST /api/alertas/evaluar (FRA-355, PR5a): el endpoint inerte al que llama QStash.
+"""POST /api/alertas/evaluar (FRA-355, PR5a y PR5b): firma, interruptor y respuestas del endpoint al que llama QStash.
 
 Contrato: 401 `{"detail": "no_autorizado"}` (sin firma o firma inválida, siempre la misma respuesta) |
-200 `{"estado": "apagado"}` (envío apagado por la variable, por la clave `alertas:apagado` de Upstash, o
-sin poder leerla: falla cerrado; es 200 para que QStash no reintente) | 200 `{"estado": "listo"}` (envío
-activo; la evaluación llega en la 5b y esta pieza no manda ninguna notificación) | 429 (30/min por IP).
-La firma se verifica sobre los bytes crudos del cuerpo, antes de parsear nada. Sin red: Upstash es falso.
+200 `{"estado": "apagado"}` (ni el envío ni la evaluación en seco están encendidos, o la clave `alertas:apagado`
+de Upstash existe o no se puede leer: falla cerrado; es 200 para que QStash no reintente) | 200 con el estado de
+la evaluación | 429 (30/min por IP). La firma se verifica sobre los bytes crudos del cuerpo, antes de parsear
+nada. Sin red: Upstash es falso.
+
+Los tests de la PR5a que esperaban `listo` del evaluador inerte usan la fixture `evaluador_inerte` (el mismo
+evaluador de entonces): lo que prueban es el router y el interruptor, no la evaluación. El router con la evaluación
+de verdad está en `test_alertas_evaluar_router.py`; la clave de cliente del trabajo, en `test_alertas_con_clave.py`.
 """
 
 from __future__ import annotations
@@ -18,56 +22,27 @@ from httpx import AsyncClient, Response
 from starlette.requests import Request
 
 from app.core import client_context
-from app.core.client_context import current_client_key, reset_client_key, set_client_key
+from app.core.client_context import ALERTAS_JOB_CLIENT_KEY, current_client_key, reset_client_key, set_client_key
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.upstash import UpstashRedis, UpstashUnavailableError, configure_redis
 from app.routers import alertas as router_alertas
 from app.services.alertas import evaluacion, firma_qstash, interruptor
-from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
-from tests.qstash_helpers import (
-    CLAVE_ACTUAL,
-    CLAVE_AJENA,
-    CLAVE_SIGUIENTE,
-    URL_EVALUAR,
-    firmar,
+from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; estado_de_alertas_limpio is autouse)
+    CABECERA,
+    CLAVE_APAGADO,
+    CUERPO,
+    NO_AUTORIZADO,
+    RUTA,
+    envio_activo,
+    estado_de_alertas_limpio,
+    evaluador_inerte,
+    llamar_evaluar,
 )
+from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
+from tests.qstash_helpers import CLAVE_ACTUAL, CLAVE_AJENA, CLAVE_SIGUIENTE, firmar
 
 pytestmark = pytest.mark.integration
-
-RUTA = "/api/alertas/evaluar"
-CABECERA = "Upstash-Signature"
-CUERPO = b'{"origen":"qstash","regla":"tormenta"}'
-NO_AUTORIZADO = {"detail": "no_autorizado"}
-CLAVE_APAGADO = "alertas:apagado"  # el nombre que se usa en la consola de Upstash: un contrato, no un detalle
-
-
-@pytest.fixture(autouse=True)
-def _estado_limpio(monkeypatch):
-    limiter.reset()
-    firma_qstash.reset_aviso_de_configuracion_para_tests()
-    configure_redis(None)
-    monkeypatch.setattr(settings, "qstash_current_signing_key", CLAVE_ACTUAL)
-    monkeypatch.setattr(settings, "qstash_next_signing_key", CLAVE_SIGUIENTE)
-    monkeypatch.setattr(settings, "alertas_evaluar_url", URL_EVALUAR)
-    monkeypatch.setattr(settings, "alertas_envio_activo", False)
-    yield
-    limiter.reset()
-    configure_redis(None)
-
-
-@pytest.fixture
-def envio_activo(monkeypatch):
-    monkeypatch.setattr(settings, "alertas_envio_activo", True)
-
-
-async def _post(client: AsyncClient, cuerpo: bytes = CUERPO, firma: str | None = "auto", **headers):
-    cabeceras = {"Content-Type": "application/json", **headers}
-    if firma == "auto":
-        firma = firmar(cuerpo)
-    if firma is not None:
-        cabeceras[CABECERA] = firma
-    return await client.post(RUTA, content=cuerpo, headers=cabeceras)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +51,7 @@ async def _post(client: AsyncClient, cuerpo: bytes = CUERPO, firma: str | None =
 
 
 async def test_without_a_signature_header_the_answer_is_401(async_client: AsyncClient) -> None:
-    response = await _post(async_client, firma=None)
+    response = await llamar_evaluar(async_client, firma=None)
     assert response.status_code == 401
     assert response.json() == NO_AUTORIZADO
 
@@ -100,7 +75,7 @@ async def test_every_rejection_cause_gets_the_same_401_response(
     respuestas = {}
     for nombre, args in causas.items():
         limiter.reset()  # cada causa es un pedido aparte: no se prueba el tope acá
-        response = await _post(async_client, **args)
+        response = await llamar_evaluar(async_client, **args)
         respuestas[nombre] = (response.status_code, response.content, response.headers.get("content-type"))
     assert {valor for valor in respuestas.values()} == {
         (401, json.dumps(NO_AUTORIZADO, separators=(",", ":")).encode(), "application/json")
@@ -113,13 +88,13 @@ async def test_without_signing_keys_configured_even_a_well_formed_signature_is_r
 ) -> None:
     monkeypatch.setattr(settings, "qstash_current_signing_key", "")
     monkeypatch.setattr(settings, "qstash_next_signing_key", "")
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 401
     assert response.json() == NO_AUTORIZADO
 
 
 async def test_a_signature_made_with_the_next_key_is_accepted(async_client: AsyncClient) -> None:
-    response = await _post(async_client, firma=firmar(CUERPO, clave=CLAVE_SIGUIENTE))
+    response = await llamar_evaluar(async_client, firma=firmar(CUERPO, clave=CLAVE_SIGUIENTE))
     assert response.status_code == 200
 
 
@@ -135,26 +110,26 @@ async def test_the_signature_covers_the_raw_bytes_so_json_is_never_parsed_first(
     # Un cuerpo que ni es JSON, y otro con el espaciado "raro": con firma válida pasan; sin parsear nada.
     for crudo in (b"esto no es json {{", b'{ "b": 2,   "a": 1 }\n', b""):
         limiter.reset()
-        response = await _post(async_client, crudo)
+        response = await llamar_evaluar(async_client, crudo)
         assert response.status_code == 200, crudo
         assert response.json() == {"estado": "apagado"}
     # Y la firma de un JSON no vale para el mismo JSON reescrito.
     limiter.reset()
     original = b'{ "b": 2,   "a": 1 }'
     reescrito = json.dumps(json.loads(original)).encode()
-    response = await _post(async_client, reescrito, firma=firmar(original))
+    response = await llamar_evaluar(async_client, reescrito, firma=firmar(original))
     assert response.status_code == 401
 
 
 async def test_an_invalid_json_body_with_a_bad_signature_is_401_not_422(async_client: AsyncClient) -> None:
-    response = await _post(async_client, b"{no es json", firma="basura.basura.basura")
+    response = await llamar_evaluar(async_client, b"{no es json", firma="basura.basura.basura")
     assert response.status_code == 401
     assert response.json() == NO_AUTORIZADO
 
 
 async def test_an_oversized_body_is_rejected_even_with_a_valid_signature(async_client: AsyncClient) -> None:
     grande = b"x" * (router_alertas.MAX_CUERPO_EVALUAR_BYTES + 1)
-    response = await _post(async_client, grande)
+    response = await llamar_evaluar(async_client, grande)
     assert response.status_code == 401
     assert response.json() == NO_AUTORIZADO
 
@@ -167,16 +142,16 @@ async def test_an_oversized_body_is_rejected_even_with_a_valid_signature(async_c
 async def test_a_valid_signature_with_sending_off_answers_apagado_without_touching_upstash(
     async_client: AsyncClient, alertas_redis, fake_upstash
 ) -> None:
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 200
     assert response.json() == {"estado": "apagado"}
     assert fake_upstash.commands == []
 
 
 async def test_with_sending_on_and_no_kill_key_the_answer_is_listo_and_nothing_is_sent(
-    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, push_http
+    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, push_http, evaluador_inerte
 ) -> None:
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 200
     assert response.json() == {"estado": "listo"}
     assert fake_upstash.commands == [["GET", CLAVE_APAGADO]]
@@ -190,26 +165,26 @@ async def test_the_upstash_kill_key_turns_sending_off_whatever_its_value(
     async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, valor: str
 ) -> None:
     fake_upstash.strings[CLAVE_APAGADO] = valor
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 200
     assert response.json() == {"estado": "apagado"}
 
 
 async def test_removing_the_kill_key_turns_sending_on_again_without_a_redeploy(
-    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo
+    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, evaluador_inerte
 ) -> None:
     fake_upstash.strings[CLAVE_APAGADO] = "1"
-    assert (await _post(async_client)).json() == {"estado": "apagado"}
+    assert (await llamar_evaluar(async_client)).json() == {"estado": "apagado"}
     del fake_upstash.strings[CLAVE_APAGADO]
     limiter.reset()
-    assert (await _post(async_client)).json() == {"estado": "listo"}
+    assert (await llamar_evaluar(async_client)).json() == {"estado": "listo"}
 
 
 async def test_the_kill_key_is_read_on_every_request(
-    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo
+    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, evaluador_inerte
 ) -> None:
     for _ in range(3):
-        await _post(async_client)
+        await llamar_evaluar(async_client)
     assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] * 3
 
 
@@ -217,7 +192,7 @@ async def test_an_unreachable_upstash_means_apagado_not_listo_and_not_an_error(
     async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo
 ) -> None:
     fake_upstash.down = True
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 200  # un 5xx haría reintentar a QStash
     assert response.json() == {"estado": "apagado"}
 
@@ -225,7 +200,7 @@ async def test_an_unreachable_upstash_means_apagado_not_listo_and_not_an_error(
 async def test_without_a_configured_upstash_the_answer_is_apagado(
     async_client: AsyncClient, envio_activo
 ) -> None:
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 200
     assert response.json() == {"estado": "apagado"}
 
@@ -238,7 +213,7 @@ async def test_a_failing_kill_key_read_is_swallowed_as_apagado(
             raise UpstashUnavailableError("caido")
 
     configure_redis(RedisRoto(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN))
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 200
     assert response.json() == {"estado": "apagado"}
 
@@ -249,13 +224,13 @@ async def test_a_failing_kill_key_read_is_swallowed_as_apagado(
 
 
 async def test_the_response_never_echoes_the_signature_the_body_or_the_keys(
-    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo
+    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, evaluador_inerte
 ) -> None:
     cuerpo = b'{"secreto":"CUERPO-SECRETO-DE-PRUEBA"}'
     firma = firmar(cuerpo)
-    ok = await _post(async_client, cuerpo, firma)
+    ok = await llamar_evaluar(async_client, cuerpo, firma)
     limiter.reset()
-    malo = await _post(async_client, cuerpo, firmar(b"otro", clave=CLAVE_AJENA))
+    malo = await llamar_evaluar(async_client, cuerpo, firmar(b"otro", clave=CLAVE_AJENA))
     for response in (ok, malo):
         visible = response.text + str(dict(response.headers))
         for secreto in (firma, firma.split(".")[2], "CUERPO-SECRETO", CLAVE_ACTUAL, CLAVE_SIGUIENTE, CLAVE_AJENA):
@@ -271,11 +246,11 @@ async def test_nothing_secret_reaches_the_logs(
     cuerpo = b'{"secreto":"CUERPO-SECRETO-DE-PRUEBA"}'
     buena = firmar(cuerpo)
     mala = firmar(cuerpo, clave=CLAVE_AJENA)
-    assert (await _post(async_client, cuerpo, buena)).status_code == 200
+    assert (await llamar_evaluar(async_client, cuerpo, buena)).status_code == 200
     limiter.reset()
-    assert (await _post(async_client, cuerpo, mala)).status_code == 401
+    assert (await llamar_evaluar(async_client, cuerpo, mala)).status_code == 401
     limiter.reset()
-    assert (await _post(async_client, cuerpo, firma=None)).status_code == 401
+    assert (await llamar_evaluar(async_client, cuerpo, firma=None)).status_code == 401
     texto = caplog.text
     assert "/evaluar rechazó un pedido sin firma válida motivo=clave" in texto
     assert "/evaluar rechazó un pedido sin firma válida motivo=sin_cabecera" in texto
@@ -315,7 +290,7 @@ async def test_every_rejection_logs_its_own_fixed_code_and_still_answers_the_gen
     args = armar()
     if "cuerpo" in args:  # un cuerpo enorme con una firma que sí lo cubre
         args["firma"] = firmar(args["cuerpo"])
-    response = await _post(async_client, **args)
+    response = await llamar_evaluar(async_client, **args)
     assert response.status_code == 401
     assert response.json() == NO_AUTORIZADO  # hacia afuera, la misma respuesta de siempre
     assert _rechazos_del_router(caplog) == [f"alertas: /evaluar rechazó un pedido sin firma válida motivo={motivo}"]
@@ -327,7 +302,7 @@ async def test_without_configuration_the_rejection_code_is_config(
     monkeypatch.setattr(settings, "qstash_current_signing_key", "")
     monkeypatch.setattr(settings, "qstash_next_signing_key", "")
     caplog.set_level(logging.DEBUG)
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 401
     assert _rechazos_del_router(caplog) == ["alertas: /evaluar rechazó un pedido sin firma válida motivo=config"]
 
@@ -338,7 +313,7 @@ async def test_without_configuration_the_rejection_code_is_config(
 
 
 async def test_the_endpoint_is_rate_limited_per_ip(async_client: AsyncClient) -> None:
-    estados = [(await _post(async_client, firma=None)).status_code for _ in range(32)]
+    estados = [(await llamar_evaluar(async_client, firma=None)).status_code for _ in range(32)]
     assert estados[:30] == [401] * 30
     assert estados[30] == 429
 
@@ -348,7 +323,7 @@ async def test_the_endpoint_is_rate_limited_per_ip(async_client: AsyncClient) ->
 # ---------------------------------------------------------------------------
 
 
-async def test_inside_the_evaluator_the_client_key_is_none_but_the_request_had_one(
+async def test_inside_the_evaluator_the_client_key_is_the_job_key_but_the_request_had_one(
     async_client: AsyncClient, alertas_redis, envio_activo, monkeypatch
 ) -> None:
     vistas: dict[str, object] = {}
@@ -358,7 +333,7 @@ async def test_inside_the_evaluator_the_client_key_is_none_but_the_request_had_o
         vistas["al_verificar"] = current_client_key()
         return original(firma, cuerpo)
 
-    async def envio_activo_espia(redis):
+    async def evaluacion_permitida_espia(redis):
         vistas["en_el_interruptor"] = current_client_key()
         return True
 
@@ -367,15 +342,16 @@ async def test_inside_the_evaluator_the_client_key_is_none_but_the_request_had_o
         return evaluacion.ResultadoEvaluacion(estado="listo")
 
     monkeypatch.setattr(router_alertas, "motivo_de_rechazo", verificacion_espia)
-    monkeypatch.setattr(interruptor, "envio_activo", envio_activo_espia)
+    monkeypatch.setattr(evaluacion, "evaluacion_permitida", evaluacion_permitida_espia)
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_espia)
 
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
 
     assert response.json() == {"estado": "listo"}
     assert vistas["al_verificar"] is not None  # el middleware sí puso la clave del cliente
-    assert vistas["en_el_interruptor"] is None  # y desde el interruptor en adelante corre sin ella
-    assert vistas["dentro"] is None
+    assert vistas["al_verificar"] != ALERTAS_JOB_CLIENT_KEY
+    assert vistas["en_el_interruptor"] == "job:alertas"  # y desde el interruptor en adelante corre con la del trabajo
+    assert vistas["dentro"] == "job:alertas"
     assert current_client_key() is None
 
 
@@ -389,7 +365,7 @@ async def test_the_evaluator_receives_the_configured_redis_and_a_utc_now(
         return evaluacion.ResultadoEvaluacion(estado="listo")
 
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_espia)
-    await _post(async_client)
+    await llamar_evaluar(async_client)
     assert recibido["redis"] is alertas_redis
     assert recibido["ahora"].tzinfo is not None and recibido["ahora"].utcoffset().total_seconds() == 0
 
@@ -401,7 +377,7 @@ async def test_the_evaluator_result_state_is_what_the_response_carries(
         return evaluacion.ResultadoEvaluacion(estado="otro")
 
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_otro)
-    assert (await _post(async_client)).json() == {"estado": "otro"}
+    assert (await llamar_evaluar(async_client)).json() == {"estado": "otro"}
 
 
 async def test_with_sending_off_the_evaluator_is_never_called(
@@ -411,7 +387,7 @@ async def test_with_sending_off_the_evaluator_is_never_called(
         raise AssertionError("no debe evaluarse con el envío apagado")
 
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_prohibido)
-    assert (await _post(async_client)).json() == {"estado": "apagado"}
+    assert (await llamar_evaluar(async_client)).json() == {"estado": "apagado"}
 
 
 def test_the_client_key_helper_clears_the_key_and_restores_it() -> None:
@@ -437,7 +413,7 @@ def test_the_client_key_helper_restores_the_key_after_an_error() -> None:
 
 
 def test_the_router_uses_the_shared_client_key_helper() -> None:
-    assert router_alertas.sin_clave_de_cliente is client_context.sin_clave_de_cliente
+    assert router_alertas.con_clave_de_cliente is client_context.con_clave_de_cliente
 
 
 # ---------------------------------------------------------------------------
@@ -467,12 +443,49 @@ async def test_the_switch_is_off_when_upstash_is_down(fake_upstash, envio_activo
     assert await interruptor.envio_activo(UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)) is False
 
 
-async def test_the_evaluator_stub_returns_a_frozen_result() -> None:
-    from dataclasses import FrozenInstanceError
-    from datetime import datetime, timezone
+async def test_the_shared_kill_key_reader_is_true_only_when_the_key_is_absent(fake_upstash) -> None:
+    redis = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    assert await interruptor.clave_de_apagado_ausente(redis) is True
+    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]]
+    for valor in ("1", "", "0", "false"):  # present means off, whatever it holds
+        fake_upstash.strings[CLAVE_APAGADO] = valor
+        assert await interruptor.clave_de_apagado_ausente(redis) is False
 
-    resultado = await evaluacion.evaluar(None, datetime.now(timezone.utc))  # type: ignore[arg-type]
-    assert resultado == evaluacion.ResultadoEvaluacion(estado="listo")
+
+async def test_the_shared_kill_key_reader_fails_closed(fake_upstash) -> None:
+    redis = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    assert await interruptor.clave_de_apagado_ausente(None) is False
+    fake_upstash.down = True
+    assert await interruptor.clave_de_apagado_ausente(redis) is False
+
+
+@pytest.mark.parametrize("respuesta", [{}, {"error": "x"}, {"result": 5}, {"result": ["1"]}, {"result": True}])
+async def test_the_shared_kill_key_reader_does_not_take_an_unusable_answer_for_an_absent_key(respuesta: dict) -> None:
+    redis = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    with respx.mock(assert_all_called=False) as router:
+        router.post(url__startswith=FAKE_UPSTASH_URL).mock(return_value=Response(200, json=respuesta))
+        assert await interruptor.clave_de_apagado_ausente(redis) is False
+
+
+async def test_the_sending_switch_goes_through_the_shared_reader(fake_upstash, envio_activo, monkeypatch) -> None:
+    pedidos: list[object] = []
+
+    async def lector_falso(redis):
+        pedidos.append(redis)
+        return True
+
+    monkeypatch.setattr(interruptor, "clave_de_apagado_ausente", lector_falso)
+    redis = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    assert await interruptor.envio_activo(redis) is True
+    assert pedidos == [redis] and fake_upstash.commands == []
+
+
+def test_a_bare_result_is_what_the_inert_evaluator_returned_and_answers_only_its_state() -> None:
+    from dataclasses import FrozenInstanceError
+
+    resultado = evaluacion.ResultadoEvaluacion(estado="listo")
+    assert resultado.como_respuesta() == {"estado": "listo"}
+    assert (resultado.evaluadas, resultado.con_tormenta, resultado.sin_datos, resultado.errores) == (0, 0, 0, 0)
     with pytest.raises(FrozenInstanceError):
         resultado.estado = "otro"  # type: ignore[misc]
 
@@ -551,12 +564,12 @@ async def test_a_chunked_request_without_content_length_is_still_accepted(async_
     ids=["vacio", "error", "entero", "booleano", "lista", "texto", "texto-vacio", "null-es-clave-ausente"],
 )
 async def test_the_kill_key_read_fails_closed_on_an_unusable_upstash_answer(
-    async_client: AsyncClient, envio_activo, respuesta: dict, estado: str
+    async_client: AsyncClient, envio_activo, evaluador_inerte, respuesta: dict, estado: str
 ) -> None:
     configure_redis(UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN))
     with respx.mock(assert_all_called=False) as router:
         router.post(url__startswith=FAKE_UPSTASH_URL).mock(return_value=Response(200, json=respuesta))
-        response = await _post(async_client)
+        response = await llamar_evaluar(async_client)
     assert response.status_code == 200
     assert response.json() == {"estado": estado}
 
@@ -565,7 +578,7 @@ async def test_with_the_env_flag_off_a_null_result_still_means_apagado(async_cli
     configure_redis(UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN))
     with respx.mock(assert_all_called=False) as router:
         router.post(url__startswith=FAKE_UPSTASH_URL).mock(return_value=Response(200, json={"result": None}))
-        response = await _post(async_client)
+        response = await llamar_evaluar(async_client)
     assert response.json() == {"estado": "apagado"}
 
 
@@ -581,7 +594,7 @@ async def test_missing_signing_configuration_warns_once_per_process_not_per_requ
     monkeypatch.setattr(settings, "qstash_next_signing_key", "")
     caplog.set_level(logging.DEBUG)
     for _ in range(3):
-        response = await _post(async_client)
+        response = await llamar_evaluar(async_client)
         assert response.status_code == 401
     avisos = [r for r in caplog.records if r.name == firma_qstash.logger.name and r.levelno >= logging.WARNING]
     assert len(avisos) == 1
@@ -602,7 +615,7 @@ async def test_a_client_disconnect_while_streaming_the_body_is_a_clean_rejection
 
 async def test_a_client_disconnect_over_http_answers_the_generic_401(async_client: AsyncClient, monkeypatch) -> None:
     monkeypatch.setattr(Request, "stream", lambda self: _stream_que_se_corta())
-    response = await _post(async_client)
+    response = await llamar_evaluar(async_client)
     assert response.status_code == 401
     assert response.json() == NO_AUTORIZADO
 
@@ -639,7 +652,7 @@ async def test_an_oversized_signature_header_is_rejected_before_the_body_is_read
         raise AssertionError("no se debe leer el cuerpo con una cabecera enorme")
 
     monkeypatch.setattr(router_alertas, "_leer_cuerpo_crudo", lectura_prohibida)
-    response = await _post(async_client, firma="x" * (firma_qstash.MAX_LARGO_FIRMA + 1))
+    response = await llamar_evaluar(async_client, firma="x" * (firma_qstash.MAX_LARGO_FIRMA + 1))
     assert response.status_code == 401
     assert response.json() == NO_AUTORIZADO
 
@@ -648,7 +661,7 @@ async def test_a_signature_header_at_the_limit_is_still_looked_at(
     async_client: AsyncClient, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.DEBUG)
-    response = await _post(async_client, firma="x" * firma_qstash.MAX_LARGO_FIRMA)
+    response = await llamar_evaluar(async_client, firma="x" * firma_qstash.MAX_LARGO_FIRMA)
     assert response.status_code == 401
     assert _rechazos_del_router(caplog) == ["alertas: /evaluar rechazó un pedido sin firma válida motivo=formato"]
 
