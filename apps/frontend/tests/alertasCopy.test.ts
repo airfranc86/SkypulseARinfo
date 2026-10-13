@@ -208,7 +208,7 @@ test('cada motivo por el que no se puede activar tiene su explicación, y son di
   assert.equal(new Set(razones).size, MOTIVOS_NO_ACTIVABLE.length)
   assert.match(razonDeshabilitado('sin-consentimiento'), /casilla/)
   assert.match(razonDeshabilitado('sin-zona'), /ciudad/)
-  assert.match(razonDeshabilitado('permiso-denegado'), /ajustes de tu navegador/)
+  assert.match(razonDeshabilitado('permiso-denegado'), /bloqueados en este navegador/)
   assert.match(razonDeshabilitado('sin-soporte'), /Tu navegador no puede recibir avisos\./)
 })
 
@@ -247,16 +247,21 @@ test('el estado "activo" sin tercer argumento usa la constante ENVIO_AUTOMATICO_
 })
 
 test('los mensajes de estado dicen lo que fija el ticket', () => {
-  assert.equal(
-    mensajeDeEstado({ tipo: 'denegado' }, null),
-    'No diste permiso para recibir avisos. Podés habilitarlo desde los ajustes de tu navegador.',
-  )
+  assert.match(mensajeDeEstado({ tipo: 'denegado' }, null), /^Los avisos están bloqueados en este navegador\./)
   assert.equal(
     mensajeDeEstado({ tipo: 'sin-respuesta' }, null),
     'Todavía no respondiste el pedido de permiso. Tocá «Activar avisos» para intentarlo de nuevo.',
   )
   assert.match(mensajeDeEstado({ tipo: 'suscribiendo' }, null), /^Activando…/)
   assert.match(mensajeDeEstado({ tipo: 'pidiendo-permiso' }, null), /^Activando…/)
+})
+
+test('el estado "denegado" explica cómo habilitar los avisos, en el navegador y en los ajustes del celular', () => {
+  const mensaje = mensajeDeEstado({ tipo: 'denegado' }, null)
+  assert.match(mensaje, /Permisos → Notificaciones → Permitir/)
+  assert.match(mensaje, /recargá la página/)
+  assert.match(mensaje, /ajustes de tu celular/)
+  assert.doesNotMatch(mensaje, /No diste permiso/)
 })
 
 test('"activo" sin nombre de ciudad igual da un mensaje completo, con y sin envío automático', () => {

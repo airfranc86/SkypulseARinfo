@@ -123,8 +123,7 @@ export function etiquetaProbar(segundos: number | null): string {
 
 const RAZON_DESHABILITADO: Record<MotivoNoActivable, string> = {
   'sin-soporte': 'Tu navegador no puede recibir avisos.',
-  'permiso-denegado':
-    'El navegador tiene bloqueados los avisos de SkyPulse. Podés habilitarlos desde los ajustes de tu navegador.',
+  'permiso-denegado': 'Los avisos están bloqueados en este navegador. Habilitá las notificaciones de SkyPulse desde sus ajustes.',
   'sin-consentimiento': 'Para activar los avisos, tildá la casilla de consentimiento.',
   'sin-zona': 'Para activar los avisos, elegí tu ciudad.',
 }
@@ -156,6 +155,15 @@ export function mensajeDeError(error: ErrorAvisos): string {
   }
 }
 
+/**
+ * El permiso del navegador figura como bloqueado: la persona lo negó o el celular lo bloquea (por ejemplo, con las
+ * notificaciones del navegador apagadas en Android). Una página no puede volver a pedirlo: se explica cómo habilitarlo.
+ */
+const MENSAJE_BLOQUEADO =
+  'Los avisos están bloqueados en este navegador. Para activarlos: tocá el ícono a la izquierda de la dirección → ' +
+  'Permisos → Notificaciones → Permitir, y recargá la página. Si no aparece esa opción, revisá en los ajustes de tu ' +
+  'celular que las notificaciones del navegador estén activadas.'
+
 /** El mensaje del estado de la suscripción; vacío en "inactivo" (no hay nada que anunciar). */
 export function mensajeDeEstado(
   estado: EstadoAvisos,
@@ -170,7 +178,7 @@ export function mensajeDeEstado(
     case 'sin-respuesta':
       return 'Todavía no respondiste el pedido de permiso. Tocá «Activar avisos» para intentarlo de nuevo.'
     case 'denegado':
-      return 'No diste permiso para recibir avisos. Podés habilitarlo desde los ajustes de tu navegador.'
+      return MENSAJE_BLOQUEADO
     case 'activo':
       return (envioAutomatico ? TEXTOS_CON_ENVIO : TEXTOS_SIN_ENVIO).estadoActivo(nombreZona)
     case 'error':
