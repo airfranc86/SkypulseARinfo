@@ -1,44 +1,31 @@
-"""Phase 2b: the one module that sends requests to Open-Meteo (`services/openmeteo_source.py`).
+"""Phase 2b/2c: the one module that sends requests to Open-Meteo (`services/openmeteo_source.py`).
 
 Covers the request description (`SeriesRequest.params()`), `fetch_series` (cache level and key, persistence, the
 outcome, single flight, refusals, parse errors), `bind_caches`, the swappable source (`get_source`/`set_source`
-with the `FakeOpenMeteoSource` defined here) and the real `HttpOpenMeteoSource` (pause, budget, counter, retry).
+with the `FakeOpenMeteoSource` of `tests/openmeteo_fake_source.py`) and the requests of the backend's public fetchers
+that go through it.
 
-The 429 pause, the call budget and the counter are also pinned end to end, through every public function, in
-`test_openmeteo_429_pause.py`, `test_openmeteo_budget.py` and `test_openmeteo_caracterizacion_*`; here the module
-gets its own direct tests so it does not depend on them.
+The real `HttpOpenMeteoSource` (pause, budget, counter, retry) is in `test_openmeteo_source_http.py` and the values
+derived from other requests (`fetch_derived`) in `test_openmeteo_derived.py`. The 429 pause, the call budget and the
+counter are also pinned end to end, through every public function, in `test_openmeteo_429_pause.py`,
+`test_openmeteo_budget.py` and `test_openmeteo_caracterizacion_*`.
 """
 from __future__ import annotations
 
 import asyncio
-import copy
 import dataclasses
 import json
 import logging
 import subprocess
 import sys
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
-import httpx
 import pytest
-import respx
-from cachetools import TTLCache
 
 import app.services.openmeteo as om_module
 import app.services.openmeteo_source as source_module
-from app.core import usage_counter
 from app.core.cache import CacheOutcome, FetchRefused, SingleFlightCache
-from app.core.client_context import reset_client_key, set_client_key
-from app.core.config import settings
-from app.core.rate_limit_pause import openmeteo_pause as pause
-from app.services import openmeteo_budget
 from app.services.openmeteo_source import (
     CacheLevel,
     CacheNotBoundError,
@@ -46,124 +33,27 @@ from app.services.openmeteo_source import (
     SeriesRequest,
     bind_caches,
     cache_key,
-    fetch_derived,
-    fetch_derived_or_raise,
     fetch_series,
     fetch_series_or_raise,
     get_source,
     set_source,
 )
-from tests._om_payloads import _CURRENT_PAYLOAD, _FOG_PAYLOAD, _VISIBILITY_PAYLOAD, OM_URL
-from tests.conftest import FakeClock
+from tests._om_payloads import _CURRENT_PAYLOAD, _DAILY_EXT_PAYLOAD, _FOG_PAYLOAD, _VISIBILITY_PAYLOAD
+from tests.openmeteo_fake_source import (  # noqa: F401  (fixtures are used by name)
+    LAT,
+    LON,
+    TZ,
+    FakeOpenMeteoSource,
+    SourceCall,
+    clock,
+    install,
+    own_caches,
+)
+from tests.openmeteo_fake_source import parse_value as _parse_value
+from tests.openmeteo_fake_source import series_key as _key
+from tests.openmeteo_fake_source import series_request as _request
 
-LAT, LON = -31.4, -64.2
-TZ = "America/Argentina/Buenos_Aires"
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-
-
-# ---------------------------------------------------------------------------
-# The test adapter: answers from memory, records what it was asked
-# ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class SourceCall:
-    params: dict[str, object]
-    failure_message: str
-    log_args: tuple[object, ...]
-
-
-class FakeOpenMeteoSource:
-    """`OpenMeteoSource` that never touches the network, the budget, the pause or the counter.
-
-    `answers` are served in order and the last one repeats; each is a payload, None (a failed call) or an exception
-    instance (raised, for example `FetchRefused`). `respond(params)` picks the answer from the request instead.
-    `delay` makes each call yield to the event loop for that long (to overlap concurrent callers).
-    """
-
-    def __init__(
-        self,
-        *answers: object,
-        respond: Callable[[dict[str, object]], object] | None = None,
-        delay: float = 0.0,
-    ) -> None:
-        self._answers = list(answers) or [None]
-        self._respond = respond
-        self._delay = delay
-        self.calls: list[SourceCall] = []
-
-    async def get_json(self, params: dict, failure_message: str, *log_args: object) -> Any:
-        self.calls.append(SourceCall(dict(params), failure_message, log_args))
-        position = len(self.calls) - 1
-        if self._delay:
-            await asyncio.sleep(self._delay)
-        answer = self._respond(params) if self._respond else self._answers[min(position, len(self._answers) - 1)]
-        if isinstance(answer, BaseException):
-            raise answer
-        return copy.deepcopy(answer)
-
-
-@pytest.fixture
-def install():
-    """Install a `FakeOpenMeteoSource` as the active source (conftest puts the HTTP one back after the test)."""
-
-    def _install(*answers: object, **kwargs: Any) -> FakeOpenMeteoSource:
-        fake = FakeOpenMeteoSource(*answers, **kwargs)
-        set_source(fake)
-        return fake
-
-    return _install
-
-
-@pytest.fixture
-def clock(monkeypatch: pytest.MonkeyPatch) -> FakeClock:
-    """Give the fresh, failure and stale stores of the three real caches a clock the test drives."""
-    fake = FakeClock()
-    for cache in (om_module._CACHE_CURRENT, om_module._CACHE_FORECAST, om_module._CACHE_NOWCAST):
-        for store in ("_cache", "_failure_cache", "_stale_cache"):
-            old = getattr(cache, store)
-            monkeypatch.setattr(cache, store, TTLCache(maxsize=old.maxsize, ttl=old.ttl, timer=fake))
-    return fake
-
-
-class RecordingBackend:
-    """Persistent backend that remembers which keys it was asked to save and to load."""
-
-    def __init__(self) -> None:
-        self.saved: list[str] = []
-        self.loaded: list[str] = []
-        self.stored: dict[str, object] = {}
-
-    async def load(self, key: str) -> object | None:
-        self.loaded.append(key)
-        return self.stored.get(key)
-
-    async def save(self, key: str, value: object) -> None:
-        self.saved.append(key)
-
-
-@pytest.fixture
-def own_caches(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    """Three fresh caches (with a recording backend) bound in place of the real ones for this test."""
-    monkeypatch.setattr(source_module, "_caches", {})
-    backend = RecordingBackend()
-    caches = {
-        level: SingleFlightCache(maxsize=8, ttl=600, name=f"test_{level.name.lower()}", persistence=backend)
-        for level in CacheLevel
-    }
-    bind_caches(caches)
-    return SimpleNamespace(backend=backend, caches=caches)
-
-
-def _parse_value(payload: dict) -> dict:
-    return {"value": payload["value"]}
-
-
-def _request(level: CacheLevel = CacheLevel.CURRENT, lat: float = LAT, lon: float = LON, **kwargs: Any) -> SeriesRequest:
-    return SeriesRequest(lat=lat, lon=lon, level=level, current=("temperature_2m",), **kwargs)
-
-
-def _key(request: SeriesRequest) -> str:
-    return cache_key(request.params())
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +67,7 @@ _CURRENT_CSV = (
 _NIEBLA_HOURLY_CSV = "visibility,relative_humidity_2m,dew_point_2m,temperature_2m,wind_speed_10m,weather_code"
 
 
-def test_the_current_request_is_exactly_what_get_current_has_always_sent() -> None:
+def test_the_current_request_carries_exactly_these_params() -> None:
     assert om_module._current_request(LAT, LON).params() == {
         "latitude": LAT,
         "longitude": LON,
@@ -187,7 +77,7 @@ def test_the_current_request_is_exactly_what_get_current_has_always_sent() -> No
     }
 
 
-def test_the_niebla_request_is_exactly_what_the_combined_fetch_has_always_sent() -> None:
+def test_the_niebla_request_carries_exactly_these_params() -> None:
     assert om_module._niebla_request(LAT, LON).params() == {
         "latitude": LAT,
         "longitude": LON,
@@ -378,208 +268,6 @@ async def test_a_refusal_serves_the_stale_copy_when_there_is_one(install, clock)
 
 
 # ---------------------------------------------------------------------------
-# fetch_derived: a value computed from other cached requests
-# ---------------------------------------------------------------------------
-
-DERIVED_KEY = {"latitude": LAT, "longitude": LON, "forecast_days": 7, "models": "a,b"}
-
-
-class Compute:
-    """A `compute` that counts its calls and answers in order (the last answer repeats); an exception instance is raised."""
-
-    def __init__(self, *answers: object) -> None:
-        self._answers = list(answers) or [None]
-        self.calls = 0
-
-    async def __call__(self) -> Any:
-        answer = self._answers[min(self.calls, len(self._answers) - 1)]
-        self.calls += 1
-        if isinstance(answer, BaseException):
-            raise answer
-        return answer
-
-
-async def test_a_derived_value_is_computed_once_and_then_served_from_its_cache() -> None:
-    compute = Compute({"v": 1})
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
-    assert compute.calls == 1
-
-
-async def test_a_derived_value_lives_in_the_cache_of_the_level_asked(own_caches) -> None:
-    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute({"v": 1}))
-    held = {level: list(cache._cache) for level, cache in own_caches.caches.items()}
-    assert held == {CacheLevel.CURRENT: [], CacheLevel.FORECAST: [cache_key(DERIVED_KEY)], CacheLevel.NOWCAST: []}
-
-
-async def test_the_derived_key_rounds_the_coordinates_like_a_series_key() -> None:
-    compute = Compute({"v": 1})
-    await fetch_derived({**DERIVED_KEY, "latitude": -31.404}, CacheLevel.FORECAST, compute)
-    await fetch_derived({**DERIVED_KEY, "latitude": -31.396}, CacheLevel.FORECAST, compute)   # same 2-decimal cell
-    assert compute.calls == 1
-    await fetch_derived({**DERIVED_KEY, "forecast_days": 5}, CacheLevel.FORECAST, compute)    # another input: another entry
-    assert compute.calls == 2
-
-
-async def test_a_derived_value_is_not_persisted_unless_asked(own_caches) -> None:
-    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute({"v": 1}))
-    await fetch_derived({**DERIVED_KEY, "models": "kept"}, CacheLevel.FORECAST, Compute({"v": 2}), persist=True)
-    await own_caches.caches[CacheLevel.FORECAST].flush_persistence()
-    assert own_caches.backend.saved == [cache_key({**DERIVED_KEY, "models": "kept"})]
-
-
-async def test_the_or_raise_form_does_not_persist_by_default_either(own_caches) -> None:
-    await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, Compute({"v": 1}))
-    await own_caches.caches[CacheLevel.FORECAST].flush_persistence()
-    assert own_caches.backend.saved == []
-
-
-async def test_an_unpersisted_derived_value_does_not_read_the_backend_when_compute_has_nothing(own_caches) -> None:
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute(None)) is None
-    assert own_caches.backend.loaded == []
-
-
-async def test_the_outcome_says_whether_the_derived_value_came_from_the_cache() -> None:
-    compute = Compute({"v": 1})
-    first, second = CacheOutcome(), CacheOutcome()
-    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=first)
-    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=second)
-    assert (first.hit, second.hit) == (False, True)
-
-
-async def test_concurrent_identical_derived_calls_share_one_compute() -> None:
-    async def slow() -> dict:
-        await asyncio.sleep(0.01)
-        slow.calls += 1                                                  # type: ignore[attr-defined]
-        return {"v": 1}
-
-    slow.calls = 0                                                       # type: ignore[attr-defined]
-    results = await asyncio.gather(*(fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, slow) for _ in range(5)))
-    assert results == [{"v": 1}] * 5
-    assert slow.calls == 1                                               # type: ignore[attr-defined]
-
-
-async def test_a_derived_none_is_remembered_for_the_failure_window() -> None:
-    compute = Compute(None, {"v": 1})
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
-    assert compute.calls == 1
-
-
-async def test_a_stale_derived_copy_is_served_when_compute_has_nothing_after_the_ttl(clock) -> None:
-    compute = Compute({"v": 1}, None)
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
-    clock.advance(1801)
-    outcome = CacheOutcome()
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=outcome) == {"v": 1}
-    assert compute.calls == 2 and outcome.hit is True
-
-
-# --- a refusal is not a failure ---------------------------------------------------------------------------------
-
-async def test_a_derived_refusal_is_none_for_that_call_only_and_is_not_remembered() -> None:
-    compute = Compute(FetchRefused("budget"), {"v": 1})
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}      # nothing was negative-cached
-    assert compute.calls == 2
-
-
-async def test_the_or_raise_form_lets_the_refusal_through_and_does_not_remember_it() -> None:
-    compute = Compute(FetchRefused("budget"), {"v": 1})
-    with pytest.raises(FetchRefused):
-        await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, compute)
-    assert await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, compute) == {"v": 1}
-    assert compute.calls == 2
-
-
-async def test_a_derived_refusal_serves_the_stale_copy_when_there_is_one(clock) -> None:
-    compute = Compute({"v": 1}, FetchRefused("budget"))
-    await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute)
-    clock.advance(1801)
-    outcome = CacheOutcome()
-    assert await fetch_derived_or_raise(DERIVED_KEY, CacheLevel.FORECAST, compute, outcome=outcome) == {"v": 1}
-    assert outcome.hit is True
-
-
-async def test_concurrent_derived_calls_all_get_the_refusal_of_the_one_compute() -> None:
-    async def refuse() -> dict:
-        await asyncio.sleep(0.01)
-        refuse.calls += 1                                                # type: ignore[attr-defined]
-        raise FetchRefused("budget")
-
-    refuse.calls = 0                                                     # type: ignore[attr-defined]
-    results = await asyncio.gather(*(fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, refuse) for _ in range(3)))
-    assert results == [None, None, None]
-    assert refuse.calls == 1                                             # type: ignore[attr-defined]
-
-
-async def test_an_error_of_compute_that_is_not_a_refusal_is_not_swallowed() -> None:
-    with pytest.raises(RuntimeError, match="bug"):
-        await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, Compute(RuntimeError("bug")))
-
-
-# --- the key and the level --------------------------------------------------------------------------------------
-
-def test_a_derived_key_cannot_look_like_the_query_of_a_series() -> None:
-    wire_like = _request().params()                                      # every SeriesRequest has a `timezone`
-    with pytest.raises(ValueError, match="derived"):
-        asyncio.run(fetch_derived(wire_like, CacheLevel.CURRENT, Compute({"v": 1})))
-
-
-async def test_a_derived_key_never_collides_with_a_series_key(install, own_caches) -> None:
-    install({"value": 1})
-    request = _request(CacheLevel.FORECAST)
-    await fetch_series(request, _parse_value)
-    await fetch_derived({"latitude": LAT, "longitude": LON, "current": "temperature_2m"}, CacheLevel.FORECAST, Compute({"v": 1}))
-    assert len(own_caches.caches[CacheLevel.FORECAST]._cache) == 2
-
-
-async def test_an_unbound_level_fails_clearly_and_computes_nothing(monkeypatch) -> None:
-    monkeypatch.setattr(source_module, "_caches", {})
-    compute = Compute({"v": 1})
-    with pytest.raises(CacheNotBoundError, match="FORECAST"):
-        await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute)
-    assert compute.calls == 0
-
-
-# --- the real use: a value computed from two cached series ------------------------------------------------------
-
-def _two_models(key: dict) -> Any:
-    """A `compute` that asks the same two series a consensus asks, with `fetch_series_or_raise` inside."""
-
-    async def compute() -> dict | None:
-        requests = [
-            SeriesRequest(lat=LAT, lon=LON, level=CacheLevel.FORECAST, daily=("precipitation_sum",), models=m)
-            for m in ("a", "b")
-        ]
-        results = await asyncio.gather(
-            *(fetch_series_or_raise(r, _parse_value) for r in requests), return_exceptions=True
-        )
-        if any(isinstance(r, FetchRefused) for r in results):
-            raise FetchRefused("one model was refused")
-        return {"models": [r for r in results if isinstance(r, dict)]}
-
-    return compute
-
-
-async def test_a_consensus_with_a_refused_series_is_not_cached_but_the_series_that_came_back_is(install) -> None:
-    def respond(params: dict) -> object:
-        return FetchRefused("budget") if params["models"] == "b" and not respond.b_ok else {"value": params["models"]}  # type: ignore[attr-defined]
-
-    respond.b_ok = False                                                 # type: ignore[attr-defined]
-    fake = install(respond=respond)
-    compute = _two_models(DERIVED_KEY)
-
-    assert await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute) is None
-    assert sorted(c.params["models"] for c in fake.calls) == ["a", "b"]
-
-    respond.b_ok = True                                                  # type: ignore[attr-defined]
-    result = await fetch_derived(DERIVED_KEY, CacheLevel.FORECAST, compute)
-    assert result == {"models": [{"value": "a"}, {"value": "b"}]}        # not the one-model consensus
-    assert sorted(c.params["models"] for c in fake.calls) == ["a", "b", "b"]   # "a" was served from its own entry
-
-
-# ---------------------------------------------------------------------------
 # fetch_series: parse errors
 # ---------------------------------------------------------------------------
 
@@ -736,206 +424,26 @@ async def test_get_current_goes_through_the_installed_source(install) -> None:
     assert [c.params for c in fake.calls] == [om_module._current_request(LAT, LON).params()]
 
 
-async def test_the_unmigrated_fetches_reach_the_installed_source_through_get_json(install) -> None:
+async def test_the_daily_fetch_reaches_the_installed_source_through_fetch_series(install) -> None:
+    # Rewritten in 2c-2: it pinned `_get_json` (deleted). Same two facts, now through `fetch_series`: the source gets
+    # the request's params, the failure message and the log args; and the daily fetch hands over its model.
     fake = install(None)
-    assert await om_module._get_json({"a": 1}, "boom %s %s", "x") is None
-    assert fake.calls == [SourceCall({"a": 1}, "boom %s %s", ("x",))]
+    request = SeriesRequest(lat=LAT, lon=LON, level=CacheLevel.FORECAST, daily=("a",))
+    assert await fetch_series(request, _parse_value, failure_message="boom %s %s", log_args=("x",)) is None
+    assert fake.calls == [SourceCall(request.params(), "boom %s %s", ("x",))]
 
     assert await om_module.get_daily_forecast_ext(LAT, LON, days=3, model="gfs_seamless") is None
     assert fake.calls[1].params["models"] == "gfs_seamless"
     assert fake.calls[1].log_args == ("gfs_seamless",)
 
 
-async def test_a_refusal_from_the_source_reaches_the_unmigrated_fetches_as_fetch_refused(install) -> None:
+async def test_a_refusal_from_the_source_reaches_the_daily_fetch_as_fetch_refused(install) -> None:
+    # Rewritten in 2c-2: it called `_get_json` (deleted). The refusal now reaches the caller through
+    # `fetch_series_or_raise`, and the public daily fetch turns it into None for this call.
     install(FetchRefused("budget"))
     with pytest.raises(FetchRefused):
-        await om_module._get_json({"a": 1}, "boom %s")
+        await fetch_series_or_raise(_request(), _parse_value)
     assert await om_module.get_daily_forecast_ext(LAT, LON) is None
-
-
-# ---------------------------------------------------------------------------
-# HttpOpenMeteoSource: pause, budget, counter, retry (direct tests of the real adapter)
-# ---------------------------------------------------------------------------
-
-PARAMS = {"latitude": LAT, "longitude": LON, "current": "temperature_2m"}
-
-
-@pytest.fixture
-def om():
-    with respx.mock(assert_all_called=False) as router:
-        yield router.get(OM_URL)
-
-
-@pytest.fixture(autouse=True)
-def no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The retry of `fetch_with_retry` does not really wait."""
-    monkeypatch.setattr("app.core.http_client._backoff_delay", lambda attempt: 0.0)
-
-
-@pytest.fixture
-def counted(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    calls: list[str] = []
-    monkeypatch.setattr(usage_counter, "record", calls.append)
-    return calls
-
-
-@pytest.fixture
-def pause_clock() -> FakeClock:
-    fake = FakeClock()
-    pause.clock = fake
-    return fake
-
-
-@contextmanager
-def as_client(key: str) -> Iterator[None]:
-    token = set_client_key(key)
-    try:
-        yield
-    finally:
-        reset_client_key(token)
-
-
-async def test_http_a_good_answer_is_the_json_and_counts_once(om, counted) -> None:
-    om.mock(return_value=httpx.Response(200, json={"ok": 1}))
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") == {"ok": 1}
-    assert counted == ["open_meteo"]
-    assert dict(om.calls[0].request.url.params) == {
-        "latitude": "-31.4", "longitude": "-64.2", "current": "temperature_2m"
-    }
-
-
-async def test_http_uses_the_shared_client_with_the_timeout_of_the_settings(monkeypatch) -> None:
-    client = MagicMock()
-    client.request = AsyncMock(return_value=httpx.Response(200, json={"ok": 1}, request=httpx.Request("GET", OM_URL)))
-    monkeypatch.setattr(source_module, "get_client", lambda: client)
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") == {"ok": 1}
-    client.request.assert_awaited_once()
-    args, kwargs = client.request.await_args
-    assert args == ("GET", settings.openmeteo_base_url)
-    assert kwargs["params"] == PARAMS
-    assert kwargs["timeout"] == settings.http_timeout_seconds
-
-
-async def test_http_without_a_started_client_is_none_and_counts_nothing(monkeypatch, counted, caplog) -> None:
-    def no_client() -> httpx.AsyncClient:
-        raise RuntimeError("httpx client not started")
-
-    monkeypatch.setattr(source_module, "get_client", no_client)
-    with caplog.at_level(logging.WARNING):
-        assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None
-    assert counted == []
-    assert "failed httpx client not started" in caplog.text
-
-
-async def test_http_a_failure_is_none_and_logs_the_message_with_its_arguments(om, counted, caplog) -> None:
-    om.mock(return_value=httpx.Response(200, content=b"not json"))
-    with caplog.at_level(logging.WARNING):
-        assert await HttpOpenMeteoSource().get_json(PARAMS, "failed (model=%s): %s", "gfs") is None
-    records = [r for r in caplog.records if r.name == source_module.logger.name]
-    assert len(records) == 1 and records[0].getMessage().startswith("failed (model=gfs): ")
-
-
-async def test_http_an_open_pause_sends_nothing_and_counts_nothing(om, counted, pause_clock) -> None:
-    pause.trip()
-    om.mock(return_value=httpx.Response(200, json={"ok": 1}))
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None
-    assert om.call_count == 0
-    assert counted == []
-
-
-async def test_http_an_open_pause_spends_no_budget(om, counted, pause_clock, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "openmeteo_calls_per_client_per_minute", 1)
-    pause.trip()
-    with as_client("alice"):
-        assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None
-        assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None   # a refusal would raise instead
-    assert openmeteo_budget.budget_refusals() == {"client": 0, "global": 0}
-
-
-async def test_http_a_refused_call_raises_fetch_refused_and_costs_nothing(om, counted, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "openmeteo_calls_per_client_per_minute", 1)
-    om.mock(return_value=httpx.Response(200, json={"ok": 1}))
-    source = HttpOpenMeteoSource()
-    with as_client("alice"):
-        assert await source.get_json(PARAMS, "failed %s") == {"ok": 1}
-        with pytest.raises(FetchRefused):
-            await source.get_json(PARAMS, "failed %s")
-    assert om.call_count == 1
-    assert counted == ["open_meteo"]
-    assert openmeteo_budget.budget_refusals() == {"client": 1, "global": 0}
-    assert pause.allow_request() is True                                          # a refusal never opens the pause
-
-
-async def test_http_a_refused_half_open_probe_gives_its_slot_back(om, counted, pause_clock, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "openmeteo_calls_per_client_per_minute", 1)
-    pause.trip()
-    pause_clock.advance(10_000)                                                   # the pause is over: next is the probe
-    with as_client("alice"):
-        assert openmeteo_budget.admit_network_call() is True                      # spends the only token
-        with pytest.raises(FetchRefused):
-            await HttpOpenMeteoSource().get_json(PARAMS, "failed %s")
-    assert om.call_count == 0 and counted == []
-    assert pause.allow_request() is True                                          # the probe slot is free again
-
-
-async def test_http_a_429_opens_the_pause_and_is_not_retried(om, counted, pause_clock) -> None:
-    om.mock(return_value=httpx.Response(429, json={"error": True}))
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None
-    assert om.call_count == 1
-    assert counted == ["open_meteo"]
-    assert pause.remaining() == pytest.approx(120.0)
-
-
-async def test_http_the_retry_after_of_a_429_sets_the_length_of_the_pause(om, counted, pause_clock) -> None:
-    om.mock(return_value=httpx.Response(429, headers={"Retry-After": "45"}))
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None
-    assert pause.remaining() == pytest.approx(45.0)
-
-
-async def test_http_a_retry_after_that_is_not_a_number_uses_the_default_pause(om, counted, pause_clock) -> None:
-    om.mock(return_value=httpx.Response(429, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}))
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None
-    assert pause.remaining() == pytest.approx(120.0)
-
-
-async def test_http_a_5xx_is_retried_once_counts_once_and_does_not_open_the_pause(om, counted, pause_clock) -> None:
-    om.mock(return_value=httpx.Response(503))
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") is None
-    assert om.call_count == 2
-    assert counted == ["open_meteo"]
-    assert pause.remaining() == 0.0
-
-
-async def test_http_a_5xx_followed_by_a_good_answer_is_the_json(om, counted) -> None:
-    om.mock(side_effect=[httpx.Response(503), httpx.Response(200, json={"ok": 1})])
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") == {"ok": 1}
-    assert om.call_count == 2
-    assert counted == ["open_meteo"]
-
-
-async def test_http_a_good_answer_closes_the_pause(om, counted, pause_clock) -> None:
-    pause.trip()
-    pause_clock.advance(10_000)                                                   # this call is the probe
-    om.mock(return_value=httpx.Response(200, json={"ok": 1}))
-    assert await HttpOpenMeteoSource().get_json(PARAMS, "failed %s") == {"ok": 1}
-    assert pause.allow_request() is True and pause.allow_request() is True        # no probe left in flight
-    assert pause.remaining() == 0.0
-
-
-async def test_http_calls_made_outside_a_request_are_not_capped(om, counted, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "openmeteo_calls_per_client_per_minute", 1)
-    om.mock(return_value=httpx.Response(200, json={"ok": 1}))
-    source = HttpOpenMeteoSource()
-    for _ in range(3):
-        assert await source.get_json(PARAMS, "failed %s") == {"ok": 1}
-    assert counted == ["open_meteo"] * 3
-
-
-def test_the_retry_after_helper_reads_numbers_only() -> None:
-    read = source_module._retry_after_seconds
-    assert read(httpx.Response(429, headers={"Retry-After": "7.5"})) == 7.5
-    assert read(httpx.Response(429, headers={"Retry-After": "soon"})) is None
-    assert read(httpx.Response(429)) is None
 
 
 def test_the_cache_key_rounds_the_coordinates_and_ignores_the_order() -> None:
@@ -983,48 +491,6 @@ async def test_log_args_reach_the_source_and_the_parse_error_log(install, caplog
     assert [r.getMessage() for r in caplog.records] == ["bad (model=gfs): 'nope' [KeyError]"]
 
 
-async def test_fetch_series_or_raise_lets_a_refusal_through_and_does_not_remember_it(install) -> None:
-    fake = install(FetchRefused("budget"), {"value": 1})
-    with pytest.raises(FetchRefused):
-        await fetch_series_or_raise(_request(), _parse_value)
-    assert await fetch_series_or_raise(_request(), _parse_value) == {"value": 1}
-    assert len(fake.calls) == 2
-
-
-async def test_fetch_series_or_raise_serves_the_stale_copy_on_a_refusal(install, clock) -> None:
-    install({"value": 1}, FetchRefused("budget"))
-    await fetch_series_or_raise(_request(), _parse_value)
-    clock.advance(601)
-    outcome = CacheOutcome()
-    assert await fetch_series_or_raise(_request(), _parse_value, outcome=outcome) == {"value": 1}
-    assert outcome.hit is True
-
-
-async def test_fetch_series_or_raise_is_none_for_failures_and_parse_errors_like_fetch_series(install) -> None:
-    install(None)
-    assert await fetch_series_or_raise(_request(lat=1.0), _parse_value) is None
-    install({"value": 1})
-    assert await fetch_series_or_raise(_request(lat=2.0), lambda p: p["nope"]) is None
-
-
-async def test_fetch_series_or_raise_takes_the_same_options_as_fetch_series(install, own_caches, caplog) -> None:
-    fake = install({"value": 1})
-    outcome = CacheOutcome()
-    kwargs = dict(outcome=outcome, failure_message="f %s", parse_error_message="p %s", log_args=("x",))
-    assert await fetch_series_or_raise(_request(persist=False), _parse_value, **kwargs) == {"value": 1}
-    await own_caches.caches[CacheLevel.CURRENT].flush_persistence()
-    assert own_caches.backend.saved == []
-    assert (fake.calls[0].failure_message, fake.calls[0].log_args) == ("f %s", ("x",))
-    assert outcome.hit is False
-
-
-async def test_the_wrapper_and_the_raising_variant_differ_only_in_the_refusal(install) -> None:
-    install(FetchRefused("budget"))
-    assert await fetch_series(_request(lat=1.0), _parse_value) is None
-    with pytest.raises(FetchRefused):
-        await fetch_series_or_raise(_request(lat=2.0), _parse_value)
-
-
 # ---------------------------------------------------------------------------
 # Correction round: the niebla junk payload never reaches the persistent store and falls back to a good copy
 # ---------------------------------------------------------------------------
@@ -1062,59 +528,265 @@ async def test_the_niebla_junk_payload_serves_the_stale_copy_when_there_is_one(i
 
 
 # ---------------------------------------------------------------------------
-# Correction round: a cancelled request gives back the half-open probe it holds (and only that one)
+# Phase 2c-2: the daily, hourly and ECMWF hourly fetches go through the module
 # ---------------------------------------------------------------------------
 
-class GatedClient:
-    """Shared-client double whose request starts, tells the test, and then waits until it is cancelled."""
+_DAILY_CSV = (
+    "temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,"
+    "wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,relative_humidity_2m_mean,"
+    "uv_index_max,weather_code,sunrise,sunset,daylight_duration,cloud_cover_mean"
+)
+_HOURLY_CSV = (
+    "temperature_2m,precipitation,precipitation_probability,wind_speed_10m,weather_code,is_day,"
+    "freezing_level_height,wind_gusts_10m,cape,temperature_850hPa,relative_humidity_2m,cloud_cover,"
+    "wind_direction_10m"
+)
+_ECMWF_HOURLY_CSV = "precipitation,wind_gusts_10m,wind_speed_10m,wind_direction_10m,weather_code,cape"
+_GFS, _ECMWF = "gfs_seamless", "ecmwf_ifs025"
+_HOURLY_PAYLOAD = {
+    "elevation": 25.0,
+    "hourly": {"time": [f"2026-10-08T{h:02d}:00" for h in range(24)], "temperature_2m": [20.0] * 24},
+}
+_NIEBLA_PAYLOAD = {
+    **_VISIBILITY_PAYLOAD,
+    "hourly": {**_VISIBILITY_PAYLOAD["hourly"], **_FOG_PAYLOAD["hourly"], "visibility": [9000.0] * 24},
+}
 
-    def __init__(self) -> None:
-        self.entered = asyncio.Event()
-
-    async def request(self, method: str, url: str, **kwargs: object) -> httpx.Response:
-        self.entered.set()
-        await asyncio.Event().wait()
-        raise AssertionError("unreachable")
-
-
-async def _cancel(task: asyncio.Task) -> None:
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-
-
-async def test_http_a_cancelled_probe_gives_its_slot_back_and_still_counts_once(counted, pause_clock, monkeypatch) -> None:
-    client = GatedClient()
-    monkeypatch.setattr(source_module, "get_client", lambda: client)
-    pause.trip()
-    pause_clock.advance(10_000)                                                   # the pause is over: next is the probe
-    task = asyncio.create_task(HttpOpenMeteoSource().get_json(PARAMS, "failed %s"))
-    await asyncio.wait_for(client.entered.wait(), 5)
-    assert pause.allow_request() is False                                         # the probe is in flight
-    await _cancel(task)
-    assert counted == ["open_meteo"]                                              # the cancelled call was counted once
-    assert pause.allow_request() is True                                          # the next caller does not wait 15 s
-
-
-async def test_http_a_cancelled_probe_does_not_release_the_probe_of_another_window(counted, pause_clock, monkeypatch) -> None:
-    client = GatedClient()
-    monkeypatch.setattr(source_module, "get_client", lambda: client)
-    pause.trip()
-    pause_clock.advance(10_000)
-    task = asyncio.create_task(HttpOpenMeteoSource().get_json(PARAMS, "failed %s"))
-    await asyncio.wait_for(client.entered.wait(), 5)
-    pause.trip()                                                                  # another request got a 429: new pause
-    pause_clock.advance(10_000)
-    assert pause.allow_request() is True                                          # a second caller takes the NEW probe
-    await _cancel(task)
-    assert pause.allow_request() is False                                         # and the cancelled one did not free it
+# name -> (call(lat, lon), the request that call sends (lat, lon), a good payload for it)
+_FORECAST_CASES = {
+    "daily": (
+        om_module.get_daily_forecast_ext, lambda a, b: om_module._daily_request(a, b, 7, None), _DAILY_EXT_PAYLOAD
+    ),
+    "hourly": (om_module.get_hourly_forecast_ext, lambda a, b: om_module._hourly_request(a, b, 2), _HOURLY_PAYLOAD),
+    "ecmwf": (
+        om_module.get_hourly_forecast_ecmwf, lambda a, b: om_module._hourly_ecmwf_request(a, b, 7), _HOURLY_PAYLOAD
+    ),
+}
+_FORECAST_NAMES = list(_FORECAST_CASES)
 
 
-async def test_http_a_cancelled_call_outside_a_pause_leaves_the_pause_closed(counted, monkeypatch) -> None:
-    client = GatedClient()
-    monkeypatch.setattr(source_module, "get_client", lambda: client)
-    task = asyncio.create_task(HttpOpenMeteoSource().get_json(PARAMS, "failed %s"))
-    await asyncio.wait_for(client.entered.wait(), 5)
-    await _cancel(task)
-    assert counted == ["open_meteo"]
-    assert pause.remaining() == 0.0 and pause.allow_request() is True and pause.allow_request() is True
+def test_the_daily_request_carries_exactly_these_params() -> None:
+    assert om_module._daily_request(LAT, LON, 7, None).params() == {
+        "latitude": LAT, "longitude": LON, "daily": _DAILY_CSV,
+        "timezone": TZ, "wind_speed_unit": "kmh", "forecast_days": 7,
+    }
+
+
+@pytest.mark.parametrize(("model", "sent"), [(None, {}), ("", {}), (_GFS, {"models": _GFS})])
+def test_the_daily_request_sends_a_model_only_when_there_is_one(model, sent) -> None:
+    params = om_module._daily_request(LAT, LON, 5, model).params()
+    assert {k: v for k, v in params.items() if k == "models"} == sent
+    assert (params["forecast_days"], params["daily"]) == (5, _DAILY_CSV)
+
+
+def test_the_hourly_request_carries_exactly_these_params() -> None:
+    assert om_module._hourly_request(LAT, LON, 3).params() == {
+        "latitude": LAT, "longitude": LON, "hourly": _HOURLY_CSV,
+        "timezone": TZ, "wind_speed_unit": "kmh", "forecast_days": 3,
+    }
+
+
+def test_the_ecmwf_hourly_request_carries_exactly_these_params() -> None:
+    assert om_module._hourly_ecmwf_request(LAT, LON, 7).params() == {
+        "latitude": LAT, "longitude": LON, "hourly": _ECMWF_HOURLY_CSV, "models": _ECMWF,
+        "timezone": TZ, "wind_speed_unit": "kmh", "forecast_days": 7,
+    }
+
+
+@pytest.mark.parametrize("name", _FORECAST_NAMES)
+def test_every_forecast_request_is_forecast_level_and_persisted(name) -> None:
+    request = _FORECAST_CASES[name][1](LAT, LON)
+    assert request.level is CacheLevel.FORECAST
+    assert request.persist is True
+
+
+def test_the_forecast_requests_keep_the_fixed_query_order() -> None:
+    tail = ["timezone", "wind_speed_unit", "forecast_days"]
+    assert list(om_module._daily_request(LAT, LON, 7, _GFS).params()) == [
+        "latitude", "longitude", "daily", "models", *tail
+    ]
+    assert list(om_module._hourly_request(LAT, LON, 2).params()) == ["latitude", "longitude", "hourly", *tail]
+    assert list(om_module._hourly_ecmwf_request(LAT, LON, 7).params()) == [
+        "latitude", "longitude", "hourly", "models", *tail
+    ]
+
+
+@pytest.mark.parametrize("name", _FORECAST_NAMES)
+async def test_a_forecast_fetch_lives_in_the_forecast_cache_and_is_handed_to_the_persistent_store(
+    name, install, own_caches
+) -> None:
+    call, request, payload = _FORECAST_CASES[name]
+    install(payload)
+    assert await call(LAT, LON) is not None
+    key = _key(request(LAT, LON))
+    held = {level: list(cache._cache) for level, cache in own_caches.caches.items()}
+    assert held == {CacheLevel.CURRENT: [], CacheLevel.FORECAST: [key], CacheLevel.NOWCAST: []}
+    await own_caches.caches[CacheLevel.FORECAST].flush_persistence()
+    assert own_caches.backend.saved == [key]
+
+
+@pytest.mark.parametrize("name", _FORECAST_NAMES)
+async def test_a_forecast_fetch_sends_the_exact_coordinates_and_shares_the_rounded_cell(name, install) -> None:
+    call, _, payload = _FORECAST_CASES[name]
+    fake = install(payload)
+    assert await call(-31.401, -64.201) is not None
+    assert await call(-31.404, -64.204) is not None
+    assert len(fake.calls) == 1                                           # same two-decimal cell
+    assert (fake.calls[0].params["latitude"], fake.calls[0].params["longitude"]) == (-31.401, -64.201)
+    assert await call(-31.41, -64.2) is not None
+    assert len(fake.calls) == 2                                           # 0.01 degrees away is another cell
+
+
+@pytest.mark.parametrize("name", _FORECAST_NAMES)
+async def test_a_refused_forecast_fetch_is_none_for_that_call_and_is_not_remembered(name, install) -> None:
+    call, _, payload = _FORECAST_CASES[name]
+    fake = install(FetchRefused("budget"), payload)
+    assert await call(LAT, LON) is None
+    assert await call(LAT, LON) is not None
+    assert len(fake.calls) == 2
+
+
+@pytest.mark.parametrize("name", _FORECAST_NAMES)
+async def test_a_forecast_fetch_serves_the_stale_copy_when_the_source_refuses_after_the_ttl(
+    name, install, clock
+) -> None:
+    call, _, payload = _FORECAST_CASES[name]
+    fake = install(payload, FetchRefused("budget"))
+    first = await call(LAT, LON)
+    assert first is not None
+    clock.advance(1801)
+    assert await call(LAT, LON) is first
+    assert len(fake.calls) == 2
+
+
+async def test_the_raising_daily_fetch_lets_a_refusal_through_and_does_not_remember_it(install) -> None:
+    fake = install(FetchRefused("budget"), _DAILY_EXT_PAYLOAD)
+    with pytest.raises(FetchRefused):
+        await om_module._daily_forecast_ext_or_raise(LAT, LON, 7, _GFS)
+    assert await om_module._daily_forecast_ext_or_raise(LAT, LON, 7, _GFS) is not None
+    assert len(fake.calls) == 2
+
+
+async def test_the_daily_fetch_failure_names_the_model_in_its_log_args(install) -> None:
+    fake = install(None)
+    await om_module.get_daily_forecast_ext(LAT, LON, model=_GFS)
+    await om_module.get_daily_forecast_ext(LAT, LON)
+    message = "Open-Meteo daily_ext forecast failed (model=%s): %s"
+    assert [(c.failure_message, c.log_args) for c in fake.calls] == [(message, (_GFS,)), (message, (None,))]
+
+
+async def test_the_raising_daily_fetch_also_names_the_model_in_its_log_args(install) -> None:
+    fake = install(None)
+    await om_module._daily_forecast_ext_or_raise(LAT, LON, 7, _GFS)
+    assert [(c.failure_message, c.log_args) for c in fake.calls] == [
+        ("Open-Meteo daily_ext forecast failed (model=%s): %s", (_GFS,))
+    ]
+
+
+async def test_the_daily_fetch_labels_each_date_with_its_spanish_weekday(install) -> None:
+    install({"daily": {"time": ["2024-01-15", "2024-01-20", "2024-01-21"]}})   # Monday, Saturday, Sunday
+    result = await om_module.get_daily_forecast_ext(LAT, LON)
+    assert result is not None
+    assert result.dates == ["2024-01-15", "2024-01-20", "2024-01-21"]
+    assert result.day_labels == ["lunes", "sábado", "domingo"]
+
+
+async def test_the_hourly_fetches_keep_their_failure_messages(install) -> None:
+    fake = install(None)
+    await om_module.get_hourly_forecast_ext(LAT, LON)
+    await om_module.get_hourly_forecast_ecmwf(LAT, LON)
+    assert [(c.failure_message, c.log_args) for c in fake.calls] == [
+        ("Open-Meteo hourly_ext forecast failed: %s", ()),
+        ("Open-Meteo hourly ECMWF forecast failed: %s", ()),
+    ]
+
+
+async def test_the_daily_parse_error_log_names_the_model(install, caplog) -> None:
+    install({"daily": None})
+    with caplog.at_level(logging.WARNING):
+        assert await om_module.get_daily_forecast_ext(LAT, LON, model=_GFS) is None
+    (message,) = [r.getMessage() for r in caplog.records]
+    assert message.startswith(f"Open-Meteo daily_ext parse error (model={_GFS}): ")
+    assert message.endswith("[AttributeError]")
+
+
+# --- the 2a findings: a malformed forecast payload is None, never an exception ----------------------------------
+
+_PARSE_LOG_PREFIX = {
+    "daily": "Open-Meteo daily_ext parse error (model=None): ",
+    "hourly": "Open-Meteo hourly_ext parse error: ",
+    "ecmwf": "Open-Meteo hourly ECMWF parse error: ",
+}
+# (fetch, payload, the error the parser raises on it). The AttributeError and ValueError ones of `daily` and `hourly`
+# used to escape the fetch before 2c-2 (only KeyError and TypeError were caught there).
+_MALFORMED = [
+    ("daily", {}, "KeyError"),
+    ("daily", {"daily": {"time": 5}}, "TypeError"),
+    ("daily", {"daily": None}, "AttributeError"),
+    ("daily", {"daily": {"time": ["not-iso"]}}, "ValueError"),
+    ("hourly", {}, "KeyError"),
+    ("hourly", {"hourly": {"time": 5}}, "TypeError"),
+    ("hourly", {"hourly": []}, "AttributeError"),
+    ("hourly", {"hourly": {"time": ["not-iso"]}}, "ValueError"),
+    ("ecmwf", {}, "KeyError"),
+    ("ecmwf", {"hourly": {"time": 5}}, "TypeError"),
+    ("ecmwf", {"hourly": []}, "AttributeError"),
+    ("ecmwf", {"hourly": {"time": ["not-iso"]}}, "ValueError"),
+]
+
+
+@pytest.mark.parametrize(
+    ("name", "payload", "error"), _MALFORMED, ids=[f"{name}-{error}" for name, _, error in _MALFORMED]
+)
+async def test_a_malformed_forecast_payload_is_none_and_never_raises(name, payload, error, install, caplog) -> None:
+    call, _, _ = _FORECAST_CASES[name]
+    fake = install(payload)
+    with caplog.at_level(logging.WARNING):
+        assert await call(LAT, LON) is None
+        assert await call(LAT, LON) is None                               # remembered as a failure of the key
+    assert len(fake.calls) == 1
+    (message,) = [r.getMessage() for r in caplog.records if r.name == source_module.logger.name]
+    assert message.startswith(_PARSE_LOG_PREFIX[name]) and message.endswith(f"[{error}]")
+
+
+# --- every public fetcher reaches the installed source, and openmeteo.py reaches nothing else -------------------
+
+# name -> (call, a good payload, the requests that call must send)
+_ALL_FETCHERS = {
+    "current": (om_module.get_current, _CURRENT_PAYLOAD, lambda: [om_module._current_request(LAT, LON)]),
+    "daily": (
+        om_module.get_daily_forecast_ext, _DAILY_EXT_PAYLOAD, lambda: [om_module._daily_request(LAT, LON, 7, None)]
+    ),
+    "multi_model": (
+        om_module.get_multi_model_daily, _DAILY_EXT_PAYLOAD,
+        lambda: [om_module._daily_request(LAT, LON, 7, _GFS), om_module._daily_request(LAT, LON, 7, _ECMWF)],
+    ),
+    "hourly": (om_module.get_hourly_forecast_ext, _HOURLY_PAYLOAD, lambda: [om_module._hourly_request(LAT, LON, 2)]),
+    "hourly_ecmwf": (
+        om_module.get_hourly_forecast_ecmwf, _HOURLY_PAYLOAD, lambda: [om_module._hourly_ecmwf_request(LAT, LON, 7)]
+    ),
+    "visibility": (om_module.get_visibility_forecast, _NIEBLA_PAYLOAD, lambda: [om_module._niebla_request(LAT, LON)]),
+    "fog": (om_module.get_fog_inference_forecast, _NIEBLA_PAYLOAD, lambda: [om_module._niebla_request(LAT, LON)]),
+}
+
+
+@pytest.mark.parametrize("name", list(_ALL_FETCHERS))
+async def test_every_public_fetcher_reaches_the_installed_source(name, install, monkeypatch) -> None:
+    monkeypatch.setattr(om_module, "_ar_now", lambda: datetime(2024, 1, 15, 12, 30, tzinfo=om_module._AR_TZ))
+    call, payload, requests = _ALL_FETCHERS[name]
+    fake = install(payload)
+    assert await call(LAT, LON) is not None
+    sent = sorted(json.dumps(c.params, sort_keys=True) for c in fake.calls)
+    assert sent == sorted(json.dumps(r.params(), sort_keys=True) for r in requests())
+
+
+def test_the_old_request_helpers_are_gone_from_openmeteo() -> None:
+    for name in ("_get_json", "_cached_or_none", "get_source"):
+        assert not hasattr(om_module, name), name
+
+
+def test_openmeteo_reaches_neither_the_source_nor_the_cache_except_to_bind_the_caches() -> None:
+    text = Path(om_module.__file__).read_text(encoding="utf-8")
+    for needle in ("get_source", "set_source", "get_json", ".get_or_fetch("):
+        assert needle not in text, needle
+    assert text.count("bind_caches(") == 1
