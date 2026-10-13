@@ -5,7 +5,6 @@ import asyncio
 import logging
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from app.core.cache import CacheOutcome, FetchRefused, SingleFlightCache
 from app.core.config import settings
@@ -15,10 +14,9 @@ from app.services.openmeteo_source import (
     CacheLevel,
     SeriesRequest,
     bind_caches,
-    cache_key,
     fetch_derived,
     fetch_series,
-    get_source,
+    fetch_series_or_raise,
 )
 from app.services.visibilidad import MAX_VISIBILITY_M, classify_visibility
 from app.utils.parsing import parse_float
@@ -52,26 +50,6 @@ _CURRENT_FIELDS = (
 
 # Las cachés (`_CACHE_*`) se definen más abajo, después de las dataclasses que guardan: el códec de la
 # persistencia registra esas clases por nombre.
-
-
-async def _cached_or_none(cache: SingleFlightCache, key: str, fetch, **kwargs):
-    """`get_or_fetch` for the public fetch functions that are not behind `fetch_series` yet.
-
-    A budget refusal with no copy to serve means "unavailable" (None) for THIS request only: the cache has
-    already refused to remember it as a failure of the key (`FetchRefused`).
-    """
-    try:
-        return await cache.get_or_fetch(key, fetch, **kwargs)
-    except FetchRefused:
-        return None
-
-
-async def _get_json(params: dict, failure_message: str, *log_args: object) -> Any:
-    """Pide `params` a la fuente activa (ver `openmeteo_source`). Solo para los fetch que aún no usan `fetch_series`.
-
-    Devuelve el JSON o None ante cualquier fallo; LEVANTA `FetchRefused` si el tope de pedidos lo rechaza.
-    """
-    return await get_source().get_json(params, failure_message, *log_args)
 
 
 @dataclass(frozen=True)
@@ -188,6 +166,81 @@ class DailyForecastDataExt:
     fetched_at: datetime | None = None
 
 
+_DAILY_FIELDS = (
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "precipitation_sum",
+    "precipitation_probability_max",
+    "wind_speed_10m_max",
+    "wind_gusts_10m_max",
+    "wind_direction_10m_dominant",
+    "relative_humidity_2m_mean",
+    "uv_index_max",
+    "weather_code",
+    "sunrise",
+    "sunset",
+    "daylight_duration",
+    "cloud_cover_mean",
+)
+
+_DAILY_FAILURE_MESSAGE = "Open-Meteo daily_ext forecast failed (model=%s): %s"
+_DAILY_PARSE_ERROR_MESSAGE = "Open-Meteo daily_ext parse error (model=%s): %s"
+
+
+def _daily_request(lat: float, lon: float, days: int, model: str | None) -> SeriesRequest:
+    # Sin `model` (None o vacío) no se manda "models" y Open-Meteo usa best_match.
+    return SeriesRequest(
+        lat=lat,
+        lon=lon,
+        level=CacheLevel.FORECAST,
+        daily=_DAILY_FIELDS,
+        models=model or None,
+        forecast_days=days,
+        wind_speed_unit_kmh=True,
+    )
+
+
+def _parse_daily(data: dict) -> DailyForecastDataExt:
+    """Arma el `DailyForecastDataExt`. El error de un payload mal formado lo traduce `fetch_series` en None."""
+    daily = data["daily"]
+    time_list: list[str] = daily.get("time", [])
+
+    day_labels: list[str] = []
+    for t in time_list:
+        dt = datetime.fromisoformat(t)
+        day_labels.append(_DAY_LABELS_ES[dt.weekday()])
+
+    # daylight_duration viene en segundos
+    daylight_raw = daily.get("daylight_duration", [])
+    daylight_seconds: list[float | None] = [parse_float(v) for v in daylight_raw]
+
+    # weather_code puede ser int
+    weather_codes: list[int | None] = []
+    for v in daily.get("weather_code", []):
+        pf = parse_float(v)
+        weather_codes.append(int(pf) if pf is not None else None)
+
+    return DailyForecastDataExt(
+        dates=list(time_list),
+        day_labels=day_labels,
+        temp_max=[parse_float(v) for v in daily.get("temperature_2m_max", [])],
+        temp_min=[parse_float(v) for v in daily.get("temperature_2m_min", [])],
+        precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
+        precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
+        wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
+        wind_gusts_max=[parse_float(v) for v in daily.get("wind_gusts_10m_max", [])],
+        wind_dir_dominant=[parse_float(v) for v in daily.get("wind_direction_10m_dominant", [])],
+        humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
+        uv_max=[parse_float(v) for v in daily.get("uv_index_max", [])],
+        weather_codes=weather_codes,
+        sunrise=list(daily.get("sunrise", [])),
+        sunset=list(daily.get("sunset", [])),
+        daylight_seconds=daylight_seconds,
+        cloud_cover_mean=[parse_float(v) for v in daily.get("cloud_cover_mean", [])],
+        fetched_at=datetime.now(timezone.utc),
+    )
+
+
 async def get_daily_forecast_ext(
     lat: float,
     lon: float,
@@ -198,10 +251,13 @@ async def get_daily_forecast_ext(
     Pronóstico diario extendido para el dashboard.
     Si model=None, Open-Meteo usa best_match automáticamente.
     """
-    try:
-        return await _daily_forecast_ext_or_raise(lat, lon, days, model)
-    except FetchRefused:
-        return None
+    return await fetch_series(
+        _daily_request(lat, lon, days, model),
+        _parse_daily,
+        failure_message=_DAILY_FAILURE_MESSAGE,
+        parse_error_message=_DAILY_PARSE_ERROR_MESSAGE,
+        log_args=(model,),
+    )
 
 
 async def _daily_forecast_ext_or_raise(
@@ -211,72 +267,13 @@ async def _daily_forecast_ext_or_raise(
     model: str | None,
 ) -> DailyForecastDataExt | None:
     """Como `get_daily_forecast_ext`, pero deja pasar `FetchRefused` (el consenso necesita distinguirlo)."""
-    params: dict = {
-        "latitude": lat,
-        "longitude": lon,
-        "daily": (
-            "temperature_2m_max,temperature_2m_min,precipitation_sum,"
-            "precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,"
-            "wind_direction_10m_dominant,"
-            "relative_humidity_2m_mean,uv_index_max,weather_code,"
-            "sunrise,sunset,daylight_duration,cloud_cover_mean"
-        ),
-        "forecast_days": days,
-        "timezone": "America/Argentina/Buenos_Aires",
-        "wind_speed_unit": "kmh",
-    }
-    if model:
-        params["models"] = model
-    key = cache_key(params)
-
-    async def _fetch() -> DailyForecastDataExt | None:
-        data = await _get_json(params, "Open-Meteo daily_ext forecast failed (model=%s): %s", model)
-        if data is None:
-            return None
-
-        try:
-            daily = data["daily"]
-            time_list: list[str] = daily.get("time", [])
-
-            day_labels: list[str] = []
-            for t in time_list:
-                dt = datetime.fromisoformat(t)
-                day_labels.append(_DAY_LABELS_ES[dt.weekday()])
-
-            # daylight_duration viene en segundos
-            daylight_raw = daily.get("daylight_duration", [])
-            daylight_seconds: list[float | None] = [parse_float(v) for v in daylight_raw]
-
-            # weather_code puede ser int
-            weather_codes: list[int | None] = []
-            for v in daily.get("weather_code", []):
-                pf = parse_float(v)
-                weather_codes.append(int(pf) if pf is not None else None)
-
-            return DailyForecastDataExt(
-                dates=list(time_list),
-                day_labels=day_labels,
-                temp_max=[parse_float(v) for v in daily.get("temperature_2m_max", [])],
-                temp_min=[parse_float(v) for v in daily.get("temperature_2m_min", [])],
-                precip_sum=[parse_float(v) for v in daily.get("precipitation_sum", [])],
-                precip_prob_max=[parse_float(v) for v in daily.get("precipitation_probability_max", [])],
-                wind_speed_max=[parse_float(v) for v in daily.get("wind_speed_10m_max", [])],
-                wind_gusts_max=[parse_float(v) for v in daily.get("wind_gusts_10m_max", [])],
-                wind_dir_dominant=[parse_float(v) for v in daily.get("wind_direction_10m_dominant", [])],
-                humidity_mean=[parse_float(v) for v in daily.get("relative_humidity_2m_mean", [])],
-                uv_max=[parse_float(v) for v in daily.get("uv_index_max", [])],
-                weather_codes=weather_codes,
-                sunrise=list(daily.get("sunrise", [])),
-                sunset=list(daily.get("sunset", [])),
-                daylight_seconds=daylight_seconds,
-                cloud_cover_mean=[parse_float(v) for v in daily.get("cloud_cover_mean", [])],
-                fetched_at=datetime.now(timezone.utc),
-            )
-        except (KeyError, TypeError) as exc:
-            logger.warning("Open-Meteo daily_ext parse error (model=%s): %s", model, exc)
-            return None
-
-    return await _CACHE_FORECAST.get_or_fetch(key, _fetch)
+    return await fetch_series_or_raise(
+        _daily_request(lat, lon, days, model),
+        _parse_daily,
+        failure_message=_DAILY_FAILURE_MESSAGE,
+        parse_error_message=_DAILY_PARSE_ERROR_MESSAGE,
+        log_args=(model,),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +310,12 @@ async def get_multi_model_daily(
         model_names = ["gfs_seamless", "ecmwf_ifs025"]
         tasks = [_daily_forecast_ext_or_raise(lat, lon, days, m) for m in model_names]
         results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # gather(return_exceptions=True) hands back every error as a value: a refusal is handled below, anything
+        # else (a bug, a cancelled model) must not vanish without a trace. The model that answered is still used.
+        for name, r in zip(model_names, results):
+            if isinstance(r, BaseException) and not isinstance(r, FetchRefused):
+                logger.error("get_multi_model_daily: unexpected error for model %s", name, exc_info=r)
 
         successful: dict[str, DailyForecastDataExt] = {
             name: r
@@ -447,12 +450,12 @@ bind_caches({
 })
 
 
-def _parse_hourly_payload(data: dict, fetched_at: datetime | None = None) -> HourlyForecastExt:
+def _parse_hourly_payload(data: dict) -> HourlyForecastExt:
     """Arma un `HourlyForecastExt` desde la respuesta horaria de Open-Meteo.
 
     Toda variable que la respuesta no trae queda como lista vacía (p. ej. el pedido a un solo modelo
-    pide menos variables). `fetched_at` es la hora del pedido (la pone cada `_fetch`). Lanza
-    KeyError/TypeError si falta o viene mal formado `hourly`.
+    pide menos variables). `fetched_at` es la hora de este armado, que corre dentro del pedido cacheado.
+    Un payload mal formado levanta KeyError/TypeError/ValueError/AttributeError; `fetch_series` lo traduce en None.
     """
     hourly = data["hourly"]
     time_list: list[str] = hourly.get("time", [])
@@ -498,7 +501,36 @@ def _parse_hourly_payload(data: dict, fetched_at: datetime | None = None) -> Hou
         cloud_covers=[parse_float(v) for v in hourly.get("cloud_cover", [])],
         wind_dirs_deg=[parse_float(v) for v in hourly.get("wind_direction_10m", [])],
         elevation_m=parse_float(data.get("elevation")),
-        fetched_at=fetched_at,
+        fetched_at=datetime.now(timezone.utc),
+    )
+
+
+_HOURLY_FIELDS = (
+    "temperature_2m",
+    "precipitation",
+    "precipitation_probability",
+    "wind_speed_10m",
+    "weather_code",
+    "is_day",
+    "freezing_level_height",
+    "wind_gusts_10m",
+    "cape",
+    "temperature_850hPa",
+    "relative_humidity_2m",
+    "cloud_cover",
+    "wind_direction_10m",
+)
+
+
+def _hourly_request(lat: float, lon: float, days: int) -> SeriesRequest:
+    # Sin modelo: best_match (una mezcla de modelos) para máxima disponibilidad.
+    return SeriesRequest(
+        lat=lat,
+        lon=lon,
+        level=CacheLevel.FORECAST,
+        hourly=_HOURLY_FIELDS,
+        forecast_days=days,
+        wind_speed_unit_kmh=True,
     )
 
 
@@ -516,33 +548,12 @@ async def get_hourly_forecast_ext(
     herramientas leen esta serie tal cual; el dashboard le superpone los campos de lluvia, viento y
     CAPE de ECMWF (`get_hourly_forecast_ecmwf` + `merge_hourly_ecmwf`) y deja el resto de best_match.
     """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": (
-            "temperature_2m,precipitation,precipitation_probability,"
-            "wind_speed_10m,weather_code,is_day,freezing_level_height,"
-            "wind_gusts_10m,cape,temperature_850hPa,relative_humidity_2m,cloud_cover,"
-            "wind_direction_10m"
-        ),
-        "forecast_days": days,
-        "timezone": "America/Argentina/Buenos_Aires",
-        "wind_speed_unit": "kmh",
-    }
-    key = cache_key(params)
-
-    async def _fetch() -> HourlyForecastExt | None:
-        data = await _get_json(params, "Open-Meteo hourly_ext forecast failed: %s")
-        if data is None:
-            return None
-
-        try:
-            return _parse_hourly_payload(data, fetched_at=datetime.now(timezone.utc))
-        except (KeyError, TypeError) as exc:
-            logger.warning("Open-Meteo hourly_ext parse error: %s", exc)
-            return None
-
-    return await _cached_or_none(_CACHE_FORECAST, key, _fetch)
+    return await fetch_series(
+        _hourly_request(lat, lon, days),
+        _parse_hourly_payload,
+        failure_message="Open-Meteo hourly_ext forecast failed: %s",
+        parse_error_message="Open-Meteo hourly_ext parse error: %s",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -554,7 +565,12 @@ async def get_hourly_forecast_ext(
 _ECMWF_MODEL = "ecmwf_ifs025"
 
 _ECMWF_HOURLY_FIELDS = (
-    "precipitation,wind_gusts_10m,wind_speed_10m,wind_direction_10m,weather_code,cape"
+    "precipitation",
+    "wind_gusts_10m",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "weather_code",
+    "cape",
 )
 
 # Campos de `HourlyForecastExt` que lidera ECMWF en el dashboard. El resto sale de best_match.
@@ -566,6 +582,18 @@ _ECMWF_LED_FIELDS = (
     "weather_codes",
     "cape_j_kg",
 )
+
+
+def _hourly_ecmwf_request(lat: float, lon: float, days: int) -> SeriesRequest:
+    return SeriesRequest(
+        lat=lat,
+        lon=lon,
+        level=CacheLevel.FORECAST,
+        hourly=_ECMWF_HOURLY_FIELDS,
+        models=_ECMWF_MODEL,
+        forecast_days=days,
+        wind_speed_unit_kmh=True,
+    )
 
 
 async def get_hourly_forecast_ecmwf(
@@ -582,29 +610,12 @@ async def get_hourly_forecast_ecmwf(
     serie best_match de las herramientas. Devuelve None ante cualquier fallo (HTTP, timeout, JSON o
     payload inválido) para que el dashboard siga con best_match.
     """
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": _ECMWF_HOURLY_FIELDS,
-        "models": _ECMWF_MODEL,
-        "forecast_days": days,
-        "timezone": "America/Argentina/Buenos_Aires",
-        "wind_speed_unit": "kmh",
-    }
-    key = cache_key(params)
-
-    async def _fetch() -> HourlyForecastExt | None:
-        data = await _get_json(params, "Open-Meteo hourly ECMWF forecast failed: %s")
-        if data is None:
-            return None
-
-        try:
-            return _parse_hourly_payload(data, fetched_at=datetime.now(timezone.utc))
-        except (KeyError, TypeError, ValueError, AttributeError) as exc:
-            logger.warning("Open-Meteo hourly ECMWF parse error: %s", exc)
-            return None
-
-    return await _cached_or_none(_CACHE_FORECAST, key, _fetch)
+    return await fetch_series(
+        _hourly_ecmwf_request(lat, lon, days),
+        _parse_hourly_payload,
+        failure_message="Open-Meteo hourly ECMWF forecast failed: %s",
+        parse_error_message="Open-Meteo hourly ECMWF parse error: %s",
+    )
 
 
 def oldest_forecast_fetched_at(*fetched: datetime | None) -> datetime | None:

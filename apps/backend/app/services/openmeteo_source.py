@@ -3,7 +3,7 @@
 Callers describe WHAT they want with a `SeriesRequest` and hand `fetch_series` a `parse` function; the module owns
 the rest: the query string, the cache level and key, the persistence flag, the 429 pause, the call budget, the usage
 counter and the retry. The wire is behind `OpenMeteoSource`: the real one is `HttpOpenMeteoSource`; tests swap it
-with `set_source` (see `FakeOpenMeteoSource` in `tests/test_openmeteo_source.py`).
+with `set_source` (see `FakeOpenMeteoSource` in `tests/openmeteo_fake_source.py`).
 
     fetch_series(request, parse) -> T | None
         key    = cache_key(request.params())      lat/lon rounded to 2 decimals, so nearby points share an entry
@@ -100,7 +100,7 @@ class SeriesRequest:
     def params(self) -> dict[str, object]:
         """The query string of the request, as a new dict. The coordinates are the exact ones, never rounded.
 
-        The key order is the one the first two migrated requests always had on the wire (it is not behavior:
+        The key order is one fixed order for every request built from a `SeriesRequest` (it is not behavior:
         Open-Meteo reads the query by name, and the cache key sorts it).
         """
         params: dict[str, object] = {"latitude": self.lat, "longitude": self.lon}
