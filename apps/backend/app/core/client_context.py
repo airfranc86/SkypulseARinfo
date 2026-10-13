@@ -13,6 +13,8 @@ A key identifies a person's connection: use it for counting and keep it out of r
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar, Token
 
 _client_key: ContextVar[str | None] = ContextVar("skypulse_client_key", default=None)
@@ -31,3 +33,22 @@ def reset_client_key(token: Token[str | None]) -> None:
 def current_client_key() -> str | None:
     """The client key of the request in flight, or ``None`` outside an HTTP request."""
     return _client_key.get()
+
+
+@contextmanager
+def sin_clave_de_cliente() -> Iterator[None]:
+    """Inside the block there is no client key; on exit (also on an error) the previous one comes back.
+
+    For work a scheduler triggers on its own behalf (the QStash call to ``/api/alertas/evaluar``): it is not a
+    person, so it must not spend the per-client budget of the IP that happened to deliver the call.
+
+    WARNING: with no client key the Open-Meteo budget removes BOTH its per-client cap AND the global one (only
+    requests that carry a key are capped, see ``openmeteo_budget``). A job that makes many calls must not run
+    under this helper unprotected: either give it its own fixed client key (for example ``"job:alertas"``, via
+    ``set_client_key``) so the GLOBAL bucket still applies, or cap the number of zones it queries and pace the run.
+    """
+    token = set_client_key(None)
+    try:
+        yield
+    finally:
+        reset_client_key(token)

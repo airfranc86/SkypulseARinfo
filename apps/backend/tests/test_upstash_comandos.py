@@ -177,6 +177,114 @@ async def test_decr_reports_a_negative_result_as_is(redis: UpstashRedis) -> None
         assert await redis.decr("k") == -1
 
 
+# ---------------------------------------------------------------------------
+# SMEMBERS, SET NX EX y borrado de clave (FRA-355, PR5a: lectura de conjuntos y lock del evaluador)
+# ---------------------------------------------------------------------------
+
+
+async def test_smembers_sends_the_command_in_the_body_and_returns_a_frozenset(redis: UpstashRedis) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok(["id1", "id2", "id1"]))
+        assert await redis.smembers("alertas:zona:cordoba") == frozenset({"id1", "id2"})
+    assert _body(route) == ["SMEMBERS", "alertas:zona:cordoba"]
+    _assert_value_not_in_url(route)
+    assert route.calls.last.request.headers["authorization"] == f"Bearer {_TOKEN}"
+
+
+async def test_smembers_of_a_missing_set_is_empty(redis: UpstashRedis) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=_ok([]))
+        assert await redis.smembers("alertas:zona:nada") == frozenset()
+
+
+@pytest.mark.parametrize(
+    "result",
+    [None, "id1", 3, {"id1": 1}, ["id1", 2], [None]],
+    ids=["null", "string", "int", "dict", "member-not-str", "member-null"],
+)
+async def test_smembers_with_an_unexpected_result_is_unavailable(redis: UpstashRedis, result) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=_ok(result))
+        with pytest.raises(UpstashUnavailableError):
+            await redis.smembers("alertas:ids")
+
+
+async def test_smembers_failures_raise_unavailable_without_leaking(
+    redis: UpstashRedis, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(side_effect=httpx.ConnectError("sin red a SECRETO-123"))
+        with pytest.raises(UpstashUnavailableError) as raised:
+            await redis.smembers("alertas:ids")
+    assert "SECRETO" not in str(raised.value)
+    assert "SECRETO" not in caplog.text
+    assert "SMEMBERS" in caplog.text
+
+
+async def test_set_nx_sends_nx_and_ex_in_the_body_and_keeps_the_value_out_of_the_url(redis: UpstashRedis) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok("OK"))
+        assert await redis.set_nx("alertas:lock:evaluar", _SECRETO, ex=90) is True
+    assert _body(route) == ["SET", "alertas:lock:evaluar", _SECRETO, "NX", "EX", "90"]
+    _assert_value_not_in_url(route)
+    assert route.calls.last.request.headers["authorization"] == f"Bearer {_TOKEN}"
+
+
+async def test_set_nx_answers_false_when_the_key_already_exists(redis: UpstashRedis) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=_ok(None))
+        assert await redis.set_nx("alertas:lock:evaluar", "otro", ex=90) is False
+
+
+@pytest.mark.parametrize("ex", [0, -1], ids=["cero", "negativo"])
+async def test_set_nx_requires_a_positive_expiry(redis: UpstashRedis, ex: int) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok("OK"))
+        with pytest.raises(ValueError):
+            await redis.set_nx("alertas:lock:evaluar", "v", ex=ex)
+    assert not route.called  # un lock sin vencimiento quedaría tomado para siempre
+
+
+async def test_set_nx_failures_raise_unavailable_without_leaking_the_value(
+    redis: UpstashRedis, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=Response(500, json={"error": "boom"}))
+        with pytest.raises(UpstashUnavailableError) as raised:
+            await redis.set_nx("alertas:lock:evaluar", _SECRETO, ex=60)
+    assert "SECRETO" not in str(raised.value)
+    assert "SECRETO" not in caplog.text
+
+
+async def test_set_nx_is_exclusive_and_delete_releases_it_against_the_fake(fake_upstash) -> None:
+    from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
+
+    real = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    assert await real.set_nx("alertas:lock:evaluar", "yo", ex=90) is True
+    assert fake_upstash.ttls["alertas:lock:evaluar"] == 90
+    assert await real.set_nx("alertas:lock:evaluar", "otro", ex=90) is False
+    assert fake_upstash.strings["alertas:lock:evaluar"] == "yo"  # el segundo no pisó al primero
+    assert await real.delete("alertas:lock:otra-clave") == 0  # borrar otra clave no libera el lock
+    assert await real.set_nx("alertas:lock:evaluar", "otro", ex=90) is False
+    assert await real.delete("alertas:lock:evaluar") == 1
+    assert "alertas:lock:evaluar" not in fake_upstash.strings
+    assert await real.set_nx("alertas:lock:evaluar", "otro", ex=90) is True
+    for request in fake_upstash.requests:
+        assert str(request.url) == f"{FAKE_UPSTASH_URL}/"
+
+
+async def test_the_fake_serves_smembers(fake_upstash) -> None:
+    from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
+
+    real = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    assert await real.smembers("alertas:zonas") == frozenset()
+    await real.sadd("alertas:zonas", "cordoba", "mendoza")
+    assert await real.smembers("alertas:zonas") == frozenset({"cordoba", "mendoza"})
+    assert await real.smembers("alertas:zona:cordoba") == frozenset()
+
+
 @pytest.mark.parametrize(
     "failure",
     [httpx.ConnectError("sin red"), httpx.ReadTimeout("lento"), Response(500, json={"error": "boom"})],
@@ -192,3 +300,37 @@ async def test_decr_failures_raise_unavailable(redis: UpstashRedis, failure) -> 
         with pytest.raises(UpstashUnavailableError):
             await redis.decr("k")
 
+
+# ---------------------------------------------------------------------------
+# read_strict: GET que distingue "result: null" (clave ausente) de "no hay result" (FRA-355, interruptor)
+# ---------------------------------------------------------------------------
+
+
+async def test_read_strict_returns_the_value_or_none_for_an_explicit_null(redis: UpstashRedis) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok("1"))
+        assert await redis.read_strict("alertas:apagado") == "1"
+        assert _body(route) == ["GET", "alertas:apagado"]
+        _assert_value_not_in_url(route)
+        route.mock(return_value=_ok(None))
+        assert await redis.read_strict("alertas:apagado") is None
+        route.mock(return_value=_ok(""))
+        assert await redis.read_strict("alertas:apagado") == ""
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [{}, {"error": "x"}, {"result": 5}, {"result": True}, {"result": ["1"]}, {"result": {"a": 1}}],
+    ids=["empty", "error-field", "int", "bool", "list", "dict"],
+)
+async def test_read_strict_without_a_usable_result_is_unavailable(redis: UpstashRedis, answer: dict) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=Response(200, json=answer))
+        with pytest.raises(UpstashUnavailableError):
+            await redis.read_strict("alertas:apagado")
+
+
+async def test_read_keeps_treating_a_missing_result_as_none(redis: UpstashRedis) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=Response(200, json={}))
+        assert await redis.read("alertas:sub:x") is None  # comportamiento de siempre para los demás llamadores

@@ -114,6 +114,20 @@ class Settings(BaseSettings):
     # Contacto que declara el VAPID ante los servicios push: `https://...` o `mailto:...`.
     vapid_subject: str = "https://skypulse-ar.vercel.app"
 
+    # Envío automático de alertas push (FRA-355). QStash llama a `POST /api/alertas/evaluar` y firma cada
+    # llamada con un JWT HS256 en la cabecera `Upstash-Signature`; ver `services/alertas/firma_qstash.py`.
+    # Las dos claves de firma (actual y siguiente, para rotarlas sin cortar el servicio) solo viven en el
+    # entorno (Render): `repr=False` evita que salgan en un `repr(settings)` o en un log. Vacías = el
+    # endpoint rechaza todo (falla cerrado).
+    qstash_current_signing_key: str = Field(default="", repr=False)
+    qstash_next_signing_key: str = Field(default="", repr=False)
+    # URL pública exacta a la que QStash llama (https://.../api/alertas/evaluar): el claim `sub` de la
+    # firma debe ser igual. Vacía = el endpoint rechaza todo.
+    alertas_evaluar_url: str = ""
+    # Interruptor de apagado nº 1: el envío automático nace APAGADO. El nº 2 es la clave `alertas:apagado`
+    # en Upstash (si existe, apaga; se maneja desde su consola sin redeploy). Apaga cualquiera de los dos.
+    alertas_envio_activo: bool = False
+
     # Clave del límite de pedidos por IP (ver `core/rate_limit.py::client_key`). Render pone Cloudflare delante:
     # Cloudflare escribe `CF-Connecting-IP` con la IP real y agrega al `X-Forwarded-For` (el valor de la
     # izquierda lo manda el cliente). `RATE_LIMIT_TRUST_CF_HEADER=false` ignora `CF-Connecting-IP` (si el

@@ -61,13 +61,21 @@ class UpstashRedis:
         await self._call("EXPIRE", key, str(seconds))
 
     async def setnx_ex(self, key: str, ttl_seconds: int) -> bool:
-        """SET key 1 NX EX ttl. Returns True if key was created."""
+        """SET key 1 NX EX ttl. Returns True if key was created.
+
+        Sends the command in the URL (``_call``) with a fixed value: only for short keys that carry nothing
+        sensitive (the CheckWX quota counter). For a value that varies or that can be sensitive use ``set_nx``,
+        which sends it in the body. The two are NOT interchangeable.
+        """
         result = await self._call("SET", key, "1", "NX", "EX", str(ttl_seconds))
         return result == "OK"
 
     # -- Comandos con el valor en el cuerpo JSON (alertas push, FRA-353) ---------------------------
 
-    async def _call_body(self, *command: str) -> Any:
+    async def _call_body(self, *command: str, require_result: bool = False) -> Any:
+        """Manda el comando en el cuerpo. Con `require_result`, una respuesta 200 sin campo `result` (por ejemplo
+        `{}` o `{"error": ...}`) es `UpstashUnavailableError`, no `None`: el llamador distingue así "la clave
+        no existe" (`{"result": null}`) de "no sé qué contestó Upstash"."""
         try:
             resp = await get_client().post(
                 f"{self._url}/",
@@ -79,6 +87,8 @@ class UpstashRedis:
             data = resp.json()
             if not isinstance(data, dict):
                 raise TypeError("respuesta de Upstash inesperada")
+            if require_result and "result" not in data:
+                raise ValueError("respuesta de Upstash sin result")
         except (httpx.HTTPError, ValueError, TypeError) as exc:
             # Solo el nombre del comando y el tipo de error: el texto de la excepción y los
             # argumentos pueden traer el endpoint push o las claves.
@@ -102,12 +112,52 @@ class UpstashRedis:
         """GET con el comando en el cuerpo: lo guardado puede ser un valor sensible."""
         return await self._call_body("GET", key)
 
+    async def read_strict(self, key: str) -> str | None:
+        """GET que solo devuelve `None` si Upstash contestó `{"result": null}` (la clave no existe).
+
+        Una respuesta sin `result`, o con un `result` que no es texto ni null, es `UpstashUnavailableError`.
+        Para los interruptores de apagado, donde "no sé" tiene que contar como "apagado".
+        """
+        result = await self._call_body("GET", key, require_result=True)
+        if result is not None and not isinstance(result, str):
+            logger.warning("upstash_call_failed command=GET exc_type=resultado_no_es_texto")
+            raise UpstashUnavailableError("resultado_no_es_texto")
+        return result
+
     async def set(self, key: str, value: str, ex: int | None = None) -> None:
         """SET key value [EX ex]."""
         command = ["SET", key, value]
         if ex is not None:
             command += ["EX", str(ex)]
         await self._call_body(*command)
+
+    async def set_nx(self, key: str, value: str, ex: int) -> bool:
+        """SET key value NX EX ex, con el valor en el cuerpo. True si la clave se creó; False si ya existía.
+
+        Sirve de lock o de marca de "ya visto": el vencimiento es obligatorio (sin él, un lock quedaría tomado
+        para siempre si el proceso muere). Lo normal es DEJAR QUE VENZA: un `delete` simple puede liberar el
+        lock de OTRO dueño si el propio ya venció y alguien más lo tomó. Liberarlo de forma segura (solo si el
+        valor sigue siendo el propio) necesita un script (`EVAL`), que llega con la 5b.
+
+        Manda el comando en el cuerpo (`_call_body`): usalo para valores que varían o pueden ser sensibles. Para
+        una clave corta con un valor fijo y nada sensible, `setnx_ex` lo manda en la URL; no son intercambiables.
+        """
+        if ex < 1:
+            raise ValueError("set_nx necesita un vencimiento positivo")
+        result = await self._call_body("SET", key, value, "NX", "EX", str(ex))
+        return result == "OK"
+
+    async def smembers(self, key: str) -> frozenset[str]:
+        """SMEMBERS key. Un conjunto que no existe es vacío; un resultado que no es una lista de textos, un error.
+
+        Devuelve el conjunto ENTERO en una respuesta (no hay `SSCAN`): lo que acota su tamaño es el tope de
+        5.000 ids de suscripción (`alertas:ids`). Con conjuntos sin tope, paginar con `SSCAN`.
+        """
+        result = await self._call_body("SMEMBERS", key)
+        if not isinstance(result, list) or not all(isinstance(member, str) for member in result):
+            logger.warning("upstash_call_failed command=SMEMBERS exc_type=resultado_no_es_lista_de_textos")
+            raise UpstashUnavailableError("resultado_no_es_lista_de_textos")
+        return frozenset(result)
 
     async def sadd(self, key: str, *members: str) -> int:
         return await self._call_int("SADD", key, *members)

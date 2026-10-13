@@ -19,3 +19,17 @@ services:
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
+      # Alertas push (FRA-354 / FRA-355). Los valores se cargan a mano en el panel de Render.
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: QSTASH_CURRENT_SIGNING_KEY
+        sync: false
+      - key: QSTASH_NEXT_SIGNING_KEY
+        sync: false
+      - key: ALERTAS_EVALUAR_URL
+        sync: false
+      # El envío automático nace apagado; encenderlo es un cambio explícito de esta variable. OJO: un `value`
+      # fijo en el blueprint se vuelve a escribir en cada sync. Para encenderlo desde el panel de Render, antes
+      # hay que quitar o cambiar este valor en el blueprint; si no, el próximo sync lo apaga de nuevo.
+      - key: ALERTAS_ENVIO_ACTIVO
+        value: "false"

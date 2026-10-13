@@ -552,6 +552,8 @@ class FakeUpstash:
             return before - len(members)
         if name == "SCARD":
             return len(self.sets.get(args[0], set()))
+        if name == "SMEMBERS":
+            return sorted(self.sets.get(args[0], set()))
         raise AssertionError(f"comando no soportado por FakeUpstash: {name}")
 
 
