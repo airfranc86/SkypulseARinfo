@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
+from cryptography.hazmat.primitives.asymmetric import ec
+
 from app.core.upstash import UpstashRedis
 from app.services.alertas.zonas import zona_por_slug
 
@@ -55,8 +57,9 @@ _ETIQUETA_NUMERICA = re.compile(
 )  # decimal, hexadecimal u octal: formas de IP
 _BASE64URL = re.compile(r"[A-Za-z0-9_-]+={0,2}")
 
-_CLAVE_IDS = "alertas:ids"
-_CLAVE_ZONAS = "alertas:zonas"
+# Los nombres de las claves de Upstash son públicos: el envío (FRA-355) arma las mismas claves con estos helpers.
+CLAVE_IDS = "alertas:ids"
+CLAVE_ZONAS = "alertas:zonas"
 
 
 class SuscripcionInvalida(ValueError):
@@ -82,6 +85,29 @@ def _es_literal_ip(host: str) -> bool:
     return all(_ETIQUETA_NUMERICA.fullmatch(etiqueta) for etiqueta in host.split("."))
 
 
+def es_host_de_push(host: str) -> bool:
+    """True si `host` es el de un servicio push conocido (la lista cerrada de arriba).
+
+    Es la ÚNICA lista de hosts push: la comparte la validación anti-SSRF del alta y el filtro de Sentry (`main.py`), que
+    no debe enviar nunca la URL de un endpoint push (su ruta es un secreto). Solo compara el host: no valida su sintaxis.
+    """
+    host = host.lower()
+    return host in _HOSTS_EXACTOS or host.endswith(_SUFIJOS)
+
+
+def menciona_host_de_push(texto: str) -> bool:
+    """True si `texto` nombra, en cualquier forma, el host de un servicio push (la misma lista cerrada de arriba).
+
+    Es para filtrar (Sentry, `main.py`) texto de cualquier largo y sin truncar, así que es LINEAL: se pasa a minúsculas una
+    vez y se busca cada host como subcadena. Sin expresiones regulares (una expresión para "encontrar nombres de host" es
+    cuadrática en una ruta larga sin puntos: un `GET /aaaa...` de 16 KB bloqueaba el servidor unos 4 s). Solo puede
+    FILTRAR DE MÁS (`fcm.googleapis.com.evil.example`, `fcm.googleapis.com@evil`) y nunca de menos: no importa el puerto, el
+    punto final, las mayúsculas ni el usuario antes de la arroba.
+    """
+    t = texto.lower()
+    return any(h in t for h in _HOSTS_EXACTOS) or any(s in t for s in _SUFIJOS)
+
+
 def _validar_host(host: str) -> None:
     if len(host) > 253 or not all(_ETIQUETA_DNS.fullmatch(e) for e in host.split(".")):
         raise SuscripcionInvalida(
@@ -89,7 +115,7 @@ def _validar_host(host: str) -> None:
         )  # incluye punto final, etiquetas vacías, %, _
     if _es_literal_ip(host):
         raise SuscripcionInvalida("endpoint_invalido")
-    if host not in _HOSTS_EXACTOS and not host.endswith(_SUFIJOS):
+    if not es_host_de_push(host):
         raise SuscripcionInvalida("endpoint_invalido")
 
 
@@ -143,8 +169,18 @@ def _decodificar_base64url(value: str, largo: int) -> bytes:
 
 
 def validar_p256dh(value: str) -> str:
-    if _decodificar_base64url(value, LARGO_P256DH)[0] != 0x04:
+    """Un punto REAL de la curva P-256 sin comprimir (65 bytes, empieza en 0x04).
+
+    El largo y el 0x04 no alcanzan: una clave fuera de la curva se guarda bien pero ningún mensaje puede cifrarse para
+    ella, así que cada corrida volvería a intentarla (una suscripción "envenenada"). Mismo error genérico que el resto.
+    """
+    datos = _decodificar_base64url(value, LARGO_P256DH)
+    if datos[0] != 0x04:
         raise SuscripcionInvalida("clave_invalida")
+    try:
+        ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), datos)
+    except ValueError as exc:  # no está en la curva (o es el punto en el infinito)
+        raise SuscripcionInvalida("clave_invalida") from exc
     return value
 
 
@@ -190,11 +226,13 @@ class Suscripcion:
 # ---------------------------------------------------------------------------
 
 
-def _clave_sub(sub_id: str) -> str:
+def clave_de_sub(sub_id: str) -> str:
+    """La clave del JSON de una suscripción."""
     return f"alertas:sub:{sub_id}"
 
 
-def _clave_zona(slug: str) -> str:
+def clave_de_zona(slug: str) -> str:
+    """La clave del set de ids suscriptos a una ciudad."""
     return f"alertas:zona:{slug}"
 
 
@@ -218,9 +256,9 @@ async def alta(redis: UpstashRedis, suscripcion: Suscripcion) -> str:
         UpstashUnavailableError: Upstash no respondió.
     """
     sub_id = id_de_endpoint(suscripcion.endpoint)
-    clave = _clave_sub(sub_id)
+    clave = clave_de_sub(sub_id)
     previo = await redis.read(clave)
-    if previo is None and await redis.scard(_CLAVE_IDS) >= TOPE_SUSCRIPCIONES:
+    if previo is None and await redis.scard(CLAVE_IDS) >= TOPE_SUSCRIPCIONES:
         raise TopeAlcanzadoError
 
     registro = json.dumps(
@@ -234,13 +272,13 @@ async def alta(redis: UpstashRedis, suscripcion: Suscripcion) -> str:
         separators=(",", ":"),
     )
     await redis.set(clave, registro, ex=TTL_SEGUNDOS)
-    await redis.sadd(_clave_zona(suscripcion.zona), sub_id)
-    await redis.sadd(_CLAVE_ZONAS, suscripcion.zona)
-    await redis.sadd(_CLAVE_IDS, sub_id)
+    await redis.sadd(clave_de_zona(suscripcion.zona), sub_id)
+    await redis.sadd(CLAVE_ZONAS, suscripcion.zona)
+    await redis.sadd(CLAVE_IDS, sub_id)
 
     zona_previa = _zona_guardada(previo)
     if zona_previa is not None and zona_previa != suscripcion.zona:
-        await redis.srem(_clave_zona(zona_previa), sub_id)
+        await redis.srem(clave_de_zona(zona_previa), sub_id)
     return sub_id
 
 
@@ -248,12 +286,12 @@ async def baja(redis: UpstashRedis, sub_id: str) -> None:
     """Borra la suscripción y la saca de los índices. Idempotente: un id desconocido no es un error."""
     if not isinstance(sub_id, str) or not PATRON_ID.fullmatch(sub_id):
         raise SuscripcionInvalida("id_invalido")
-    clave = _clave_sub(sub_id)
+    clave = clave_de_sub(sub_id)
     zona = _zona_guardada(await redis.read(clave))
     await redis.delete(clave)
-    await redis.srem(_CLAVE_IDS, sub_id)
+    await redis.srem(CLAVE_IDS, sub_id)
     if zona is not None:
-        await redis.srem(_clave_zona(zona), sub_id)
+        await redis.srem(clave_de_zona(zona), sub_id)
 
 
 async def registro_de(redis: UpstashRedis, sub_id: str) -> str | None:
@@ -265,7 +303,7 @@ async def registro_de(redis: UpstashRedis, sub_id: str) -> str | None:
     """
     if not isinstance(sub_id, str) or not PATRON_ID.fullmatch(sub_id):
         raise SuscripcionInvalida("id_invalido")
-    return await redis.read(_clave_sub(sub_id))
+    return await redis.read(clave_de_sub(sub_id))
 
 
 async def limpiar_id_vencido(
@@ -286,9 +324,9 @@ async def limpiar_id_vencido(
         raise SuscripcionInvalida("id_invalido")
     if zona is not None:
         validar_zona(zona)
-    if await redis.read(_clave_sub(sub_id)) is not None:
+    if await redis.read(clave_de_sub(sub_id)) is not None:
         return False
-    await redis.srem(_CLAVE_IDS, sub_id)
+    await redis.srem(CLAVE_IDS, sub_id)
     if zona is not None:
-        await redis.srem(_clave_zona(zona), sub_id)
+        await redis.srem(clave_de_zona(zona), sub_id)
     return True

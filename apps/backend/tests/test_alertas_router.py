@@ -31,7 +31,7 @@ def _b64(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode().rstrip("=")
 
 
-P256DH = _b64(b"\x04" + bytes(range(64)))
+from tests.test_alertas_suscripcion import P256DH  # noqa: E402  (a REAL P-256 point: the alta validates it since PR5c)
 AUTH = _b64(bytes(range(16)))
 ENDPOINT = "https://fcm.googleapis.com/fcm/send/SECRETO-ENDPOINT-abc123"
 OTRO_ENDPOINT = "https://updates.push.services.mozilla.com/wpush/v2/OTRO-SECRETO"

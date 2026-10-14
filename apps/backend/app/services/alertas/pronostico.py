@@ -19,7 +19,9 @@ positive evidence and must not be thrown away. Whether the series may also be us
 question, `cubre_ventana`: it needs EVERY hour of the review window with BOTH `weather_code` and `cape` (a short series
 or a hole, or a variable missing, would make the rule read the missing hours as calm).
 
-Nothing here reads the wall clock: `ahora` is injected and must carry a time zone.
+Nothing here reads the wall clock: `ahora` and `referencia` are injected and must carry a time zone. `ahora` is the
+start of the run (the window, the kind of notice); `referencia` is the instant the freshness is judged against, read by the
+caller for each zone (a long run fetches the later zones minutes after `ahora`). Without it, `ahora` is the reference.
 """
 from __future__ import annotations
 
@@ -93,13 +95,17 @@ def cubre_ventana(hourly: HourlyForecastExt, ventana: tuple[int, int]) -> bool:
     return completas.issuperset(range(inicio, fin, _SEGUNDOS_POR_HORA))
 
 
-async def pronostico_de_zona(zona: Zona, ahora: datetime) -> HourlyForecastExt | None:
+async def pronostico_de_zona(
+    zona: Zona, ahora: datetime, referencia: datetime | None = None
+) -> HourlyForecastExt | None:
     """The fresh ECMWF series of `zona` (complete or not: see `cubre_ventana`), or `None` when there is no usable data.
 
     Raises:
-        ValueError: `ahora` has no time zone (nothing is requested).
+        ValueError: `ahora` or `referencia` has no time zone (nothing is requested).
     """
     exigir_hora_con_zona(ahora)
+    if referencia is not None:
+        exigir_hora_con_zona(referencia)
     try:
         serie = await fetch_series_or_raise(
             pedido_de_zona(zona),
@@ -111,7 +117,7 @@ async def pronostico_de_zona(zona: Zona, ahora: datetime) -> HourlyForecastExt |
         return None  # the budget said no for THIS call: no data now, and nothing is remembered against the cell
     if serie is None:
         return None
-    if not es_fresco(serie, ahora):
-        logger.warning("alertas: stale forecast discarded zone=%s", zona.slug)
+    if not es_fresco(serie, referencia or ahora):
+        logger.warning("alertas: stale forecast discarded")  # the zone is not named: a subscribed zone is not for the logs
         return None
     return serie

@@ -28,10 +28,11 @@ services:
         sync: false
       - key: ALERTAS_EVALUAR_URL
         sync: false
-      # El envío automático nace apagado; encenderlo es un cambio explícito de esta variable. OJO: el servicio
-      # real de Render NO se sincroniza desde este blueprint (su comando de inicio y su nombre difieren), así
-      # que este archivo documenta las variables y sus valores iniciales: lo que vale es el valor cargado en el
-      # panel de Render, y cambiarlo ahí no se pisa solo.
+      # El envío automático nace apagado; encenderlo es un cambio explícito de esta variable (PR5c: con "true", la
+      # clave `alertas:apagado` ausente de Upstash y una VAPID_PRIVATE_KEY usable, /evaluar MANDA las notificaciones).
+      # OJO: el servicio real de Render NO se sincroniza desde este blueprint (su comando de inicio y su nombre
+      # difieren), así que este archivo documenta las variables y sus valores iniciales: lo que vale es el valor
+      # cargado en el panel de Render, y cambiarlo ahí no se pisa solo.
       - key: ALERTAS_ENVIO_ACTIVO
         value: "false"
       # Evaluación en seco (PR5b): con "true" el endpoint /evaluar consulta a Open-Meteo y CUENTA las zonas con

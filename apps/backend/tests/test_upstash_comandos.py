@@ -334,3 +334,40 @@ async def test_read_keeps_treating_a_missing_result_as_none(redis: UpstashRedis)
     with respx.mock:
         respx.post(f"{_URL}/").mock(return_value=Response(200, json={}))
         assert await redis.read("alertas:sub:x") is None  # comportamiento de siempre para los demás llamadores
+
+
+# --- PR5c second correction round: the done-set of a notice -----------------------------------------------------------------
+
+
+async def test_sadd_takes_several_members_in_one_command_with_the_values_in_the_body(redis: UpstashRedis) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok(3))
+        assert await redis.sadd("alertas:enviado:cordoba:hoy:2026-10-14", "a", "b", "c") == 3
+        assert _body(route) == ["SADD", "alertas:enviado:cordoba:hoy:2026-10-14", "a", "b", "c"]
+        _assert_value_not_in_url(route)
+
+
+async def test_expire_si_falta_sends_expire_nx_in_the_body_and_returns_the_integer(redis: UpstashRedis) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok(1))
+        assert await redis.expire_si_falta("alertas:enviado:cordoba:hoy:2026-10-14", 129600) == 1
+        assert _body(route) == ["EXPIRE", "alertas:enviado:cordoba:hoy:2026-10-14", "129600", "NX"]
+        route.mock(return_value=_ok(0))
+        assert await redis.expire_si_falta("k", 60) == 0  # it already had an expiry: untouched
+
+
+@pytest.mark.parametrize("segundos", [0, -5])
+async def test_expire_si_falta_refuses_a_non_positive_expiry_without_calling_upstash(redis: UpstashRedis, segundos: int) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok(1))
+        with pytest.raises(ValueError):
+            await redis.expire_si_falta("k", segundos)
+        assert not route.called
+
+
+@pytest.mark.parametrize("answer", [{}, {"result": "OK"}, {"result": True}, {"error": "x"}], ids=["empty", "text", "bool", "error"])
+async def test_expire_si_falta_without_an_integer_result_is_unavailable(redis: UpstashRedis, answer: dict) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=Response(200, json=answer))
+        with pytest.raises(UpstashUnavailableError):
+            await redis.expire_si_falta("k", 60)

@@ -4,6 +4,10 @@ from pydantic_settings import BaseSettings
 _DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app"
 
 
+# Cuánto tiene que sobrarle al lock de la evaluación de alertas sobre el plazo de la corrida (ver `Settings`).
+MARGEN_DEL_LOCK_SEGUNDOS = 120
+
+
 class Settings(BaseSettings):
     smn_weather_url: str = "https://ws.smn.gob.ar/map_items/weather"
     # El feed `map_items/weather` está congelado desde 2022 (sin campo `date`): el "ahora" nunca podía
@@ -126,9 +130,10 @@ class Settings(BaseSettings):
     alertas_evaluar_url: str = ""
     # Interruptor de apagado nº 1: el envío automático nace APAGADO. El nº 2 es la clave `alertas:apagado`
     # en Upstash (si existe, apaga; se maneja desde su consola sin redeploy). Apaga cualquiera de los dos.
+    # Es el ÚNICO que hace que `/evaluar` mande notificaciones (PR5c), vía `services/alertas/interruptor.py`.
     alertas_envio_activo: bool = False
     # Evaluación en seco (FRA-355, PR5b): con `true` el endpoint evalúa las zonas y CUENTA, pero no manda nada
-    # (el envío real es otra pieza). Apagada por defecto. La clave `alertas:apagado` también la detiene.
+    # (mandar lo decide solo `alertas_envio_activo`). Apagada por defecto. La clave `alertas:apagado` también la detiene.
     alertas_evaluar_en_seco: bool = False
     # Tope de zonas que consulta cada corrida (una consulta a Open-Meteo por zona); las que sobran quedan
     # `diferidas` (primero van las zonas con más suscriptores). El valor por defecto es el catálogo entero (50
@@ -140,15 +145,17 @@ class Settings(BaseSettings):
     # mínimo de 330 s.
     alertas_lock_ttl_segundos: int = Field(default=600, ge=330, le=3600)
     # Plazo de la corrida, en segundos: pasado ese tiempo se deja de evaluar zonas y las que faltaron quedan
-    # `diferidas` (estado `evaluada_incompleta`). Tiene que ser MENOR que la vida del lock (si no, el lock vencería
-    # con la corrida todavía andando).
+    # `diferidas` (estado `evaluada_incompleta`). Tiene que ser MENOR que la vida del lock por al menos
+    # `MARGEN_DEL_LOCK_SEGUNDOS`: el plazo es cooperativo (un envío en vuelo no se cancela: puede pasarse unos segundos
+    # y un reintento sumar otros) y el lock no debe vencer con la corrida todavía andando.
     alertas_plazo_corrida_segundos: int = Field(default=480, ge=60)
 
     @model_validator(mode="after")
     def _plazo_menor_que_el_lock(self) -> "Settings":
-        if self.alertas_plazo_corrida_segundos >= self.alertas_lock_ttl_segundos:
+        if self.alertas_plazo_corrida_segundos + MARGEN_DEL_LOCK_SEGUNDOS > self.alertas_lock_ttl_segundos:
             raise ValueError(
-                "alertas_plazo_corrida_segundos (el plazo de la corrida) tiene que ser menor que alertas_lock_ttl_segundos"
+                "alertas_plazo_corrida_segundos (el plazo de la corrida) tiene que ser al menos "
+                f"{MARGEN_DEL_LOCK_SEGUNDOS} segundos menor que alertas_lock_ttl_segundos"
             )
         return self
 

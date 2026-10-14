@@ -22,6 +22,7 @@ Contract pinned by these tests (the numbers in brackets are the points of the PR
 from __future__ import annotations
 
 import ast
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,7 +33,7 @@ import pytest
 from app.core.cache import FetchRefused
 from app.core.config import settings
 from app.core.upstash import UpstashRedis, UpstashUnavailableError
-from app.services.alertas import envio, evaluacion, interruptor, pronostico, regla
+from app.services.alertas import despacho, envio, evaluacion, interruptor, pronostico, regla
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.evaluacion import ResultadoEvaluacion
 from app.services.alertas.zonas import ZONAS, zona_por_slug
@@ -54,8 +55,21 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name)
     respuestas_por_zona,
     suscribir,
 )
+from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name)
+    CONTADORES_ENVIO_HTTP,
+    CONTADORES_HTTP,
+    RelojDeTest,
+    correr,
+    envio_activo,
+    esperas,
+    lineas_de_resumen,
+    push,
+    registrar,
+    reloj_del_bucle,
+    respuestas_en_orden,
+)
 from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
-from tests.openmeteo_fake_source import install, own_caches  # noqa: F401
+from tests.openmeteo_fake_source import FakeOpenMeteoSource, install, own_caches  # noqa: F401
 from tests.test_alertas_suscripcion import AUTH, P256DH
 
 pytestmark = pytest.mark.integration
@@ -683,3 +697,378 @@ def test_the_evaluation_modules_never_read_the_wall_clock(modulo) -> None:
         if isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Attribute) and nodo.func.attr in relojes
     ]
     assert llamadas == []
+
+
+# ===========================================================================
+# PR5c: the second pass, the pruning and the counters of a run that SENDS
+# ===========================================================================
+
+
+@pytest.fixture
+def envio_listo(push, esperas, envio_activo):  # noqa: F811
+    """What a sending run needs: the stand-in sender, a VAPID key, the send flag on and no real waiting."""
+    return push
+
+
+async def test_a_zone_without_data_is_asked_again_once_after_the_wait_and_the_final_result_is_the_second_one(
+    redis, fake_upstash, install, envio_listo, esperas
+) -> None:
+    respond = respuestas_en_orden({"cordoba": [None, TORMENTA]})
+    install(respond=respond)
+    await registrar(redis, "cordoba", 2)
+    resultado = await correr(redis)
+    assert respond.cuenta["cordoba"] == 2
+    assert esperas == [despacho.ESPERA_SEGUNDA_PASADA_SEGUNDOS]
+    assert (resultado.sin_datos, resultado.con_tormenta, resultado.evaluadas) == (0, 1, 1)  # the FINAL result
+    assert resultado.estado == "evaluada" and resultado.envio.reintentadas == 1
+    assert resultado.envio.avisadas == 1 and resultado.envio.enviados == 2  # and it was notified like any other
+    assert [z.veredicto for z in resultado.zonas] == ["con_tormenta"]
+
+
+async def test_a_zone_that_still_has_no_data_is_asked_exactly_twice_and_stays_without_data(
+    redis, fake_upstash, install, envio_listo, caplog
+) -> None:
+    respond = respuestas_en_orden({"cordoba": [None]})
+    install(respond=respond)
+    await registrar(redis, "cordoba", 1)
+    caplog.set_level(logging.DEBUG)
+    resultado = await correr(redis)
+    assert respond.cuenta["cordoba"] == 2  # never a third time
+    assert resultado.estado == "evaluada" and resultado.sin_datos == 1 and resultado.envio.reintentadas == 1
+    assert envio_listo.llamadas == [] and resultado.con_tormenta == 0
+    assert [r.levelno for r in lineas_de_resumen(caplog)] == [logging.WARNING]
+
+
+async def test_only_the_zones_without_data_enter_the_second_pass_and_the_wait_happens_once(
+    redis, fake_upstash, install, envio_listo, esperas
+) -> None:
+    respond = respuestas_en_orden(
+        {
+            "cordoba": [None, CALMA],
+            "tucuman": [None],
+            "rosario": [CALMA],
+            "mendoza": [TORMENTA],
+            "salta": [RuntimeError("bug")],
+        }
+    )
+    install(respond=respond)
+    for slug in ("cordoba", "tucuman", "rosario", "mendoza", "salta"):
+        await registrar(redis, slug, 1)
+    resultado = await correr(redis)
+    assert dict(respond.cuenta) == {"cordoba": 2, "tucuman": 2, "rosario": 1, "mendoza": 1, "salta": 1}
+    assert esperas == [despacho.ESPERA_SEGUNDA_PASADA_SEGUNDOS]  # one wait for the whole pass
+    assert resultado.envio.reintentadas == 2
+    assert (resultado.sin_datos, resultado.sin_tormenta, resultado.con_tormenta, resultado.errores) == (1, 2, 1, 1)
+    assert {c.zona for c in envio_listo.llamadas} == {"mendoza"}  # an error zone is never retried nor notified
+
+
+async def test_without_zones_lacking_data_there_is_no_wait_and_no_second_pass(
+    redis, fake_upstash, install, envio_listo, esperas
+) -> None:
+    respond = respuestas_en_orden({"cordoba": [TORMENTA], "rosario": [CALMA]})
+    install(respond=respond)
+    await registrar(redis, "cordoba", 1)
+    await registrar(redis, "rosario", 1)
+    resultado = await correr(redis)
+    assert esperas == [] and resultado.envio.reintentadas == 0 and dict(respond.cuenta) == {"cordoba": 1, "rosario": 1}
+
+
+async def test_a_dry_run_never_waits_nor_asks_twice(redis, fake_upstash, install, esperas) -> None:
+    respond = respuestas_en_orden({"cordoba": [None, CALMA]})
+    install(respond=respond)
+    suscribir(fake_upstash, "cordoba")
+    resultado = await evaluacion.evaluar(redis, AHORA)
+    assert esperas == [] and respond.cuenta["cordoba"] == 1 and resultado.sin_datos == 1
+
+
+async def test_if_the_deadline_leaves_no_room_for_the_second_pass_the_zones_stay_without_data_and_the_run_is_incomplete(
+    redis, fake_upstash, install, envio_listo, esperas, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings, "alertas_plazo_corrida_segundos", 60)
+    monkeypatch.setattr(despacho, "ESPERA_SEGUNDA_PASADA_SEGUNDOS", 100.0)  # more than what is left
+    respond = respuestas_en_orden({"cordoba": [None, TORMENTA]})
+    install(respond=respond)
+    await registrar(redis, "cordoba", 1)
+    resultado = await correr(redis)
+    assert resultado.estado == "evaluada_incompleta"  # visible: a zone could not be given its second chance
+    assert resultado.sin_datos == 1 and resultado.envio.reintentadas == 0
+    assert esperas == [] and respond.cuenta["cordoba"] == 1 and envio_listo.llamadas == []
+
+
+async def test_the_deadline_hitting_during_the_second_pass_leaves_the_zones_without_data(
+    redis, fake_upstash, envio_listo, esperas, monkeypatch, reloj_del_bucle
+) -> None:
+    monkeypatch.setattr(settings, "alertas_plazo_corrida_segundos", 100)
+    monkeypatch.setattr(despacho, "ESPERA_SEGUNDA_PASADA_SEGUNDOS", 0.01)
+    preguntas: list[str] = []
+
+    class FuenteQueNuncaTiene(FakeOpenMeteoSource):
+        async def get_json(self, params, failure_message, *log_args):  # noqa: ANN001, ANN201
+            preguntas.append(str(params["latitude"]))
+            if len(preguntas) > 2:  # the second pass: asking again takes longer than what is left of the run
+                reloj_del_bucle.avanzar(1000)
+            return None
+
+    from app.services.openmeteo_source import set_source
+
+    set_source(FuenteQueNuncaTiene())
+    await registrar(redis, "cordoba", 2)
+    await registrar(redis, "rosario", 1)
+    resultado = await correr(redis)
+    assert resultado.estado == "evaluada_incompleta"
+    assert resultado.sin_datos == 2 and resultado.con_tormenta == 0 and resultado.diferidas == 0
+    assert resultado.envio.reintentadas == 2  # both took their turn; the second one found the run already over
+    assert envio_listo.llamadas == []
+
+
+async def test_a_kill_key_pulled_during_the_wait_stops_the_second_pass(
+    redis, fake_upstash, install, envio_listo, monkeypatch
+) -> None:
+    respond = respuestas_en_orden({"cordoba": [None, TORMENTA]})
+    install(respond=respond)
+    await registrar(redis, "cordoba", 1)
+
+    async def dormir_y_apagar(segundos: float) -> None:
+        fake_upstash.strings[CLAVE_APAGADO] = "1"
+
+    monkeypatch.setattr(despacho, "_dormir", dormir_y_apagar)
+    resultado = await correr(redis)
+    assert resultado.estado == "apagado_a_mitad"
+    assert respond.cuenta["cordoba"] == 1 and envio_listo.llamadas == []
+    assert resultado.sin_datos == 1
+
+
+# --- pruning of `alertas:zonas` --------------------------------------------------------------------------------------
+
+
+def _con_zona_vacia(fake_upstash) -> None:
+    fake_upstash.sets["alertas:zonas"].add("salta")  # listed, but its subscriber set does not exist: empty
+
+
+async def test_a_sending_run_prunes_the_zones_left_without_subscribers_and_only_those(
+    redis, fake_upstash, install, envio_listo
+) -> None:
+    install(CALMA)
+    await registrar(redis, "cordoba", 1)
+    _con_zona_vacia(fake_upstash)
+    resultado = await correr(redis)
+    assert fake_upstash.sets["alertas:zonas"] == {"cordoba"}
+    assert ["SREM", "alertas:zonas", "salta"] in fake_upstash.commands
+    assert [z.veredicto for z in resultado.zonas if z.slug == "salta"] == ["sin_suscriptores"]
+
+
+async def test_a_dry_run_prunes_nothing(redis, fake_upstash, install) -> None:
+    install(CALMA)
+    await registrar(redis, "cordoba", 1)
+    _con_zona_vacia(fake_upstash)
+    await evaluacion.evaluar(redis, AHORA)
+    assert fake_upstash.sets["alertas:zonas"] == {"cordoba", "salta"}
+    assert not [c for c in fake_upstash.commands if c[0] == "SREM"]
+
+
+async def test_an_unknown_slug_is_counted_but_never_pruned(redis, fake_upstash, install, envio_listo) -> None:
+    install(CALMA)
+    await registrar(redis, "cordoba", 1)
+    fake_upstash.sets["alertas:zonas"].add("ciudad-que-no-existe")
+    resultado = await correr(redis)
+    assert resultado.desconocidas == 1 and "ciudad-que-no-existe" in fake_upstash.sets["alertas:zonas"]
+
+
+async def test_a_run_stopped_by_the_kill_key_prunes_nothing(redis, fake_upstash, install, envio_listo) -> None:
+    fuente = install(CALMA)
+    await registrar(redis, "cordoba", 1)
+    _con_zona_vacia(fake_upstash)
+    fake_upstash.strings[CLAVE_APAGADO] = "1"
+    resultado = await correr(redis)
+    assert resultado.estado == "apagado_a_mitad" and fuente.calls == []
+    assert "salta" in fake_upstash.sets["alertas:zonas"]
+
+
+async def test_a_zone_that_got_a_subscriber_after_it_was_counted_empty_is_not_pruned(
+    fake_upstash, install, envio_listo
+) -> None:
+    install(CALMA)
+    base = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    await registrar(base, "cordoba", 1)
+    _con_zona_vacia(fake_upstash)
+
+    class ConCarrera(UpstashRedis):
+        """`salta` is empty when the run counts it and has a subscriber when the run is about to prune it."""
+
+        def __init__(self) -> None:
+            super().__init__(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+            self.preguntas = 0
+
+        async def scard(self, key: str) -> int:
+            if key == "alertas:zona:salta":
+                self.preguntas += 1
+                return 0 if self.preguntas == 1 else 1
+            return await super().scard(key)
+
+    await correr(ConCarrera())
+    assert "salta" in fake_upstash.sets["alertas:zonas"]
+
+
+async def test_a_pruning_failure_does_not_break_the_run(fake_upstash, install, envio_listo) -> None:
+    install(CALMA)
+    base = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    await registrar(base, "cordoba", 1)
+    _con_zona_vacia(fake_upstash)
+    resultado = await correr(RedisConFalla("SREM"))
+    assert resultado.estado == "evaluada" and resultado.sin_tormenta == 1
+
+
+# --- counters, response and log of a run that sends ------------------------------------------------------------------
+
+
+async def test_the_response_of_a_sending_run_adds_exactly_the_sending_counters(
+    redis, fake_upstash, install, envio_listo
+) -> None:
+    install(respond=respuestas_por_zona({"cordoba": TORMENTA}, por_defecto=CALMA))
+    await registrar(redis, "cordoba", 2)
+    respuesta = (await correr(redis)).como_respuesta()
+    assert set(respuesta) == {"estado", *CONTADORES_HTTP, *CONTADORES_ENVIO_HTTP}
+    assert all(type(respuesta[nombre]) is int for nombre in (*CONTADORES_HTTP, *CONTADORES_ENVIO_HTTP))
+    assert (respuesta["avisadas"], respuesta["enviados"], respuesta["reintentadas"]) == (1, 2, 0)
+    del fake_upstash.strings[CLAVE_LOCK]  # the lock of the first run expired
+    seco = (await evaluacion.evaluar(redis, AHORA)).como_respuesta()
+    assert set(seco) == {"estado", *CONTADORES_HTTP}  # the dry run answers exactly what it answered before
+
+
+async def test_a_sending_run_logs_one_info_line_with_the_counters(
+    redis, fake_upstash, install, envio_listo, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    install(respond=respuestas_por_zona({"cordoba": TORMENTA}, por_defecto=CALMA))
+    await registrar(redis, "cordoba", 2)
+    await correr(redis)
+    lineas = lineas_de_resumen(caplog)
+    assert [r.levelno for r in lineas] == [logging.INFO]
+    mensaje = lineas[0].getMessage()
+    for fragmento in (
+        "estado=evaluada", "avisadas=1", "ya_avisadas=0", "enviados=2", "vencidos=0", "fallidos=0", "diferidos=0",
+        "reintentadas=0",
+    ):
+        assert fragmento in mensaje
+    assert "cordoba" not in mensaje
+
+
+async def test_failed_sends_turn_the_summary_into_a_warning(
+    redis, fake_upstash, install, envio_listo, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    install(respond=respuestas_por_zona({"cordoba": TORMENTA}, por_defecto=CALMA))
+    (sub_id,) = await registrar(redis, "cordoba", 1)
+    envio_listo.resultados[sub_id] = [envio.Resultado.ERROR]
+    await correr(redis)
+    assert [r.levelno for r in lineas_de_resumen(caplog)] == [logging.WARNING]
+    assert "fallidos=1" in lineas_de_resumen(caplog)[0].getMessage()
+
+
+async def test_an_already_notified_zone_alone_keeps_the_summary_at_info(
+    redis, fake_upstash, install, envio_listo, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    install(respond=respuestas_por_zona({"cordoba": TORMENTA}, por_defecto=CALMA))
+    ids = await registrar(redis, "cordoba", 1)
+    fake_upstash.sets["alertas:enviado:cordoba:hoy:2026-10-14"] = set(ids)  # everybody there was already reached
+    await correr(redis)
+    assert [r.levelno for r in lineas_de_resumen(caplog)] == [logging.INFO]
+    assert "ya_avisadas=1" in lineas_de_resumen(caplog)[0].getMessage()
+
+
+def test_the_result_has_no_sending_counters_until_a_run_sends() -> None:
+    assert ResultadoEvaluacion(estado="evaluada").envio is None
+    assert ResultadoEvaluacion(estado="sin_vapid").como_respuesta() == {"estado": "sin_vapid"}
+
+
+async def test_an_unexpected_error_in_a_zone_is_logged_without_naming_the_zone(
+    redis, fake_upstash, install, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    install(respond=respuestas_por_zona({"cordoba": RuntimeError("bug")}, por_defecto=CALMA))
+    suscribir(fake_upstash, "cordoba")
+    resultado = await evaluacion.evaluar(redis, AHORA)
+    assert resultado.errores == 1
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR]  # the traceback is still there
+    assert "cordoba" not in caplog.text
+
+
+# --- PR5c correction round -----------------------------------------------------------------------------------------------
+
+
+async def test_a_zone_evaluated_after_long_sends_is_not_read_as_data_from_the_future(
+    redis, fake_upstash, install, envio_listo, reloj_de_openmeteo
+) -> None:
+    """The run's `ahora` is fixed at its start. The sends of the first zone take minutes of real time, and the zone that
+    had no data in the first pass is asked again AFTER them: what is fetched then is stamped with the later time, and
+    judging it against `ahora` made it "from the future"."""
+    reloj = RelojDeTest(AHORA)
+    install(respond=respuestas_en_orden({"cordoba": [TORMENTA], "rosario": [None, CALMA]}))
+    await registrar(redis, "cordoba", 2)
+    await registrar(redis, "rosario", 1)
+
+    def pasan_los_minutos(n: int) -> None:
+        reloj.avanzar(300)  # each send takes five minutes
+        reloj_de_openmeteo.instante = reloj.ahora  # and what is fetched afterwards is stamped with the later time
+
+    envio_listo.al_llamar = pasan_los_minutos
+    resultado = await correr(redis, AHORA, reloj=reloj)
+    assert (resultado.sin_datos, resultado.sin_tormenta, resultado.con_tormenta) == (0, 1, 1)
+    assert resultado.estado == "evaluada" and resultado.envio.enviados == 2 and resultado.envio.reintentadas == 1
+
+
+async def test_the_freshness_limit_is_still_90_minutes_against_the_clock_of_the_zone(
+    redis, fake_upstash, install, reloj_de_openmeteo, own_caches
+) -> None:
+    install(CALMA)
+    suscribir(fake_upstash, "cordoba")
+    viejo = await evaluacion.evaluar(redis, AHORA, reloj=RelojDeTest(AHORA + timedelta(minutes=100)))
+    assert viejo.sin_datos == 1 and viejo.sin_tormenta == 0  # fetched at AHORA, judged 100 minutes later: stale
+    del fake_upstash.strings[CLAVE_LOCK]
+    for cache in own_caches.caches.values():
+        cache.clear()
+    fresco = await evaluacion.evaluar(redis, AHORA, reloj=RelojDeTest(AHORA + timedelta(minutes=89)))
+    assert fresco.sin_datos == 0 and fresco.sin_tormenta == 1
+
+
+async def test_without_a_clock_the_freshness_is_judged_against_ahora_as_before(redis, fake_upstash, install) -> None:
+    install(CALMA)
+    suscribir(fake_upstash, "cordoba")
+    assert (await evaluacion.evaluar(redis, AHORA)).sin_tormenta == 1
+
+
+async def test_the_discarded_stale_series_is_logged_without_naming_the_zone(
+    redis, fake_upstash, install, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    install(CALMA)
+    suscribir(fake_upstash, "cordoba")
+    await evaluacion.evaluar(redis, AHORA, reloj=RelojDeTest(AHORA + timedelta(minutes=100)))
+    descartes = [r for r in caplog.records if "stale" in r.getMessage()]
+    assert descartes and not any("cordoba" in r.getMessage() for r in descartes)
+
+
+async def test_a_subscriber_arriving_between_the_recount_and_the_removal_puts_the_zone_back(
+    fake_upstash, install, envio_listo
+) -> None:
+    install(CALMA)
+    base = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    await registrar(base, "cordoba", 1)
+    _con_zona_vacia(fake_upstash)
+
+    class ConLlegadaTardia(UpstashRedis):
+        """`salta` counts 0 when listed and when re-counted, and 1 right after the SREM: someone just subscribed."""
+
+        def __init__(self) -> None:
+            super().__init__(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+            self.preguntas = 0
+
+        async def scard(self, key: str) -> int:
+            if key == "alertas:zona:salta":
+                self.preguntas += 1
+                return 0 if self.preguntas <= 2 else 1
+            return await super().scard(key)
+
+    await correr(ConLlegadaTardia())
+    assert "salta" in fake_upstash.sets["alertas:zonas"]  # put back with SADD
