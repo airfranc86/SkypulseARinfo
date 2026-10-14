@@ -36,6 +36,17 @@ test('the page names the institutions behind each live tool', () => {
   assert.ok(byId('avisos').providers.some(p => p.includes('SMN')))
 })
 
+test('the official alerts credit the SMN with the licence its own feed declares, linked to the legal text', () => {
+  const page = read('../src/pages/DatosFuentes.tsx')
+  assert.match(page, /Avisos oficiales/)
+  assert.match(page, /Servicio Meteorológico Nacional/)
+  assert.match(page, /CC BY 4\.0/)
+  assert.match(page, /href=\{SMN_URL\}/)
+  assert.match(page, /href=\{CC_BY_4_URL\}/)
+  assert.match(page, /según la propia fuente/)
+  assert.doesNotMatch(page, /CC BY 2\.5/)
+})
+
 test('no source uses commercial wording', () => {
   const text = DATA_SOURCES.map(s => `${s.title} ${s.summary} ${s.providers.join(' ')}`).join(' ')
   assert.doesNotMatch(text, /perk|premium|precio|suscripci|plan pago|\$\s?\d/i)
