@@ -101,3 +101,11 @@ ruff check scripts/admin
 
 Los tests no usan red externa ni credenciales reales: clientes HTTP falsos y dos servidores
 locales en `127.0.0.1`.
+
+## Vaciar las suscripciones de alertas (`alertas_vaciar.py`)
+
+Da de baja **todas** las suscripciones de alertas push en Upstash. Se corre **una vez, justo antes de encender el envío automático**: los registros anteriores consintieron solo un aviso de prueba y cada persona tiene que registrarse de nuevo con el texto nuevo.
+
+1. **Primero el simulacro** (no borra nada): define `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` en el **entorno** (no lee ningún `.env`) y corré `python scripts/admin/alertas_vaciar.py`. Muestra solo cantidades por tipo de clave.
+2. **Después** `python scripts/admin/alertas_vaciar.py --confirmar`: borra, vuelve a contar y sale con código 1 si quedó algo borrable. Si Upstash falla a mitad, dice cuánto alcanzó a borrar (código 2) y se puede volver a correr.
+3. **Nunca borra** `alertas:apagado` (el interruptor de emergencia) ni claves fuera del prefijo `alertas:`. No imprime ids, endpoints ni valores.
