@@ -19,11 +19,10 @@ import type { EstadoAvisos } from '../src/lib/alertas/suscripcion.ts'
 import { SECCIONES_PRIVACIDAD, seccionesPrivacidad } from '../src/lib/privacidad.ts'
 
 /**
- * Avisos honestos (B1). El envío programado de avisos de tormenta (FRA-355/356) todavía no existe: hoy solo se
- * puede registrar el celular, mandarse un aviso de prueba y desactivar. Mientras `ENVIO_AUTOMATICO_ACTIVO` sea
- * `false`, ningún texto de la pantalla de avisos ni de la política de privacidad puede prometer lo contrario.
- * Con `true` vuelven los textos originales, que se fijan acá palabra por palabra para que activar el envío sea
- * cambiar la constante y nada más.
+ * Avisos honestos (B1). Mientras `ENVIO_AUTOMATICO_ACTIVO` sea `false` (el envío programado de avisos de tormenta,
+ * FRA-355/356, no existe), ningún texto de la pantalla de avisos ni de la política de privacidad puede prometer
+ * lo contrario. Con `true` (hoy) valen los textos originales, que se fijan acá palabra por palabra. Las pruebas
+ * de modo `false` siguen vigentes para poder volver a apagar el envío cambiando solo la constante.
  */
 
 /** Las promesas de entrega automática: ningún texto sin envío automático puede contenerlas. */
@@ -74,8 +73,8 @@ const textosDePrivacidad = (envio: boolean): string[] =>
 
 // ── Estado que se publica ────────────────────────────────────────────────────
 
-test('hoy el envío automático NO está activo: la constante es false', () => {
-  assert.equal(ENVIO_AUTOMATICO_ACTIVO, false)
+test('el envío automático está activo: la constante es true', () => {
+  assert.equal(ENVIO_AUTOMATICO_ACTIVO, true)
 })
 
 // ── Sin envío automático: ningún texto promete lo que no existe ──────────────
@@ -164,15 +163,17 @@ test('COPY, el estado y la política que se publican siguen a ENVIO_AUTOMATICO_A
   assert.equal(mensajeDeEstado(activo, 'Córdoba'), mensajeDeEstado(activo, 'Córdoba', ENVIO_AUTOMATICO_ACTIVO))
 })
 
-test('lo que se publica hoy no contiene ninguna promesa de envío automático', () => {
+test('lo que se publica hoy son los textos con envío automático, con sus promesas y sin la salvedad "todavía no"', () => {
   const publicados = [
     ...Object.values(COPY).flatMap((valor) => (typeof valor === 'string' ? [valor] : [])),
     mensajeDeEstado({ tipo: 'activo', id: ID, zona: 'cordoba' }, 'Córdoba'),
     ...SECCIONES_PRIVACIDAD.flatMap((s) => s.parrafos),
-  ]
-  for (const texto of publicados) {
-    for (const promesa of PROMESAS) assert.doesNotMatch(texto, promesa, `promete: ${texto}`)
-  }
+  ].join('\n')
+  assert.match(publicados, /avisa a las 21/)
+  assert.match(publicados, /Avisos activados para Córdoba\./)
+  assert.doesNotMatch(publicados, /todavía no están activos/)
+  assert.deepEqual(COPY, copyDe(true))
+  assert.deepEqual(SECCIONES_PRIVACIDAD, seccionesPrivacidad(true))
 })
 
 // ── Ningún otro archivo de src repite la promesa ─────────────────────────────

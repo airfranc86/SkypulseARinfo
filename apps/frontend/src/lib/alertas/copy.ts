@@ -24,16 +24,17 @@ export const RUTA_PRIVACIDAD = '/privacidad'
 export const NOMBRE_CAMPANA = 'Avisos de tormenta'
 
 /**
- * ¿Existe el envío programado de avisos de tormenta (FRA-355/356)? Mientras sea `false`, todos los textos
- * describen solo lo que existe hoy: registrar el celular para una ciudad, mandarse un aviso de prueba y
- * desactivar, y dicen que los avisos automáticos todavía no están activos. Con `true` vuelven los textos
- * originales (los de `TEXTOS_CON_ENVIO`). Cuando el envío exista, se cambia esta constante.
+ * ¿Existe el envío programado de avisos de tormenta (FRA-355/356)? Con `false`, todos los textos describen
+ * solo lo que existía antes: registrar el celular para una ciudad, mandarse un aviso de prueba y desactivar,
+ * y dicen que los avisos automáticos todavía no están activos. Con `true` valen los textos originales (los de
+ * `TEXTOS_CON_ENVIO`).
  *
- * Antes de ponerla en `true`: (1) el consentimiento de hoy cubre solo el aviso de prueba, así que hay que pedir
- * consentimiento nuevo a quienes ya se registraron o darlos de baja (Ley 25.326, finalidad y consentimiento);
- * (2) la campana (`VITE_ALERTAS_VISIBLE`) no se enciende antes de que el envío exista.
+ * Está en `true` desde que el envío existe en el servidor (PR #126). Orden para encender (ver el manual de
+ * alertas): (1) esta constante en `true`; (2) vaciar las suscripciones anteriores, que dieron un
+ * consentimiento que cubría solo el aviso de prueba (Ley 25.326, finalidad y consentimiento); (3) crear los
+ * schedules de QStash; (4) `ALERTAS_ENVIO_ACTIVO=true` en el servidor.
  */
-export const ENVIO_AUTOMATICO_ACTIVO = false
+export const ENVIO_AUTOMATICO_ACTIVO = true
 
 /** Los textos que dependen de si el envío automático existe, cada uno con su versión según el modo. */
 interface TextosPorModo {
