@@ -550,21 +550,13 @@ async def test_a_hole_in_the_other_variable_of_one_hour_blocks_no_storm(redis, f
 
 
 # ---------------------------------------------------------------------------
-# [8] The kill key, read again before every zone
+# [8] The kill key: read before the dispatch and before each batch, not once per zone while evaluating
 # ---------------------------------------------------------------------------
 
 
-async def test_the_kill_key_is_read_before_each_zone(redis, fake_upstash, install) -> None:
-    install(CALMA)
-    suscribir(fake_upstash, "cordoba", "rosario", "mendoza")
-    await evaluacion.evaluar(redis, AHORA)
-    assert comandos(fake_upstash).count("GET") == 3
-    ordenados = comandos(fake_upstash)
-    assert ordenados.index("GET") > ordenados.index("SCARD")  # the zones were already known
-    assert fake_upstash.commands.count(["GET", CLAVE_APAGADO]) == 3
-
-
-async def test_a_kill_key_that_appears_mid_run_stops_before_the_next_zone(redis, fake_upstash, install) -> None:
+async def test_a_kill_key_that_appears_mid_run_does_not_stop_a_dry_run_that_sends_nothing(
+    redis, fake_upstash, install
+) -> None:
     def respond(params):
         fake_upstash.strings[CLAVE_APAGADO] = "1"  # the owner sets it from the Upstash console during the run
         return CALMA
@@ -572,41 +564,40 @@ async def test_a_kill_key_that_appears_mid_run_stops_before_the_next_zone(redis,
     fuente = install(respond=respond)
     suscribir(fake_upstash, "mendoza", "tucuman", "salta")
     resultado = await evaluacion.evaluar(redis, AHORA)
-    assert resultado == ResultadoEvaluacion(
-        estado="apagado_a_mitad", zonas_con_suscriptores=3, evaluadas=1, sin_tormenta=1, diferidas=2
-    )
-    assert len(fuente.calls) == 1  # the second zone was never asked about
+    assert resultado == ResultadoEvaluacion(estado="evaluada", zonas_con_suscriptores=3, evaluadas=3, sin_tormenta=3)
+    assert len(fuente.calls) == 3  # evaluating is read-only: there is nothing to stop, so the key is not read per zone
 
 
-async def test_a_kill_key_already_there_stops_before_the_first_zone(redis, fake_upstash, install) -> None:
+async def test_a_kill_key_already_there_evaluates_but_sends_nothing_when_the_run_was_to_send(
+    redis, fake_upstash, install, push, envio_activo
+) -> None:
     fake = install(TORMENTA)
     suscribir(fake_upstash, "cordoba")
-    fake_upstash.strings[CLAVE_APAGADO] = "cualquier valor"
-    resultado = await evaluacion.evaluar(redis, AHORA)
-    assert resultado == ResultadoEvaluacion(estado="apagado_a_mitad", zonas_con_suscriptores=1, diferidas=1)
-    assert fake.calls == []
+    fake_upstash.strings[CLAVE_APAGADO] = "cualquier valor"  # the router would not even start the run; this is the evaluator alone
+    resultado = await correr(redis)
+    assert resultado.estado == "apagado_a_mitad" and resultado.con_tormenta == 1 and resultado.envio.diferidos == 1
+    assert len(fake.calls) == 1 and push.llamadas == []
 
 
-async def test_an_unreadable_kill_key_mid_run_counts_as_off(fake_upstash, install) -> None:
-    fake = install(CALMA)
-    suscribir(fake_upstash, "mendoza", "tucuman", "salta")
-    resultado = await evaluacion.evaluar(LecturaQueSeRompe(buenas=1), AHORA)
-    assert resultado == ResultadoEvaluacion(
-        estado="apagado_a_mitad", zonas_con_suscriptores=3, evaluadas=1, sin_tormenta=1, diferidas=2
-    )
-    assert len(fake.calls) == 1
+async def test_an_unreadable_kill_key_before_the_dispatch_counts_as_off(
+    fake_upstash, install, push, envio_activo
+) -> None:
+    install(TORMENTA)
+    suscribir(fake_upstash, "cordoba")
+    resultado = await correr(LecturaQueSeRompe(buenas=0))
+    assert resultado.estado == "apagado_a_mitad" and resultado.envio.diferidos == 1 and push.llamadas == []
 
 
-async def test_an_unusable_kill_key_answer_counts_as_off(fake_upstash, install) -> None:
-    fake = install(CALMA)
+async def test_an_unusable_kill_key_answer_counts_as_off(fake_upstash, install, push, envio_activo) -> None:
+    fake = install(TORMENTA)
     suscribir(fake_upstash, "cordoba")
 
     class _RespuestaRota(UpstashRedis):
         async def read_strict(self, key: str) -> str | None:
             raise UpstashUnavailableError("resultado_no_es_texto")
 
-    resultado = await evaluacion.evaluar(_RespuestaRota(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN), AHORA)
-    assert resultado.estado == "apagado_a_mitad" and fake.calls == []
+    resultado = await correr(_RespuestaRota(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN))
+    assert resultado.estado == "apagado_a_mitad" and push.llamadas == [] and len(fake.calls) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -623,7 +614,7 @@ async def test_the_scard_fan_out_over_the_zones_is_bounded_but_still_parallel(fa
     assert 2 <= medido.max_simultaneos <= 10
 
 
-async def test_the_per_zone_check_and_the_switch_use_the_shared_fail_closed_reader(
+async def test_the_switch_uses_the_shared_fail_closed_reader_and_evaluating_zones_does_not_read_it(
     redis, fake_upstash, install, monkeypatch
 ) -> None:
     visto: list[object] = []
@@ -638,7 +629,7 @@ async def test_the_per_zone_check_and_the_switch_use_the_shared_fail_closed_read
     suscribir(fake_upstash, "cordoba", "rosario", "mendoza")
     assert await evaluacion.evaluacion_permitida(redis) is True
     await evaluacion.evaluar(redis, AHORA)
-    assert visto == [redis] * 4  # once for the switch and once before each of the 3 zones
+    assert visto == [redis]  # once for the switch; evaluating the 3 zones does not read the kill key again
     assert "GET" not in comandos(fake_upstash)  # the spy answered: evaluacion reads nothing by itself
 
 
@@ -822,7 +813,7 @@ async def test_the_deadline_hitting_during_the_second_pass_leaves_the_zones_with
 
 
 async def test_a_kill_key_pulled_during_the_wait_stops_the_second_pass(
-    redis, fake_upstash, install, envio_listo, monkeypatch
+    redis, fake_upstash, install, envio_listo, monkeypatch, own_caches
 ) -> None:
     respond = respuestas_en_orden({"cordoba": [None, TORMENTA]})
     install(respond=respond)
@@ -830,12 +821,15 @@ async def test_a_kill_key_pulled_during_the_wait_stops_the_second_pass(
 
     async def dormir_y_apagar(segundos: float) -> None:
         fake_upstash.strings[CLAVE_APAGADO] = "1"
+        for cache in own_caches.caches.values():
+            cache._failure_cache.clear()  # like the real wait: the cache forgets the failed call, the zone is asked again
 
     monkeypatch.setattr(despacho, "_dormir", dormir_y_apagar)
     resultado = await correr(redis)
     assert resultado.estado == "apagado_a_mitad"
-    assert respond.cuenta["cordoba"] == 1 and envio_listo.llamadas == []
-    assert resultado.sin_datos == 1
+    # the second pass evaluates the zone (nothing reads the kill key per zone), then the read before the dispatch stops it
+    assert respond.cuenta["cordoba"] == 2 and envio_listo.llamadas == []
+    assert resultado.con_tormenta == 1 and resultado.envio.diferidos == 1
 
 
 # --- pruning of `alertas:zonas` --------------------------------------------------------------------------------------
@@ -875,12 +869,12 @@ async def test_an_unknown_slug_is_counted_but_never_pruned(redis, fake_upstash, 
 
 
 async def test_a_run_stopped_by_the_kill_key_prunes_nothing(redis, fake_upstash, install, envio_listo) -> None:
-    fuente = install(CALMA)
+    fuente = install(TORMENTA)
     await registrar(redis, "cordoba", 1)
     _con_zona_vacia(fake_upstash)
     fake_upstash.strings[CLAVE_APAGADO] = "1"
     resultado = await correr(redis)
-    assert resultado.estado == "apagado_a_mitad" and fuente.calls == []
+    assert resultado.estado == "apagado_a_mitad" and len(fuente.calls) == 1 and envio_listo.llamadas == []
     assert "salta" in fake_upstash.sets["alertas:zonas"]
 
 
@@ -1072,3 +1066,64 @@ async def test_a_subscriber_arriving_between_the_recount_and_the_removal_puts_th
 
     await correr(ConLlegadaTardia())
     assert "salta" in fake_upstash.sets["alertas:zonas"]  # put back with SADD
+
+
+# ---------------------------------------------------------------------------
+# Hardening: the kill key is not read once per zone while evaluating (it is read before the dispatch and per batch)
+# ---------------------------------------------------------------------------
+
+
+def lecturas_del_interruptor(fake_upstash) -> int:
+    return fake_upstash.commands.count(["GET", CLAVE_APAGADO])
+
+
+async def test_a_dry_run_does_not_read_the_kill_key_once_per_zone(redis, fake_upstash, install) -> None:
+    install(CALMA)
+    suscribir(fake_upstash, "cordoba", "rosario", "mendoza", "salta", "tucuman")
+    fake_upstash.commands.clear()
+    resultado = await evaluacion.evaluar(redis, AHORA)
+    assert resultado.estado == "evaluada" and resultado.evaluadas == 5
+    assert lecturas_del_interruptor(fake_upstash) == 0  # the router read it at the start of the run; evaluating sends nothing
+
+
+async def test_a_sending_run_with_no_storm_does_not_read_the_kill_key_either(
+    redis, fake_upstash, install, push, envio_activo
+) -> None:
+    install(CALMA)
+    suscribir(fake_upstash, "cordoba", "rosario", "mendoza", "salta", "tucuman")
+    fake_upstash.commands.clear()
+    resultado = await correr(redis)
+    assert resultado.estado == "evaluada" and resultado.evaluadas == 5
+    assert lecturas_del_interruptor(fake_upstash) == 0  # nothing to dispatch: no reason to look again
+
+
+async def test_a_storm_run_reads_the_kill_key_once_before_the_dispatch_and_once_per_batch(
+    redis, fake_upstash, install, push, envio_activo
+) -> None:
+    install(respond=respuestas_por_zona({"cordoba": TORMENTA}, por_defecto=CALMA))
+    await registrar(redis, "cordoba", 12)  # two batches of sends
+    suscribir(fake_upstash, "rosario", "mendoza", "salta", "tucuman")
+    fake_upstash.commands.clear()
+    resultado = await correr(redis)
+    assert resultado.estado == "evaluada" and resultado.envio.enviados == 12
+    assert lecturas_del_interruptor(fake_upstash) == 3  # before the dispatch, before batch 1 and before batch 2
+
+
+async def test_a_kill_key_pulled_while_evaluating_stops_before_the_dispatch_reads_nobody_and_defers_the_storm_zone(
+    redis, fake_upstash, install, push, envio_activo
+) -> None:
+    fuente = install(respond=respuestas_por_zona({"cordoba": TORMENTA}, por_defecto=CALMA))
+    await registrar(redis, "cordoba", 2)
+    suscribir(fake_upstash, "rosario", "mendoza")
+    base = fuente._respond
+
+    def respuesta_que_apaga(params):
+        fake_upstash.strings[CLAVE_APAGADO] = "1"  # pulled while the forecasts are being fetched
+        return base(params)
+
+    fuente._respond = respuesta_que_apaga
+    fake_upstash.commands.clear()
+    resultado = await correr(redis)
+    assert resultado.estado == "apagado_a_mitad" and push.llamadas == []
+    assert resultado.evaluadas == 3 and resultado.envio.diferidos == 2  # every zone was evaluated, nothing was sent
+    assert not [c for c in fake_upstash.commands if c[0] == "SMEMBERS" and c[1].startswith("alertas:enviado:")]

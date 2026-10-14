@@ -31,7 +31,7 @@ from urllib.parse import urlsplit
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from app.core.upstash import UpstashRedis
+from app.core.upstash import UpstashRedis, UpstashUnavailableError
 from app.services.alertas.zonas import zona_por_slug
 
 TOPE_SUSCRIPCIONES = 5000
@@ -294,16 +294,31 @@ async def baja(redis: UpstashRedis, sub_id: str) -> None:
         await redis.srem(clave_de_zona(zona), sub_id)
 
 
+class LecturaDudosa(UpstashUnavailableError):
+    """La lectura de un registro no se pudo confirmar (Upstash no respondió, o respondió algo dudoso, como un 200 sin
+    `result`). NO es "el registro no existe": quien la atrapa no puede borrar ni limpiar nada por su culpa."""
+
+
+async def _leer_registro_estricto(redis: UpstashRedis, sub_id: str) -> str | None:
+    """GET estricto de `alertas:sub:{id}`: None solo si Upstash contestó `{"result": null}` (el registro no existe).
+    Cualquier otra cosa (sin `result`, un `result` que no es texto, caída) es `LecturaDudosa`."""
+    try:
+        return await redis.read_strict(clave_de_sub(sub_id))
+    except UpstashUnavailableError as exc:
+        raise LecturaDudosa(str(exc)) from None
+
+
 async def registro_de(redis: UpstashRedis, sub_id: str) -> str | None:
-    """El JSON guardado de una suscripción tal cual (para `envio.enviar`); None si no existe o venció.
+    """El JSON guardado de una suscripción tal cual (para `envio.enviar`); None solo si Upstash confirma que no existe
+    o venció (`{"result": null}`).
 
     Raises:
         SuscripcionInvalida: el id no tiene la forma válida (no se toca Upstash).
-        UpstashUnavailableError: Upstash no respondió.
+        LecturaDudosa (es un UpstashUnavailableError): Upstash no respondió o respondió algo dudoso; no es "no existe".
     """
     if not isinstance(sub_id, str) or not PATRON_ID.fullmatch(sub_id):
         raise SuscripcionInvalida("id_invalido")
-    return await redis.read(clave_de_sub(sub_id))
+    return await _leer_registro_estricto(redis, sub_id)
 
 
 async def limpiar_id_vencido(
@@ -318,13 +333,14 @@ async def limpiar_id_vencido(
 
     Raises:
         SuscripcionInvalida: el id o la zona no tienen la forma válida (no se toca Upstash).
-        UpstashUnavailableError: Upstash no respondió.
+        LecturaDudosa: la relectura no se pudo confirmar; no se quita nada de los índices.
+        UpstashUnavailableError: Upstash no respondió al quitar el id de los índices.
     """
     if not isinstance(sub_id, str) or not PATRON_ID.fullmatch(sub_id):
         raise SuscripcionInvalida("id_invalido")
     if zona is not None:
         validar_zona(zona)
-    if await redis.read(clave_de_sub(sub_id)) is not None:
+    if await _leer_registro_estricto(redis, sub_id) is not None:
         return False
     await redis.srem(CLAVE_IDS, sub_id)
     if zona is not None:

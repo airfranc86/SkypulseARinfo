@@ -613,3 +613,39 @@ def test_the_push_host_list_is_one_public_function_shared_with_the_scrubbing_of_
     from app.services.alertas import suscripcion as svc
 
     assert svc.es_host_de_push(host) is esperado
+
+
+# ---------------------------------------------------------------------------
+# Strict reads: a doubtful answer is never "no record" (hardening)
+# ---------------------------------------------------------------------------
+
+
+async def test_registro_de_returns_the_stored_json_and_none_only_for_a_confirmed_absent_record(redis, fake_upstash) -> None:
+    from app.services.alertas.suscripcion import registro_de
+
+    sub_id = await alta(redis, _suscripcion())
+    assert await registro_de(redis, sub_id) == fake_upstash.strings[f"alertas:sub:{sub_id}"]
+    del fake_upstash.strings[f"alertas:sub:{sub_id}"]
+    assert await registro_de(redis, sub_id) is None  # `{"result": null}`: the record is really gone
+
+
+async def test_registro_de_with_a_doubtful_answer_raises_instead_of_saying_there_is_no_record(redis, fake_upstash) -> None:
+    from app.services.alertas.suscripcion import registro_de
+    from tests.alertas_helpers import RedisConLecturaDudosa
+
+    sub_id = await alta(redis, _suscripcion())
+    with pytest.raises(UpstashUnavailableError):
+        await registro_de(RedisConLecturaDudosa(), sub_id)  # a 200 without `result`
+
+
+async def test_limpiar_id_vencido_with_a_doubtful_answer_raises_and_touches_no_index(redis, fake_upstash) -> None:
+    from app.services.alertas.suscripcion import limpiar_id_vencido
+    from tests.alertas_helpers import RedisConLecturaDudosa
+
+    sub_id = await alta(redis, _suscripcion())
+    antes = {clave: set(miembros) for clave, miembros in fake_upstash.sets.items()}
+    fake_upstash.commands.clear()
+    with pytest.raises(UpstashUnavailableError):
+        await limpiar_id_vencido(RedisConLecturaDudosa(), sub_id, "cordoba")
+    assert fake_upstash.sets == antes and f"alertas:sub:{sub_id}" in fake_upstash.strings
+    assert [c[0] for c in fake_upstash.commands if c[0] in ("SREM", "DEL")] == []

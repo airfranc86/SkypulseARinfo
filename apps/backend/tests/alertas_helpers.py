@@ -201,10 +201,33 @@ class LecturaQueSeRompe(UpstashRedis):
         self._buenas = buenas
 
     async def read_strict(self, key: str) -> str | None:
+        if key != CLAVE_APAGADO:  # only the kill key is counted; a subscription record reads normally
+            return await super().read_strict(key)
         if self._buenas <= 0:
             raise UpstashUnavailableError("caido")
         self._buenas -= 1
         return await super().read_strict(key)
+
+
+class RedisConLecturaDudosa(UpstashRedis):
+    """Upstash answering 200 WITHOUT `result` to the GET of a subscription record (`solo` limits it to one id). The first
+    `normales` such reads answer normally. A plain `read` turns that answer into None ("no record"); `read_strict`
+    refuses it, like the real client does."""
+
+    def __init__(self, solo: str | None = None, normales: int = 0) -> None:
+        super().__init__(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+        self._solo, self._normales, self.lecturas = solo, normales, 0
+
+    async def _call_body(self, *command: str, require_result: bool = False):
+        if command[0] == "GET" and command[1].startswith("alertas:sub:") and (
+            self._solo is None or command[1].endswith(self._solo)
+        ):
+            self.lecturas += 1
+            if self.lecturas > self._normales:
+                if require_result:
+                    raise UpstashUnavailableError("sin_result")
+                return None
+        return await super()._call_body(*command, require_result=require_result)
 
 
 class RedisEnMemoria(UpstashRedis):
@@ -466,6 +489,8 @@ class LecturaQueFallaUnaVez(UpstashRedis):
         self._n, self.lecturas = n, 0
 
     async def read_strict(self, key: str) -> str | None:
+        if key != CLAVE_APAGADO:  # only the kill key is counted; a subscription record reads normally
+            return await super().read_strict(key)
         self.lecturas += 1
         if self.lecturas == self._n:
             raise UpstashUnavailableError("caido")
