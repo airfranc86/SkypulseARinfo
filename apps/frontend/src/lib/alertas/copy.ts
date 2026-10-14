@@ -50,7 +50,7 @@ interface TextosPorModo {
 const TEXTOS_CON_ENVIO: TextosPorModo = Object.freeze({
   titulo: 'Avisos de tormenta en tu celular',
   intro:
-    'SkyPulse avisa a las 21 h cuando se esperan tormentas para mañana y, durante el día, si aparece algo nuevo. No manda nada entre las 22 y las 7.',
+    'SkyPulse avisa a las 21 h cuando se esperan tormentas para mañana y, durante el día, si aparece una tormenta nueva. La primera revisión es a las 5 h, para quien sale temprano a trabajar. Solo avisa por tormentas, no por lluvia ni llovizna; si el pronóstico indica posible granizo, el aviso lo aclara. No manda nada entre las 22 y las 5.',
   consentimiento:
     'Acepto que SkyPulse guarde la dirección técnica de entrega de mi navegador y mi ciudad, solo para enviarme estos avisos. Puedo darme de baja cuando quiera.',
   tituloInstalarIos: '¿Usás iPhone? Instalá SkyPulse para recibir avisos',

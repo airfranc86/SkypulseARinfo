@@ -28,7 +28,7 @@ import { SECCIONES_PRIVACIDAD, seccionesPrivacidad } from '../src/lib/privacidad
 /** Las promesas de entrega automática: ningún texto sin envío automático puede contenerlas. */
 const PROMESAS = [
   /avisa a las 21/i,
-  /si aparece algo nuevo/i,
+  /si aparece una tormenta nueva/i,
   /Avisos activados/,
   /solo para enviarme estos avisos/i,
   /solo para enviarte esos avisos/i,
@@ -133,7 +133,7 @@ test('con envío automático la pantalla vuelve a los textos originales', () => 
   assert.equal(copy.titulo, 'Avisos de tormenta en tu celular')
   assert.equal(
     copy.intro,
-    'SkyPulse avisa a las 21 h cuando se esperan tormentas para mañana y, durante el día, si aparece algo nuevo. No manda nada entre las 22 y las 7.',
+    'SkyPulse avisa a las 21 h cuando se esperan tormentas para mañana y, durante el día, si aparece una tormenta nueva. La primera revisión es a las 5 h, para quien sale temprano a trabajar. Solo avisa por tormentas, no por lluvia ni llovizna; si el pronóstico indica posible granizo, el aviso lo aclara. No manda nada entre las 22 y las 5.',
   )
   assert.equal(
     copy.consentimiento,
@@ -149,7 +149,7 @@ test('con envío automático la política vuelve al párrafo original de para qu
   const t = textosDePrivacidad(true)
   assert.ok(
     t.includes(
-      'Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día, si aparece algo nuevo; nunca entre las 22 y las 7. También para la notificación de prueba cuando la pedís. No los usamos para nada más ni los compartimos.',
+      'Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día (desde las 5 h), si aparece una tormenta nueva; nunca entre las 22 y las 5. También para la notificación de prueba cuando la pedís. No los usamos para nada más ni los compartimos.',
     ),
   )
 })

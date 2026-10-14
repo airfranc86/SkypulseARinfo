@@ -90,7 +90,7 @@ export function leerContactoPrivacidad(env: Record<string, unknown> | undefined)
  */
 function parrafoDeUso(envioAutomatico: boolean): string {
   return envioAutomatico
-    ? 'Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día, si aparece algo nuevo; nunca entre las 22 y las 7. También para la notificación de prueba cuando la pedís. No los usamos para nada más ni los compartimos.'
+    ? 'Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día (desde las 5 h), si aparece una tormenta nueva; nunca entre las 22 y las 5. También para la notificación de prueba cuando la pedís. No los usamos para nada más ni los compartimos.'
     : 'Hoy usamos esos datos solo para mandarte el aviso de prueba cuando lo pedís: es el único aviso que se envía. Los avisos automáticos de tormenta todavía no están activos. Si se activan, vamos a actualizar esta política y a pedirte de nuevo tu consentimiento. No los usamos para nada más ni los compartimos.'
 }
 

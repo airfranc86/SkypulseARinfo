@@ -69,7 +69,7 @@ test('los avisos: no promete que la IP no existe en ningún lado (los registros 
 
 test('con el envío automático activo, los avisos se usan solo para enviarte esos avisos (a las 21 h y durante el día)', () => {
   const t = texto(porTitulo('Avisos en el celular', seccionesPrivacidad(true)))
-  assert.match(t, /Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día, si aparece algo nuevo; nunca entre las 22 y las 7\. También para la notificación de prueba cuando la pedís\./)
+  assert.match(t, /Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día \(desde las 5 h\), si aparece una tormenta nueva; nunca entre las 22 y las 5\. También para la notificación de prueba cuando la pedís\./)
 })
 
 test('sin envío automático, la política dice que hoy solo se envía el aviso de prueba y que los automáticos no están activos', () => {
@@ -79,8 +79,8 @@ test('sin envío automático, la política dice que hoy solo se envía el aviso 
   assert.match(t, /avisos automáticos de tormenta todavía no están activos/)
   // No anuncia horarios ni usos futuros que el consentimiento de hoy no cubre: si se activan, se vuelve a pedir.
   assert.match(t, /vamos a actualizar esta política y a pedirte de nuevo tu consentimiento/)
-  assert.doesNotMatch(t, /previstos|Cuando empiecen|21 h|entre las 22 y las 7/)
-  assert.doesNotMatch(t, /solo para enviarte esos avisos|si aparece algo nuevo/)
+  assert.doesNotMatch(t, /previstos|Cuando empiecen|21 h|entre las 22 y las 5/)
+  assert.doesNotMatch(t, /solo para enviarte esos avisos|si aparece una tormenta nueva/)
 })
 
 test('la política que se publica es la del valor actual de ENVIO_AUTOMATICO_ACTIVO', () => {

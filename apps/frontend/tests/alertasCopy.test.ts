@@ -115,7 +115,8 @@ test('con el envío automático activo, la introducción dice cuándo avisa y el
   const { intro } = copyDe(true)
   assert.match(intro, /21 h/)
   assert.match(intro, /tormentas/)
-  assert.match(intro, /entre las 22 y las 7/)
+  assert.match(intro, /entre las 22 y las 5/)
+  assert.match(intro, /5 h/)
 })
 
 test('sin envío automático, el título y la introducción dicen que los avisos automáticos todavía no están activos', () => {
@@ -126,7 +127,7 @@ test('sin envío automático, el título y la introducción dicen que los avisos
   assert.match(intro, /aviso de prueba/)
   assert.match(intro, /registrar tu celular/)
   assert.match(intro, /desactivar/)
-  assert.doesNotMatch(intro, /21 h|entre las 22 y las 7/)
+  assert.doesNotMatch(intro, /21 h|entre las 22 y las 5/)
 })
 
 test('copyDe usa por defecto la constante ENVIO_AUTOMATICO_ACTIVO y COPY es ese resultado', () => {
