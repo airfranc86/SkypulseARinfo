@@ -300,6 +300,8 @@ export interface HourlyEntry {
   convective_risk?: ConvectiveRisk | null
   freezing_level_height_m?: number | null
   wind_gusts_kmh?: number | null
+  /** Favorable hail conditions (CAPE and storm code in the same hour). null = not enough data. */
+  hail_favorable?: boolean | null
 }
 
 /** The two models behind the 7-day card. */

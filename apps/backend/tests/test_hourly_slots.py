@@ -241,3 +241,76 @@ def test_a_window_with_no_data_at_all_is_unknown_not_dry():
     hourly = _hourly(precipitations={16: None, 17: None, 18: None})
 
     assert _slot(hourly, 18).precip_mm is None
+
+
+# ---------------------------------------------------------------------------
+# Granizo: condiciones favorables en UNA MISMA hora de la franja (CAPE >= 1000 y código 95..99)
+# ---------------------------------------------------------------------------
+
+def test_hail_favorable_when_cape_and_storm_code_fall_in_the_same_hour():
+    hourly = _hourly(cape_j_kg={17: 1400.0}, weather_codes={17: 95})
+
+    assert _slot(hourly, 18).hail_favorable is True
+
+
+def test_hail_not_favorable_when_cape_and_code_come_from_different_hours():
+    # Los máximos de la franja (CAPE 2000 y código 99) cumplirían, pero nunca en la misma hora.
+    hourly = _hourly(cape_j_kg={16: 2000.0, 17: 0.0}, weather_codes={16: 3, 17: 99})
+
+    slot = _slot(hourly, 18)
+    assert slot.hail_favorable is False
+    assert slot.convective_risk == "moderate"
+    assert slot.weather_code == 99
+
+
+def test_hail_cape_exactly_1000_counts_and_999_does_not():
+    assert _slot(_hourly(cape_j_kg={18: 1000.0}, weather_codes={18: 95}), 18).hail_favorable is True
+    assert _slot(_hourly(cape_j_kg={18: 999.0}, weather_codes={18: 95}), 18).hail_favorable is False
+
+
+def test_hail_code_range_is_95_to_99():
+    def favorable(code: int) -> bool | None:
+        return _slot(_hourly(cape_j_kg={18: 2000.0}, weather_codes={18: code}), 18).hail_favorable
+
+    assert [favorable(c) for c in (94, 95, 99, 100)] == [False, True, True, False]
+
+
+def test_hail_missing_cape_or_code_in_the_only_hour_is_unknown_not_false():
+    no_cape = _hourly(cape_j_kg={16: None, 17: None, 18: None}, weather_codes={18: 95})
+    no_code = _hourly(cape_j_kg={18: 2000.0}, weather_codes={16: None, 17: None, 18: None})
+
+    assert _slot(no_cape, 18).hail_favorable is None
+    assert _slot(no_code, 18).hail_favorable is None
+
+
+def test_hail_hour_without_data_does_not_count_but_another_hour_can_still_fire():
+    hourly = _hourly(cape_j_kg={16: None, 18: 1500.0}, weather_codes={16: 95, 18: 96})
+
+    assert _slot(hourly, 18).hail_favorable is True
+
+
+def test_hail_slot_without_series_is_unknown():
+    hourly = _hourly()
+    hourly = HourlyForecastExt(**{**hourly.__dict__, "cape_j_kg": [], "weather_codes": []})
+
+    assert _slot(hourly, 18).hail_favorable is None
+
+
+def test_hail_calm_slot_is_false_with_data():
+    assert _slot(_hourly(), 12).hail_favorable is False
+
+
+def test_hail_does_not_change_the_existing_entry_fields():
+    hourly = _hourly(
+        cape_j_kg={17: 1400.0}, weather_codes={17: 95}, wind_gusts_kmh={17: 55.5}, cloud_covers={17: 90.0},
+    )
+
+    entry = _slot(hourly, 18)
+    assert entry.convective_risk == "moderate"
+    assert entry.wind_gusts_kmh == pytest.approx(55.5)
+    assert entry.weather_code == 95
+    assert entry.icon == build_hourly_schema(_hourly(weather_codes={17: 95}, cloud_covers={17: 90.0})).entries[6].icon
+    assert set(entry.model_dump()) == {
+        "timestamp", "hour_label", "date", "temp_c", "precip_mm", "precip_prob", "weather_code",
+        "icon", "is_day", "convective_risk", "freezing_level_height_m", "wind_gusts_kmh", "hail_favorable",
+    }

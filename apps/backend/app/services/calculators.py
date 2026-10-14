@@ -42,11 +42,31 @@ _STORM_WMO_CODES = {95, 96, 99}
 # de mantenerlo, así que no se toca.
 _CAPE_STORM_THRESHOLD_J_KG = 1000.0
 
+# Condiciones favorables para granizo (dashboard de Previsión, un solo nivel). Es una INFERENCIA
+# propia, no un estándar validado: el corte de CAPE de 1000 J/kg sale de Elkins y Hence 2024
+# (J. Applied Meteorology, radar de la región de Córdoba, régimen dominado por CAPE vs. cizalladura).
+# El CAPE solo da falsos negativos (hay granizo grande en Córdoba con pocos cientos de J/kg), y por eso
+# se exige además un código WMO de tormenta (95..99) en la MISMA hora. No reutiliza el corte de 2500
+# J/kg del aviso de tormenta (otra regla) y el push no depende de este indicador.
+CAPE_GRANIZO_J_KG = 1000.0
+GRANIZO_WMO_MIN = 95
+GRANIZO_WMO_MAX = 99
+
 ConvectiveRisk = Literal["low", "moderate", "high", "severe"]
 
 
 def is_storm_wmo_code(code: int | None) -> bool:
     return code is not None and code in _STORM_WMO_CODES
+
+
+def is_hail_favorable_hour(cape_j_kg: float | None, weather_code: int | None) -> bool | None:
+    """Una hora es favorable a granizo con CAPE >= 1000 J/kg y código WMO 95..99 a la vez.
+
+    None si falta el CAPE o el código: sin dato no se afirma ni se descarta.
+    """
+    if cape_j_kg is None or weather_code is None:
+        return None
+    return cape_j_kg >= CAPE_GRANIZO_J_KG and GRANIZO_WMO_MIN <= weather_code <= GRANIZO_WMO_MAX
 
 
 def compute_convective_risk(cape_j_kg: float | None) -> ConvectiveRisk:

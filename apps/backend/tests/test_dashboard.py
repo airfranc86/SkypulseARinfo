@@ -270,6 +270,20 @@ async def test_dashboard_hourly_entries(async_client: AsyncClient):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+async def test_dashboard_hourly_entries_carry_the_hail_flag(async_client: AsyncClient):
+    """hail_favorable viaja por franja: True si CAPE y código de tormenta coinciden en una hora."""
+    hourly = _make_hourly(cape_j_kg={8: 1800.0}, weather_codes={8: 96})
+    with _dashboard_mocks(hourly=hourly):
+        response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")
+
+    entries = response.json()["hourly"]["entries"]
+    by_label = {e["hour_label"]: e["hail_favorable"] for e in entries[:4]}
+    assert by_label == {"00:00": False, "03:00": False, "06:00": False, "09:00": True}
+    assert entries[3]["convective_risk"] == "moderate"
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
 async def test_dashboard_rain_today_shape(async_client: AsyncClient):
     with _dashboard_mocks():
         response = await async_client.get("/api/weather/dashboard?lat=-31.4&lon=-64.2")

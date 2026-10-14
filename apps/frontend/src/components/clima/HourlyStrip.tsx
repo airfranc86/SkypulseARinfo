@@ -5,6 +5,7 @@ import { WeatherIcon } from '@/components/ui/WeatherIcon'
 import { cn } from '@/lib/utils'
 import { HOURLY_ANCHOR_ID } from './anchors'
 import { arDateKey, dayLabel } from '@/lib/dates'
+import { hailChip } from '@/lib/granizo'
 import { describeWeatherIcon } from '@/lib/weatherLabels'
 import { GUST_KMH, entriesFromNow, formatMm, isRainy, rainWindowLabel } from '@/lib/weatherVerdict'
 import type { HourlyConsensus, HourlyEntry } from '@/lib/api'
@@ -152,6 +153,7 @@ function HourCard({ entry, isNow }: { entry: HourlyEntry; isNow: boolean }) {
   const mm = entry.precip_mm ?? 0
   const gust = entry.wind_gusts_kmh
   const strongGust = gust !== null && gust !== undefined && gust > GUST_KMH
+  const hail = hailChip(entry)
 
   return (
     <div
@@ -194,6 +196,16 @@ function HourCard({ entry, isNow }: { entry: HourlyEntry; isNow: boolean }) {
           <Wind size={12} strokeWidth={2} aria-hidden="true" />
           <span aria-hidden="true">{Math.round(gust)}</span>
           <span className="sr-only">Ráfagas de {Math.round(gust)} kilómetros por hora</span>
+        </span>
+      )}
+      {hail && (
+        <span
+          className="text-xs font-medium whitespace-nowrap rounded-full px-2 py-0.5"
+          style={{ color: 'var(--color-info)', background: 'rgba(90,170,216,0.15)' }}
+          title={hail.description}
+        >
+          <span aria-hidden="true">{hail.label}</span>
+          <span className="sr-only">{hail.description}</span>
         </span>
       )}
     </div>

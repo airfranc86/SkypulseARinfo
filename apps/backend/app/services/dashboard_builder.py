@@ -253,6 +253,7 @@ def build_hourly_schema(om_hourly: HourlyForecastExt | None) -> HourlyConsensusS
             convective_risk=compute_convective_risk(s.cape_j_kg) if s.cape_j_kg is not None else None,
             freezing_level_height_m=s.freezing_level_m,
             wind_gusts_kmh=s.wind_gust_kmh,
+            hail_favorable=s.hail_favorable,
         )
         for s in three_hour_slots(om_hourly)
     ]
