@@ -58,7 +58,7 @@ def ventana(ahora: datetime) -> tuple[int, int] | None:
 
     Las revisiones de hoy miran desde su hora en punto hasta la medianoche; la
     de las 21 h mira el día siguiente completo. Fuera de esas horas, o en el
-    silencio (22 a 7 h), no hay ventana.
+    silencio (22 a 5 h), no hay ventana.
     """
     local = ahora.astimezone(_AR)
     hora = local.hour

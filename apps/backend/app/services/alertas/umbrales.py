@@ -20,10 +20,10 @@ CAPE_TORMENTA_J_KG: float = 2500.0
 # Revisiones programadas (hora de Argentina). Las de HOY miran desde esa hora
 # hasta la medianoche de hoy; la de la noche mira el día siguiente completo
 # (00 a 24 h).
-REVISIONES_HOY: tuple[int, ...] = (7, 10, 13, 16, 19)
+REVISIONES_HOY: tuple[int, ...] = (5, 7, 10, 13, 16, 19)
 REVISION_MANANA: int = 21
 
 # Franja en la que nunca se avisa (hora de Argentina): desde las 22 h hasta
-# las 7 h.
+# las 5 h. La revisión de las 5 h es la de quien sale a trabajar entre las 6 y las 7.
 SILENCIO_DESDE_H: int = 22
-SILENCIO_HASTA_H: int = 7
+SILENCIO_HASTA_H: int = 5

@@ -30,13 +30,13 @@ def test_cape_de_tormenta_es_2500():
 
 
 def test_revisiones_de_hoy_y_de_manana():
-    assert umbrales.REVISIONES_HOY == (7, 10, 13, 16, 19)
+    assert umbrales.REVISIONES_HOY == (5, 7, 10, 13, 16, 19)
     assert umbrales.REVISION_MANANA == 21
 
 
-def test_silencio_de_22_a_7():
+def test_silencio_de_22_a_5():
     assert umbrales.SILENCIO_DESDE_H == 22
-    assert umbrales.SILENCIO_HASTA_H == 7
+    assert umbrales.SILENCIO_HASTA_H == 5
 
 
 def test_ninguna_revision_cae_en_silencio():
@@ -202,6 +202,6 @@ def test_revision_de_las_21_mira_todo_el_dia_siguiente():
     assert not regla.evaluar_revision(de_hoy, ahora).hay_tormenta
 
 
-@pytest.mark.parametrize("hora", [22, 23, 0, 3, 6])
+@pytest.mark.parametrize("hora", [22, 23, 0, 3, 4])
 def test_en_el_silencio_no_se_evalua(hora):
     assert regla.evaluar_revision(make_hourly(weather_codes={30: 95}), _ar(19, hora)) is None
