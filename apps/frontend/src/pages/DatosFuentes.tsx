@@ -1,6 +1,6 @@
 import { DATA_SOURCES } from '@/data/dataSources'
 import { CafecitoButton } from '@/components/ui/CafecitoButton'
-import { OPEN_METEO_LICENCE_URL, OPEN_METEO_URL } from '@/lib/siteLinks'
+import { CC_BY_4_URL, OPEN_METEO_LICENCE_URL, OPEN_METEO_URL, SMN_URL } from '@/lib/siteLinks'
 import { CREDITOS_FOTOS, FOTOS_COMPARTIR_IGUAL, TEXTO_CAMBIOS } from '@/lib/creditosFotos'
 
 const LINK_CLASS = 'inline-flex min-h-[44px] items-center underline hover:opacity-80'
@@ -54,6 +54,16 @@ export function DatosFuentes() {
         </p>
         <a href={OPEN_METEO_LICENCE_URL} target="_blank" rel="noopener noreferrer" className={LINK_CLASS} style={{ color: 'var(--color-muted-foreground)' }}>
           Ver la licencia de Open-Meteo
+        </a>
+        <p className="pt-3 text-sm leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+          Avisos oficiales:{' '}
+          <a href={SMN_URL} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80">
+            Servicio Meteorológico Nacional
+          </a>
+          , datos abiertos con licencia CC BY 4.0 según la propia fuente. SkyPulse no modifica el contenido de los avisos: los ordena por gravedad y los muestra según tu ubicación.
+        </p>
+        <a href={CC_BY_4_URL} target="_blank" rel="noopener noreferrer" className={LINK_CLASS} style={{ color: 'var(--color-muted-foreground)' }}>
+          Ver la licencia CC BY 4.0
         </a>
 
         <h3 className="pt-3 text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>

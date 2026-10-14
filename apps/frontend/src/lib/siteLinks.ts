@@ -9,6 +9,15 @@ export const OPEN_METEO_URL = 'https://open-meteo.com/'
 /** Open-Meteo licence page (CC BY 4.0). */
 export const OPEN_METEO_LICENCE_URL = 'https://open-meteo.com/en/licence'
 
+/** SMN (Servicio Meteorológico Nacional) home: credit link for the official alerts. */
+export const SMN_URL = 'https://www.smn.gob.ar/'
+
+/**
+ * Legal text of CC BY 4.0: the licence the SMN open CAP feed declares for the official alerts in its own
+ * copyright line (checked on the real feed, 2026-10-06). Other SMN open data may carry a different licence.
+ */
+export const CC_BY_4_URL = 'https://creativecommons.org/licenses/by/4.0/'
+
 /** Voluntary contribution. It unlocks nothing: every feature is the same for everyone. */
 export const CAFECITO_URL = 'https://cafecito.app/skypulse-ar'
 
