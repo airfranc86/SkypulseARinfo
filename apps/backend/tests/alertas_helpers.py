@@ -13,8 +13,10 @@ module: a test file imports the helpers and fixtures it uses by name (`estado_de
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -28,9 +30,10 @@ from app.core import usage_counter
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.upstash import UpstashRedis, UpstashUnavailableError, configure_redis
-from app.services.alertas import evaluacion, firma_qstash
+from app.services.alertas import despacho, envio, evaluacion, firma_qstash
+from app.services.alertas import suscripcion as svc
 from app.services.alertas.zonas import zona_por_slug
-from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
+from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL, nuevo_receptor
 from tests.qstash_helpers import CLAVE_ACTUAL, CLAVE_SIGUIENTE, URL_EVALUAR, firmar
 
 # ---------------------------------------------------------------------------
@@ -61,6 +64,19 @@ CONTADORES_HTTP = (
     "diferidas",
     "desconocidas",
 )
+# PR5c: what a run that SENDS adds to the response (counts only: never ids, endpoints, keys or texts).
+CONTADORES_ENVIO_HTTP = (
+    "avisadas",
+    "ya_avisadas",
+    "enviados",
+    "vencidos",
+    "fallidos",
+    "diferidos",
+    "reintentadas",
+)
+AHORA_21H = datetime(2026, 10, 14, 21, 10, tzinfo=AR)  # the review that looks at TOMORROW (the 15th)
+CLAVE_ENVIADOS_HOY = "alertas:enviado:cordoba:hoy:2026-10-14"  # the SET of ids already reached
+CLAVE_ENVIADOS_MANANA = "alertas:enviado:cordoba:manana:2026-10-15"
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +288,7 @@ def en_seco(monkeypatch):
 def evaluador_inerte(monkeypatch):
     """The PR5a evaluator: does nothing and answers `listo`. For the tests that look only at the router."""
 
-    async def evaluar_inerte(redis, ahora):
+    async def evaluar_inerte(redis, ahora, *, enviar=False, reloj=None):
         return evaluacion.ResultadoEvaluacion(estado="listo")
 
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_inerte)
@@ -286,3 +302,178 @@ async def llamar_evaluar(client: AsyncClient, cuerpo: bytes = CUERPO, firma: str
     if firma is not None:
         cabeceras[CABECERA] = firma
     return await client.post(RUTA, content=cuerpo, headers=cabeceras)
+
+
+# ---------------------------------------------------------------------------
+# Sending (PR5c): real subscriptions, a recording stand-in for `envio.enviar`, no real waiting
+# ---------------------------------------------------------------------------
+
+
+def endpoint_de(slug: str, i: int) -> str:
+    return f"https://fcm.googleapis.com/fcm/send/SECRETO-ENDPOINT-{slug}-{i:03d}"
+
+
+async def registrar(redis: UpstashRedis, slug: str, cantidad: int = 1) -> list[str]:
+    """Store `cantidad` REAL subscriptions (valid keys, so the real sender can encrypt to them); return their ids."""
+    ids: list[str] = []
+    for i in range(cantidad):
+        receptor = nuevo_receptor(endpoint_de(slug, i))
+        ids.append(await svc.alta(redis, svc.Suscripcion(receptor.endpoint, receptor.p256dh, receptor.auth, slug)))
+    return ids
+
+
+def respuestas_en_orden(respuestas: Mapping[str, list[object]]) -> Callable[[dict], object]:
+    """A `respond` for `FakeOpenMeteoSource`: each zone gets its list of answers in order (the last one repeats).
+    `respond.cuenta` says how many times each zone was asked."""
+    cuenta: Counter[str] = Counter()
+    slug_de = {(zona_por_slug(s).lat, zona_por_slug(s).lon): s for s in respuestas}
+
+    def respond(params: dict) -> object:
+        slug = slug_de[(params["latitude"], params["longitude"])]
+        lista = respuestas[slug]
+        valor = lista[min(cuenta[slug], len(lista) - 1)]
+        cuenta[slug] += 1
+        return valor
+
+    respond.cuenta = cuenta  # type: ignore[attr-defined]
+    return respond
+
+
+@pytest.fixture
+def esperas(own_caches, monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Nothing waits for real: `despacho._dormir` records the seconds it was asked to wait and returns at once. Like the
+    real wait, it lets the 15 s failure memory of the Open-Meteo caches expire."""
+    registro: list[float] = []
+
+    async def dormir(segundos: float) -> None:
+        registro.append(segundos)
+        for cache in own_caches.caches.values():
+            cache._failure_cache.clear()
+
+    monkeypatch.setattr(despacho, "_dormir", dormir)
+    return registro
+
+
+class RelojDeTest:
+    """The wall clock of a run, driven by the test: `ahora` only moves when the test (or a fake send) moves it."""
+
+    def __init__(self, inicio: datetime) -> None:
+        self.ahora = inicio
+
+    def __call__(self) -> datetime:
+        return self.ahora
+
+    def avanzar(self, segundos: float) -> None:
+        self.ahora = self.ahora + timedelta(seconds=segundos)
+
+
+class DesfaseDelBucle:
+    """The monotonic clock of the run deadline (`despacho._monotonico`): the event loop's clock plus an offset that
+    the test moves. The offset only ever makes time pass faster, so the real `asyncio.timeout_at` stays consistent."""
+
+    def __init__(self) -> None:
+        self.desfase = 0.0
+
+    def avanzar(self, segundos: float) -> None:
+        self.desfase += segundos
+
+
+@pytest.fixture
+def reloj_del_bucle(monkeypatch: pytest.MonkeyPatch) -> DesfaseDelBucle:
+    """Time for the run deadline passes only when a test says so (no test waits for a real deadline)."""
+    desfase = DesfaseDelBucle()
+    monkeypatch.setattr(despacho, "_monotonico", lambda: asyncio.get_running_loop().time() + desfase.desfase)
+    return desfase
+
+
+class PushFalso:
+    """Stands in for `envio.enviar`: records every call, answers by subscription id and measures concurrency.
+
+    `resultados[sub_id]` is the list of answers for that subscription in order (the last repeats; default ENVIADA); an
+    exception instance in the list is raised. `al_llamar(n)` runs on the n-th call. `cesiones` makes each call yield
+    to the event loop that many times (so the calls of a batch overlap, with no real waiting). `avance` is what each
+    call adds to `reloj_del_bucle` (the run deadline's clock) and to `reloj` (the wall clock of the run), in seconds.
+    A `Resultado.VENCIDA` answer deletes the subscription only if `borrar` is true, as the real `enviar` does.
+    """
+
+    def __init__(self, fake_upstash, redis: UpstashRedis) -> None:
+        self._fake = fake_upstash
+        self._redis = redis
+        self.llamadas: list[SimpleNamespace] = []
+        self.resultados: dict[str, list[object]] = {}
+        self.al_llamar: Callable[[int], None] | None = None
+        self.cesiones = 0
+        self.avance = 0.0
+        self.bucle: DesfaseDelBucle | None = None
+        self.reloj: RelojDeTest | None = None
+        self.en_vuelo = 0
+        self.max_en_vuelo = 0
+        self.vencida_borra = True
+
+    def hechos(self) -> int:
+        """How many ids are recorded as already reached, in all the done-sets, at this moment."""
+        return sum(len(v) for k, v in self._fake.sets.items() if k.startswith("alertas:enviado:"))
+
+    async def __call__(  # noqa: ANN001
+        self, redis, sub_id, registro, payload, *, zona, fecha, ttl=None, vapid=None, borrar=True
+    ):
+        previas = sum(1 for c in self.llamadas if c.sub_id == sub_id)
+        self.llamadas.append(
+            SimpleNamespace(
+                sub_id=sub_id, registro=registro, payload=json.loads(payload), zona=zona, fecha=fecha, ttl=ttl,
+                vapid=vapid, borrar=borrar, hechos=self.hechos(),
+            )
+        )
+        if self.al_llamar:
+            self.al_llamar(len(self.llamadas))
+        if self.avance:
+            if self.bucle is not None:
+                self.bucle.avanzar(self.avance)
+            if self.reloj is not None:
+                self.reloj.avanzar(self.avance)
+        self.en_vuelo += 1
+        self.max_en_vuelo = max(self.max_en_vuelo, self.en_vuelo)
+        try:
+            for _ in range(self.cesiones):
+                await asyncio.sleep(0)
+        finally:
+            self.en_vuelo -= 1
+        lista = self.resultados.get(sub_id, [envio.Resultado.ENVIADA])
+        resultado = lista[min(previas, len(lista) - 1)]
+        if isinstance(resultado, BaseException):
+            raise resultado
+        if resultado is envio.Resultado.VENCIDA and self.vencida_borra and borrar:
+            await svc.baja(self._redis, sub_id)
+        return resultado
+
+    def a(self, sub_id: str) -> list[SimpleNamespace]:
+        return [c for c in self.llamadas if c.sub_id == sub_id]
+
+
+@pytest.fixture
+def push(monkeypatch: pytest.MonkeyPatch, fake_upstash, redis: UpstashRedis, vapid_efimera) -> PushFalso:
+    """`envio.enviar` replaced by a recording fake, with a VAPID key loaded (the run refuses to send without one)."""
+    falso = PushFalso(fake_upstash, redis)
+    monkeypatch.setattr(envio, "enviar", falso)
+    return falso
+
+
+class LecturaQueFallaUnaVez(UpstashRedis):
+    """The kill key fails to read on the `n`-th read only (a blip); every other read answers normally."""
+
+    def __init__(self, n: int) -> None:
+        super().__init__(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+        self._n, self.lecturas = n, 0
+
+    async def read_strict(self, key: str) -> str | None:
+        self.lecturas += 1
+        if self.lecturas == self._n:
+            raise UpstashUnavailableError("caido")
+        return await super().read_strict(key)
+
+
+async def correr(
+    redis: UpstashRedis, ahora: datetime = AHORA, reloj: Callable[[], datetime] | None = None
+) -> evaluacion.ResultadoEvaluacion:
+    """A run that SENDS (what the router does when `interruptor.envio_activo` is true)."""
+    return await evaluacion.evaluar(redis, ahora, enviar=True, reloj=reloj)

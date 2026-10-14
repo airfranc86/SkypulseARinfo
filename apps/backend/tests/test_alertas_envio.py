@@ -9,6 +9,7 @@ Ninguna clave se escribe en el repo.
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import logging
 import re
@@ -498,7 +499,17 @@ def test_the_payload_is_declarative_web_push_and_also_reads_for_the_service_work
 
 
 def test_the_navigate_url_is_one_absolute_https_constant_of_this_site() -> None:
-    assert envio.URL_ALERTAS == "https://skypulse-ar.vercel.app/"
+    # PR5c: a tap on the notification opens the forecast screen by franjas (decision of the owner), not the home page.
+    assert envio.URL_ALERTAS == "https://skypulse-ar.vercel.app/prevision"
+
+
+def test_the_tag_of_a_notice_is_per_zone_and_day_so_a_duplicate_replaces_it_on_the_device() -> None:
+    assert envio.tag_de("cordoba", FECHA) == "skypulse-alerta-cordoba-2026-10-09"
+    assert envio.tag_de("cordoba", FECHA) != envio.tag_de("rosario", FECHA)
+    assert envio.tag_de("cordoba", FECHA) != envio.tag_de("cordoba", date(2026, 10, 10))
+    assert envio.tag_de("cordoba", FECHA).startswith(envio.TAG_ALERTA)
+    datos = json.loads(construir_payload(texto_aviso_manana(CORDOBA, ("tarde",)), tag=envio.tag_de("cordoba", FECHA)))
+    assert datos["tag"] == "skypulse-alerta-cordoba-2026-10-09"
 
 
 def test_the_payload_carries_every_field_sw_js_reads() -> None:
@@ -588,7 +599,7 @@ async def test_redirects_are_never_followed(
         alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA
     )
 
-    assert resultado is Resultado.ERROR
+    assert resultado is Resultado.RECHAZADA  # PR5c: a persistent refusal, not a transient failure: never retried
     assert [p.url for p in push_http.requests] == [
         ENDPOINT_FCM
     ]  # ni un pedido al destino de la redirección
@@ -647,7 +658,7 @@ async def test_a_gone_subscription_is_deleted_from_the_key_and_both_indexes(
     }
 
 
-@pytest.mark.parametrize("estado", [400, 401, 403, 405, 413, 429, 500, 502, 503, 504])
+@pytest.mark.parametrize("estado", [400, 401, 403, 405, 413, 408, 425, 429, 500, 502, 503, 504])
 async def test_other_http_errors_never_delete_the_subscription(
     alertas_redis,
     fake_upstash,
@@ -664,7 +675,10 @@ async def test_other_http_errors_never_delete_the_subscription(
         alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA
     )
 
-    assert resultado is Resultado.ERROR
+    # PR5c: only the transient ones (timeout, too early, 429, 5xx) are worth a retry; a persistent 4xx is RECHAZADA
+    # (it could be our VAPID key: kept, not retried, not deleted).
+    transitorio = estado in (408, 425, 429) or estado >= 500
+    assert resultado is (Resultado.ERROR if transitorio else Resultado.RECHAZADA)
     assert await _estado_de_la_suscripcion(fake_upstash, sub) == {
         "clave": True,
         "zona": True,
@@ -752,14 +766,14 @@ async def test_a_record_pointing_at_an_internal_host_is_never_posted_to(
         alertas_redis, sub.id, adulterado, payload, zona="cordoba", fecha=FECHA
     )
 
-    assert resultado is Resultado.ERROR
+    assert resultado is Resultado.INVALIDA  # PR5c: terminal (the caller removes it), not a transient error
     assert push_http.requests == []
 
 
 @pytest.mark.parametrize(
     "registro", ["no es json", "[]", "{}", '{"endpoint": 1}', "null", ""]
 )
-async def test_a_corrupt_record_is_an_error_not_a_crash(
+async def test_a_corrupt_record_is_invalid_not_a_crash(
     alertas_redis, suscribir, push_http, vapid_efimera, payload, registro: str
 ) -> None:
     sub = await suscribir()
@@ -768,7 +782,7 @@ async def test_a_corrupt_record_is_an_error_not_a_crash(
         await enviar(
             alertas_redis, sub.id, registro, payload, zona="cordoba", fecha=FECHA
         )
-        is Resultado.ERROR
+        is Resultado.INVALIDA
     )
     assert push_http.requests == []
 
@@ -963,3 +977,137 @@ def test_the_http_library_cannot_log_the_endpoint_path_even_with_debug_logging(
         logging.getLogger("urllib3.connectionpool").getEffectiveLevel() >= logging.INFO
     )
     assert logging.getLogger("urllib3").getEffectiveLevel() >= logging.INFO
+
+
+# ---------------------------------------------------------------------------
+# PR5c: terminal vs transient, and who deletes
+# ---------------------------------------------------------------------------
+
+
+async def test_a_record_with_an_off_curve_key_is_invalid_and_nothing_is_posted(
+    alertas_redis, fake_upstash, suscribir, push_http, vapid_efimera, payload
+) -> None:
+    from tests.test_alertas_suscripcion import P256DH_FUERA_DE_CURVA
+
+    sub = await suscribir()
+    envenenado = json.dumps({**json.loads(sub.registro), "p256dh": P256DH_FUERA_DE_CURVA})
+    resultado = await enviar(alertas_redis, sub.id, envenenado, payload, zona="cordoba", fecha=FECHA)
+    assert resultado is Resultado.INVALIDA and push_http.requests == []
+    assert await _estado_de_la_suscripcion(fake_upstash, sub) == {"clave": True, "zona": True, "ids": True}  # the caller removes
+
+
+async def test_a_local_encryption_failure_is_invalid_and_never_posted(
+    alertas_redis, fake_upstash, suscribir, push_http, vapid_efimera, payload, monkeypatch
+) -> None:
+    sub = await suscribir()
+
+    def no_cifra(self, data, *args, **kwargs):
+        raise ValueError("Invalid EC key.")
+
+    monkeypatch.setattr(envio.WebPusher, "encode", no_cifra)
+    resultado = await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA)
+    assert resultado is Resultado.INVALIDA and push_http.requests == []
+
+
+async def test_a_failure_of_our_own_vapid_key_is_never_read_as_a_poisoned_subscription(
+    alertas_redis, fake_upstash, suscribir, push_http, vapid_efimera, payload, monkeypatch
+) -> None:
+    """If the problem is OUR key, every subscription would look "invalid" and a run would wipe them all."""
+    sub = await suscribir()
+
+    def firma_mal(*args, **kwargs):
+        raise ValueError("clave VAPID rota")
+
+    monkeypatch.setattr(envio, "webpush", firma_mal)
+    resultado = await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA)
+    assert resultado is Resultado.RECHAZADA  # kept, not retried
+    assert await _estado_de_la_suscripcion(fake_upstash, sub) == {"clave": True, "zona": True, "ids": True}
+
+
+@pytest.mark.parametrize("estado", [404, 410])
+async def test_with_borrar_false_a_gone_answer_is_reported_but_the_record_stays_for_the_caller(
+    alertas_redis, fake_upstash, suscribir, push_http, vapid_efimera, payload, estado: int
+) -> None:
+    sub = await suscribir()
+    push_http.responder(estado)
+    resultado = await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA, borrar=False)
+    assert resultado is Resultado.VENCIDA
+    assert await _estado_de_la_suscripcion(fake_upstash, sub) == {"clave": True, "zona": True, "ids": True}
+
+
+async def test_an_unknown_exception_while_posting_is_a_refusal_not_a_transient_error(
+    alertas_redis, fake_upstash, suscribir, push_http, vapid_efimera, payload
+) -> None:
+    sub = await suscribir()
+    push_http.fallar(RuntimeError("algo raro"))
+    resultado = await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA)
+    assert resultado is Resultado.RECHAZADA
+
+
+# --- second correction round: only the KNOWN local encryption errors make a subscription invalid ---------------------------
+
+
+@pytest.mark.parametrize(
+    "error",
+    [RuntimeError("regresion en http_ece"), MemoryError(), IndexError("index out of range"), KeyError("x")],
+    ids=lambda e: type(e).__name__,
+)
+async def test_an_unexpected_exception_while_encrypting_is_a_transient_error_never_invalid(
+    alertas_redis, fake_upstash, suscribir, push_http, vapid_efimera, payload, monkeypatch, error
+) -> None:
+    """A bug in `http_ece`/`cryptography` would otherwise look like "every subscription is poisoned" and get them deleted."""
+    sub = await suscribir()
+
+    def falla(self, data, *args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(envio.WebPusher, "encode", falla)
+    resultado = await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA)
+    assert resultado is Resultado.ERROR and push_http.requests == []
+    assert await _estado_de_la_suscripcion(fake_upstash, sub) == {"clave": True, "zona": True, "ids": True}
+
+
+@pytest.mark.parametrize("error", [ValueError("Invalid EC key."), binascii.Error("Incorrect padding")], ids=lambda e: type(e).__name__)
+async def test_the_known_local_encryption_errors_are_invalid(
+    alertas_redis, suscribir, push_http, vapid_efimera, payload, monkeypatch, error
+) -> None:
+    sub = await suscribir()
+
+    def falla(self, data, *args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(envio.WebPusher, "encode", falla)
+    assert await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA) is Resultado.INVALIDA
+
+
+async def test_a_pywebpush_exception_without_a_response_is_invalid_but_with_a_response_it_is_not(
+    alertas_redis, suscribir, push_http, vapid_efimera, payload, monkeypatch
+) -> None:
+    sub = await suscribir()
+
+    def sin_respuesta(self, data, *args, **kwargs):
+        raise envio.WebPushException("Invalid p256dh key specified")
+
+    monkeypatch.setattr(envio.WebPusher, "encode", sin_respuesta)
+    assert await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA) is Resultado.INVALIDA
+
+    def con_respuesta(self, data, *args, **kwargs):
+        raise envio.WebPushException("raro", response=requests.Response())
+
+    monkeypatch.setattr(envio.WebPusher, "encode", con_respuesta)
+    assert await enviar(alertas_redis, sub.id, sub.registro, payload, zona="cordoba", fecha=FECHA) is Resultado.ERROR
+
+
+def test_the_encryption_self_test_passes_with_a_working_library_and_fails_when_encrypting_breaks(monkeypatch) -> None:
+    assert envio.autoprueba_de_cifrado() is True
+
+    def falla(self, data, *args, **kwargs):
+        raise RuntimeError("regresion")
+
+    monkeypatch.setattr(envio.WebPusher, "encode", falla)
+    assert envio.autoprueba_de_cifrado() is False
+
+
+def test_the_encryption_self_test_uses_a_throwaway_key_and_never_the_network(push_http) -> None:
+    assert envio.autoprueba_de_cifrado() is True
+    assert push_http.requests == []

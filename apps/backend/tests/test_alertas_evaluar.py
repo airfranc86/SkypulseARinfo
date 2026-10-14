@@ -333,16 +333,16 @@ async def test_inside_the_evaluator_the_client_key_is_the_job_key_but_the_reques
         vistas["al_verificar"] = current_client_key()
         return original(firma, cuerpo)
 
-    async def evaluacion_permitida_espia(redis):
+    async def envio_activo_espia(redis):  # PR5c: the router consults the send switch first
         vistas["en_el_interruptor"] = current_client_key()
         return True
 
-    async def evaluar_espia(redis, ahora):
+    async def evaluar_espia(redis, ahora, *, enviar=False, reloj=None):
         vistas["dentro"] = current_client_key()
         return evaluacion.ResultadoEvaluacion(estado="listo")
 
     monkeypatch.setattr(router_alertas, "motivo_de_rechazo", verificacion_espia)
-    monkeypatch.setattr(evaluacion, "evaluacion_permitida", evaluacion_permitida_espia)
+    monkeypatch.setattr(interruptor, "envio_activo", envio_activo_espia)
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_espia)
 
     response = await llamar_evaluar(async_client)
@@ -360,7 +360,7 @@ async def test_the_evaluator_receives_the_configured_redis_and_a_utc_now(
 ) -> None:
     recibido: dict[str, object] = {}
 
-    async def evaluar_espia(redis, ahora):
+    async def evaluar_espia(redis, ahora, *, enviar=False, reloj=None):
         recibido["redis"], recibido["ahora"] = redis, ahora
         return evaluacion.ResultadoEvaluacion(estado="listo")
 
@@ -373,7 +373,7 @@ async def test_the_evaluator_receives_the_configured_redis_and_a_utc_now(
 async def test_the_evaluator_result_state_is_what_the_response_carries(
     async_client: AsyncClient, alertas_redis, envio_activo, monkeypatch
 ) -> None:
-    async def evaluar_otro(redis, ahora):
+    async def evaluar_otro(redis, ahora, *, enviar=False, reloj=None):
         return evaluacion.ResultadoEvaluacion(estado="otro")
 
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_otro)
@@ -383,7 +383,7 @@ async def test_the_evaluator_result_state_is_what_the_response_carries(
 async def test_with_sending_off_the_evaluator_is_never_called(
     async_client: AsyncClient, alertas_redis, monkeypatch
 ) -> None:
-    async def evaluar_prohibido(redis, ahora):
+    async def evaluar_prohibido(redis, ahora, *, enviar=False, reloj=None):
         raise AssertionError("no debe evaluarse con el envío apagado")
 
     monkeypatch.setattr(evaluacion, "evaluar", evaluar_prohibido)

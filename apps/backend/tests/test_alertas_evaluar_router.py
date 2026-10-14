@@ -1,6 +1,7 @@
 """POST /api/alertas/evaluar with the real evaluation (FRA-355, PR5b), through the router.
 
-The modes (both flags off = `apagado` without touching Upstash or Open-Meteo; either flag = evaluate; neither ever sends),
+The modes (both flags off = `apagado` without touching Upstash or Open-Meteo; either flag = evaluate; only
+`interruptor.envio_activo` = send, PR5c),
 the kill key, the states of a run (`fuera_de_ventana`, `en_curso`, `upstash_no_disponible`, ...), the response whitelist
 and what must never leave the process (ids, endpoints, keys, the lock value), plus the switch (`evaluacion_permitida`)
 and the settings and `render.yaml` entries that gate it. Upstash and Open-Meteo are fakes: there is no network.
@@ -13,7 +14,7 @@ import json
 import logging
 import re
 from dataclasses import FrozenInstanceError
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -24,7 +25,7 @@ from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.upstash import UpstashRedis, configure_redis
 from app.routers import alertas as router_alertas
-from app.services.alertas import envio, evaluacion, regla
+from app.services.alertas import despacho, envio, evaluacion, interruptor, regla
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.evaluacion import ResultadoEvaluacion, ZonaEvaluada
 from app.services.alertas.zonas import ZONAS
@@ -35,16 +36,21 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; e
     CALMA,
     CLAVE_APAGADO,
     CLAVE_LOCK,
+    CONTADORES_ENVIO_HTTP,
     CONTADORES_HTTP,
     TORMENTA,
     FuenteQueSeCuelga,
     RedisSinSet,
     en_seco,
+    envio_activo,
+    esperas,
     estado_de_alertas_limpio,
     llamar_evaluar,
     lineas_de_resumen,
     payload_horario,
+    push,
     redis,
+    registrar,
     reloj_de_openmeteo,
     respuestas_por_zona,
     suscribir,
@@ -104,20 +110,15 @@ async def test_with_both_flags_off_nothing_is_touched_not_even_open_meteo(
     assert fuente.calls == []
 
 
-@pytest.mark.parametrize(
-    ("con_envio", "con_seco"),
-    [(False, True), (True, False), (True, True)],
-    ids=["solo-en-seco", "solo-envio", "ambos"],
-)
-async def test_either_flag_turns_the_evaluation_on_and_neither_ever_sends(
+async def test_the_dry_run_flag_alone_evaluates_and_never_sends(
     async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, push_http, monkeypatch,
-    con_envio: bool, con_seco: bool,
 ) -> None:
-    monkeypatch.setattr(settings, "alertas_envio_activo", con_envio)
-    monkeypatch.setattr(settings, "alertas_evaluar_en_seco", con_seco)
+    # PR5c: the send flag no longer belongs here (it sends, see the PR5c block below); the dry run still never sends.
+    monkeypatch.setattr(settings, "alertas_envio_activo", False)
+    monkeypatch.setattr(settings, "alertas_evaluar_en_seco", True)
 
     async def prohibido(*args, **kwargs):
-        raise AssertionError("la evaluación de la PR5b no manda nada")
+        raise AssertionError("la evaluación en seco no manda nada")
 
     monkeypatch.setattr(envio, "enviar", prohibido)
     monkeypatch.setattr(envio, "enviar_prueba", prohibido)
@@ -235,7 +236,7 @@ async def test_the_evaluator_receives_the_routers_clock_with_a_time_zone(
 ) -> None:
     recibido: dict[str, object] = {}
 
-    async def evaluar_espia(redis, ahora):
+    async def evaluar_espia(redis, ahora, *, enviar=False, reloj=None):
         recibido["ahora"] = ahora
         return evaluacion.ResultadoEvaluacion(estado="listo")
 
@@ -427,7 +428,8 @@ def test_the_size_settings_reject_values_that_would_break_the_run(monkeypatch, v
 
 @pytest.mark.parametrize(
     ("lock", "plazo", "valido"),
-    [("600", "599", True), ("600", "600", False), ("600", "601", False), ("330", "329", True), ("330", "480", False)],
+    # PR5c correction round: the lock must outlast the deadline by 120 s (it was "any amount"): 599 and 329 are now refused.
+    [("600", "480", True), ("600", "600", False), ("600", "601", False), ("330", "329", False), ("330", "480", False)],
 )
 def test_the_deadline_must_be_below_the_lock_expiry(monkeypatch, lock: str, plazo: str, valido: bool) -> None:
     variables = {"alertas_lock_ttl_segundos": lock, "alertas_plazo_corrida_segundos": plazo}
@@ -477,7 +479,7 @@ def test_the_http_whitelist_is_explicit_and_every_field_of_the_result_is_account
     never reach the response by accident."""
     assert evaluacion.CONTADORES == CONTADORES_HTTP
     campos = {campo.name for campo in dataclasses.fields(ResultadoEvaluacion)}
-    assert campos == {"estado", "zonas", *CONTADORES_HTTP}
+    assert campos == {"estado", "zonas", "envio", *CONTADORES_HTTP}  # PR5c: `envio` is the sending summary (below)
 
 
 def test_the_zone_detail_is_invisible_in_the_repr_and_ignored_by_equality() -> None:
@@ -661,3 +663,215 @@ async def test_the_zone_detail_never_reaches_the_response_nor_the_logs(
     for dato in ("cordoba", "rosario", "2026-10-14", "15:00", "hoy", "manana", "sin_suscriptores", "ID-SECRETO"):
         assert dato not in visible  # ... and none of it is serialized or logged
     assert set(resultado.como_respuesta()) == {"estado", *CONTADORES_HTTP}
+
+
+# ---------------------------------------------------------------------------
+# PR5c: the router decides to SEND with `interruptor.envio_activo` and only with it
+# ---------------------------------------------------------------------------
+
+CERO_ENVIO = {nombre: 0 for nombre in CONTADORES_ENVIO_HTTP}
+
+
+async def _dos_zonas_con_suscriptores(redis, install) -> list[str]:
+    install(respond=respuestas_por_zona({"cordoba": TORMENTA, "rosario": CALMA}))
+    return await registrar(redis, "cordoba", 2) + await registrar(redis, "rosario", 1)
+
+
+async def test_the_dry_run_flag_alone_never_sends_even_with_a_storm_and_real_subscribers(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, en_seco, push, redis
+) -> None:
+    await _dos_zonas_con_suscriptores(redis, install)
+    response = await llamar_evaluar(async_client)
+    assert response.status_code == 200 and response.json() == RESPUESTA_DOS_ZONAS  # no sending counters at all
+    assert push.llamadas == []
+    assert not [k for k in fake_upstash.strings if k.startswith("alertas:enviado:")]
+
+
+async def test_even_if_the_evaluation_switch_says_yes_the_router_does_not_send_without_the_send_switch(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, push, redis, monkeypatch
+) -> None:
+    # PR5c correction round: with both flags off the router is `apagado` without even consulting the evaluation switch
+    # (it used to evaluate in a dry run when `evaluacion_permitida` was patched to say yes). Either way: nothing is sent.
+    async def siempre_si(r):
+        return True
+
+    monkeypatch.setattr(evaluacion, "evaluacion_permitida", siempre_si)  # both flags are off
+    await _dos_zonas_con_suscriptores(redis, install)
+    response = await llamar_evaluar(async_client)
+    assert response.json() == {"estado": "apagado"} and push.llamadas == []
+
+
+async def test_the_send_switch_makes_the_run_send_and_the_response_adds_only_counters(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, esperas, push,
+    redis,
+) -> None:
+    ids = await _dos_zonas_con_suscriptores(redis, install)
+    fake_upstash.commands.clear()
+    response = await llamar_evaluar(async_client)
+    assert response.status_code == 200
+    assert response.json() == {**RESPUESTA_DOS_ZONAS, **CERO_ENVIO, "avisadas": 1, "enviados": 2}
+    assert sorted(c.sub_id for c in push.llamadas) == sorted(ids[:2])
+    assert fake_upstash.commands[0] == ["GET", CLAVE_APAGADO]
+
+
+async def test_the_router_asks_the_send_switch_to_decide(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, push, redis, monkeypatch
+) -> None:
+    pedidos: list[object] = []
+
+    async def espia(r):
+        pedidos.append(r)
+        return True  # the switch says "send" although the flag is off: the decision follows the switch alone
+
+    monkeypatch.setattr(interruptor, "envio_activo", espia)
+    await _dos_zonas_con_suscriptores(redis, install)
+    response = await llamar_evaluar(async_client)
+    assert pedidos[0] is alertas_redis
+    assert response.json()["enviados"] == 2 and len(push.llamadas) == 2
+
+
+async def test_the_kill_key_stops_a_sending_run_before_anything_else(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, push, redis
+) -> None:
+    await _dos_zonas_con_suscriptores(redis, install)
+    fake_upstash.strings[CLAVE_APAGADO] = "1"
+    response = await llamar_evaluar(async_client)
+    assert response.json() == {"estado": "apagado"} and push.llamadas == []
+    assert not [k for k in fake_upstash.strings if k.startswith("alertas:enviado:")]
+
+
+async def test_an_unreachable_upstash_never_sends(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, push
+) -> None:
+    install(TORMENTA)
+    fake_upstash.down = True
+    response = await llamar_evaluar(async_client)
+    assert response.status_code == 200 and response.json() == {"estado": "apagado"} and push.llamadas == []
+
+
+async def test_with_the_send_switch_on_but_no_usable_vapid_key_the_answer_is_sin_vapid_and_a_200(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, redis, monkeypatch
+) -> None:
+    monkeypatch.setattr(settings, "vapid_private_key", "")
+    fuente = install(TORMENTA)
+    await registrar(redis, "cordoba", 1)
+    fake_upstash.commands.clear()
+    response = await llamar_evaluar(async_client)
+    assert response.status_code == 200  # a 5xx would make QStash retry for nothing
+    assert response.json() == {"estado": "sin_vapid"}
+    assert fuente.calls == [] and "SET" not in [c[0] for c in fake_upstash.commands]
+
+
+async def test_a_run_whose_sends_all_fail_still_answers_a_200_with_the_counters(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, esperas, push,
+    redis,
+) -> None:
+    ids = await _dos_zonas_con_suscriptores(redis, install)
+    for sub_id in ids:
+        push.resultados[sub_id] = [envio.Resultado.ERROR]
+    response = await llamar_evaluar(async_client)
+    assert response.status_code == 200
+    assert response.json()["fallidos"] == 2 and response.json()["enviados"] == 0
+    assert all(f"alertas:sub:{i}" in fake_upstash.strings for i in ids)  # nobody deleted by a transient error
+
+
+async def test_with_the_real_sender_the_response_and_the_logs_carry_no_id_endpoint_text_key_or_zone(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, esperas,
+    push_http, vapid_efimera, redis, caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    ids = await _dos_zonas_con_suscriptores(redis, install)
+    response = await llamar_evaluar(async_client)
+    assert response.status_code == 200 and response.json()["enviados"] == 2 and len(push_http.requests) == 2
+    visible = response.text + str(dict(response.headers)) + caplog.text
+    secretos = (
+        *ids, "SECRETO", "fcm.googleapis.com", vapid_efimera.privada, vapid_efimera.publica, "Posibles tormentas",
+        "SkyPulse \u00b7", "cordoba", "rosario", "C\u00f3rdoba", "alertas:enviado", fake_upstash.strings[CLAVE_LOCK],
+        CLAVE_ACTUAL, CLAVE_SIGUIENTE,
+    )
+    for secreto in secretos:
+        assert secreto not in visible, secreto
+    assert set(response.json()) == {"estado", *CONTADORES_HTTP, *CONTADORES_ENVIO_HTTP}
+
+
+def test_the_sending_counters_are_an_explicit_whitelist_of_integers() -> None:
+    assert despacho.CONTADORES_ENVIO == CONTADORES_ENVIO_HTTP
+    campos = {campo.name for campo in dataclasses.fields(despacho.ResumenEnvio)}
+    assert campos == set(CONTADORES_ENVIO_HTTP)
+    assert all(campo.type in (int, "int") for campo in dataclasses.fields(despacho.ResumenEnvio))
+
+
+async def test_the_dry_run_flag_wins_over_the_send_flag_and_nothing_is_sent(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, en_seco, push, redis
+) -> None:
+    """Meaning change of the old `envio-y-en-seco` case: with both flags on the run used to SEND; now the dry run wins."""
+    await _dos_zonas_con_suscriptores(redis, install)
+    response = await llamar_evaluar(async_client)
+    assert response.status_code == 200 and response.json() == RESPUESTA_DOS_ZONAS  # evaluated and counted, no send counters
+    assert push.llamadas == []
+    assert not [k for k in fake_upstash.strings if k.startswith("alertas:enviado:")]
+
+
+async def test_the_dry_run_flag_that_wins_still_obeys_the_kill_key_and_never_asks_the_send_switch(
+    async_client: AsyncClient, alertas_redis, fake_upstash, install, evaluacion_real, envio_activo, en_seco, push, redis,
+    monkeypatch,
+) -> None:
+    async def prohibido(r):
+        raise AssertionError("with the dry-run flag on, the send switch is not even consulted")
+
+    monkeypatch.setattr(interruptor, "envio_activo", prohibido)
+    await _dos_zonas_con_suscriptores(redis, install)
+    fake_upstash.strings[CLAVE_APAGADO] = "1"
+    assert (await llamar_evaluar(async_client)).json() == {"estado": "apagado"}
+    assert push.llamadas == []
+
+
+async def test_the_router_hands_the_evaluator_a_clock_that_follows_the_routers_wall_clock(
+    async_client: AsyncClient, alertas_redis, envio_activo, monkeypatch
+) -> None:
+    recibido: dict[str, object] = {}
+
+    async def evaluar_espia(redis, ahora, *, enviar=False, reloj=None):
+        recibido["reloj"], recibido["ahora"] = reloj, ahora
+        return evaluacion.ResultadoEvaluacion(estado="listo")
+
+    monkeypatch.setattr(evaluacion, "evaluar", evaluar_espia)
+    instantes = iter([AHORA, AHORA + timedelta(minutes=7)])
+    monkeypatch.setattr(router_alertas, "_ahora_utc", lambda: next(instantes))
+    await llamar_evaluar(async_client)
+    assert recibido["ahora"] == AHORA  # the start of the run ...
+    assert recibido["reloj"]() == AHORA + timedelta(minutes=7)  # ... and a clock that reads the wall clock when asked
+
+
+# [7] the lock must outlast the run by a margin ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("lock", "plazo", "valido"),
+    [("600", "480", True), ("600", "481", False), ("600", "599", False), ("330", "210", True), ("330", "211", False)],
+)
+def test_the_lock_must_outlast_the_deadline_by_at_least_two_minutes(
+    monkeypatch, lock: str, plazo: str, valido: bool
+) -> None:
+    variables = {"alertas_lock_ttl_segundos": lock, "alertas_plazo_corrida_segundos": plazo}
+    if valido:
+        assert _ajustes_sin_entorno(monkeypatch, **variables).alertas_plazo_corrida_segundos == int(plazo)
+    else:
+        with pytest.raises(Exception, match="(?i)plazo.*120|120.*plazo"):
+            _ajustes_sin_entorno(monkeypatch, **variables)
+
+
+async def test_an_off_curve_p256dh_gets_the_same_422_as_any_other_bad_key_and_touches_nothing(
+    async_client: AsyncClient, alertas_redis, fake_upstash
+) -> None:
+    from tests.test_alertas_suscripcion import P256DH_FUERA_DE_CURVA
+
+    cuerpo = {
+        "endpoint": "https://fcm.googleapis.com/fcm/send/SECRETO-ENDPOINT-fuera",
+        "keys": {"p256dh": P256DH_FUERA_DE_CURVA, "auth": AUTH},
+        "zona": "cordoba",
+    }
+    response = await async_client.post("/api/alertas/suscripcion", json=cuerpo)
+    assert response.status_code == 422 and response.json()["error"] == "invalid_request"
+    assert fake_upstash.requests == []
+    assert P256DH_FUERA_DE_CURVA not in response.text and "SECRETO" not in response.text

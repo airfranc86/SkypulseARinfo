@@ -550,6 +550,13 @@ class FakeUpstash:
             before = len(members)
             members.difference_update(args[1:])
             return before - len(members)
+        if name == "EXPIRE":
+            clave, segundos, *opciones = args
+            existe = clave in self.strings or clave in self.sets
+            if not existe or ("NX" in [o.upper() for o in opciones] and clave in self.ttls):
+                return 0
+            self.ttls[clave] = int(segundos)
+            return 1
         if name == "SCARD":
             return len(self.sets.get(args[0], set()))
         if name == "SMEMBERS":

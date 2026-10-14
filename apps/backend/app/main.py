@@ -9,11 +9,94 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 
-_SENTRY_DSN = os.getenv('SENTRY_DSN')
-if _SENTRY_DSN and os.getenv('ENV') == 'prod':
+from .services.alertas import suscripcion as _suscripcion
+
+# --- Sentry: nunca la URL de un servicio push --------------------------------------------------------------------------
+# La ruta de un endpoint push (`https://fcm.googleapis.com/fcm/send/<token>`) es un secreto: quien la tiene puede
+# mandarle mensajes al navegador de esa persona. Las integraciones por defecto de Sentry (la de `http.client`, que ve
+# el pedido que hace `pywebpush`) guardan cada pedido saliente, URL incluida, como migaja y como span. Se eligió
+# FILTRAR (tres ganchos) y no apagar la integración: se siguen viendo los pedidos a Open-Meteo, Upstash y los demás, y el
+# filtro mira cualquier cadena del evento (descripción, URL, mensaje de una excepción de `requests`...) por si la
+# versión del SDK la pone en otro campo. La lista de hosts es la de la validación anti-SSRF de las suscripciones, y la
+# búsqueda es LINEAL (`menciona_host_de_push`): los ganchos corren sobre texto sin truncar, que puede venir de un cliente
+# sin autenticar (la ruta de un `GET`), y una expresión regular ahí era un ataque de denegación de servicio.
+_QUITADO = "[removed: push service request]"
+
+
+def _menciona_host_de_push(valor: object) -> bool:
+    """True si alguna cadena dentro de `valor` (a cualquier profundidad) nombra el host de un servicio push."""
+    if isinstance(valor, str):
+        return _suscripcion.menciona_host_de_push(valor)
+    if isinstance(valor, dict):
+        return any(_menciona_host_de_push(v) for v in valor.values())
+    if isinstance(valor, (list, tuple)):
+        return any(_menciona_host_de_push(v) for v in valor)
+    return False
+
+
+def _sin_hosts_de_push(valor: object) -> object:
+    """Una copia de `valor` donde toda cadena que nombra un host push se reemplazó por un texto fijo."""
+    if isinstance(valor, str):
+        return _QUITADO if _menciona_host_de_push(valor) else valor
+    if isinstance(valor, dict):
+        return {k: _sin_hosts_de_push(v) for k, v in valor.items()}
+    if isinstance(valor, list):
+        return [_sin_hosts_de_push(v) for v in valor]
+    if isinstance(valor, tuple):
+        return tuple(_sin_hosts_de_push(v) for v in valor)
+    return valor
+
+
+def _scrub_breadcrumb(migaja: dict, hint: dict) -> dict | None:
+    """`before_breadcrumb`: la migaja que nombra un servicio push se descarta entera. El SDK no protege este gancho: si
+    falla, la migaja se descarta (mejor perderla que romper el pedido que la generó)."""
+    try:
+        return None if _menciona_host_de_push(migaja) else migaja
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _scrub_span(span: dict) -> dict:
+    """Un span que nombra un servicio push se queda (su duración sirve) pero sin descripción ni datos."""
+    return {**span, "description": _QUITADO, "data": {}} if _menciona_host_de_push(span) else span
+
+
+def _scrub_evento(evento: dict) -> dict:
+    limpio = {k: _sin_hosts_de_push(v) for k, v in evento.items() if k not in ("breadcrumbs", "spans", "request")}
+    migajas = evento.get("breadcrumbs")
+    if isinstance(migajas, dict) and isinstance(migajas.get("values"), list):
+        limpio["breadcrumbs"] = {**migajas, "values": [m for m in migajas["values"] if not _menciona_host_de_push(m)]}
+    elif isinstance(migajas, list):
+        limpio["breadcrumbs"] = [m for m in migajas if not _menciona_host_de_push(m)]
+    elif "breadcrumbs" in evento:
+        limpio["breadcrumbs"] = migajas
+    if isinstance(evento.get("spans"), list):
+        limpio["spans"] = [_scrub_span(sp) if isinstance(sp, dict) else sp for sp in evento["spans"]]
+    pedido = evento.get("request")
+    if isinstance(pedido, dict) and _menciona_host_de_push(pedido):
+        limpio["request"] = {k: v for k, v in pedido.items() if k == "method"}  # sin URL, cabeceras ni cuerpo
+    elif "request" in evento:
+        limpio["request"] = pedido
+    return limpio
+
+
+def _scrub_event(evento: dict, hint: dict) -> dict | None:
+    """`before_send` (eventos de error)."""
+    return _scrub_evento(evento)
+
+
+def _scrub_transaction(evento: dict, hint: dict) -> dict | None:
+    """`before_send_transaction`."""
+    return _scrub_evento(evento)
+
+
+def _init_sentry(dsn: str | None, entorno: str | None) -> bool:
+    """Inicializa Sentry solo con un DSN y en producción. Devuelve si lo hizo."""
+    if not (dsn and entorno == 'prod'):
+        return False
     sentry_sdk.init(
-        dsn=_SENTRY_DSN,
-        environment=os.getenv('ENV', 'dev'),
+        dsn=dsn,
+        environment=entorno,
         release=os.getenv('RENDER_GIT_COMMIT', 'unknown'),
         traces_sample_rate=0.1,
         profiles_sample_rate=0.05,
@@ -22,7 +105,17 @@ if _SENTRY_DSN and os.getenv('ENV') == 'prod':
         max_request_body_size="never",
         # Ni variables locales: los handlers de alertas manejan el endpoint y las claves del suscriptor.
         include_local_variables=False,
+        # Ni cabeceras `sentry-trace` / `baggage` hacia terceros (un servicio push recibiría el id de la traza del pedido).
+        trace_propagation_targets=[],
+        # Ni la URL de un servicio push, en migajas, spans, transacciones ni eventos.
+        before_breadcrumb=_scrub_breadcrumb,
+        before_send=_scrub_event,
+        before_send_transaction=_scrub_transaction,
     )
+    return True
+
+
+_init_sentry(os.getenv('SENTRY_DSN'), os.getenv('ENV'))
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -67,6 +160,8 @@ def setup_logging() -> None:
             },
         }
     )
+    # Las líneas INFO de httpx llevan la URL de cada pedido, con la latitud y la longitud de las zonas con suscriptores.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 logger = logging.getLogger("skypulse")

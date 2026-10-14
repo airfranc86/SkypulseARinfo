@@ -162,6 +162,14 @@ class UpstashRedis:
     async def sadd(self, key: str, *members: str) -> int:
         return await self._call_int("SADD", key, *members)
 
+    async def expire_si_falta(self, key: str, seconds: int) -> int:
+        """EXPIRE key seconds NX, con el comando en el cuerpo: pone el vencimiento solo si la clave todavía no tiene uno (1 si
+        lo puso, 0 si ya tenía o la clave no existe). Sirve para un conjunto que se llena de a tandas: el vencimiento corre
+        desde la primera, y las siguientes no lo estiran."""
+        if seconds < 1:
+            raise ValueError("expire_si_falta necesita un vencimiento positivo")
+        return await self._call_int("EXPIRE", key, str(seconds), "NX")
+
     async def srem(self, key: str, *members: str) -> int:
         return await self._call_int("SREM", key, *members)
 

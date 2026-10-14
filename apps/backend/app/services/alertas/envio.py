@@ -13,6 +13,11 @@
   al darse de alta, una respuesta de un servicio comprometido no puede llevarnos a otro lado.
 - 404 y 410 (la suscripción ya no existe) borran el registro; 429, 5xx, errores de red y cualquier otro
   rechazo NO: son del servicio push o de este envío, no de la suscripción.
+- Cuatro resultados de fracaso, según qué hacer después (FRA-355, PR5c): `ERROR` es TRANSITORIO (red, timeout, 408,
+  425, 429, 5xx) y vale UN reintento; `RECHAZADA` es un rechazo persistente (400, 401, 403, otro 4xx, 3xx, una excepción
+  que no se conoce): no se reintenta y NO se borra, porque podría ser nuestra clave VAPID; `INVALIDA` es una suscripción
+  que nunca va a andar (registro ilegible o fuera de la validación, o que no se puede cifrar para ella): quien llama la
+  borra, sin reintento; `VENCIDA` es 404/410.
 - Nada sensible llega a un log: ni el endpoint, ni las claves, ni el mensaje, ni la clave VAPID. El texto de
   una `WebPushException` o de un error de `requests` trae el cuerpo de la respuesta o la URL del pedido,
   así que solo se registra el nombre de la clase y el estado HTTP.
@@ -22,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import hashlib
 import json
 import logging
@@ -29,9 +35,10 @@ from datetime import date, datetime, timezone
 from enum import Enum
 
 import requests
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from py_vapid import Vapid
-from pywebpush import WebPushException, webpush
+from pywebpush import WebPusher, WebPushException, webpush
 
 from app.core.config import settings
 from app.core.upstash import UpstashRedis
@@ -45,8 +52,9 @@ logger = logging.getLogger(__name__)
 # push es un secreto. LOG_LEVEL=DEBUG baja el nivel de toda la app: este tope lo deja fuera.
 logging.getLogger("urllib3").setLevel(logging.INFO)
 
-# Adonde lleva tocar la notificación. Todavía no existe la página de alertas: por ahora, la portada.
-URL_ALERTAS = "https://skypulse-ar.vercel.app/"
+# Adonde lleva tocar la notificación: la pantalla del pronóstico por franjas (decisión del dueño, FRA-355). No hay una
+# página `/alertas`. Es siempre del mismo origen que el sitio: el service worker solo abre URLs de su propio origen.
+URL_ALERTAS = "https://skypulse-ar.vercel.app/prevision"
 
 # Cuánto guarda el servicio push un mensaje que no pudo entregar (teléfono apagado o sin señal). Un aviso de
 # tormenta pierde sentido pasado el día: 12 h. La prueba, en cambio, se espera "ya": 5 minutos.
@@ -73,8 +81,19 @@ _AUD_DE_COMPROBACION = "https://fcm.googleapis.com"
 
 class Resultado(Enum):
     ENVIADA = "ok"  # el servicio push aceptó el mensaje (2xx)
-    VENCIDA = "gone"  # 404/410: la suscripción ya no existe y se borró
-    ERROR = "error"  # no se pudo enviar; la suscripción sigue guardada
+    VENCIDA = "gone"  # 404/410: la suscripción ya no existe (se borró, salvo con `borrar=False`)
+    ERROR = "error"  # fallo TRANSITORIO (red, timeout, 408/425/429/5xx): vale un reintento; la suscripción sigue guardada
+    RECHAZADA = "rejected"  # rechazo persistente (otro 4xx, 3xx, excepción rara): sin reintento, sin borrar
+    INVALIDA = "invalid"  # nunca va a andar (registro ilegible o imposible de cifrar): quien llama la borra
+
+
+class SuscripcionInservible(Exception):
+    """No se puede cifrar un mensaje para esta suscripción (clave fuera de la curva, mal formada): nunca va a andar."""
+
+
+class CifradoInesperado(Exception):
+    """Cifrar falló de una forma que NO es la de una suscripción mala (un bug en `http_ece` o `cryptography`, memoria...).
+    Es transitorio: si se leyera como "suscripción inválida" una regresión de la librería borraría todas."""
 
 
 class VapidNoDisponibleError(Exception):
@@ -122,6 +141,32 @@ def cargar_vapid(clave: str | None = None) -> Vapid:
     return vapid
 
 
+def autoprueba_de_cifrado() -> bool:
+    """Cifra un mensaje mínimo para una clave P-256 generada acá. False si falla: la librería de cifrado está rota y NADA
+    se manda ni se borra en esa corrida (de lo contrario cada fallo parecería una suscripción mala).
+
+    No usa la red ni claves guardadas; la clave de la prueba se descarta.
+    """
+    try:
+        clave = ec.generate_private_key(ec.SECP256R1())
+        publica = clave.public_key().public_bytes(
+            serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint
+        )
+
+        def b64(datos: bytes) -> str:
+            return base64.urlsafe_b64encode(datos).decode().rstrip("=")
+
+        info = {
+            "endpoint": "https://fcm.googleapis.com/fcm/send/autoprueba",
+            "keys": {"p256dh": b64(publica), "auth": b64(os.urandom(16))},
+        }
+        WebPusher(info).encode(b"autoprueba")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("alertas: la autoprueba de cifrado falló exc_type=%s", type(exc).__name__)
+        return False
+    return True
+
+
 def _claims_nuevos() -> dict[str, str | int]:
     """Un dict nuevo en cada llamada: `pywebpush` le agrega `aud` y `exp`."""
     return {"sub": settings.vapid_subject}
@@ -141,6 +186,12 @@ def topic_de(zona: str, fecha: date) -> str:
     """
     digest = hashlib.sha256(f"{zona}:{fecha:%Y-%m-%d}".encode()).digest()
     return base64.urlsafe_b64encode(digest).decode().rstrip("=")[:_LARGO_TOPIC]
+
+
+def tag_de(zona: str, fecha: date) -> str:
+    """El `tag` de la notificación de una ciudad y un día: un aviso repetido por accidente REEMPLAZA al anterior en el
+    dispositivo (mismo tag) en vez de apilarse. Es el par de `topic_de`, que hace lo mismo en el servicio push."""
+    return f"{TAG_ALERTA}-{zona}-{fecha:%Y-%m-%d}"
 
 
 def construir_payload(mensaje: Mensaje, *, tag: str = TAG_ALERTA) -> str:
@@ -210,13 +261,26 @@ class _SesionSinRedirecciones(requests.Session):
 def _enviar_sync(
     suscripcion: svc.Suscripcion, payload: str, vapid: Vapid, ttl: int, topic: str
 ) -> None:
+    info = {
+        "endpoint": suscripcion.endpoint,
+        "keys": {"p256dh": suscripcion.p256dh, "auth": suscripcion.auth},
+    }
+    # Cifrar primero, aparte: si esto falla, el problema es de LA SUSCRIPCIÓN (sus claves) y nunca va a andar. Un fallo de
+    # `webpush` más abajo (nuestra clave VAPID, la red, el servicio) no debe leerse así: borraría suscripciones sanas.
+    try:
+        WebPusher(info).encode(payload.encode("utf-8"))
+    except ValueError:  # clave fuera de la curva, mal formada (`binascii.Error` es un ValueError)
+        raise SuscripcionInservible from None
+    except WebPushException as exc:
+        if exc.response is None:  # "Invalid p256dh key specified": el rechazo es local, no de un servicio push
+            raise SuscripcionInservible from None
+        raise CifradoInesperado from None
+    except Exception:  # noqa: BLE001 - cualquier otra cosa no es culpa de la suscripción
+        raise CifradoInesperado from None
     sesion = _SesionSinRedirecciones()
     try:
         webpush(
-            subscription_info={
-                "endpoint": suscripcion.endpoint,
-                "keys": {"p256dh": suscripcion.p256dh, "auth": suscripcion.auth},
-            },
+            subscription_info=info,
             data=payload,
             vapid_private_key=vapid,
             vapid_claims=_claims_nuevos(),
@@ -230,6 +294,12 @@ def _enviar_sync(
         sesion.close()
 
 
+def _es_transitorio(estado: int | None) -> bool:
+    """Un rechazo que puede pasar solo: timeout (408), demasiado pronto (425), límite (429) o un fallo del servicio (5xx).
+    Sin estado no hay respuesta que juzgar. Todo lo demás (400, 401, 403, 405, 413, 3xx...) es persistente."""
+    return estado is not None and (estado in (408, 425, 429) or estado >= 500)
+
+
 async def enviar(
     redis: UpstashRedis,
     sub_id: str,
@@ -240,11 +310,14 @@ async def enviar(
     fecha: date,
     ttl: int = TTL_ALERTA_SEGUNDOS,
     vapid: Vapid | None = None,
+    borrar: bool = True,
 ) -> Resultado:
     """Manda `payload` a la suscripción guardada como `registro` (el JSON de `alertas:sub:{sub_id}`).
 
     `zona` y `fecha` solo arman el Topic. `vapid` permite cargar la clave una vez para muchos envíos
-    (`cargar_vapid()`); sin él se carga de `settings` en cada llamada.
+    (`cargar_vapid()`); sin él se carga de `settings` en cada llamada. Con `borrar=False` un 404/410 se informa
+    (`VENCIDA`) pero NO se borra nada: lo decide quien llama (el envío programado lo hace detrás de un cortacircuitos
+    que evita vaciar las suscripciones si un proxy devolviera 404 para todo).
 
     Raises:
         ValueError: `ttl` no es positivo o `payload` no entra en un mensaje push (no se envía nada).
@@ -260,7 +333,7 @@ async def enviar(
         logger.warning(
             "alertas: registro de suscripción ilegible o inválido, no se envía"
         )
-        return Resultado.ERROR
+        return Resultado.INVALIDA
     if vapid is None:
         vapid = cargar_vapid()
 
@@ -268,13 +341,20 @@ async def enviar(
         await asyncio.to_thread(
             _enviar_sync, suscripcion, payload, vapid, ttl, topic_de(zona, fecha)
         )
+    except SuscripcionInservible:
+        logger.warning("alertas: no se puede cifrar un mensaje para una suscripción; es inválida")
+        return Resultado.INVALIDA
+    except CifradoInesperado:
+        logger.warning("alertas: cifrar el mensaje falló de forma inesperada; se trata como un error transitorio")
+        return Resultado.ERROR
     except WebPushException as exc:
         estado = exc.status_code
         if estado in (404, 410):
             logger.info(
                 "alertas: suscripción vencida en el servicio push status=%s", estado
             )
-            await svc.baja(redis, sub_id)
+            if borrar:
+                await svc.baja(redis, sub_id)
             return Resultado.VENCIDA
         # `pywebpush` solo da por buena la respuesta 200 a 202; cualquier otro 2xx también es una entrega.
         if estado is not None and 200 <= estado < 300:
@@ -284,12 +364,17 @@ async def enviar(
             type(exc).__name__,
             estado,
         )
-        return Resultado.ERROR
-    except Exception as exc:  # noqa: BLE001  # red, TLS, timeout, clave de la suscripción: nunca borra
+        return Resultado.ERROR if _es_transitorio(estado) else Resultado.RECHAZADA
+    except requests.RequestException as exc:  # red, TLS, timeout: transitorio, nunca borra
         logger.warning(
             "alertas: no se pudo enviar el push exc_type=%s", type(exc).__name__
         )
         return Resultado.ERROR
+    except Exception as exc:  # noqa: BLE001  # algo que no se conoce: no se reintenta y nunca borra
+        logger.warning(
+            "alertas: no se pudo enviar el push exc_type=%s", type(exc).__name__
+        )
+        return Resultado.RECHAZADA
     return Resultado.ENVIADA
 
 
@@ -332,7 +417,7 @@ async def enviar_prueba(
         logger.warning(
             "alertas: registro de suscripción ilegible o inválido, no se envía la prueba"
         )
-        return Resultado.ERROR
+        return Resultado.INVALIDA
     zona = zona_por_slug(suscripcion.zona)  # no es None: `Suscripcion` ya la validó
     return await enviar(
         redis,

@@ -14,6 +14,8 @@ import re
 from datetime import datetime, timedelta
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from app.core.upstash import UpstashRedis, UpstashUnavailableError
 from app.services.alertas.suscripcion import (
@@ -40,9 +42,15 @@ def _b64(data: bytes, *, padded: bool = False) -> str:
     return text if padded else text.rstrip("=")
 
 
+# Un punto REAL de la curva P-256 (el generador, determinístico: ninguna clave privada se guarda ni se escribe): desde
+# la PR5c el alta rechaza un p256dh que cumple el largo y el 0x04 pero no está en la curva.
 P256DH = _b64(
-    b"\x04" + bytes(range(64))
-)  # 65 bytes, primer byte 0x04 (punto sin comprimir)
+    ec.derive_private_key(1, ec.SECP256R1())
+    .public_key()
+    .public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+)
+# Largo y primer byte correctos (65 bytes, 0x04) pero FUERA de la curva: el ejemplo de una suscripción envenenada.
+P256DH_FUERA_DE_CURVA = _b64(b"\x04" + bytes(range(64)))
 AUTH = _b64(bytes(range(16)))  # 16 bytes
 ENDPOINT = "https://fcm.googleapis.com/fcm/send/abc123:APA91bXYZ"
 OTRO_ENDPOINT = "https://updates.push.services.mozilla.com/wpush/v2/gAAAAABk"
@@ -217,7 +225,7 @@ def _flip_unused_bit(value: str) -> str:
 
 def test_valid_p256dh_is_accepted_with_or_without_padding() -> None:
     assert validar_p256dh(P256DH) == P256DH
-    padded = _b64(b"\x04" + bytes(range(64)), padded=True)
+    padded = P256DH + "="  # 65 bytes: one padding character
     assert padded.endswith("=")
     assert validar_p256dh(padded) == padded
 
@@ -552,3 +560,56 @@ async def test_baja_with_upstash_down_raises_unavailable(redis, fake_upstash) ->
     fake_upstash.down = True
     with pytest.raises(UpstashUnavailableError):
         await baja(redis, "A" * 22)
+
+
+def test_the_key_names_of_the_indexes_are_public_for_the_sender_and_keep_their_format() -> None:
+    """PR5c: the sender builds these keys; a rename of the format would silently break every stored subscription."""
+    from app.services.alertas import suscripcion as svc
+
+    assert svc.CLAVE_IDS == "alertas:ids" and svc.CLAVE_ZONAS == "alertas:zonas"
+    assert svc.clave_de_zona("cordoba") == "alertas:zona:cordoba"
+    assert svc.clave_de_sub("A" * 22) == "alertas:sub:" + "A" * 22
+
+
+# ---------------------------------------------------------------------------
+# PR5c: a p256dh must be a real point of the curve (a "poisoned" subscription never gets in)
+# ---------------------------------------------------------------------------
+
+
+def test_the_test_constants_are_what_their_names_say() -> None:
+    assert validar_p256dh(P256DH) == P256DH
+    assert len(base64.urlsafe_b64decode(P256DH + "=")) == 65 and base64.urlsafe_b64decode(P256DH + "=")[0] == 0x04
+    assert len(base64.urlsafe_b64decode(P256DH_FUERA_DE_CURVA + "=")) == 65
+
+
+def test_an_off_curve_p256dh_with_the_right_length_and_prefix_is_rejected_with_the_same_generic_error() -> None:
+    with pytest.raises(SuscripcionInvalida) as error:
+        Suscripcion(endpoint=ENDPOINT, p256dh=P256DH_FUERA_DE_CURVA, auth=AUTH, zona="cordoba")
+    assert str(error.value) == "clave_invalida"  # the same code as every other bad key: it says nothing more
+    with pytest.raises(SuscripcionInvalida, match="clave_invalida"):
+        validar_p256dh(P256DH_FUERA_DE_CURVA)
+
+
+async def test_an_off_curve_registration_never_reaches_upstash(redis, fake_upstash) -> None:
+    with pytest.raises(SuscripcionInvalida):
+        await alta(redis, Suscripcion(ENDPOINT, P256DH_FUERA_DE_CURVA, AUTH, "cordoba"))
+    assert fake_upstash.requests == []  # validated BEFORE touching Upstash
+
+
+@pytest.mark.parametrize(
+    ("host", "esperado"),
+    [
+        ("fcm.googleapis.com", True),
+        ("updates.push.services.mozilla.com", True),
+        ("web.push.apple.com", True),
+        ("wns2-par02p.notify.windows.com", True),
+        ("evilpush.apple.com", False),
+        ("fcm.googleapis.com.evil.example", False),
+        ("api.open-meteo.com", False),
+        ("", False),
+    ],
+)
+def test_the_push_host_list_is_one_public_function_shared_with_the_scrubbing_of_sentry(host: str, esperado: bool) -> None:
+    from app.services.alertas import suscripcion as svc
+
+    assert svc.es_host_de_push(host) is esperado
