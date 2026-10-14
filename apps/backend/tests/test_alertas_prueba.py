@@ -72,10 +72,7 @@ async def test_a_prueba_is_delivered_to_the_subscription_and_answers_200(
     mensaje = json.loads(_descifrar(pedido, sub.receptor))
     assert mensaje["web_push"] == 8030
     assert mensaje["title"] == "SkyPulse · Prueba"
-    assert mensaje["body"] == (
-        "Esto es un aviso de prueba para Córdoba. "
-        "Los avisos automáticos de tormenta todavía no están activos."
-    )
+    assert mensaje["body"] == "Esto es un aviso de prueba para Córdoba. Si se esperan tormentas, te avisamos por acá."
     assert mensaje["notification"]["title"] == mensaje["title"]
     assert mensaje["tag"] == "skypulse-prueba"
 

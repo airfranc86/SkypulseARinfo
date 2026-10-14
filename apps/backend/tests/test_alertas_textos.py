@@ -272,28 +272,25 @@ def test_an_unknown_franja_is_a_bug(texto) -> None:
         texto(CORDOBA, ("mediodia",))
 
 
-def test_prueba_says_it_is_a_test_and_that_automatic_alerts_are_not_active_yet() -> None:
+def test_prueba_says_it_is_a_test_for_the_city_the_person_chose() -> None:
     mensaje = texto_prueba(CORDOBA)
 
     assert mensaje == Mensaje(
         titulo="SkyPulse · Prueba",
-        cuerpo=(
-            "Esto es un aviso de prueba para Córdoba. "
-            "Los avisos automáticos de tormenta todavía no están activos."
-        ),
+        cuerpo="Esto es un aviso de prueba para Córdoba. Si se esperan tormentas, te avisamos por acá.",
     )
     assert texto_prueba(zona_por_slug("san-salvador-de-jujuy")).cuerpo.startswith(
         "Esto es un aviso de prueba para San Salvador de Jujuy."
     )
 
 
-def test_prueba_does_not_suggest_that_storm_alerts_are_ready() -> None:
-    """Es el único aviso que se envía hoy: no puede decir 'así vas a ver los avisos' ni 'está todo listo'."""
+def test_prueba_does_not_say_that_automatic_alerts_are_inactive() -> None:
+    """El envío automático está activo: la prueba ya no puede decir que 'todavía no están activos'."""
     for zona in ZONAS:
         cuerpo = texto_prueba(zona).cuerpo
-        assert "Así vas a ver" not in cuerpo
-        assert "todo listo" not in cuerpo
-        assert "todavía no están activos" in cuerpo
+        assert "todavía no" not in cuerpo
+        assert "no están activos" not in cuerpo
+        assert cuerpo.startswith(f"Esto es un aviso de prueba para {zona.nombre}.")
 
 
 # ---------------------------------------------------------------------------
