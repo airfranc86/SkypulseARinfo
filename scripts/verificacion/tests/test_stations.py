@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 import re
 from pathlib import Path
 
@@ -14,6 +15,16 @@ METAR_PATH = (
     Path(__file__).resolve().parents[3]
     / "apps" / "backend" / "app" / "services" / "reportes_aeronauticos" / "aeropuertos.py"
 )
+
+# SMN station coordinates and aerodrome coordinates may differ by a little (SAAR ~0.3 km, SAZN ~1.3 km today).
+MAX_COORDINATE_GAP_KM = 2.0
+
+
+def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance (haversine) in kilometres."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 6371.0 * 2 * math.asin(math.sqrt(a))
 
 
 def test_names_and_icao_are_unique() -> None:
@@ -95,11 +106,14 @@ def test_coordinates_match_metar_for_stations_whose_icao_is_in_metar() -> None:
 
     shared = [s for s in STATIONS if s.icao in in_metar]
 
-    assert {s.icao for s in shared} == {
+    # The backend list grows over time: these eight must stay shared, new ones are allowed.
+    assert {
         "SABE", "SAEZ", "SACO", "SASA", "SANT", "SAZM", "SAME", "SAWH",
-    }  # fmt: skip
+    } <= {s.icao for s in shared}  # fmt: skip
     for station in shared:
-        assert in_metar[station.icao] == (station.lat, station.lon), station.icao
+        lat, lon = in_metar[station.icao]
+        distance = _distance_km(lat, lon, station.lat, station.lon)
+        assert distance <= MAX_COORDINATE_GAP_KM, (station.icao, distance)
 
 
 def test_wrong_icao_codes_of_metar_are_not_used() -> None:
