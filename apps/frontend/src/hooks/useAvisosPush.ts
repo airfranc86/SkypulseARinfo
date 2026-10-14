@@ -7,6 +7,7 @@ import {
   ESTADO_INICIAL,
   claveVapidABytes,
   cuerpoDeAlta,
+  errorDeSuscribirEnNavegador,
   idADarDeBaja,
   motivoDeError,
   normalizarPermiso,
@@ -90,7 +91,11 @@ async function suscribirEnNavegador(clave: Uint8Array): Promise<PushSubscription
   const existente = await registro.pushManager.getSubscription()
   // Una suscripción hecha con otra clave no se puede reusar: `subscribe` falla hasta darla de baja.
   if (existente !== null && !mismaClave(existente, clave)) await existente.unsubscribe()
-  return registro.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(clave) })
+  try {
+    return await registro.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(clave) })
+  } catch (error) {
+    throw errorDeSuscribirEnNavegador(error)
+  }
 }
 
 async function desuscribir(suscripcion: PushSubscription): Promise<void> {

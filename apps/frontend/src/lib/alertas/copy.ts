@@ -147,6 +147,8 @@ export function mensajeDeError(error: ErrorAvisos): string {
         : 'Esperá un momento y probá de nuevo.'
     case 'servicio-push':
       return 'El servicio de notificaciones de tu navegador no aceptó el aviso. Probá de nuevo en unos minutos.'
+    case 'push-bloqueado':
+      return 'Tu navegador no pudo activar las notificaciones. Si usás Brave, activá "Usar los servicios de Google para mensajería push" en Configuración, Privacidad y seguridad, y reiniciá el navegador.'
     case 'no-disponible':
       return 'Los avisos no están disponibles en este momento. Probá de nuevo más tarde.'
     case 'datos-invalidos':
