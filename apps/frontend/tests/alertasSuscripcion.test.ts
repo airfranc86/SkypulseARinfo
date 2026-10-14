@@ -11,6 +11,7 @@ import {
   claveVapidABytes,
   cuerpoDeAlta,
   debeRenovar,
+  errorDeSuscribirEnNavegador,
   idADarDeBaja,
   leerEstadoGuardado,
   motivoDeError,
@@ -587,6 +588,17 @@ test('motivoDeError: funciona con un ApiError real, también el 429 con Retry-Af
   assert.deepEqual(motivoDeError(limitado), { motivo: 'espera', segundos: 45 })
   const sinCabecera = buildApiError({ error: 'Rate limit exceeded' }, 429, null)
   assert.deepEqual(motivoDeError(sinCabecera), { motivo: 'espera', segundos: 60 })
+})
+
+test('un AbortError de pushManager.subscribe (Brave sin el servicio push de Google) es "push-bloqueado"', () => {
+  const abortado = new DOMException('Registration failed - push service error', 'AbortError')
+  assert.deepEqual(motivoDeError(errorDeSuscribirEnNavegador(abortado)), { motivo: 'push-bloqueado' })
+})
+
+test('errorDeSuscribirEnNavegador deja pasar cualquier otro error sin tocarlo', () => {
+  const otros = [new TypeError('x'), new DOMException('nope', 'NotAllowedError'), new ApiError('x', 503), 'boom', null]
+  for (const otro of otros) assert.equal(errorDeSuscribirEnNavegador(otro), otro)
+  assert.deepEqual(motivoDeError(errorDeSuscribirEnNavegador(new ApiError('x', 503))), { motivo: 'no-disponible' })
 })
 
 test('el motivo de motivoDeError entra tal cual en el evento "suscripcion-fallo"', () => {

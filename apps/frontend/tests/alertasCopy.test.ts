@@ -32,6 +32,7 @@ const ERRORES: readonly ErrorAvisos[] = [
   { motivo: 'vencida' },
   { motivo: 'espera', segundos: 7 },
   { motivo: 'servicio-push' },
+  { motivo: 'push-bloqueado' },
   { motivo: 'no-disponible' },
   { motivo: 'datos-invalidos' },
   { motivo: 'desconocido' },

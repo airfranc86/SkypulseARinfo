@@ -29,6 +29,7 @@ export type ErrorAvisos =
       motivo:
         | 'vencida' // 404/410: la suscripción ya no existe en el servidor, hay que volver a activar
         | 'servicio-push' // 502: el servicio push del navegador no aceptó el aviso
+        | 'push-bloqueado' // el navegador no pudo suscribir (Brave sin los servicios de Google para mensajería push)
         | 'no-disponible' // 503: el servidor de alertas no está disponible o llegó al tope
         | 'datos-invalidos' // 422: el servidor rechazó lo enviado
         | 'desconocido' // 504, red caída o cualquier otro
@@ -49,6 +50,7 @@ function segundosDeEspera(retryAfter: unknown): number {
  */
 export function motivoDeError(error: unknown): ErrorAvisos {
   const datos = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {}
+  if (datos.pushBloqueado === true) return { motivo: 'push-bloqueado' }
   switch (datos.status) {
     case 404:
     case 410:
@@ -64,6 +66,16 @@ export function motivoDeError(error: unknown): ErrorAvisos {
     default:
       return ERROR_DESCONOCIDO
   }
+}
+
+/**
+ * Un fallo de `pushManager.subscribe()`. Brave trae apagado el servicio push de Google y el navegador responde
+ * `AbortError` ("push service error"), que no tiene `status`: se lo marca para que `motivoDeError` lo distinga.
+ * Cualquier otro error pasa sin tocar.
+ */
+export function errorDeSuscribirEnNavegador(error: unknown): unknown {
+  const nombre = typeof error === 'object' && error !== null ? (error as { name?: unknown }).name : undefined
+  return nombre === 'AbortError' ? Object.freeze({ pushBloqueado: true }) : error
 }
 
 // ── Identificador de la suscripción ──────────────────────────────────────────
