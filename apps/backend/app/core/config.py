@@ -1,7 +1,12 @@
+from urllib.parse import urlsplit
+
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
-_DEFAULT_CORS = "http://localhost:5173,https://skypulse-ar.vercel.app"
+# El dominio público del sitio: el único lugar del backend donde está escrito. `PUBLIC_SITE_URL` lo reemplaza.
+_SITIO_POR_DEFECTO = "https://skypulse-ar.vercel.app"
+_HOSTS_DE_DESARROLLO = frozenset({"localhost", "127.0.0.1"})
+_DEFAULT_CORS = f"http://localhost:5173,{_SITIO_POR_DEFECTO}"
 
 
 # Cuánto tiene que sobrarle al lock de la evaluación de alertas sobre el plazo de la corrida (ver `Settings`).
@@ -29,6 +34,24 @@ class Settings(BaseSettings):
     smn_cap_content_failures_before_skip: int = 3  # fallas de contenido seguidas de un XML CAP antes de ponerlo en cuarentena
     log_level: str = "INFO"
     cors_origins: list[str] | str = _DEFAULT_CORS
+    # Origen público del sitio (`https://dominio`, sin ruta): el link de las notificaciones push y el User-Agent hacia
+    # AWC y el SMN. Un valor que no es un origen https (salvo localhost, para desarrollo) frena el arranque.
+    public_site_url: str = _SITIO_POR_DEFECTO
+
+    @field_validator("public_site_url")
+    @classmethod
+    def _origen_del_sitio(cls, v: str) -> str:
+        valor = v.strip().rstrip("/")
+        partes = urlsplit(valor)
+        es_origen = bool(partes.hostname) and not (partes.path or partes.query or partes.fragment)
+        es_seguro = partes.scheme == "https" or (partes.scheme == "http" and partes.hostname in _HOSTS_DE_DESARROLLO)
+        if not (es_origen and es_seguro):
+            raise ValueError("PUBLIC_SITE_URL debe ser un origen https, por ejemplo https://skypulse-ar.vercel.app")
+        return valor
+
+    def site_url(self, ruta: str = "") -> str:
+        """Una dirección del mismo origen que el sitio: `site_url("/prevision")`."""
+        return f"{self.public_site_url}{ruta}"
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -116,7 +139,7 @@ class Settings(BaseSettings):
     # `services/alertas/envio.py::cargar_vapid`. Vacía = el aviso de prueba responde 503.
     vapid_private_key: str = Field(default="", repr=False)
     # Contacto que declara el VAPID ante los servicios push: `https://...` o `mailto:...`.
-    vapid_subject: str = "https://skypulse-ar.vercel.app"
+    vapid_subject: str = _SITIO_POR_DEFECTO
 
     # Envío automático de alertas push (FRA-355). QStash llama a `POST /api/alertas/evaluar` y firma cada
     # llamada con un JWT HS256 en la cabecera `Upstash-Signature`; ver `services/alertas/firma_qstash.py`.
