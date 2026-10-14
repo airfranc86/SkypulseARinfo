@@ -7,6 +7,7 @@ from app.services.calculators import (
     compute_sensacion_termica,
     compute_cota_de_nieve,
     compute_convective_risk,
+    is_hail_favorable_hour,
     score_hacer_deporte,
     score_lavar_coche,
     FeelsLikeResult,
@@ -830,3 +831,43 @@ class TestActiveRainCap:
             temp_c=25.0, humidity=30.0, wind_speed_kmh=10.0, precip_mm=0.0, cape_j_kg=2000.0,
         )
         assert "granizo" not in r.reason.lower()
+
+
+class TestHailFavorableHour:
+    """Una hora es favorable a granizo con CAPE >= 1000 J/kg Y código WMO 95..99 (inferencia propia,
+    corte de CAPE de Elkins y Hence 2024; no es un estándar validado)."""
+
+    def test_cape_and_thunderstorm_code_together_are_favorable(self):
+        assert is_hail_favorable_hour(1500.0, 95) is True
+
+    def test_cape_exactly_1000_counts(self):
+        assert is_hail_favorable_hour(1000.0, 96) is True
+
+    def test_cape_999_does_not_count(self):
+        assert is_hail_favorable_hour(999.0, 96) is False
+
+    def test_cape_high_but_not_a_thunderstorm_code_does_not_count(self):
+        assert is_hail_favorable_hour(3000.0, 3) is False
+
+    def test_code_94_is_below_the_range(self):
+        assert is_hail_favorable_hour(2000.0, 94) is False
+
+    def test_codes_95_to_99_are_in_the_range(self):
+        assert [is_hail_favorable_hour(2000.0, c) for c in (95, 96, 97, 98, 99)] == [True] * 5
+
+    def test_code_100_is_above_the_range(self):
+        assert is_hail_favorable_hour(2000.0, 100) is False
+
+    def test_the_2500_storm_threshold_is_not_the_cut(self):
+        # 1000..2499 enciende: el corte no es el de CAPE_TORMENTA_J_KG (2500, otra regla).
+        assert is_hail_favorable_hour(1200.0, 95) is True
+
+    def test_missing_cape_is_unknown_not_false(self):
+        assert is_hail_favorable_hour(None, 95) is None
+
+    def test_missing_code_is_unknown_not_false(self):
+        assert is_hail_favorable_hour(2000.0, None) is None
+
+    def test_convective_risk_is_untouched(self):
+        assert compute_convective_risk(999.0) == "low"
+        assert compute_convective_risk(1000.0) == "moderate"

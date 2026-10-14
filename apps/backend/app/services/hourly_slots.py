@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TypeVar
 
+from app.services.calculators import is_hail_favorable_hour
 from app.services.openmeteo import HourlyForecastExt
 
 # Franjas de 3 h (las horas locales 00, 03, 06… 21), como siempre mostró la tira horaria.
@@ -46,6 +47,10 @@ class Slot:
     # cielo durante el fenómeno, el que elige el ícono. None si esa hora no trae dato, sin tomar el
     # de otra hora.
     weather_cloud_cover: float | None = None
+    # Condiciones favorables para granizo: True si en UNA misma hora de las 3 h se juntan CAPE alto y
+    # código de tormenta (no los máximos de la franja, que pueden venir de horas distintas); False si
+    # hay horas con ambos datos y ninguna lo cumple; None si ninguna hora trae los dos datos.
+    hail_favorable: bool | None = None
 
 
 def window(values: list[_T | None], index: int) -> list[_T]:
@@ -71,6 +76,18 @@ def worst_code_index(codes: list[int | None], index: int) -> int | None:
         if code is not None and (worst is None or code >= codes[worst]):
             worst = i
     return worst
+
+
+def hail_favorable_for_window(
+    capes: list[float | None], codes: list[int | None], index: int
+) -> bool | None:
+    """Granizo favorable en la franja de 3 h que termina en `index`, evaluando hora por hora."""
+    start = max(0, index - SLOT_HOURS + 1)
+    hours = [
+        is_hail_favorable_hour(at(capes, i), at(codes, i)) for i in range(start, index + 1)
+    ]
+    known = [h for h in hours if h is not None]
+    return any(known) if known else None
 
 
 def three_hour_slots(om: HourlyForecastExt) -> list[Slot]:
@@ -103,6 +120,7 @@ def three_hour_slots(om: HourlyForecastExt) -> list[Slot]:
                 humidity=at(om.humidities, i),
                 cloud_cover=at(om.cloud_covers, i),
                 weather_cloud_cover=at(om.cloud_covers, worst_hour) if worst_hour is not None else None,
+                hail_favorable=hail_favorable_for_window(om.cape_j_kg, om.weather_codes, i),
             )
         )
     return slots

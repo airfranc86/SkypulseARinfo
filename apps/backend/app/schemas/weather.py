@@ -148,6 +148,9 @@ class HourlyEntrySchema(BaseModel):
     convective_risk: ConvectiveRisk | None = None
     freezing_level_height_m: float | None = None
     wind_gusts_kmh: float | None = None
+    # Condiciones favorables para granizo en la franja (CAPE y código de tormenta en la misma hora).
+    # None = sin datos suficientes; False = hay datos y no se cumple. Es un pronóstico, no una detección.
+    hail_favorable: bool | None = None
 
 
 ForecastModelName = Literal["gfs", "ecmwf"]
