@@ -72,7 +72,7 @@ _CAP_NS: Final = "{urn:oasis:names:tc:emergency:cap:1.2}"
 # (text/html, "<!DOCTYPE html>") to browsers and with the RSS to everything else
 # (checked on 2026-10-06 with a Chrome UA, curl, the httpx default and this one).
 _HEADERS: Final = {
-    "User-Agent": "SkyPulse/1.0 (+https://skypulse-ar.vercel.app)",
+    "User-Agent": f"SkyPulse/1.0 (+{settings.public_site_url})",
     "Accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8",
 }
 

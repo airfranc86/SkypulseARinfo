@@ -54,7 +54,7 @@ logging.getLogger("urllib3").setLevel(logging.INFO)
 
 # Adonde lleva tocar la notificación: la pantalla del pronóstico por franjas (decisión del dueño, FRA-355). No hay una
 # página `/alertas`. Es siempre del mismo origen que el sitio: el service worker solo abre URLs de su propio origen.
-URL_ALERTAS = "https://skypulse-ar.vercel.app/prevision"
+URL_ALERTAS = settings.site_url("/prevision")
 
 # Cuánto guarda el servicio push un mensaje que no pudo entregar (teléfono apagado o sin señal). Un aviso de
 # tormenta pierde sentido pasado el día: 12 h. La prueba, en cambio, se espera "ya": 5 minutos.

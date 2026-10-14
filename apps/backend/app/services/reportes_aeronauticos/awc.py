@@ -25,6 +25,7 @@ from typing import Any, Protocol
 from httpx import HTTPStatusError, Response
 
 from app.core import usage_counter
+from app.core.config import settings
 from app.core.http_client import get_client
 from app.core.rate_limit_pause import awc_pause
 from app.services.reportes_aeronauticos.awc_budget import admit_network_call
@@ -34,7 +35,7 @@ AWC_TAF_BASE = "https://aviationweather.gov/api/data/taf"
 
 # Identifies SkyPulse to AWC (same value the SMN client sends in `services/smn_alertas.py`). Set per
 # request on purpose: the shared httpx client also serves Open-Meteo and the SMN, which must not change.
-AWC_USER_AGENT = "SkyPulse/1.0 (+https://skypulse-ar.vercel.app)"
+AWC_USER_AGENT = f"SkyPulse/1.0 (+{settings.public_site_url})"
 
 _USAGE_PROVIDER = "metar_awc"   # read by scripts/admin/monitor_core/quotas.py
 

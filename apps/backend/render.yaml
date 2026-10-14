@@ -11,6 +11,10 @@ services:
         value: prod
       - key: CORS_ORIGINS
         sync: false
+      # Dominio público del sitio (origen https, sin ruta): link de las notificaciones push y User-Agent hacia AWC y
+      # el SMN. Sin declararla vale https://skypulse-ar.vercel.app; con un valor inválido el servicio no arranca.
+      - key: PUBLIC_SITE_URL
+        sync: false
       - key: CHECKWX_API_KEY
         sync: false
       - key: SENTRY_DSN
