@@ -18,8 +18,9 @@ switch was read. A run:
    "no storm" is concluded only if every hour of the window has BOTH `weather_code` and `cape`; otherwise, and for any
    data that is missing or stale, the zone is `sin_datos`, never "no storm". An unexpected exception (also inside the
    rule) is an `errores` zone, not an exception of the run;
-6. reads the kill key `alertas:apagado` again before EVERY zone (`interruptor.clave_de_apagado_ausente`, fail
-   closed): present or unreadable stops the run with `apagado_a_mitad`. The zones not reached are `diferidas`;
+6. the kill key `alertas:apagado` (fail closed) is read by the router at the start of the run and, when the run sends,
+   once more before the dispatch starts (`despacho.corte_por_interruptor`) and before every batch of sends; present or
+   unreadable stops the sending with `apagado_a_mitad`. Evaluating the zones (read-only) does not read it per zone;
 7. stops at the run deadline (`alertas_plazo_corrida_segundos`, below the lock expiry): state `evaluada_incompleta`,
    the zones not reached (also the one in flight) are `diferidas`, not `sin_datos`;
 8. counts and logs ONE line with the counters (a WARNING when there is `sin_datos`, `errores`, a failed send or a
@@ -336,12 +337,11 @@ def _sin_evaluar(conocida: _ZonaConocida, veredicto: str) -> ZonaEvaluada:
 
 
 async def _evaluar_paso(conocida: _ZonaConocida, corrida: _Corrida) -> tuple[ZonaEvaluada | None, str | None]:
-    """One zone's evaluation: the cut checks, then the forecast and the rule (bounded by the run deadline). Read-only.
-    Returns the verdict (None if the run was cut before it was known) and why the run stops (None = it goes on)."""
+    """One zone's evaluation: the deadline check, then the forecast and the rule (bounded by the run deadline). Read-only.
+    It does NOT read the kill key: evaluating sends nothing, and the key is read before the dispatch starts (`_pasada`) and
+    before every batch. Returns the verdict (None if the run was cut before it was known) and why the run stops."""
     if corrida.plazo.vencido():
         return None, despacho.CORTE_PLAZO
-    if not await interruptor.clave_de_apagado_ausente(corrida.redis):
-        return None, despacho.CORTE_APAGADO
     try:
         async with asyncio.timeout_at(corrida.plazo.limite):  # only the READ-ONLY evaluation is ever cancelled
             # The freshness of the forecast is judged against the clock of THIS moment, not against `ahora`: the sends of
@@ -423,6 +423,8 @@ async def _pasada(
         if corte is not None:
             break
     envio = ResumenEnvio()
+    if tormentas and corte is None:  # the kill key is read once more before the first zone is prepared for sending
+        corte = await despacho.corte_por_interruptor(corrida.redis)
     if tormentas and corte is not None:  # found a storm but the run was cut before it could send: still pending
         envio = ResumenEnvio(diferidos=sum(z.suscriptores for z in tormentas))
     elif tormentas:

@@ -32,7 +32,9 @@ Per subscriber, what each answer of the sender means (`envio.Resultado`):
   rejections on purpose.
 - a record that now belongs to ANOTHER zone (the person changed city; the old set kept the id): taken out of this zone's
   set and not sent to. Counted as nothing.
-- no record at all: an expired id, cleaned from the indexes (`limpiar_id_vencido`), `vencidos`.
+- no record at all (Upstash CONFIRMED it with a null result, twice): an expired id, cleaned from the indexes
+  (`limpiar_id_vencido`), `vencidos`. A doubtful read (no `result`, an odd answer) is NOT "no record": `fallidos`, nothing
+  is cleaned or recorded, and the next run tries again (`registro_de` and `limpiar_id_vencido` read strictly).
 
 Circuit breaker (`DisyuntorDeBajas`, ONE per run). It counts, over the whole run, the sends (`total`) and the "gone"
 answers (`VENCIDA` + `INVALIDA`, `bajas`); it trips when `total >= 4` and `bajas * 2 > total`, or when a single batch of at
@@ -40,7 +42,8 @@ least four is more than half gone (an outage that starts late in a healthy run).
 during the batches and decided when the zone closes and again when the run ends, with the run's totals, so tiny zones
 (1 to 3 subscribers) and the 1-id tail of a batch are protected too. Tripped: nothing is deleted for the rest of the run,
 the deferred ones are dropped (they count as `fallidos`, not `vencidos`) and one WARNING says so, without data. A proxy
-answering 404 for everything must not wipe the subscriptions.
+answering 404 for everything must not wipe the subscriptions. On top of it `MAX_BAJAS_POR_CORRIDA` is an absolute ceiling
+per run: past it no more subscriptions are deleted (the rest count as `fallidos` and wait for another run).
 
 Time. The time left in the run is shared among the zones that still have something to SEND, in proportion to their
 pendientes with a floor (`tope_para_zona`), so one big or poisoned zone cannot starve the ones after it. Reaching the cap
@@ -92,6 +95,9 @@ ESPERA_REINTENTO_SEGUNDOS = 2.0
 ESPERA_SEGUNDA_PASADA_SEGUNDOS = 20.0
 # The breaker looks at runs/batches of at least this many sends, and trips when more than half of them were "gone".
 LOTE_MINIMO_DEL_DISYUNTOR = 4
+# The absolute ceiling of subscriptions deleted in ONE run (all its zones): the proportional breaker lets through about as
+# many deletions as healthy sends there were before an outage; past this number the rest are dropped (counted as `fallidos`).
+MAX_BAJAS_POR_CORRIDA = 25
 # A TTL of 0 is refused by Apple: even a notice sent a second before midnight asks the push service to keep it a minute.
 TTL_MINIMO_SEGUNDOS = 60
 # The least a zone with something to send gets of the time left (never more than what is left).
@@ -201,6 +207,7 @@ class DisyuntorDeBajas:
     abierto: bool = False
     total: int = 0
     bajas: int = 0
+    borradas: int = 0  # the deletions actually made in this run, against `MAX_BAJAS_POR_CORRIDA`
     _a_borrar: list[tuple[str, str]] = field(default_factory=list)
 
     def registrar(self, total: int, bajas: int) -> None:
@@ -239,9 +246,13 @@ class DisyuntorDeBajas:
             return 0
         pendientes, self._a_borrar = self._a_borrar, []
         for i, (slug, sub_id) in enumerate(pendientes):
+            if self.borradas >= MAX_BAJAS_POR_CORRIDA:
+                logger.warning("alertas: the cap of deletions per run was reached; the rest are tried in a later run")
+                return len(pendientes) - i
             if (plazo is not None and plazo.vencido()) or not await _borrar(redis, sub_id, slug):
                 # Out of time, or Upstash stopped answering (a call can take 5 s): drop the rest, a later run retries them.
                 return len(pendientes) - i
+            self.borradas += 1
         return 0
 
 
@@ -326,6 +337,12 @@ async def _hay_corte(redis: UpstashRedis, plazo: Plazo) -> str | None:
     read ONE more time before cutting: a blip of Upstash must not stop a run that nobody stopped."""
     if plazo.vencido():
         return CORTE_PLAZO
+    return await corte_por_interruptor(redis)
+
+
+async def corte_por_interruptor(redis: UpstashRedis) -> str | None:
+    """Why the send switch (the flag AND the kill key, fail-closed) says stop, or None. The part of `_hay_corte` that reads
+    Upstash; the evaluation uses it once before it starts the dispatch."""
     if await interruptor.envio_activo(redis):
         return None
     if not settings.alertas_envio_activo:
@@ -380,6 +397,9 @@ async def _sin_registro(redis: UpstashRedis, sub_id: str, slug: str) -> str:
     """An id of the zone's set with no record: expired (180 days). Take it out of the indexes."""
     try:
         limpiado = await svc.limpiar_id_vencido(redis, sub_id, slug)
+    except svc.LecturaDudosa:
+        logger.warning("alertas: the re-read of an expired id was doubtful; nothing is cleaned, it will be tried again")
+        return _FALLIDO  # not confirmed gone: not recorded as reached, not removed from the indexes
     except (UpstashUnavailableError, svc.SuscripcionInvalida):
         logger.warning("alertas: an expired id could not be cleaned from the indexes")
         return _VENCIDO  # the record IS gone; only the index cleanup failed

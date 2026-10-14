@@ -470,3 +470,36 @@ def test_sentry_is_configured_not_to_send_request_bodies() -> None:
     # las claves del suscriptor (`payload`, `suscripcion`, `registro`) como variables del frame.
     assert kwargs["include_local_variables"] is False
     assert kwargs["send_default_pii"] is False
+
+
+# ---------------------------------------------------------------------------
+# /prueba with a doubtful read of the record: fail safe (503), never "not found", never a deletion
+# ---------------------------------------------------------------------------
+
+
+async def test_prueba_with_a_doubtful_record_read_answers_503_and_deletes_nothing(
+    async_client: AsyncClient, suscribir, fake_upstash, push_http, vapid_efimera
+) -> None:
+    from tests.alertas_helpers import RedisConLecturaDudosa
+
+    sub = await suscribir()
+    configure_redis(RedisConLecturaDudosa())  # Upstash answers 200 without `result` to the GET of the record
+    fake_upstash.commands.clear()
+
+    response = await async_client.post("/api/alertas/prueba", json={"id": sub.id})
+
+    assert response.status_code == 503 and response.json() == {"detail": "alertas_no_disponible"}
+    assert push_http.requests == []
+    assert f"alertas:sub:{sub.id}" in fake_upstash.strings and sub.id in fake_upstash.sets["alertas:ids"]
+    assert [c[0] for c in fake_upstash.commands if c[0] in ("DEL", "SREM", "SET")] == []
+
+
+async def test_prueba_for_a_confirmed_absent_record_is_still_404(
+    async_client: AsyncClient, suscribir, fake_upstash, push_http, vapid_efimera
+) -> None:
+    sub = await suscribir()
+    del fake_upstash.strings[f"alertas:sub:{sub.id}"]
+
+    response = await async_client.post("/api/alertas/prueba", json={"id": sub.id})
+
+    assert response.status_code == 404 and push_http.requests == []

@@ -126,7 +126,7 @@ async def test_the_zone_queries_run_under_the_job_key_and_the_callers_key_comes_
 
 async def test_the_key_is_restored_even_when_the_run_fails(redis, fake_upstash) -> None:
     class _Rota(UpstashRedis):
-        async def read_strict(self, key: str) -> str | None:
+        async def scard(self, key: str) -> int:
             raise RuntimeError("bug")
 
     suscribir(fake_upstash, "cordoba")

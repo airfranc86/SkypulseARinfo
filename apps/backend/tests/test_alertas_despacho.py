@@ -41,6 +41,8 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name)
     LecturaQueFallaUnaVez,
     LecturaQueSeRompe,
     PushFalso,
+    RedisConFalla,
+    RedisConLecturaDudosa,
     RelojDeTest,
     comandos,
     correr,
@@ -649,7 +651,8 @@ async def test_the_kill_key_is_checked_right_before_the_dispatch_not_only_before
     assert resultado.estado == "apagado_a_mitad"
     assert push.llamadas == [] and conjuntos(fake_upstash) == []  # no mark burned by a send that never happened
     assert resultado.envio == despacho.ResumenEnvio(diferidos=2)
-    assert resultado.con_tormenta == 1 and resultado.diferidas == 1  # rosario was not even asked about
+    # evaluating does not read the kill key per zone: rosario was evaluated too; the read before the dispatch stops it
+    assert resultado.con_tormenta == 1 and resultado.sin_tormenta == 1 and resultado.diferidas == 0
 
 
 async def test_a_run_deadline_between_batches_leaves_the_rest_counted_as_deferred(
@@ -806,7 +809,7 @@ async def test_the_dispatch_uses_the_shared_send_switch_not_the_evaluation_one(
     tormenta_en(install, "cordoba")
     await registrar(redis, "cordoba", 12)
     await correr(redis)
-    assert visto == ["envio_activo", "envio_activo"]  # before the dispatch, and at the boundary of its two batches
+    assert visto == ["envio_activo"] * 3  # once before the dispatch, then before each of its two batches
 
 
 async def test_an_unexpected_error_dispatching_a_zone_is_an_error_of_that_zone_and_leaks_nothing(
@@ -1523,7 +1526,8 @@ async def test_a_run_cut_while_evaluating_does_not_even_read_who_was_reached(red
     fuente._respond = respuesta_que_apaga
     fake_upstash.commands.clear()
     resultado = await correr(redis)
-    assert resultado.estado == "apagado_a_mitad" and resultado.envio == despacho.ResumenEnvio(diferidos=2)
+    # both zones were evaluated (no per-zone read of the kill key) and both found a storm: their 3 subscribers are deferred
+    assert resultado.estado == "apagado_a_mitad" and resultado.envio == despacho.ResumenEnvio(diferidos=3)
     assert not [c for c in fake_upstash.commands if c[0] == "SMEMBERS" and c[1].startswith("alertas:enviado:")]
     assert push.llamadas == []
 
@@ -1627,3 +1631,134 @@ async def test_with_no_kill_no_outage_and_time_left_the_deferred_deletions_still
     resultado = await correr(redis)
     assert all(f"alertas:sub:{i}" not in fake_upstash.strings for i in ids[:2])
     assert resultado.envio.vencidos == 2 and resultado.envio.fallidos == 0
+
+
+# --- hardening: an absolute cap of deletions per run (S1) ---------------------------------------------------------------
+
+
+async def _zona_con_bajas_repartidas(redis, push, slug: str, total: int, por_lote: int = 5) -> tuple[list[str], list[str]]:
+    """A zone of `total` ids where the first `por_lote` of every batch of 10 are gone. Half of a batch or less is gone, so
+    the proportional breaker stays closed and only the absolute cap can stop the deletions."""
+    ids = sorted(await registrar(redis, slug, total))
+    gone = [i for n, i in enumerate(ids) if n % despacho.ENVIOS_POR_LOTE < por_lote]
+    for sub_id in gone:
+        push.resultados[sub_id] = [Resultado.VENCIDA]
+    return ids, gone
+
+
+def _con_registro(fake_upstash, ids: list[str]) -> list[str]:
+    return [i for i in ids if f"alertas:sub:{i}" in fake_upstash.strings]
+
+
+def test_the_cap_of_deletions_per_run_is_25() -> None:
+    assert despacho.MAX_BAJAS_POR_CORRIDA == 25
+
+
+async def test_past_the_cap_no_more_gone_subscriptions_are_deleted_and_the_rest_count_as_failed(
+    redis, fake_upstash, install, push
+) -> None:
+    tormenta_en(install, "cordoba")
+    _, gone = await _zona_con_bajas_repartidas(redis, push, "cordoba", 60)  # 30 gone, never more than half of a batch
+    assert len(gone) == 30
+    resultado = await correr(redis)
+    assert _con_registro(fake_upstash, gone) == gone[25:]  # the first 25 were deleted, the other 5 wait for a later run
+    assert resultado.envio == despacho.ResumenEnvio(avisadas=1, enviados=30, vencidos=25, fallidos=5)
+    assert all(g in fake_upstash.sets["alertas:ids"] for g in gone[25:])  # still indexed: they will be tried again
+
+
+async def test_exactly_the_cap_of_gone_subscriptions_are_all_deleted(redis, fake_upstash, install, push) -> None:
+    tormenta_en(install, "cordoba")
+    _, gone = await _zona_con_bajas_repartidas(redis, push, "cordoba", 50)  # 25 gone
+    resultado = await correr(redis)
+    assert len(gone) == 25 and _con_registro(fake_upstash, gone) == []
+    assert resultado.envio == despacho.ResumenEnvio(avisadas=1, enviados=25, vencidos=25)
+
+
+async def test_the_cap_is_shared_by_all_the_zones_of_the_run(redis, fake_upstash, install, push) -> None:
+    tormenta_en(install, "cordoba", "rosario")
+    _, gone_a = await _zona_con_bajas_repartidas(redis, push, "cordoba", 40)  # 20 gone
+    _, gone_b = await _zona_con_bajas_repartidas(redis, push, "rosario", 20)  # 10 gone: 30 in the run, each zone under 25
+    resultado = await correr(redis)
+    assert len(_con_registro(fake_upstash, gone_a + gone_b)) == 5
+    assert resultado.envio.vencidos == 25 and resultado.envio.fallidos == 5 and resultado.envio.enviados == 30
+
+
+async def test_the_deletions_dropped_by_the_cap_are_done_by_the_next_run(redis, fake_upstash, install, push) -> None:
+    tormenta_en(install, "cordoba")
+    _, gone = await _zona_con_bajas_repartidas(redis, push, "cordoba", 60)
+    await correr(redis)
+    del fake_upstash.strings[CLAVE_LOCK]
+    fake_upstash.sets.pop(CLAVE_ENVIADOS_HOY)  # the cap counts per run: a new run starts again from zero
+    resultado = await correr(redis)
+    assert _con_registro(fake_upstash, gone) == [] and resultado.envio.vencidos == 5
+
+
+async def test_the_breaker_by_proportion_still_wins_below_the_cap(redis, fake_upstash, install, push) -> None:
+    tormenta_en(install, "cordoba")
+    ids = await _zona_con_vencidas(redis, push, "cordoba", 20, 12)  # 12 of 20 gone: far fewer than the cap, but over half
+    resultado = await correr(redis)
+    assert len(_con_registro(fake_upstash, ids)) == 20
+    assert resultado.envio.vencidos == 0 and resultado.envio.fallidos == 12
+
+
+async def test_the_breaker_counts_each_deletion_that_was_made_against_the_cap(redis) -> None:
+    ids = sorted(await registrar(redis, "cordoba", 26))
+    disyuntor = despacho.DisyuntorDeBajas()
+    disyuntor.registrar(100, 26)  # healthy as a whole: 26 gone out of 100
+    disyuntor.diferir("cordoba", ids)
+    assert await disyuntor.cerrar_corrida(redis) == 1  # 25 deleted, the 26th is dropped
+    assert disyuntor.borradas == 25
+
+
+async def test_a_run_that_deleted_the_cap_drops_everything_that_comes_later(redis) -> None:
+    ids = sorted(await registrar(redis, "cordoba", 28))
+    disyuntor = despacho.DisyuntorDeBajas()
+    disyuntor.registrar(100, 28)
+    disyuntor.diferir("cordoba", ids[:25])
+    assert await disyuntor.cerrar_zona(redis) == 0 and disyuntor.borradas == 25
+    disyuntor.diferir("cordoba", ids[25:])
+    assert await disyuntor.cerrar_corrida(redis) == 3 and disyuntor.borradas == 25
+
+
+# --- hardening: a doubtful read is not an absent record (S2) -----------------------------------------------------------
+
+
+async def test_a_doubtful_record_read_is_a_failure_not_an_expired_id_and_nothing_is_cleaned(
+    redis, fake_upstash, install, push
+) -> None:
+    tormenta_en(install, "cordoba")
+    ids = sorted(await registrar(redis, "cordoba", 3))
+    dudoso = RedisConLecturaDudosa(solo=ids[0])  # a 200 without `result` for ONE record
+    resultado = await correr(dudoso)
+    assert resultado.envio == despacho.ResumenEnvio(avisadas=1, enviados=2, fallidos=1)
+    assert push.a(ids[0]) == []
+    assert f"alertas:sub:{ids[0]}" in fake_upstash.strings  # the record is still there
+    assert ids[0] in fake_upstash.sets["alertas:ids"] and ids[0] in fake_upstash.sets["alertas:zona:cordoba"]
+    assert ids[0] not in hechos_de(fake_upstash)  # not marked as reached
+    del fake_upstash.strings[CLAVE_LOCK]
+    otra = await correr(redis)  # the next run, with Upstash healthy, delivers it
+    assert otra.envio == despacho.ResumenEnvio(avisadas=1, enviados=1) and push.a(ids[0])
+
+
+async def test_a_doubtful_second_read_while_cleaning_an_absent_record_keeps_the_id_and_counts_as_failed(
+    redis, fake_upstash, install, push
+) -> None:
+    tormenta_en(install, "cordoba")
+    ids = sorted(await registrar(redis, "cordoba", 3))
+    del fake_upstash.strings[f"alertas:sub:{ids[0]}"]  # confirmed absent by the first read
+    dudoso = RedisConLecturaDudosa(solo=ids[0], normales=1)  # ...but the re-read before cleaning is doubtful
+    resultado = await correr(dudoso)
+    assert resultado.envio == despacho.ResumenEnvio(avisadas=1, enviados=2, fallidos=1)
+    assert ids[0] in fake_upstash.sets["alertas:ids"] and ids[0] in fake_upstash.sets["alertas:zona:cordoba"]
+    assert ids[0] not in hechos_de(fake_upstash)
+
+
+async def test_a_confirmed_absent_record_is_still_cleaned_even_if_the_index_cleanup_fails(
+    redis, fake_upstash, install, push
+) -> None:
+    tormenta_en(install, "cordoba")
+    ids = sorted(await registrar(redis, "cordoba", 3))
+    del fake_upstash.strings[f"alertas:sub:{ids[0]}"]
+    resultado = await correr(RedisConFalla("SREM"))  # the record IS gone; only the cleanup of the indexes fails
+    assert resultado.envio == despacho.ResumenEnvio(avisadas=1, enviados=2, vencidos=1)
+    assert ids[0] in hechos_de(fake_upstash)
