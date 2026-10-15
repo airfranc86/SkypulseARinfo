@@ -49,6 +49,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import unicodedata
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
@@ -350,6 +351,53 @@ def parse_feed_items(xml: bytes, feed_url: str) -> FeedItems:
             continue
         guids[url] = None
     return FeedItems(guids=tuple(guids), skipped=skipped)
+
+
+# ---------------------------------------------------------------------------
+# Push notifications: deduplication key and filter (FRA-359)
+# ---------------------------------------------------------------------------
+
+# Alert type we push, and the levels that qualify (yellow or above; "otro" does not).
+_TIPO_NOTIFICABLE: Final = "tormentas"
+_NIVELES_NOTIFICABLES: Final = frozenset({"amarillo", "naranja", "rojo"})
+
+# (zone slug, type, level, start date): see `clave_dedupe`.
+ClaveDedupe = tuple[str, str, str, datetime | None]
+
+
+def clave_dedupe(zona_id: str, alerta: SmnAlerta) -> ClaveDedupe:
+    """Key that identifies one alert for one zone, to never push it twice.
+
+    The feed carries no stable identifier (the parser reads neither ``<identifier>`` nor
+    ``<references>``), so the key is (zone, type, level, start date). It does not depend
+    on the text: if the SMN rewrites the description of the same alert the key stays the
+    same and nothing is re-sent, but a rise from yellow to orange changes ``nivel`` and
+    yields a new key. Hashable, so it can go into a set or be part of a storage key.
+    """
+    return (zona_id, alerta.tipo, alerta.nivel, alerta.fecha_desde)
+
+
+def _normalizar_tipo(tipo: str) -> str:
+    """Case, accent and surrounding-space insensitive form of an alert type."""
+    decomposed = unicodedata.normalize("NFKD", tipo.strip().casefold())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+def es_aviso_de_tormenta_notificable(
+    alerta: SmnAlerta, ahora: datetime | None = None
+) -> bool:
+    """True if the alert is a storm alert, yellow or above, and not expired.
+
+    Other types (wind, rain, snow, ...) and level "otro" are never pushed. An expired
+    alert (``fecha_hasta`` before ``ahora``) is not pushed; one that starts later is,
+    as soon as it is published. ``ahora`` defaults to the module clock.
+    """
+    if _normalizar_tipo(alerta.tipo) != _TIPO_NOTIFICABLE:
+        return False
+    if alerta.nivel not in _NIVELES_NOTIFICABLES:
+        return False
+    now = _utcnow() if ahora is None else ahora
+    return alerta.fecha_hasta is None or alerta.fecha_hasta >= now
 
 
 # ---------------------------------------------------------------------------
