@@ -50,6 +50,11 @@ pendientes with a floor (`tope_para_zona`), so one big or poisoned zone cannot s
 of a zone ends THAT zone; reaching the run deadline ends the run. The notice of today expires at midnight (`ttl_de_aviso`)
 and the run never outlasts 22:00 in Argentina (`segundos_hasta_el_silencio`).
 
+An official SMN notice (FRA-359, `avisos_smn`) goes through the same `despachar_plan`: its plan is read by `leer_plan`
+with a text already built and carries an `AvisoSmn` (its own push Topic, its own done-set `alertas:smn:enviado:...` with
+its own expiry, and when the notice expires). Everything else (batches, cuts, retries, the breaker, the stale members)
+is shared; a plan without one is the forecast notice, exactly as before.
+
 Nothing sensitive leaves this module: no id, endpoint, text, key or zone goes into a log line or into the counters.
 `Plazo` reads the event loop's monotonic clock, not the wall clock.
 """
@@ -78,6 +83,7 @@ ClaveVapid = Vapid  # so `evaluacion.py` can name the type without importing the
 
 AVISO_HOY = "hoy"  # the revisions of 7 to 19 h: the rest of today
 AVISO_MANANA = "manana"  # the revision of 21 h: tomorrow
+AVISO_SMN = "smn"  # an official SMN notice (FRA-359): its own Topic, done-set and TTLs, carried by `AvisoSmn`
 
 CORTE_APAGADO = "apagado"  # the kill key is present (or the flag is off): an operator stopped it on purpose
 CORTE_ILEGIBLE = "ilegible"  # the kill key could not be read, twice: fail-closed, but nobody ordered it
@@ -204,6 +210,20 @@ class DespachoDeZona:
 
 
 @dataclass(frozen=True)
+class AvisoSmn:
+    """How an official SMN notice (FRA-359) is sent and recorded, instead of the forecast notice of (`aviso`, `fecha`):
+    its own push `topic` (`envio.topic_smn`, so it never replaces the forecast push of the day), its own done-set
+    (`clave_enviados`, whose expiry `ttl_enviados` is set once, like the forecast's) and when the notice expires
+    (`vence`: the push service keeps an undelivered copy until then, never longer than usual). Built by `avisos_smn`;
+    this module only reads it."""
+
+    topic: str
+    clave_enviados: str
+    ttl_enviados: int
+    vence: datetime | None = None
+
+
+@dataclass(frozen=True)
 class PlanDeZona:
     """What a zone has to send, read before anything is sent (so the time can be shared by what each zone has to do)."""
 
@@ -214,6 +234,8 @@ class PlanDeZona:
     miembros: int = 0
     pendientes: tuple[str, ...] = ()
     error: bool = False
+    # Set only for an official SMN notice (`AVISO_SMN`). None = the forecast notice of `aviso` and `fecha`, as always.
+    smn: AvisoSmn | None = None
 
 
 def _monotonico() -> float:
@@ -353,6 +375,17 @@ def ttl_de_aviso(aviso: str, ahora: datetime) -> int:
     return max(TTL_MINIMO_SEGUNDOS, min(envio.TTL_ALERTA_SEGUNDOS, int((medianoche - local).total_seconds())))
 
 
+def ttl_hasta(vence: datetime | None, ahora: datetime) -> int:
+    """How long the push service keeps an official SMN notice it cannot deliver: until the notice expires (`vence`),
+    never more than the usual 12 h and never less than a minute. Without an expiry, the usual TTL. A naive `vence` is
+    read as UTC (the CAP feed carries offsets: a guard, not the expected path)."""
+    if vence is None:
+        return envio.TTL_ALERTA_SEGUNDOS
+    if vence.tzinfo is None:
+        vence = vence.replace(tzinfo=timezone.utc)
+    return max(TTL_MINIMO_SEGUNDOS, min(envio.TTL_ALERTA_SEGUNDOS, int((vence - ahora).total_seconds())))
+
+
 def tope_para_zona(restante: float, pendientes: int, pendientes_restantes: int) -> float:
     """How many seconds a zone may take: the time left shared in proportion to its pendientes among the zones that still
     have something to send (`pendientes_restantes` includes this zone's), never less than the floor and never more than
@@ -404,13 +437,17 @@ async def corte_por_interruptor(redis: UpstashRedis) -> str | None:
 
 
 async def _intento(
-    redis: UpstashRedis, vapid: ClaveVapid, sub_id: str, registro: str, payload: str, slug: str, fecha: date, ttl: int
+    redis: UpstashRedis, vapid: ClaveVapid, sub_id: str, registro: str, payload: str, slug: str, fecha: date, ttl: int,
+    topic: str | None = None,
 ) -> tuple[str, str | None]:
-    """One attempt. `(_REINTENTAR, registro)` is the only answer that is worth another one."""
+    """One attempt. `(_REINTENTAR, registro)` is the only answer that is worth another one. `topic` is the push Topic of
+    an official SMN notice; without it the sender derives the forecast Topic from the zone and the date, as always."""
+    # The Topic is passed only when there is one: a forecast send keeps calling the sender exactly as before.
+    propio = {} if topic is None else {"topic": topic}
     try:
         # `borrar=False`: the sender reports a 404/410 but does not delete; this module deletes, behind the breaker.
         resultado = await envio.enviar(
-            redis, sub_id, registro, payload, zona=slug, fecha=fecha, ttl=ttl, vapid=vapid, borrar=False
+            redis, sub_id, registro, payload, zona=slug, fecha=fecha, ttl=ttl, vapid=vapid, borrar=False, **propio
         )
     except Exception as exc:  # noqa: BLE001 - one subscriber must not stop the zone; only the class name is logged
         logger.warning("alertas: a send failed unexpectedly exc_type=%s", type(exc).__name__)
@@ -460,7 +497,8 @@ async def _sacar_de_la_zona(redis: UpstashRedis, sub_id: str, slug: str) -> None
 
 
 async def _enviar_uno(
-    redis: UpstashRedis, vapid: ClaveVapid, plazo: Plazo, sub_id: str, payload: str, slug: str, fecha: date, ttl: int
+    redis: UpstashRedis, vapid: ClaveVapid, plazo: Plazo, sub_id: str, payload: str, slug: str, fecha: date, ttl: int,
+    topic: str | None = None,
 ) -> tuple[str, str | None]:
     """First attempt for one id: read and judge the record, then send. Returns an outcome and, for a transient failure,
     the record to retry with."""
@@ -477,15 +515,15 @@ async def _enviar_uno(
     if suscripcion.zona != slug:  # a stale member: the person moved to another city
         await _sacar_de_la_zona(redis, sub_id, slug)
         return _OMITIDO, None
-    return await _intento(redis, vapid, sub_id, registro, payload, slug, fecha, ttl)
+    return await _intento(redis, vapid, sub_id, registro, payload, slug, fecha, ttl, topic)
 
 
 async def _reintentar_uno(
     redis: UpstashRedis, vapid: ClaveVapid, plazo: Plazo, sub_id: str, payload: str, slug: str, fecha: date, ttl: int,
-    registro: str,
+    registro: str, topic: str | None = None,
 ) -> tuple[str, str | None]:
     """The single retry of a transient failure: whatever it answers is final."""
-    estado, _ = await _intento(redis, vapid, sub_id, registro, payload, slug, fecha, ttl)
+    estado, _ = await _intento(redis, vapid, sub_id, registro, payload, slug, fecha, ttl, topic)
     return (_FALLIDO, None) if estado == _REINTENTAR else (estado, None)
 
 
@@ -539,14 +577,14 @@ def _contar_lote(
     return _Lote(resumen, tuple(reintentar), tuple(hechos))
 
 
-async def _anotar(redis: UpstashRedis, clave: str, ids: Sequence[str]) -> bool:
-    """Record the ids that were reached (one SADD for the batch, and the expiry set once). False if Upstash failed: the
-    caller stops the zone, because sending without recording would repeat people on the next run."""
+async def _anotar(redis: UpstashRedis, clave: str, ids: Sequence[str], ttl: int = ENVIADOS_TTL_SEGUNDOS) -> bool:
+    """Record the ids that were reached (one SADD for the batch, and the expiry `ttl` set once). False if Upstash
+    failed: the caller stops the zone, because sending without recording would repeat people on the next run."""
     if not ids:
         return True
     try:
         await redis.sadd(clave, *ids)
-        await redis.expire_si_falta(clave, ENVIADOS_TTL_SEGUNDOS)
+        await redis.expire_si_falta(clave, ttl)
     except UpstashUnavailableError:
         logger.warning("alertas: Upstash did not answer recording who was reached; the zone stops here")
         return False
@@ -562,11 +600,13 @@ class _ResultadoDeZona:
 
 async def _enviar_a_todos(
     redis: UpstashRedis, vapid: ClaveVapid, plazo: Plazo, ids: Sequence[str], payload: str, slug: str, fecha: date,
-    ttl: int, disyuntor: DisyuntorDeBajas, clave: str,
+    ttl: int, disyuntor: DisyuntorDeBajas, clave: str, ttl_enviados: int = ENVIADOS_TTL_SEGUNDOS,
+    topic: str | None = None,
 ) -> _ResultadoDeZona:
     """Batches of `ENVIOS_POR_LOTE`. Before EACH batch (the first too) the zone cap, the deadline and the send switch are
-    checked; after each, the ids reached are recorded before the next one goes out. The transient failures wait for ONE
-    final tanda (one wait, then all of them together)."""
+    checked; after each, the ids reached are recorded (in the done-set `clave`, whose expiry `ttl_enviados` is set
+    once) before the next one goes out. The transient failures wait for ONE final tanda (one wait, then all of them
+    together). `topic` is the push Topic of an official SMN notice; None = the forecast's."""
     resumen = ResumenEnvio()
     pendientes: list[tuple[str, str]] = []
     lotes = [ids[i : i + ENVIOS_POR_LOTE] for i in range(0, len(ids), ENVIOS_POR_LOTE)]
@@ -576,11 +616,12 @@ async def _enviar_a_todos(
             sin_probar = sum(len(resto) for resto in lotes[n:])
             return _ResultadoDeZona(resumen.sumar(ResumenEnvio(fallidos=len(pendientes), diferidos=sin_probar)), corte)
         resultados = await asyncio.gather(
-            *(_enviar_uno(redis, vapid, plazo, i, payload, slug, fecha, ttl) for i in lote), return_exceptions=True
+            *(_enviar_uno(redis, vapid, plazo, i, payload, slug, fecha, ttl, topic) for i in lote),
+            return_exceptions=True,
         )
         contado = _contar_lote(lote, resultados, disyuntor, slug)
         resumen, pendientes = resumen.sumar(contado.resumen), pendientes + list(contado.reintentar)
-        if not await _anotar(redis, clave, contado.hechos):
+        if not await _anotar(redis, clave, contado.hechos, ttl_enviados):
             sin_probar = sum(len(resto) for resto in lotes[n + 1 :])
             return _ResultadoDeZona(resumen.sumar(ResumenEnvio(fallidos=len(pendientes), diferidos=sin_probar)), error=True)
     if not pendientes:
@@ -597,15 +638,37 @@ async def _enviar_a_todos(
                 resto = sum(len(t) for t in tandas[n:])
                 return _ResultadoDeZona(resumen.sumar(ResumenEnvio(fallidos=resto)), corte)
         resultados = await asyncio.gather(
-            *(_reintentar_uno(redis, vapid, plazo, i, payload, slug, fecha, ttl, r) for i, r in tanda),
+            *(_reintentar_uno(redis, vapid, plazo, i, payload, slug, fecha, ttl, r, topic) for i, r in tanda),
             return_exceptions=True,
         )
         contado = _contar_lote([i for i, _ in tanda], resultados, disyuntor, slug)
         resumen = resumen.sumar(contado.resumen)
-        if not await _anotar(redis, clave, contado.hechos):
+        if not await _anotar(redis, clave, contado.hechos, ttl_enviados):
             resto = sum(len(t) for t in tandas[n + 1 :])
             return _ResultadoDeZona(resumen.sumar(ResumenEnvio(fallidos=resto)), error=True)
     return _ResultadoDeZona(resumen)
+
+
+async def leer_plan(
+    redis: UpstashRedis, *, slug: str, aviso: str, fecha: date, payload: str, clave_enviados: str,
+    smn: AvisoSmn | None = None,
+) -> PlanDeZona:
+    """Read what the zone has to send for a notice whose `payload` is already built: the members and the done-set
+    `clave_enviados` (SMEMBERS twice, nothing written). Either read failing is an `error` plan: the zone is not notified
+    (fail-closed)."""
+    try:
+        miembros = await redis.smembers(svc.clave_de_zona(slug))
+    except UpstashUnavailableError:
+        logger.warning("alertas: Upstash did not answer reading the recipients; the zone is not notified")
+        return PlanDeZona(slug, aviso, fecha, error=True, smn=smn)
+    if not miembros:
+        return PlanDeZona(slug, aviso, fecha, payload, smn=smn)  # nobody left: nothing to send
+    try:
+        hechos = await redis.smembers(clave_enviados)
+    except UpstashUnavailableError:
+        logger.warning("alertas: Upstash did not answer reading who was reached; the zone is not notified")
+        return PlanDeZona(slug, aviso, fecha, error=True, smn=smn)
+    return PlanDeZona(slug, aviso, fecha, payload, len(miembros), tuple(sorted(miembros - hechos)), smn=smn)
 
 
 async def preparar_zona(
@@ -618,19 +681,18 @@ async def preparar_zona(
     except ValueError:
         logger.warning("alertas: the notice could not be built; the zone is not notified")
         return PlanDeZona(slug, aviso, fecha, error=True)
-    try:
-        miembros = await redis.smembers(svc.clave_de_zona(slug))
-    except UpstashUnavailableError:
-        logger.warning("alertas: Upstash did not answer reading the recipients; the zone is not notified")
-        return PlanDeZona(slug, aviso, fecha, error=True)
-    if not miembros:
-        return PlanDeZona(slug, aviso, fecha, payload)  # nobody left: nothing to send
-    try:
-        hechos = await redis.smembers(clave_de_enviados(slug, aviso, fecha))
-    except UpstashUnavailableError:
-        logger.warning("alertas: Upstash did not answer reading who was reached; the zone is not notified")
-        return PlanDeZona(slug, aviso, fecha, error=True)
-    return PlanDeZona(slug, aviso, fecha, payload, len(miembros), tuple(sorted(miembros - hechos)))
+    return await leer_plan(
+        redis, slug=slug, aviso=aviso, fecha=fecha, payload=payload, clave_enviados=clave_de_enviados(slug, aviso, fecha)
+    )
+
+
+def _destino(plan: PlanDeZona, ahora: datetime) -> tuple[int, str, int, str | None]:
+    """The push TTL, the done-set, its expiry and the push Topic of a plan: the forecast's (derived from `aviso`, `fecha`
+    and the zone, exactly as before) or the official SMN notice's (carried by `plan.smn`)."""
+    if plan.smn is None:
+        clave = clave_de_enviados(plan.slug, plan.aviso, plan.fecha)
+        return ttl_de_aviso(plan.aviso, ahora), clave, ENVIADOS_TTL_SEGUNDOS, None
+    return ttl_hasta(plan.smn.vence, ahora), plan.smn.clave_enviados, plan.smn.ttl_enviados, plan.smn.topic
 
 
 async def despachar_plan(
@@ -658,10 +720,10 @@ async def despachar_plan(
         return DespachoDeZona(ResumenEnvio(diferidos=len(plan.pendientes)), corte=CORTE_PLAZO)
     disyuntor = disyuntor or DisyuntorDeBajas()
     plazo_de_zona = plazo if tope_de_zona is None else plazo.recortado(tope_de_zona)
-    ttl = ttl_de_aviso(plan.aviso, (reloj or _ahora_real)())
-    clave = clave_de_enviados(plan.slug, plan.aviso, plan.fecha)
+    ttl, clave, ttl_enviados, topic = _destino(plan, (reloj or _ahora_real)())
     hecho = await _enviar_a_todos(
-        redis, vapid, plazo_de_zona, plan.pendientes, plan.payload, plan.slug, plan.fecha, ttl, disyuntor, clave
+        redis, vapid, plazo_de_zona, plan.pendientes, plan.payload, plan.slug, plan.fecha, ttl, disyuntor, clave,
+        ttl_enviados, topic,
     )
     detenido = hecho.corte in (CORTE_APAGADO, CORTE_ILEGIBLE)
     descartadas = await disyuntor.cerrar_zona(redis, plazo, detenido)  # deletions are decided when the zone is closed
