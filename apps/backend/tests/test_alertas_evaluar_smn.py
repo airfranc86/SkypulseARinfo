@@ -6,7 +6,8 @@ unknown value is a 422 before Upstash is touched, never a silent forecast run. W
 `{"modo": "pronostico"}`) the run is the forecast run exactly as before.
 
 The SMN run (`evaluacion.evaluar_smn`) never calls Open-Meteo (a source that fails loudly proves it), reads no review
-window and has no 22:00 cut (it runs 24 h: the night rule is T5), takes ITS OWN lock `alertas:lock:evaluar-smn` (never
+window and has no 22:00 cut (it runs 24 h; the night rule of T5, `avisos_smn.se_omite_de_noche`, omits the non-red
+alerts from 22 to 5 h), takes ITS OWN lock `alertas:lock:evaluar-smn` (never
 `alertas:lock:evaluar`, so neither run keeps the other out) and answers the SMN counters plus, when it sends, the sending
 counters, with a log line of its own (`alertas: smn evaluation ...`). Upstash, Open-Meteo and the SMN feed are fakes.
 """
@@ -250,20 +251,23 @@ async def test_running_the_smn_mode_twice_sends_the_same_alert_once(
 async def test_the_smn_mode_runs_at_night_and_outside_the_review_hours(
     async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, push, feed, open_meteo_prohibido, monkeypatch
 ) -> None:
-    """The forecast run would be `fuera_de_ventana` at these hours; the SMN run has no window and no 22:00 cut (the
-    night rule, from 22 to 5 h only the red alerts, is T5 and lives in `avisos_smn.se_omite_de_noche`)."""
+    """The forecast run would be `fuera_de_ventana` at these hours; the SMN run has no window and no 22:00 cut: it
+    RUNS at 23:30 and 2:30 (state `evaluada`, the feed is read) but the night rule of T5 (from 22 to 5 h only the red
+    alerts, `avisos_smn.se_omite_de_noche`) omits the yellow alert there, and the run of 5:30 sends it."""
     ids = await registrar(alertas_redis, "cordoba", 2)
     feed.obtener = avisos_por_zona({"cordoba": [TORMENTA_SIN_FECHAS]})  # in force at any hour
     hecho = avisos_smn.clave_de_enviados_smn(clave_dedupe("cordoba", TORMENTA_SIN_FECHAS))
-    for hora in (23, 2, 5):
+    omitida = {**RESPUESTA_SMN_EN_SECO, "smn_omitidas": 1, **CERO_ENVIO}
+    for hora, esperada in ((23, omitida), (2, omitida), (5, RESPUESTA_SMN_ENVIADA)):
         limiter.reset()
         fake_upstash.strings.pop(CLAVE_LOCK_SMN, None)  # the lock expired
         fake_upstash.sets.pop(hecho, None)  # another alert, as far as the dedupe is concerned
         noche = datetime(2026, 10, 14, hora, 30, tzinfo=AR)
         monkeypatch.setattr(router_alertas, "_ahora_utc", lambda noche=noche: noche.astimezone(timezone.utc))
         response = await llamar_smn(async_client)
-        assert response.status_code == 200 and response.json() == RESPUESTA_SMN_ENVIADA, hora
-    assert sorted(c.sub_id for c in push.llamadas) == sorted(ids * 3)
+        assert response.status_code == 200 and response.json() == esperada, hora
+    assert sorted(c.sub_id for c in push.llamadas) == sorted(ids)  # the run of 5:30 only
+    assert [a.astimezone(AR).hour for a, _ in feed.llamadas] == [23, 2, 5]  # the feed was read every time
     assert open_meteo_prohibido.calls == []
 
 

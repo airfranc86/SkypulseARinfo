@@ -44,7 +44,7 @@ from tests.alertas_helpers import (  # noqa: F401
 )
 from tests.openmeteo_fake_source import install, own_caches  # noqa: F401
 from tests.qstash_helpers import CLAVE_AJENA, firmar
-from tests.test_alertas_avisos_smn import AMARILLO, TORMENTA_SIN_FECHAS, avisos_por_zona, push  # noqa: F401
+from tests.test_alertas_avisos_smn import AMARILLO, TORMENTA_SIN_FECHAS, alerta, avisos_por_zona, push  # noqa: F401
 from tests.test_alertas_evaluar_smn import (  # noqa: F401
     AHORA_SMN,
     MODO_DESCONOCIDO,
@@ -59,6 +59,8 @@ from tests.test_alertas_evaluar_smn import (  # noqa: F401
 )
 
 pytestmark = pytest.mark.integration
+
+ROJO = alerta(nivel="rojo", severidad="Extreme")  # the one level the night rule of T5 lets through
 
 
 async def llamar(client: AsyncClient, cuerpo: bytes, firma: str | None = "auto"):
@@ -322,12 +324,15 @@ async def test_an_smn_run_with_50_zones_and_one_alert_costs_11_commands_through_
 
 
 # ---------------------------------------------------------------------------
-# S7 is NOT implemented: at 3 h in Argentina a yellow alert still goes out
+# S7 (T5): at 3 h in Argentina a yellow alert does NOT go out; a red one does (the table: test_alertas_noche_smn.py)
 # ---------------------------------------------------------------------------
 
 
-def test_the_night_rule_is_not_implemented_yet() -> None:
+def test_the_night_rule_omits_a_yellow_alert_from_22_to_5_and_never_a_red_one() -> None:
     for hora in (22, 23, 0, 3, 4):
+        assert avisos_smn.se_omite_de_noche(AMARILLO, datetime(2026, 10, 14, hora, 0, tzinfo=AR)) is True
+        assert avisos_smn.se_omite_de_noche(ROJO, datetime(2026, 10, 14, hora, 0, tzinfo=AR)) is False
+    for hora in (5, 13, 21):
         assert avisos_smn.se_omite_de_noche(AMARILLO, datetime(2026, 10, 14, hora, 0, tzinfo=AR)) is False
 
 

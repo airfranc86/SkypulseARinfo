@@ -52,7 +52,8 @@ CALLER: it never reaches the response or the log.
 
 The "SMN only" run (FRA-359, S2) is `evaluar_smn(redis, ahora, enviar=...)`: the router calls it instead of `evaluar`
 when the signed body says `{"modo": "smn"}` (every 30 minutes). It never calls Open-Meteo, reads no review window and
-has no 22:00 cut (it runs 24 h; the night rule of S7 is T5, inside `avisos_smn.se_omite_de_noche`): it takes ITS OWN
+has no 22:00 cut (it runs 24 h; the night rule of S7, `avisos_smn.se_omite_de_noche`, omits the non-red alerts from 22
+to 5 h in Argentina instead of cutting the run): it takes ITS OWN
 lock `alertas:lock:evaluar-smn` (same mechanism and expiry as the forecast's, never released), hands the cross and
 the dispatch to `avisos_smn.evaluar_avisos_smn` and maps its `corte` to a state with the same rule as the forecast.
 Its result (`ResultadoEvaluacionSmn`) carries the same states, the SMN counters (`despacho.CONTADORES_SMN`) and, when
@@ -589,7 +590,8 @@ async def evaluar_smn(
 ) -> ResultadoEvaluacionSmn:
     """Cross the official SMN alerts in force with the zones that have subscribers and, with `enviar=True`, notify them
     (FRA-359, S2). Never calls Open-Meteo: no forecast client, no review window, no 22:00 cut (the run works 24 h; the
-    night rule of S7 is T5). Only the router sets `enviar`, after `interruptor.envio_activo` said yes; the dry run
+    night rule of S7 is a filter per pair inside `avisos_smn`: from 22 to 5 h only the red alerts go out). Only the
+    router sets `enviar`, after `interruptor.envio_activo` said yes; the dry run
     counts the alerts found and touches nothing else.
 
     Takes its own lock `alertas:lock:evaluar-smn` (SET NX EX, never released): taken = `en_curso`; Upstash failing to

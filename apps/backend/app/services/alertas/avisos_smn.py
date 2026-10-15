@@ -14,8 +14,9 @@ One run:
    in force (L8);
 3. the unit from here on is the PAIR (zone, alert), identified by the dedupe key of T1 (zone, type, level, start):
    the same alert listed twice by the feed is one pair, the same alert with its text rewritten is the same pair, a
-   rise from amarillo to naranja is another pair. A pair the night rule omits (`se_omite_de_noche`, the plug of T5:
-   today it omits nothing) is counted and left alone;
+   rise from amarillo to naranja is another pair. A pair the night rule omits (`se_omite_de_noche`, S7/T5: from 22
+   to 5 h in Argentina only the red alerts go out) is counted as `smn_omitidas` and left alone: not read, not sent,
+   not marked, so the first run from 5:00 on sends it if it is still in force;
 4. each pair is PREPARED like a forecast zone (`despacho.leer_plan`: its text of T2, the members and the ids already
    reached: reads only) and DISPATCHED through the same path (`despacho.despachar_plan`: batches, the kill key and the
    deadline before every batch, the record of progress after every batch, one retry of the transient failures, the
@@ -53,7 +54,7 @@ from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 from app.core.upstash import UpstashRedis
 from app.schemas.smn_alertas import SmnAlerta, SmnAlertasResponse
-from app.services.alertas import despacho, envio
+from app.services.alertas import despacho, envio, umbrales
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.despacho import AVISO_SMN, AvisoSmn, PlanDeZona, ResumenEnvio, ResumenSmn
 from app.services.alertas.mensajes_smn import texto_aviso_smn
@@ -123,11 +124,31 @@ def ttl_de_enviados_smn(alerta: SmnAlerta, ahora: datetime) -> int:
     return min(ENVIADOS_SMN_TTL_MAXIMO_SEGUNDOS, restante + MARGEN_ENVIADOS_SMN_SEGUNDOS)
 
 
+def es_de_noche(ahora: datetime) -> bool:
+    """Whether `ahora` falls in the night silence of the alerts, in Argentina: from `umbrales.SILENCIO_DESDE_H`
+    (22:00:00, included) up to `umbrales.SILENCIO_HASTA_H` (05:00:00, excluded). The same hours, the same offset and
+    the same test as the forecast reviews (`regla.ventana` has no window there and `despacho.segundos_hasta_el_silencio`
+    reaches 0 at 22:00:00), so the two rules can never disagree about a border: 21:59:59 is day, 22:00:00 is night,
+    04:59:59 is night, 05:00:00 is day.
+
+    Raises:
+        ValueError: `ahora` has no time zone (a naive datetime would be read in the server's zone, never Argentina's).
+    """
+    if ahora.tzinfo is None:
+        raise ValueError("ahora necesita zona horaria")
+    hora = ahora.astimezone(_AR).hour
+    return hora >= umbrales.SILENCIO_DESDE_H or hora < umbrales.SILENCIO_HASTA_H
+
+
 def se_omite_de_noche(alerta: SmnAlerta, ahora: datetime) -> bool:
-    """Whether an alert is NOT sent at this hour. The plug of the night rule of S7 (T5: from 22 to 5 h in Argentina
-    only the red alerts go out); today nothing is omitted. T5 replaces this function, and only this function: the run
-    counts an omitted pair as `smn_omitidas` and neither reads, sends nor marks anything for it."""
-    return False
+    """Whether an alert is NOT sent at this hour: the night rule of S7 (T5). The run works 24 h, but from 22 to 5 h in
+    Argentina (`es_de_noche`) only the alerts of level `umbrales.SMN_NIVEL_QUE_PASA_DE_NOCHE` (rojo) go out; an
+    amarillo or naranja alert found in that stretch is omitted, and the run counts the pair as `smn_omitidas` and
+    neither reads, sends nor marks anything for it, so the first run from 5:00 on sends it if it is still in force (an
+    omitted alert that expires before 5:00 is never sent: T1's filter drops it). Any other level (`otro` never gets
+    here) is treated as "not red" and is omitted at night, never refused. A naive `ahora` is refused whatever the level.
+    """
+    return es_de_noche(ahora) and alerta.nivel != umbrales.SMN_NIVEL_QUE_PASA_DE_NOCHE
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +321,7 @@ async def evaluar_avisos_smn(
     `ahora` (time-zone aware) decides which alerts are in force and the text; `reloj` (the wall clock, read per pair)
     gives the push TTLs, `ahora` stands in without it. `plazo` is the run deadline; without it, the configured one
     (`alertas_plazo_corrida_segundos`). `vapid=None` is a dry run: the pairs are counted and nothing else happens.
-    `obtener_avisos` and `omitir` exist for the tests and for T5 (the night rule).
+    `obtener_avisos` and `omitir` exist for the tests; `omitir` is the night rule (`se_omite_de_noche`) by default.
 
     The caller holds a run lock (`evaluacion.evaluar_smn` holds `alertas:lock:evaluar-smn`) and maps `corte` to a state.
 
