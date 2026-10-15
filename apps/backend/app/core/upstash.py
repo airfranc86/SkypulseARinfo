@@ -179,6 +179,26 @@ class UpstashRedis:
     async def delete(self, key: str) -> int:
         return await self._call_int("DEL", key)
 
+    # -- Hashes (los contadores diarios de las alertas, FRA-360) ---------------------------------
+
+    async def hincrby(self, key: str, field: str, delta: int) -> int:
+        """HINCRBY key field delta, con el comando en el cuerpo. Atómico en el servidor: dos corridas que suman a la
+        vez no pierden cuentas. Devuelve el valor nuevo del campo."""
+        return await self._call_int("HINCRBY", key, field, str(delta))
+
+    async def hgetall(self, key: str) -> dict[str, str]:
+        """HGETALL key. Upstash contesta una lista plana `[campo, valor, campo, valor, ...]` (vacía si la clave no
+        existe); se devuelve como dict. Otra forma de respuesta es `UpstashUnavailableError`, nunca un dict a medias."""
+        result = await self._call_body("HGETALL", key)
+        if (
+            not isinstance(result, list)
+            or len(result) % 2
+            or not all(isinstance(parte, str) for parte in result)
+        ):
+            logger.warning("upstash_call_failed command=HGETALL exc_type=resultado_no_es_lista_plana_de_textos")
+            raise UpstashUnavailableError("resultado_no_es_lista_plana_de_textos")
+        return dict(zip(result[::2], result[1::2]))
+
 
 # Handle compartido para los endpoints de alertas: lo deja listo el lifespan de main.py.
 _redis: UpstashRedis | None = None

@@ -248,13 +248,27 @@ def _zona_guardada(registro: str | None) -> str | None:
     return zona if isinstance(zona, str) else None
 
 
+@dataclass(frozen=True)
+class ResultadoAlta:
+    """Lo que hizo un alta: el id y si la suscripción es NUEVA (no había registro) o una renovación / cambio de zona."""
+
+    sub_id: str
+    nueva: bool
+
+
 async def alta(redis: UpstashRedis, suscripcion: Suscripcion) -> str:
-    """Guarda (o renueva) la suscripción y devuelve su id.
+    """Guarda (o renueva) la suscripción y devuelve su id. Es `alta_detallada` sin el detalle: mismo comportamiento.
 
     Raises:
         TopeAlcanzadoError: es nueva y ya hay `TOPE_SUSCRIPCIONES`. Una existente siempre puede renovarse.
         UpstashUnavailableError: Upstash no respondió.
     """
+    return (await alta_detallada(redis, suscripcion)).sub_id
+
+
+async def alta_detallada(redis: UpstashRedis, suscripcion: Suscripcion) -> ResultadoAlta:
+    """Guarda (o renueva) la suscripción y dice si era nueva (para contarla como alta, FRA-360). Mismos comandos y
+    mismas excepciones que `alta`."""
     sub_id = id_de_endpoint(suscripcion.endpoint)
     clave = clave_de_sub(sub_id)
     previo = await redis.read(clave)
@@ -279,19 +293,27 @@ async def alta(redis: UpstashRedis, suscripcion: Suscripcion) -> str:
     zona_previa = _zona_guardada(previo)
     if zona_previa is not None and zona_previa != suscripcion.zona:
         await redis.srem(clave_de_zona(zona_previa), sub_id)
-    return sub_id
+    return ResultadoAlta(sub_id=sub_id, nueva=previo is None)
 
 
 async def baja(redis: UpstashRedis, sub_id: str) -> None:
-    """Borra la suscripción y la saca de los índices. Idempotente: un id desconocido no es un error."""
+    """Borra la suscripción y la saca de los índices. Idempotente: un id desconocido no es un error.
+    Es `baja_detallada` sin el detalle: mismo comportamiento."""
+    await baja_detallada(redis, sub_id)
+
+
+async def baja_detallada(redis: UpstashRedis, sub_id: str) -> bool:
+    """Borra la suscripción y la saca de los índices; True si el registro existía (para contarla como baja, FRA-360),
+    False si el id ya no estaba. Mismos comandos y mismas excepciones que `baja`."""
     if not isinstance(sub_id, str) or not PATRON_ID.fullmatch(sub_id):
         raise SuscripcionInvalida("id_invalido")
     clave = clave_de_sub(sub_id)
     zona = _zona_guardada(await redis.read(clave))
-    await redis.delete(clave)
+    borradas = await redis.delete(clave)
     await redis.srem(CLAVE_IDS, sub_id)
     if zona is not None:
         await redis.srem(clave_de_zona(zona), sub_id)
+    return borradas > 0
 
 
 class LecturaDudosa(UpstashUnavailableError):

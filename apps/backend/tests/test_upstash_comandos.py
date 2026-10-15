@@ -371,3 +371,47 @@ async def test_expire_si_falta_without_an_integer_result_is_unavailable(redis: U
         respx.post(f"{_URL}/").mock(return_value=Response(200, json=answer))
         with pytest.raises(UpstashUnavailableError):
             await redis.expire_si_falta("k", 60)
+
+
+# ---------------------------------------------------------------------------
+# HINCRBY y HGETALL (FRA-360, T11: los contadores diarios de las alertas)
+# ---------------------------------------------------------------------------
+
+
+async def test_hincrby_sends_the_command_in_the_body_and_returns_the_new_value(redis: UpstashRedis) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok(7))
+        assert await redis.hincrby("alertas:metricas:2026-10-14", "smn:enviados", 2) == 7
+    assert _body(route) == ["HINCRBY", "alertas:metricas:2026-10-14", "smn:enviados", "2"]
+    _assert_value_not_in_url(route)
+    assert route.calls.last.request.headers["authorization"] == f"Bearer {_TOKEN}"
+
+
+@pytest.mark.parametrize("result", [None, "7", True, [7]], ids=["null", "string", "bool", "list"])
+async def test_hincrby_with_a_non_integer_result_is_unavailable(redis: UpstashRedis, result) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=_ok(result))
+        with pytest.raises(UpstashUnavailableError):
+            await redis.hincrby("alertas:metricas:2026-10-14", "suscripciones:altas", 1)
+
+
+async def test_hgetall_turns_the_flat_list_into_a_dict_and_a_missing_key_into_an_empty_one(redis: UpstashRedis) -> None:
+    with respx.mock:
+        route = respx.post(f"{_URL}/").mock(return_value=_ok(["suscripciones:altas", "3", "smn:enviados", "12"]))
+        assert await redis.hgetall("alertas:metricas:2026-10-14") == {"suscripciones:altas": "3", "smn:enviados": "12"}
+        assert _body(route) == ["HGETALL", "alertas:metricas:2026-10-14"]
+        _assert_value_not_in_url(route)
+        route.mock(return_value=_ok([]))
+        assert await redis.hgetall("alertas:metricas:2026-01-01") == {}
+
+
+@pytest.mark.parametrize(
+    "result",
+    [None, "x", 3, {"a": "1"}, ["a"], ["a", 1], [None, "1"]],
+    ids=["null", "string", "int", "dict", "odd", "value-not-str", "field-null"],
+)
+async def test_hgetall_with_an_unexpected_result_is_unavailable(redis: UpstashRedis, result) -> None:
+    with respx.mock:
+        respx.post(f"{_URL}/").mock(return_value=_ok(result))
+        with pytest.raises(UpstashUnavailableError):
+            await redis.hgetall("alertas:metricas:2026-10-14")

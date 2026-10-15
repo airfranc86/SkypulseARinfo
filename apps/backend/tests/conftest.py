@@ -496,6 +496,7 @@ class FakeUpstash:
         self.strings: dict[str, str] = {}
         self.ttls: dict[str, int] = {}
         self.sets: dict[str, set[str]] = {}
+        self.hashes: dict[str, dict[str, str]] = {}  # HINCRBY/HGETALL (the daily counters of FRA-360)
         self.commands: list[list[str]] = []
         self.requests: list = []
         self.down = False
@@ -537,9 +538,15 @@ class FakeUpstash:
                 self.ttls[args[0]] = int(args[2:][opciones.index("EX") + 1])
             return "OK"
         if name == "DEL":
-            removed = self.strings.pop(args[0], None) is not None
+            removed = self.strings.pop(args[0], None) is not None or self.hashes.pop(args[0], None) is not None
             self.ttls.pop(args[0], None)
             return int(removed)
+        if name == "HINCRBY":
+            campos = self.hashes.setdefault(args[0], {})
+            campos[args[1]] = str(int(campos.get(args[1], "0")) + int(args[2]))
+            return int(campos[args[1]])
+        if name == "HGETALL":  # Upstash answers a flat list [field, value, field, value, ...]; a missing key is []
+            return [parte for campo, valor in self.hashes.get(args[0], {}).items() for parte in (campo, valor)]
         if name == "SADD":
             members = self.sets.setdefault(args[0], set())
             before = len(members)
@@ -552,7 +559,7 @@ class FakeUpstash:
             return before - len(members)
         if name == "EXPIRE":
             clave, segundos, *opciones = args
-            existe = clave in self.strings or clave in self.sets
+            existe = clave in self.strings or clave in self.sets or clave in self.hashes
             if not existe or ("NX" in [o.upper() for o in opciones] and clave in self.ttls):
                 return 0
             self.ttls[clave] = int(segundos)

@@ -11,6 +11,10 @@ POST /api/alertas/evaluar      -> 200 {estado, ...contadores} | 401 | 422   (lo 
 Falla cerrado: sin Upstash, sin clave VAPID usable o con el tope de suscripciones alcanzado responde 503,
 nunca 500. No se loguea el endpoint, las claves, el id ni el cuerpo (el middleware de requests solo
 registra método, ruta y estado).
+
+Contadores diarios (FRA-360, `services/alertas/metricas.py`): al final de cada camino se suma en Upstash la corrida
+(con su estado y sus contadores), el alta nueva o la baja efectiva. Es un efecto secundario: nunca cambia una
+respuesta ni un envío, y `apagado` (no hubo corrida) no se cuenta.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ from app.schemas.alertas import (
     SuscripcionCreada,
     SuscripcionRequest,
 )
-from app.services.alertas import envio, evaluacion, firma_qstash, interruptor
+from app.services.alertas import envio, evaluacion, firma_qstash, interruptor, metricas
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.firma_qstash import motivo_de_rechazo
 
@@ -106,13 +110,15 @@ async def post_suscripcion(
         zona=payload.zona,
     )
     try:
-        sub_id = await svc.alta(redis, suscripcion)
+        alta = await svc.alta_detallada(redis, suscripcion)
     except svc.TopeAlcanzadoError as exc:
         logger.warning("alertas: tope de suscripciones alcanzado")
         raise HTTPException(status_code=503, detail=_TOPE) from exc
     except UpstashUnavailableError as exc:
         raise HTTPException(status_code=503, detail=_NO_DISPONIBLE) from exc
-    return SuscripcionCreada(id=sub_id, zona=suscripcion.zona)
+    if alta.nueva:  # el contador diario (FRA-360) se suma al final y nunca cambia la respuesta: una renovación no cuenta
+        await metricas.contar_alta(redis, _ahora_utc())
+    return SuscripcionCreada(id=alta.sub_id, zona=suscripcion.zona)
 
 
 @router.post(
@@ -128,9 +134,11 @@ async def post_baja(
 ) -> Response:
     """Borra la suscripción por `id`. Es idempotente: un `id` desconocido también responde 204."""
     try:
-        await svc.baja(redis, payload.id)
+        borrada = await svc.baja_detallada(redis, payload.id)
     except UpstashUnavailableError as exc:
         raise HTTPException(status_code=503, detail=_NO_DISPONIBLE) from exc
+    if borrada:  # el contador diario (FRA-360): solo una baja que borró algo; un id desconocido sigue siendo un 204
+        await metricas.contar_baja(redis, _ahora_utc())
     return Response(status_code=204)
 
 
@@ -298,8 +306,14 @@ async def post_evaluar(request: Request) -> dict[str, str | int]:
             return {"estado": evaluacion.ESTADO_APAGADO}
         # `reloj` lee la hora cuando se le pide: el pronóstico de cada zona se juzga contra la hora de ESE momento, no contra la
         # del arranque (los envíos de las zonas anteriores pueden haber tardado minutos).
+        ahora = _ahora_utc()
         if pedido == MODO_SMN:
-            resultado = await evaluacion.evaluar_smn(redis, _ahora_utc(), enviar=modo, reloj=_ahora_utc)
+            resultado = await evaluacion.evaluar_smn(redis, ahora, enviar=modo, reloj=_ahora_utc)
+            tipo = metricas.TIPO_SMN
         else:
-            resultado = await evaluacion.evaluar(redis, _ahora_utc(), enviar=modo, reloj=_ahora_utc)
+            resultado = await evaluacion.evaluar(redis, ahora, enviar=modo, reloj=_ahora_utc)
+            tipo = metricas.TIPO_PRONOSTICO
+        # Los contadores diarios (FRA-360) se suman al FINAL, con la corrida ya hecha y en el día de Argentina de su
+        # arranque; nunca cambian el estado, los contadores ni la respuesta (un fallo al contar solo deja un WARNING).
+        await metricas.contar_corrida(redis, tipo, resultado, ahora)
         return resultado.como_respuesta()

@@ -46,6 +46,7 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; e
     TORMENTA,
     RedisConFalla,
     RedisSinSet,
+    conteo_del_dia,
     en_seco,
     envio_activo,
     esperas,
@@ -220,7 +221,7 @@ async def test_the_dry_run_flag_counts_the_alerts_sends_nothing_and_answers_the_
         ["GET", CLAVE_APAGADO],
         ["SET", CLAVE_LOCK_SMN, valor, "NX", "EX", str(settings.alertas_lock_ttl_segundos)],
         ["SMEMBERS", "alertas:zonas"],
-    ]
+    ] + conteo_del_dia("2026-10-14", ("smn:corridas:evaluada", 1), ("smn:smn_avisos", 1))  # FRA-360: after the run
     assert [(r.levelno, r.getMessage()) for r in lineas_de_resumen_smn(caplog)] == [(logging.INFO, LINEA_SMN_EN_SECO)]
 
 
@@ -612,7 +613,9 @@ async def test_with_the_send_switch_on_but_no_usable_vapid_key_the_smn_mode_answ
     fake_upstash.commands.clear()
     response = await llamar_smn(async_client)
     assert response.status_code == 200 and response.json() == {"estado": "sin_vapid"}  # never a 5xx: QStash would retry
-    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] and locks(fake_upstash) == []
+    # Nothing of the run is touched; only the daily count of the state (FRA-360), after the run.
+    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] + conteo_del_dia("2026-10-14", ("smn:corridas:sin_vapid", 1))
+    assert locks(fake_upstash) == []
     assert feed.llamadas == [] and push.llamadas == []
     lineas = lineas_de_resumen_smn(caplog)
     assert [r.levelno for r in lineas] == [logging.WARNING] and "estado=sin_vapid" in lineas[0].getMessage()
@@ -649,7 +652,9 @@ async def test_the_smn_lock_taken_answers_en_curso_without_reading_or_sending(
 
     assert response.status_code == 200 and response.json() == {"estado": "en_curso"}
     assert push.llamadas == [] and feed.llamadas == [] and conjuntos_smn(fake_upstash) == []
-    assert [c[:2] for c in fake_upstash.commands] == [["GET", CLAVE_APAGADO], ["SET", CLAVE_LOCK_SMN]]
+    assert [c[:2] for c in fake_upstash.commands] == [["GET", CLAVE_APAGADO], ["SET", CLAVE_LOCK_SMN]] + [
+        c[:2] for c in conteo_del_dia("2026-10-14", ("smn:corridas:en_curso", 1))  # FRA-360: the state is counted
+    ]
     assert fake_upstash.strings[CLAVE_LOCK_SMN] == "otra-corrida-smn" and fake_upstash.ttls[CLAVE_LOCK_SMN] == 123
     lineas = lineas_de_resumen_smn(caplog)
     assert [r.levelno for r in lineas] == [logging.INFO]

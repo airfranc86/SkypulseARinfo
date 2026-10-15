@@ -179,6 +179,13 @@ def comandos(fake_upstash) -> list[str]:
     return [comando[0] for comando in fake_upstash.commands]
 
 
+def conteo_del_dia(dia: str, *campos: tuple[str, int]) -> list[list[str]]:
+    """The commands the router adds AFTER a run (or an alta/baja) for the daily counters of FRA-360: one HINCRBY per
+    field different from zero on the hash of the Argentine day `dia` (`YYYY-MM-DD`), then its 40-day expiry (NX)."""
+    clave = f"alertas:metricas:{dia}"
+    return [["HINCRBY", clave, campo, str(valor)] for campo, valor in campos] + [["EXPIRE", clave, "3456000", "NX"]]
+
+
 def lineas_de_resumen(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
     """The one summary line (state and counters) that a FORECAST run of the evaluation logs (never the SMN one)."""
     return [
