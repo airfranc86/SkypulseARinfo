@@ -61,6 +61,30 @@ def _scrub_span(span: dict) -> dict:
     return {**span, "description": _QUITADO, "data": {}} if _menciona_host_de_push(span) else span
 
 
+# La firma de QStash (`Upstash-Signature`) es un JWT que sirve para repetir el pedido unos 5 minutos. La integración de
+# Starlette adjunta `request.headers` a los eventos capturados durante un pedido (con los nombres en minúsculas) y la lista
+# de cabeceras sensibles del SDK no la incluye: nunca debe viajar a Sentry (ver `firma_qstash.py`). Nombres en minúsculas.
+# Ojo al subir el SDK: con el streaming de spans (`_experiments={"trace_lifecycle": "stream"}`, o el SDK 3) las cabeceras
+# pasan a atributos de span `http.request.header.<nombre>`, un camino que NO pasa por estos ganchos.
+_CABECERAS_QUITADAS = frozenset({"upstash-signature"})
+
+
+def _es_cabecera_quitada(nombre: object) -> bool:
+    return isinstance(nombre, str) and nombre.lower() in _CABECERAS_QUITADAS
+
+
+def _sin_cabeceras_quitadas(pedido: dict) -> dict:
+    """Una copia de `pedido` sin las cabeceras de `_CABECERAS_QUITADAS` (cualquier capitalización), sean un dict o una lista
+    de pares. Si `headers` no es ninguna de las dos cosas (ausente, `None`), el pedido se devuelve igual."""
+    cabeceras = pedido.get("headers")
+    if isinstance(cabeceras, dict):
+        return {**pedido, "headers": {k: v for k, v in cabeceras.items() if not _es_cabecera_quitada(k)}}
+    if isinstance(cabeceras, (list, tuple)):  # el protocolo de Sentry también admite una lista de pares [nombre, valor]
+        pares = [p for p in cabeceras if not (isinstance(p, (list, tuple)) and len(p) == 2 and _es_cabecera_quitada(p[0]))]
+        return {**pedido, "headers": pares}
+    return pedido
+
+
 def _scrub_evento(evento: dict) -> dict:
     limpio = {k: _sin_hosts_de_push(v) for k, v in evento.items() if k not in ("breadcrumbs", "spans", "request")}
     migajas = evento.get("breadcrumbs")
@@ -73,6 +97,8 @@ def _scrub_evento(evento: dict) -> dict:
     if isinstance(evento.get("spans"), list):
         limpio["spans"] = [_scrub_span(sp) if isinstance(sp, dict) else sp for sp in evento["spans"]]
     pedido = evento.get("request")
+    if isinstance(pedido, dict):
+        pedido = _sin_cabeceras_quitadas(pedido)
     if isinstance(pedido, dict) and _menciona_host_de_push(pedido):
         limpio["request"] = {k: v for k, v in pedido.items() if k == "method"}  # sin URL, cabeceras ni cuerpo
     elif "request" in evento:
