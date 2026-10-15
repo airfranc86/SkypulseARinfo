@@ -50,6 +50,14 @@ The result has two layers. The state and the integer counters (`CONTADORES`, plu
 run that sends) are what the response and the log carry. `ResultadoEvaluacion.zonas` is the per-zone detail for the
 CALLER: it never reaches the response or the log.
 
+The "SMN only" run (FRA-359, S2) is `evaluar_smn(redis, ahora, enviar=...)`: the router calls it instead of `evaluar`
+when the signed body says `{"modo": "smn"}` (every 30 minutes). It never calls Open-Meteo, reads no review window and
+has no 22:00 cut (it runs 24 h; the night rule of S7 is T5, inside `avisos_smn.se_omite_de_noche`): it takes ITS OWN
+lock `alertas:lock:evaluar-smn` (same mechanism and expiry as the forecast's, never released), hands the cross and
+the dispatch to `avisos_smn.evaluar_avisos_smn` and maps its `corte` to a state with the same rule as the forecast.
+Its result (`ResultadoEvaluacionSmn`) carries the same states, the SMN counters (`despacho.CONTADORES_SMN`) and, when
+it sends, the sending counters; its log line is `alertas: smn evaluation ...`, distinct from the forecast's.
+
 This module does not import the sender (`despacho` does) and never reads the wall clock: `ahora` is injected by the
 caller and carries a time zone; the run deadline is `despacho.Plazo`.
 
@@ -70,15 +78,18 @@ from datetime import date, datetime, timedelta, timezone
 from app.core.client_context import ALERTAS_JOB_CLIENT_KEY, con_clave_de_cliente
 from app.core.config import settings
 from app.core.upstash import UpstashRedis, UpstashUnavailableError
-from app.services.alertas import despacho, interruptor, pronostico, regla
+from app.services.alertas import avisos_smn, despacho, interruptor, pronostico, regla
 from app.services.alertas import suscripcion as svc
-from app.services.alertas.despacho import AVISO_HOY, AVISO_MANANA, ResumenEnvio
+from app.services.alertas.despacho import AVISO_HOY, AVISO_MANANA, ResumenEnvio, ResumenSmn
 from app.services.alertas.regla import ResultadoRegla
 from app.services.alertas.zonas import ZONAS, Zona
 
 logger = logging.getLogger(__name__)
 
 CLAVE_LOCK = "alertas:lock:evaluar"
+# The lock of the "SMN only" run (FRA-359, T4): its own, so a forecast run in flight never keeps an SMN run out (nor
+# the reverse) and two SMN runs never overlap. Same mechanism and expiry as `CLAVE_LOCK`; never released either.
+CLAVE_LOCK_SMN = "alertas:lock:evaluar-smn"
 CLAVE_ZONAS = svc.CLAVE_ZONAS  # set of slugs with at least one subscriber (written by `suscripcion.alta`)
 
 ESTADO_APAGADO = "apagado"  # answered by the router: both flags off, kill key present or unreadable
@@ -525,3 +536,92 @@ async def evaluar(
     )
     resumen = envio.sumar(ResumenEnvio(reintentadas=reintentadas)) if corrida.enviar else None
     return _cerrar(_resultado(_estado_de_corte(corte), zonas, desconocidas, resumen))
+
+
+# ---------------------------------------------------------------------------
+# The "SMN only" run (FRA-359, S2): every 30 minutes, without Open-Meteo
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ResultadoEvaluacionSmn:
+    """What happened in an "SMN only" run: `estado` (the same states as the forecast run), the counters of the pairs
+    (zone, alert) if the run got as far as the zones (`smn`, whole numbers: never a zone, a key or a text) and, if it
+    sent, what the sender did (`envio`; None for a dry run and for a run that never reached the zones)."""
+
+    estado: str
+    smn: ResumenSmn = ResumenSmn()
+    envio: ResumenEnvio | None = None
+
+    def como_respuesta(self) -> dict[str, str | int]:
+        """The JSON the endpoint answers: the state and, if the run looked at the zones, the counters. Nothing else."""
+        respuesta: dict[str, str | int] = {"estado": self.estado}
+        if self.estado in _ESTADOS_CON_CONTADORES:
+            respuesta.update(self.smn.como_respuesta())
+            if self.envio is not None:
+                respuesta.update(self.envio.como_respuesta())
+        return respuesta
+
+
+def _cerrar_smn(resultado: ResultadoEvaluacionSmn) -> ResultadoEvaluacionSmn:
+    """Log the one line of an "SMN only" run and hand the result back. The line is `alertas: smn evaluation ...`, distinct
+    from the forecast's, so the two runs can be told apart in the logs; state and counters only, a WARNING if anything
+    was off (the same rule as the forecast line)."""
+    smn, envio = resultado.smn, resultado.envio
+    algo_fallo = (
+        smn.smn_sin_datos
+        or smn.smn_errores
+        or resultado.estado in (ESTADO_EVALUADA_INCOMPLETA, ESTADO_SIN_VAPID)
+        or (envio is not None and envio.fallidos)
+    )
+    formato_smn, argumentos_smn = smn.como_log()
+    formato = "alertas: smn evaluation estado=%s " + formato_smn
+    argumentos: list[str | int] = [resultado.estado, *argumentos_smn]
+    if envio is not None:
+        formato += " " + " ".join(f"{nombre}=%d" for nombre in despacho.CONTADORES_ENVIO)
+        argumentos += [getattr(envio, nombre) for nombre in despacho.CONTADORES_ENVIO]
+    logger.log(logging.WARNING if algo_fallo else logging.INFO, formato, *argumentos)
+    return resultado
+
+
+async def evaluar_smn(
+    redis: UpstashRedis, ahora: datetime, *, enviar: bool = False, reloj: Callable[[], datetime] | None = None
+) -> ResultadoEvaluacionSmn:
+    """Cross the official SMN alerts in force with the zones that have subscribers and, with `enviar=True`, notify them
+    (FRA-359, S2). Never calls Open-Meteo: no forecast client, no review window, no 22:00 cut (the run works 24 h; the
+    night rule of S7 is T5). Only the router sets `enviar`, after `interruptor.envio_activo` said yes; the dry run
+    counts the alerts found and touches nothing else.
+
+    Takes its own lock `alertas:lock:evaluar-smn` (SET NX EX, never released): taken = `en_curso`; Upstash failing to
+    give it, or to list the zones = `upstash_no_disponible`; asked to send without a usable VAPID key = `sin_vapid`
+    (nothing is touched). `reloj` (the router passes the wall clock) gives the push TTLs; without it `ahora` stands in.
+    The run deadline is the configured one (`alertas_plazo_corrida_segundos`), below the lock expiry.
+
+    Raises:
+        ValueError: `ahora` has no time zone (nothing is touched).
+    """
+    pronostico.exigir_hora_con_zona(ahora)
+    vapid = None
+    if enviar:
+        vapid = despacho.cargar_vapid()
+        if vapid is None:
+            logger.warning("alertas: sending is on but there is no usable VAPID key; the SMN alerts are not evaluated")
+            return _cerrar_smn(ResultadoEvaluacionSmn(estado=ESTADO_SIN_VAPID))
+
+    try:
+        lock_tomado = await redis.set_nx(CLAVE_LOCK_SMN, uuid.uuid4().hex, ex=settings.alertas_lock_ttl_segundos)
+    except UpstashUnavailableError:
+        logger.warning("alertas: Upstash did not answer taking the SMN run lock; nothing is evaluated")
+        return _cerrar_smn(ResultadoEvaluacionSmn(estado=ESTADO_UPSTASH_NO_DISPONIBLE))
+    if not lock_tomado:
+        return _cerrar_smn(ResultadoEvaluacionSmn(estado=ESTADO_EN_CURSO))
+    # The lock stays: it is not released with DEL (that could free another run's lock), it expires by itself.
+
+    try:
+        hecho = await avisos_smn.evaluar_avisos_smn(redis, ahora, vapid=vapid, reloj=reloj)
+    except UpstashUnavailableError:
+        logger.warning("alertas: Upstash did not answer listing the zones; the SMN alerts are not evaluated")
+        return _cerrar_smn(ResultadoEvaluacionSmn(estado=ESTADO_UPSTASH_NO_DISPONIBLE))
+    return _cerrar_smn(
+        ResultadoEvaluacionSmn(_estado_de_corte(hecho.corte), hecho.smn, hecho.envio if enviar else None)
+    )
