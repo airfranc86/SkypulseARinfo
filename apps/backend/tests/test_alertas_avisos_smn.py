@@ -526,14 +526,17 @@ async def test_a_dry_run_counts_the_alerts_and_touches_nothing(redis, fake_upsta
 
 
 # ---------------------------------------------------------------------------
-# The night rule of S7 is T5: today nothing is omitted, and the plug is in one place
+# The night rule of S7 (T5) lives in one place; the full table is in `tests/test_alertas_noche_smn.py`
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("hora", [3, 13, 23])
-def test_today_no_alert_is_omitted_by_the_hour_the_night_rule_is_t5(hora: int) -> None:
+def test_by_day_no_alert_is_omitted_and_at_night_only_the_red_one_goes_out() -> None:
     for nivel in ("amarillo", "naranja", "rojo"):
-        assert avisos_smn.se_omite_de_noche(alerta(nivel=nivel), AHORA.replace(hour=hora)) is False
+        assert avisos_smn.se_omite_de_noche(alerta(nivel=nivel), AHORA.replace(hour=13)) is False
+    for hora in (3, 23):
+        assert avisos_smn.se_omite_de_noche(alerta(nivel="amarillo"), AHORA.replace(hour=hora)) is True
+        assert avisos_smn.se_omite_de_noche(alerta(nivel="naranja"), AHORA.replace(hour=hora)) is True
+        assert avisos_smn.se_omite_de_noche(alerta(nivel="rojo"), AHORA.replace(hour=hora)) is False
 
 
 async def test_an_omitted_alert_is_counted_and_neither_sent_nor_marked_nor_read(redis, fake_upstash, push) -> None:

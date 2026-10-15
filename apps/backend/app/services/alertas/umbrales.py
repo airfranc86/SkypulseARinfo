@@ -27,3 +27,8 @@ REVISION_MANANA: int = 21
 # las 5 h. La revisión de las 5 h es la de quien sale a trabajar entre las 6 y las 7.
 SILENCIO_DESDE_H: int = 22
 SILENCIO_HASTA_H: int = 5
+
+# Avisos oficiales del SMN (FRA-359, S7): la corrida de 30 min funciona las 24 h,
+# pero en la misma franja de silencio solo se manda el aviso de ESTE nivel; un
+# amarillo o naranja espera a la primera corrida de las 5 h. Lo decidió el dueño.
+SMN_NIVEL_QUE_PASA_DE_NOCHE: str = "rojo"
