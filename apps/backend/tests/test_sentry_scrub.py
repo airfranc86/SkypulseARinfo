@@ -136,6 +136,134 @@ def test_an_error_event_without_any_push_url_passes_unchanged() -> None:
     assert main._scrub_event(copy.deepcopy(evento), {}) == evento
 
 
+# --- the QStash signature never travels to Sentry (FRA-360 S2) ---------------------------------------------------------------
+# The Starlette integration attaches `request.headers` to every event captured during a request, and the SDK's own list of
+# sensitive headers does not include `Upstash-Signature`: that JWT could replay a request for ~5 minutes.
+
+FIRMA = "eyJhbGciOiJIUzI1NiJ9.FAKE-PAYLOAD.FAKE-SIGNATURE"
+CABECERAS_BENIGNAS = {"user-agent": "Upstash-QStash", "content-type": "application/json", "host": "skypulse-api.example"}
+
+
+def evento_con_cabeceras(cabeceras: object) -> dict:
+    return {
+        "level": "error",
+        "message": "boom",
+        "request": {"url": "https://skypulse-api.example/api/alertas/evaluar", "method": "POST", "headers": cabeceras},
+    }
+
+
+@pytest.mark.parametrize("nombre", ["Upstash-Signature", "upstash-signature", "UPSTASH-SIGNATURE"])
+@pytest.mark.parametrize("gancho", [main._scrub_event, main._scrub_transaction], ids=["event", "transaction"])
+def test_the_qstash_signature_header_is_removed_in_any_capitalization(gancho, nombre: str) -> None:
+    evento = evento_con_cabeceras({**CABECERAS_BENIGNAS, nombre: FIRMA})
+    limpio = gancho(evento, {})
+    assert limpio is not None
+    assert FIRMA not in json.dumps(limpio)
+    assert limpio["request"]["headers"] == CABECERAS_BENIGNAS  # the other headers are identical
+    assert limpio["request"]["url"] == evento["request"]["url"] and limpio["request"]["method"] == "POST"
+    assert limpio["message"] == "boom" and limpio["level"] == "error"
+
+
+def test_the_signature_header_removal_does_not_mutate_the_event_it_receives() -> None:
+    evento = evento_con_cabeceras({**CABECERAS_BENIGNAS, "Upstash-Signature": FIRMA})
+    copia = copy.deepcopy(evento)
+    main._scrub_event(evento, {})
+    assert evento == copia
+
+
+@pytest.mark.parametrize(
+    "evento",
+    [
+        {"level": "error", "message": "boom"},  # no `request` at all
+        {"level": "error", "request": {"url": "https://skypulse-api.example/x", "method": "GET"}},  # no `headers`
+        evento_con_cabeceras(None),
+        evento_con_cabeceras({}),
+        evento_con_cabeceras({"user-agent": "curl"}),
+    ],
+    ids=["no-request", "no-headers", "headers-none", "headers-empty", "headers-without-signature"],
+)
+def test_a_request_without_a_dict_of_headers_or_without_the_signature_passes_unchanged(evento: dict) -> None:
+    assert main._scrub_event(copy.deepcopy(evento), {}) == evento
+    assert main._scrub_transaction(copy.deepcopy(evento), {}) == evento
+
+
+def test_the_signature_is_also_removed_from_headers_given_as_a_list_of_pairs() -> None:
+    evento = evento_con_cabeceras([("Upstash-Signature", FIRMA), ("user-agent", "curl"), ["UPSTASH-SIGNATURE", FIRMA]])
+    copia = copy.deepcopy(evento)
+    for gancho in (main._scrub_event, main._scrub_transaction):
+        limpio = gancho(copy.deepcopy(evento), {})
+        assert FIRMA not in json.dumps(limpio)
+        assert limpio["request"]["headers"] == [("user-agent", "curl")]
+    assert evento == copia  # the received event is not mutated
+
+
+def test_the_qstash_signature_never_reaches_a_real_sentry_envelope() -> None:
+    """End to end with the real SDK and a transport that keeps every envelope: the hooks block the leak."""
+    import sentry_sdk
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sentry_sdk.transport import Transport
+
+    enviados: list = []
+
+    class Captura(Transport):
+        def capture_envelope(self, envelope):  # noqa: ANN001
+            enviados.extend(it.payload.json for it in envelope.items if it.payload.json is not None)
+
+    sentry_sdk.init(
+        dsn="https://k@o0.ingest.sentry.io/1",
+        transport=Captura,
+        traces_sample_rate=1.0,
+        send_default_pii=False,
+        max_request_body_size="never",
+        include_local_variables=False,
+        before_breadcrumb=main._scrub_breadcrumb,
+        before_send=main._scrub_event,
+        before_send_transaction=main._scrub_transaction,
+    )
+    try:
+        app = FastAPI()
+
+        @app.post("/boom")
+        async def boom() -> None:
+            raise RuntimeError("boom")
+
+        TestClient(app, raise_server_exceptions=False).post(
+            "/boom", headers=[("Upstash-Signature", FIRMA), ("upstash-signature", FIRMA)]
+        )
+        sentry_sdk.flush()
+    finally:  # leave the process as it was: no client on any scope (other tests assert that Sentry is inactive)
+        from sentry_sdk.scope import Scope
+
+        Scope.get_global_scope().set_client(None)
+        Scope.get_isolation_scope().set_client(None)
+        Scope.get_current_scope().set_client(None)
+    tipos = {e.get("type", "event") for e in enviados}
+    assert {"event", "transaction"} <= tipos  # the probe really captured both kinds
+    assert FIRMA not in json.dumps(enviados, default=str)
+
+
+def test_an_alert_message_event_passes_through_the_hook_identical() -> None:
+    # The alert events of the next task: no push host, no request -> neither over- nor under-filtered.
+    evento = {
+        "message": "alertas_corrida: upstash_no_disponible",
+        "level": "warning",
+        "tags": {"alert_kind": "alertas_corrida"},
+        "extra": {"evaluadas": 12, "sin_datos": 12, "fallidos": 0},
+        "fingerprint": ["alertas_corrida", "upstash_no_disponible"],
+    }
+    assert main._scrub_event(copy.deepcopy(evento), {}) == evento
+
+
+def test_a_request_naming_a_push_host_is_still_reduced_to_the_method_even_with_the_signature() -> None:
+    evento = evento_con_cabeceras({**CABECERAS_BENIGNAS, "Upstash-Signature": FIRMA})
+    evento["request"]["url"] = URL_FCM
+    copia = copy.deepcopy(evento)
+    limpio = main._scrub_event(evento, {})
+    assert limpio is not None and limpio["request"] == {"method": "POST"}  # previous behavior, intact
+    assert evento == copia
+
+
 # --- one host list for the anti-SSRF check and for Sentry -------------------------------------------------------------------
 
 
