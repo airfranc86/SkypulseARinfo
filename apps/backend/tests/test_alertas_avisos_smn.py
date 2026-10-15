@@ -23,13 +23,15 @@ from app.core.upstash import UpstashRedis, UpstashUnavailableError
 from app.schemas.smn_alertas import SmnAlerta, SmnAlertasResponse
 from app.services.alertas import avisos_smn, despacho, envio
 from app.services.alertas.envio import Resultado, tag_de, tag_smn, topic_smn
+from app.services.alertas import suscripcion as svc
 from app.services.alertas.mensajes_smn import texto_aviso_smn
 from app.services.alertas.textos import texto_aviso_hoy
-from app.services.alertas.zonas import zona_por_slug
+from app.services.alertas.zonas import ZONAS, zona_por_slug
 from app.services.smn_alertas import clave_dedupe
 from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name)
     CLAVE_APAGADO,
     CLAVE_LOCK,
+    CLAVE_LOCK_SMN,
     PushFalso,
     RedisConFalla,
     envio_activo,
@@ -39,8 +41,9 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name)
     registrar,
     reloj_de_openmeteo,
     respuestas_por_zona,
+    suscribir,
 )
-from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
+from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL, nuevo_receptor
 from tests.openmeteo_fake_source import install, own_caches  # noqa: F401
 from tests.test_alertas_despacho import RedisQueFalla, tormenta_en
 
@@ -78,6 +81,7 @@ def alerta(**cambios: object) -> SmnAlerta:
 AMARILLO = alerta()
 CLAVE_AMARILLO = clave_dedupe("cordoba", AMARILLO)
 ENVIADOS_AMARILLO = f"alertas:smn:enviado:cordoba:amarillo:{topic_smn(CLAVE_AMARILLO)}"
+TORMENTA_SIN_FECHAS = alerta(fecha_desde=None, fecha_hasta=None)  # "ya vigente", in force at any hour, default TTLs
 
 
 def avisos_por_zona(por_zona: Mapping[str, Sequence[SmnAlerta]], *, available: bool = True):
@@ -696,3 +700,211 @@ async def test_end_to_end_neither_the_result_nor_the_logs_carry_ids_endpoints_te
                     "cordoba", "rosario", "Córdoba", AMARILLO.descripcion):
         assert secreto not in visible, secreto
     assert resultado.envio.fallidos == 3 and resultado.smn == despacho.ResumenSmn(smn_avisos=2)
+
+
+# ---------------------------------------------------------------------------
+# Probes of the independent verifier of T3 (added with T4): keyspace, Upstash cost, mixed feeds, set-once expiry,
+# concurrency without and with the caller's lock, a crash between a push and its record
+# ---------------------------------------------------------------------------
+
+# Every keyspace the alerts already use: an SMN done-set must never start with any of them.
+PREFIJOS_EXISTENTES = (
+    "alertas:enviado:",
+    "alertas:lock:",
+    "alertas:zona:",
+    "alertas:zonas",
+    "alertas:sub:",
+    "alertas:ids",
+    "alertas:apagado",
+    "alertas:prueba:",
+)
+
+
+def test_an_smn_done_set_never_starts_with_an_existing_prefix_for_any_zone_level_or_start() -> None:
+    for zona in ZONAS:
+        for nivel in ("amarillo", "naranja", "rojo"):
+            for desde in (None, AHORA, AHORA + timedelta(hours=5)):
+                clave_par = clave_dedupe(zona.slug, alerta(nivel=nivel, fecha_desde=desde))
+                clave = avisos_smn.clave_de_enviados_smn(clave_par)
+                assert clave.startswith("alertas:smn:enviado:")
+                assert not any(clave.startswith(p) for p in PREFIJOS_EXISTENTES), clave
+                assert ":" not in topic_smn(clave_par)  # the Topic ends the key: it must not add a segment
+    # And the forecast keys never start with the new prefix, not even for a zone called "smn".
+    assert not despacho.clave_de_enviados("cordoba", "hoy", FECHA).startswith("alertas:smn:")
+    assert not despacho.clave_de_enviados("smn", "hoy", FECHA).startswith("alertas:smn:enviado:")
+
+
+async def test_the_cost_with_50_zones_with_subscribers_and_one_alert_is_nine_commands_and_no_scard(
+    redis, fake_upstash, push
+) -> None:
+    for zona in ZONAS:
+        if zona.slug != "cordoba":
+            suscribir(fake_upstash, zona.slug, cantidad=3)
+    await registrar(redis, "cordoba", 2)
+    assert len(fake_upstash.sets["alertas:zonas"]) == 50
+    obtener = avisos_por_zona({"cordoba": [AMARILLO]})
+    fake_upstash.commands.clear()
+    resultado = await correr(redis, obtener_avisos=obtener)
+
+    assert len(obtener.consultas) == 50  # the cross is in memory, not in Upstash
+    assert resultado.smn == despacho.ResumenSmn(smn_avisos=1, smn_avisadas=1)
+    assert [c[0] for c in fake_upstash.commands] == [
+        "SMEMBERS",  # alertas:zonas
+        "SMEMBERS",  # the members of cordoba
+        "SMEMBERS",  # the done-set of the pair
+        "GET", "GET",  # the two subscription records
+        "GET",  # the kill key before the dispatch starts
+        "GET",  # the kill key before the batch
+        "SADD", "EXPIRE",  # the record of the batch, with its expiry set once
+    ]
+    assert not any(c[0] == "SCARD" for c in fake_upstash.commands)
+    for comando in fake_upstash.commands:  # no command names a zone other than cordoba
+        for argumento in comando[1:]:
+            assert not any(f":{z.slug}" in argumento for z in ZONAS if z.slug != "cordoba"), comando
+
+
+async def test_the_cost_with_50_zones_with_subscribers_and_no_alert_is_one_smembers(redis, fake_upstash, push) -> None:
+    for zona in ZONAS:
+        suscribir(fake_upstash, zona.slug, cantidad=3)
+    fake_upstash.commands.clear()
+    resultado = await correr(redis, {})
+    assert fake_upstash.commands == [["SMEMBERS", "alertas:zonas"]]
+    assert resultado.smn == despacho.ResumenSmn() and push.llamadas == []
+
+
+async def test_available_false_in_one_zone_does_not_block_the_alert_of_another(redis, fake_upstash, push) -> None:
+    await registrar(redis, "cordoba", 1)
+    ids_rosario = await registrar(redis, "rosario", 2)
+
+    async def obtener(lat: float, lon: float) -> SmnAlertasResponse:
+        if (lat, lon) == (CORDOBA.lat, CORDOBA.lon):
+            return SmnAlertasResponse(alertas=[AMARILLO], available=False, fetched_at=AHORA)  # "we do not know"
+        return SmnAlertasResponse(alertas=[AMARILLO], available=True, fetched_at=AHORA)
+
+    resultado = await correr(redis, obtener_avisos=obtener)
+    assert sorted(c.sub_id for c in push.llamadas) == sorted(ids_rosario)
+    assert resultado.smn == despacho.ResumenSmn(smn_sin_datos=1, smn_avisos=1, smn_avisadas=1)
+    assert conjuntos_smn(fake_upstash) == [avisos_smn.clave_de_enviados_smn(clave_dedupe("rosario", AMARILLO))]
+
+
+async def test_a_feed_that_raises_for_one_zone_counts_an_error_and_the_other_zone_is_served(
+    redis, fake_upstash, push, caplog
+) -> None:
+    await registrar(redis, "cordoba", 1)
+    ids_rosario = await registrar(redis, "rosario", 1)
+    caplog.set_level(logging.DEBUG)
+
+    async def obtener(lat: float, lon: float) -> SmnAlertasResponse:
+        if (lat, lon) == (CORDOBA.lat, CORDOBA.lon):
+            raise RuntimeError("feed roto")
+        return SmnAlertasResponse(alertas=[AMARILLO], available=True, fetched_at=AHORA)
+
+    resultado = await correr(redis, obtener_avisos=obtener)
+    assert [c.sub_id for c in push.llamadas] == ids_rosario
+    assert resultado.smn == despacho.ResumenSmn(smn_avisos=1, smn_avisadas=1, smn_errores=1)
+    assert "cordoba" not in caplog.text and "feed roto" not in caplog.text  # only the class of the exception
+
+
+async def test_a_feed_that_raises_for_every_zone_sends_and_writes_nothing(redis, fake_upstash, push) -> None:
+    await registrar(redis, "cordoba", 1)
+    fake_upstash.commands.clear()
+
+    async def obtener(lat: float, lon: float) -> SmnAlertasResponse:
+        raise RuntimeError("feed roto")
+
+    resultado = await correr(redis, obtener_avisos=obtener)
+    assert push.llamadas == [] and fake_upstash.commands == [["SMEMBERS", "alertas:zonas"]]
+    assert resultado.smn == despacho.ResumenSmn(smn_errores=1)
+
+
+async def test_an_alert_without_fecha_desde_nor_fecha_hasta_is_sent_with_the_default_ttls(
+    redis, fake_upstash, push
+) -> None:
+    await registrar(redis, "cordoba", 1)
+    resultado = await correr(redis, {"cordoba": [TORMENTA_SIN_FECHAS]})
+    assert len(push.llamadas) == 1
+    assert "ya vigente" in push.llamadas[0].payload["body"]
+    assert push.llamadas[0].ttl == envio.TTL_ALERTA_SEGUNDOS
+    clave = avisos_smn.clave_de_enviados_smn(clave_dedupe("cordoba", TORMENTA_SIN_FECHAS))
+    assert fake_upstash.ttls[clave] == avisos_smn.MARGEN_ENVIADOS_SMN_SEGUNDOS == 36 * 3600
+    assert resultado.smn == despacho.ResumenSmn(smn_avisos=1, smn_avisadas=1)
+
+
+async def test_a_later_subscriber_receives_the_push_and_the_expire_nx_does_not_stretch_the_done_set(
+    redis, fake_upstash, push
+) -> None:
+    await registrar(redis, "cordoba", 2)
+    await correr(redis)
+    ttl_inicial = fake_upstash.ttls[ENVIADOS_AMARILLO]
+    receptor = nuevo_receptor("https://fcm.googleapis.com/fcm/send/SECRETO-ENDPOINT-nuevo-999")
+    nuevo = await svc.alta(redis, svc.Suscripcion(receptor.endpoint, receptor.p256dh, receptor.auth, "cordoba"))
+    fake_upstash.ttls[ENVIADOS_AMARILLO] = ttl_inicial - 1800  # 30 min went by in Upstash
+    fake_upstash.commands.clear()
+    segundo = await correr(redis)
+
+    assert [c.sub_id for c in push.llamadas[2:]] == [nuevo]
+    assert segundo.smn == despacho.ResumenSmn(smn_avisos=1, smn_avisadas=1)
+    assert fake_upstash.ttls[ENVIADOS_AMARILLO] == ttl_inicial - 1800  # EXPIRE NX did not touch it
+    assert ["EXPIRE", ENVIADOS_AMARILLO, str(ttl_inicial), "NX"] in fake_upstash.commands
+
+
+async def test_two_runs_at_once_without_any_lock_send_the_same_alert_twice(redis, fake_upstash, push) -> None:
+    """The worst case the module documents: the lock of the caller is the guard; without it both runs read an empty
+    done-set and both send. The devices collapse the duplicate (same Topic, same tag)."""
+    ids = await registrar(redis, "cordoba", 2)
+    push.cesiones = 5  # every send yields, so both runs interleave
+    a, b = await asyncio.gather(correr(redis), correr(redis))
+    assert len(push.llamadas) == 4  # 2 subscribers × 2 runs: duplicates, as documented
+    assert sorted(c.sub_id for c in push.llamadas) == sorted(ids * 2)
+    assert fake_upstash.sets[ENVIADOS_AMARILLO] == set(ids)
+    assert a.smn == b.smn == despacho.ResumenSmn(smn_avisos=1, smn_avisadas=1)
+    # The function never takes a lock (the SETs of the fake are the subscription records of `registrar`).
+    assert [c for c in fake_upstash.commands if c[0] == "SET" and c[1].startswith("alertas:lock:")] == []
+
+
+async def test_with_the_callers_lock_the_second_run_at_once_is_kept_out(redis, fake_upstash, push) -> None:
+    """The contract of the caller (`evaluacion.evaluar_smn` in production): SET NX EX on `alertas:lock:evaluar-smn`."""
+    await registrar(redis, "cordoba", 2)
+
+    async def corrida_con_lock():
+        if not await redis.set_nx(CLAVE_LOCK_SMN, "x", ex=600):
+            return None
+        return await correr(redis)
+
+    push.cesiones = 5
+    a, b = await asyncio.gather(corrida_con_lock(), corrida_con_lock())
+    assert (a is None) != (b is None)
+    assert len(push.llamadas) == 2
+
+
+class RedisQueFallaAlAnotarSmn(UpstashRedis):
+    """Upstash fails on the `desde`-th record of progress of an SMN done-set (the SADD after a batch): the push went
+    out but nothing says so."""
+
+    def __init__(self, desde: int) -> None:
+        super().__init__(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+        self._desde, self.anotaciones = desde, 0
+
+    async def sadd(self, key: str, *members: str) -> int:
+        if key.startswith("alertas:smn:enviado:"):
+            self.anotaciones += 1
+            if self.anotaciones >= self._desde:
+                raise UpstashUnavailableError("caido")
+        return await super().sadd(key, *members)
+
+
+async def test_a_batch_sent_but_not_recorded_is_repeated_at_most_once_by_the_next_run(fake_upstash, push) -> None:
+    base = UpstashRedis(FAKE_UPSTASH_URL, FAKE_UPSTASH_TOKEN)
+    ids = await registrar(base, "cordoba", 12)  # two batches: 10 and 2
+    roto = RedisQueFallaAlAnotarSmn(desde=1)
+    primero = await correr(roto)
+    assert len(push.llamadas) == 10 and primero.smn == despacho.ResumenSmn(smn_avisos=1, smn_errores=1)
+    assert primero.envio.enviados == 10 and primero.envio.diferidos == 2
+    assert ENVIADOS_AMARILLO not in fake_upstash.sets
+
+    segundo = await correr(base)
+    assert sorted(c.sub_id for c in push.llamadas[10:]) == sorted(ids)  # the 10 again (collapsed by Topic/tag) + 2
+    assert fake_upstash.sets[ENVIADOS_AMARILLO] == set(ids)
+    assert segundo.smn == despacho.ResumenSmn(smn_avisos=1, smn_avisadas=1)
+    tercero = await correr(base)
+    assert len(push.llamadas) == 22 and tercero.smn == despacho.ResumenSmn(smn_avisos=1, smn_ya_avisadas=1)

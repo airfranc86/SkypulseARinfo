@@ -46,11 +46,13 @@ AHORA = datetime(2026, 10, 14, 10, 30, tzinfo=AR)
 DIA0 = datetime(2026, 10, 14, 0, 0, tzinfo=AR)  # where Open-Meteo's two-day series starts
 
 CLAVE_LOCK = "alertas:lock:evaluar"
+CLAVE_LOCK_SMN = "alertas:lock:evaluar-smn"  # FRA-359 (T4): the lock of the "SMN only" run, its own
 CLAVE_APAGADO = "alertas:apagado"  # the name used in the Upstash console
 OM_URL = "https://api.open-meteo.com/v1/forecast"
 RUTA = "/api/alertas/evaluar"
 CABECERA = "Upstash-Signature"
 CUERPO = b'{"origen":"qstash","regla":"tormenta"}'
+CUERPO_SMN = b'{"modo":"smn"}'  # FRA-359 (T4): the body the SMN schedule sends (the signature covers it)
 NO_AUTORIZADO = {"detail": "no_autorizado"}
 
 # The counters (and only the counters) that the HTTP response may carry next to `estado`.
@@ -73,6 +75,15 @@ CONTADORES_ENVIO_HTTP = (
     "fallidos",
     "diferidos",
     "reintentadas",
+)
+# FRA-359 (T4): what the "SMN only" run answers next to `estado` (pairs zone × alert, whole numbers only).
+CONTADORES_SMN_HTTP = (
+    "smn_sin_datos",
+    "smn_avisos",
+    "smn_avisadas",
+    "smn_ya_avisadas",
+    "smn_omitidas",
+    "smn_errores",
 )
 AHORA_21H = datetime(2026, 10, 14, 21, 10, tzinfo=AR)  # the review that looks at TOMORROW (the 15th)
 CLAVE_ENVIADOS_HOY = "alertas:enviado:cordoba:hoy:2026-10-14"  # the SET of ids already reached
@@ -169,8 +180,19 @@ def comandos(fake_upstash) -> list[str]:
 
 
 def lineas_de_resumen(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
-    """The one summary line (state and counters) that a run of the evaluation logs."""
-    return [r for r in caplog.records if r.name == evaluacion.logger.name and "evaluation estado=" in r.getMessage()]
+    """The one summary line (state and counters) that a FORECAST run of the evaluation logs (never the SMN one)."""
+    return [
+        r for r in caplog.records
+        if r.name == evaluacion.logger.name and r.getMessage().startswith("alertas: evaluation estado=")
+    ]
+
+
+def lineas_de_resumen_smn(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    """The one summary line of an "SMN only" run (FRA-359, T4): distinct from the forecast's on purpose."""
+    return [
+        r for r in caplog.records
+        if r.name == evaluacion.logger.name and r.getMessage().startswith("alertas: smn evaluation estado=")
+    ]
 
 
 class RedisConFalla(UpstashRedis):

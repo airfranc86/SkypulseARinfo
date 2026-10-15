@@ -26,17 +26,19 @@ The done-set of a pair is `alertas:smn:enviado:{zona}:{nivel}:{topic}` (`clave_d
 reached for THAT alert, with an expiry set once (`EXPIRE ... NX`, like the forecast's) that outlives `fecha_hasta` by
 `MARGEN_ENVIADOS_SMN_SEGUNDOS` (an alert the SMN extends keeps its key and must not be sent again) and never passes
 `ENVIADOS_SMN_TTL_MAXIMO_SEGUNDOS` (a feed error far in the future must not pin a key for months). Its keyspace is its
-own: it never meets the forecast done-sets `alertas:enviado:{zona}:{aviso}:{fecha}` nor the run lock
-`alertas:lock:evaluar`. An id is recorded ONLY after its send was accepted (or the subscription is gone or invalid, as the
-forecast does): a transient failure, a rejection or a run cut leave it pending for the next run, and the same person is
-never notified twice of the same alert.
+own: it never meets the forecast done-sets `alertas:enviado:{zona}:{aviso}:{fecha}` nor the run locks
+`alertas:lock:evaluar` and `alertas:lock:evaluar-smn`. An id is recorded ONLY after its send was accepted (or the
+subscription is gone or invalid, as the forecast does): a transient failure, a rejection or a run cut leave it pending
+for the next run, and the same person is never notified twice of the same alert.
 
-Two runs at the same time are kept apart by the run lock `alertas:lock:evaluar`, which the CALLER holds (as
-`evaluacion.evaluar` does: SET NX EX, never released): this function does not take it, so a run that is already inside
-`evaluar` can call it too. The lock, not a mark per key, is the guard on purpose: a per-key SET NX would have to live
-as long as the dispatch of the pair (minutes) and a crash in the middle would block the next run until it expired,
-leaving people unnotified; with the lock the worst case is the forecast's (a crash between a push and its record repeats
-at most one batch, which the devices collapse: same `tag`, same `Topic`).
+Two runs at the same time are kept apart by a run lock that the CALLER holds (SET NX EX, never released): this function
+does not take one. The caller of production is `evaluacion.evaluar_smn` (T4), which holds ITS OWN lock
+`alertas:lock:evaluar-smn`, so a forecast run in flight (`alertas:lock:evaluar`) never keeps an SMN run out, nor the
+reverse, and two SMN runs never overlap. The lock, not a mark per key, is the guard on purpose: a per-key SET NX would
+have to live as long as the dispatch of the pair (minutes) and a crash in the middle would block the next run until it
+expired, leaving people unnotified; with the lock the worst case is the forecast's (a crash between a push and its
+record repeats at most one batch, which the devices collapse: same `tag`, same `Topic`). Without any lock, two runs at
+once can send the same alert twice (documented and pinned by a test).
 
 A dry run (`vapid=None`) only counts the alerts found: it reads no member, sends nothing and marks nothing. Nothing
 sensitive leaves this module: no id, endpoint, text, key or zone goes into a log line or into the counters.
@@ -300,7 +302,7 @@ async def evaluar_avisos_smn(
     (`alertas_plazo_corrida_segundos`). `vapid=None` is a dry run: the pairs are counted and nothing else happens.
     `obtener_avisos` and `omitir` exist for the tests and for T5 (the night rule).
 
-    The caller holds the run lock `alertas:lock:evaluar` (as `evaluacion.evaluar` does) and maps `corte` to a state.
+    The caller holds a run lock (`evaluacion.evaluar_smn` holds `alertas:lock:evaluar-smn`) and maps `corte` to a state.
 
     Raises:
         ValueError: `ahora` has no time zone (nothing is touched).

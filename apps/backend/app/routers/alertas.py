@@ -3,8 +3,10 @@
 POST /api/alertas/suscripcion  -> 201 {id, zona}
 POST /api/alertas/baja         -> 204
 POST /api/alertas/prueba       -> 200 {enviada}
-POST /api/alertas/evaluar      -> 200 {estado, ...contadores} | 401   (lo llama QStash, firmado; evalúa y, si el interruptor
-                                                                       de envío está encendido, manda; ver `/evaluar`)
+POST /api/alertas/evaluar      -> 200 {estado, ...contadores} | 401 | 422   (lo llama QStash, firmado; evalúa y, si el
+                                                                       interruptor de envío está encendido, manda; con
+                                                                       `{"modo":"smn"}` en el cuerpo solo cruza los avisos
+                                                                       del SMN, sin Open-Meteo; ver `/evaluar`)
 
 Falla cerrado: sin Upstash, sin clave VAPID usable o con el tope de suscripciones alcanzado responde 503,
 nunca 500. No se loguea el endpoint, las claves, el id ni el cuerpo (el middleware de requests solo
@@ -13,6 +15,7 @@ registra método, ruta y estado).
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Annotated
@@ -48,9 +51,20 @@ _PRUEBA_RECIENTE = "prueba_reciente"
 _PUSH_NO_DISPONIBLE = "push_no_disponible"
 # Una sola respuesta para todo rechazo de /evaluar: no le dice a quien prueba qué falló.
 _NO_AUTORIZADO = "no_autorizado"
+_MODO_DESCONOCIDO = "modo_desconocido"
 
 # QStash manda un cuerpo de pocos bytes; más que esto no es QStash y ni se lee entero.
 MAX_CUERPO_EVALUAR_BYTES = 64 * 1024
+
+# El modo que pide el cuerpo FIRMADO de /evaluar (FRA-359, T4). `{"modo":"smn"}` corre solo el cruce de los avisos
+# oficiales del SMN (cada 30 min, sin Open-Meteo); `{"modo":"pronostico"}`, o ningún `modo`, es la corrida del
+# pronóstico de siempre (lo que mandan los 6 schedules que existen). Lista cerrada: otro valor es un 422, nunca una
+# corrida del pronóstico en silencio. Va en el cuerpo y no en la URL porque la firma de QStash cubre el cuerpo (su
+# SHA-256 es un claim firmado) y exige la URL exacta: nadie sin la clave de firma puede cambiar el modo, que decide
+# qué se le manda a la gente.
+MODO_PRONOSTICO = "pronostico"
+MODO_SMN = "smn"
+MODOS = frozenset({MODO_PRONOSTICO, MODO_SMN})
 
 
 def redis_de_alertas() -> UpstashRedis:
@@ -196,17 +210,40 @@ async def _modo_de_la_corrida(redis: UpstashRedis | None) -> bool | None:
     return True if await interruptor.envio_activo(redis) else None
 
 
-async def _motivo_de_rechazo_del_pedido(request: Request) -> str | None:
-    """None si el pedido trae una firma de QStash válida para su cuerpo crudo; si no, el código fijo del motivo."""
+async def _motivo_de_rechazo_del_pedido(request: Request) -> tuple[str | None, bytes]:
+    """`(None, cuerpo)` si el pedido trae una firma de QStash válida para su cuerpo crudo (que se devuelve tal cual,
+    ya verificado, para leer el modo); si no, `(motivo, b"")` con el código fijo del motivo."""
     firma = request.headers.get("upstash-signature")
     if not firma or not firma.strip():
-        return firma_qstash.MOTIVO_SIN_CABECERA
+        return firma_qstash.MOTIVO_SIN_CABECERA, b""
     if len(firma) > firma_qstash.MAX_LARGO_FIRMA:
-        return firma_qstash.MOTIVO_FIRMA_LARGA  # antes de leer el cuerpo: no hay nada que valga la pena leer
+        return firma_qstash.MOTIVO_FIRMA_LARGA, b""  # antes de leer el cuerpo: no hay nada que valga la pena leer
     cuerpo = await _leer_cuerpo_crudo(request)
     if cuerpo is None:
-        return firma_qstash.MOTIVO_CUERPO
-    return motivo_de_rechazo(firma, cuerpo)
+        return firma_qstash.MOTIVO_CUERPO, b""
+    motivo = motivo_de_rechazo(firma, cuerpo)
+    return motivo, (cuerpo if motivo is None else b"")
+
+
+def modo_pedido(cuerpo: bytes) -> str:
+    """El modo (`MODO_*`) que pide un cuerpo YA VERIFICADO por la firma. Un cuerpo vacío, que no es JSON, que no es un
+    objeto o sin la clave `modo` es la corrida del pronóstico (lo que mandaban los schedules antes de que existiera el
+    modo). Solo se mira `modo`; el resto del objeto se ignora, como siempre.
+
+    Raises:
+        ValueError: `modo` está pero no es uno de `MODOS` (el valor no viaja en el error ni se registra).
+    """
+    try:
+        datos = json.loads(cuerpo) if cuerpo.strip() else None
+    except (ValueError, RecursionError):  # también UnicodeDecodeError; RecursionError: JSON anidado hasta el tope de bytes
+        datos = None
+    if not isinstance(datos, dict) or "modo" not in datos:
+        return MODO_PRONOSTICO
+    modo = datos["modo"]
+    # `isinstance` antes del `in`: un valor que no es texto (una lista) no puede ni preguntarse al conjunto.
+    if isinstance(modo, str) and modo in MODOS:
+        return modo
+    raise ValueError("modo desconocido")
 
 
 def _ahora_utc() -> datetime:
@@ -221,27 +258,39 @@ def _ahora_utc() -> datetime:
 )
 @limiter.limit("30/minute")
 async def post_evaluar(request: Request) -> dict[str, str | int]:
-    """Verifica la firma de QStash sobre el cuerpo crudo y, solo entonces, mira el interruptor y evalúa (y manda).
+    """Verifica la firma de QStash sobre el cuerpo crudo y, solo entonces, lee el modo, mira el interruptor y evalúa
+    (y manda).
 
     - 401 `no_autorizado` si falta la firma o no vale (misma respuesta para toda causa; el motivo, un código
       fijo sin valores, queda solo en el registro del servidor).
+    - 422 `modo_desconocido` si el cuerpo firmado trae un `modo` que no es `smn` ni `pronostico` (antes de tocar
+      Upstash: un schedule mal armado se ve desde la primera entrega, apagado o no). Sin `modo`, la corrida del
+      pronóstico de siempre.
     - 200 `{"estado": "apagado"}` si ni `ALERTAS_ENVIO_ACTIVO` ni `ALERTAS_EVALUAR_EN_SECO` están encendidos, si
       la clave `alertas:apagado` de Upstash existe o no se puede leer, o si no hay Upstash (200 para que QStash no
       reintente; con los dos interruptores apagados no se toca Upstash ni Open-Meteo).
     - 200 `{"estado": ..., <contadores>}` con el resultado de la evaluación (`evaluada`, `evaluada_incompleta`,
       `fuera_de_ventana`, `en_curso`, `upstash_no_disponible`, `apagado_a_mitad`, `sin_vapid`): solo el estado y
       números, nunca ids, endpoints, textos ni claves. Una corrida que MANDA agrega los contadores de envío.
+      En el modo `smn` (FRA-359) los contadores son los de los avisos del SMN (`smn_*`, pares zona × aviso) y, si
+      manda, los de envío; no hay `fuera_de_ventana` (corre las 24 h) y el lock es `alertas:lock:evaluar-smn`.
     - Manda notificaciones SOLO si `interruptor.envio_activo` es verdadero (`ALERTAS_ENVIO_ACTIVO` y la clave de
       apagado ausente). Con solo `ALERTAS_EVALUAR_EN_SECO` evalúa y cuenta, sin mandar nada. Sin una clave VAPID
-      usable, `{"estado": "sin_vapid"}` (200: un 5xx haría reintentar a QStash por nada).
+      usable, `{"estado": "sin_vapid"}` (200: un 5xx haría reintentar a QStash por nada). Lo mismo en los dos modos.
 
     Todo corre con la clave de cliente fija del trabajo (`job:alertas`): las llamadas a Open-Meteo no gastan la
-    parte de la IP que entregó el pedido, y SIGUE valiendo el tope global de Open-Meteo.
+    parte de la IP que entregó el pedido, y SIGUE valiendo el tope global de Open-Meteo (el modo `smn` no llama a
+    Open-Meteo).
     """
-    motivo = await _motivo_de_rechazo_del_pedido(request)
+    motivo, cuerpo = await _motivo_de_rechazo_del_pedido(request)
     if motivo is not None:
         logger.warning("alertas: /evaluar rechazó un pedido sin firma válida motivo=%s", motivo)
         raise HTTPException(status_code=401, detail=_NO_AUTORIZADO)
+    try:
+        pedido = modo_pedido(cuerpo)
+    except ValueError:
+        logger.warning("alertas: /evaluar rechazó un pedido firmado con un modo desconocido")
+        raise HTTPException(status_code=422, detail=_MODO_DESCONOCIDO) from None
     redis = get_redis()
     with con_clave_de_cliente(ALERTAS_JOB_CLIENT_KEY):
         modo = await _modo_de_la_corrida(redis)
@@ -249,5 +298,8 @@ async def post_evaluar(request: Request) -> dict[str, str | int]:
             return {"estado": evaluacion.ESTADO_APAGADO}
         # `reloj` lee la hora cuando se le pide: el pronóstico de cada zona se juzga contra la hora de ESE momento, no contra la
         # del arranque (los envíos de las zonas anteriores pueden haber tardado minutos).
-        resultado = await evaluacion.evaluar(redis, _ahora_utc(), enviar=modo, reloj=_ahora_utc)
+        if pedido == MODO_SMN:
+            resultado = await evaluacion.evaluar_smn(redis, _ahora_utc(), enviar=modo, reloj=_ahora_utc)
+        else:
+            resultado = await evaluacion.evaluar(redis, _ahora_utc(), enviar=modo, reloj=_ahora_utc)
         return resultado.como_respuesta()
