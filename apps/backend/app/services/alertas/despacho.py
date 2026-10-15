@@ -148,6 +148,51 @@ class ResumenEnvio:
         return {nombre: getattr(self, nombre) for nombre in CONTADORES_ENVIO}
 
 
+# The counters of the sending of OFFICIAL SMN alerts (FRA-359). Their own tuple, NEXT to `CONTADORES_ENVIO` and never
+# inside it: the response and the log line of the forecast run keep their exact shape (tests pin it), and a run that
+# only checks the SMN (S2) adds these. The unit is the pair (zone, alert): a zone with two alerts counts twice. The
+# people reached by an SMN push are counted by the sender as always (`ResumenEnvio`): no second set of per-subscriber
+# counters. An explicit whitelist: whole numbers only, never a zone, a key or a text.
+CONTADORES_SMN = (
+    "smn_sin_datos",
+    "smn_avisos",
+    "smn_avisadas",
+    "smn_ya_avisadas",
+    "smn_omitidas",
+    "smn_errores",
+)
+
+
+@dataclass(frozen=True)
+class ResumenSmn:
+    """What the SMN part of a run did, as integers (FRA-359). `smn_sin_datos` is 1 when the SMN feed could not be
+    verified (`available=False`: "we do not know", never "no alerts"; nothing was sent or marked). Pairs (zone, alert):
+    `smn_avisos` (notifiable storm alerts found over the zones with subscribers), `smn_avisadas` (at least one person
+    was reached in this run), `smn_ya_avisadas` (already dispatched before: the dedupe key of T1 said so),
+    `smn_omitidas` (not sent on purpose: the night rule of S7), `smn_errores` (the text, a read or a record of progress
+    failed: the pair is not notified, fail-closed)."""
+
+    smn_sin_datos: int = 0
+    smn_avisos: int = 0
+    smn_avisadas: int = 0
+    smn_ya_avisadas: int = 0
+    smn_omitidas: int = 0
+    smn_errores: int = 0
+
+    def sumar(self, otro: ResumenSmn) -> ResumenSmn:
+        """A new summary with both added up (neither input changes)."""
+        return ResumenSmn(**{n: getattr(self, n) + getattr(otro, n) for n in CONTADORES_SMN})
+
+    def como_respuesta(self) -> dict[str, int]:
+        return {nombre: getattr(self, nombre) for nombre in CONTADORES_SMN}
+
+    def como_log(self) -> tuple[str, tuple[int, ...]]:
+        """The fragment for the summary line of a run, in the shape of the existing counters (`nombre=%d ...`) and its
+        arguments, so the caller appends it to the line with `" " + formato` and `argumentos`."""
+        formato = " ".join(f"{nombre}=%d" for nombre in CONTADORES_SMN)
+        return formato, tuple(getattr(self, nombre) for nombre in CONTADORES_SMN)
+
+
 @dataclass(frozen=True)
 class DespachoDeZona:
     """The outcome of one zone: what was counted, whether the RUN must stop (`corte`) and whether the zone could not

@@ -8,7 +8,8 @@
 - Claims VAPID nuevos en cada envío: `pywebpush` escribe `aud` (el servicio push) y `exp` en el dict que
   recibe, así que reusarlo le mandaría a un servicio el `aud` del anterior.
 - `Urgency: high` (un aviso de tormenta no puede esperar a que el teléfono salga del ahorro de batería) y
-  `Topic` (un mensaje nuevo reemplaza al anterior de la misma ciudad y día que aún no se entregó).
+  `Topic` (un mensaje nuevo reemplaza al anterior de la misma ciudad y día que aún no se entregó; el de un aviso
+  oficial del SMN es otro, derivado del aviso, así que nunca reemplaza al del pronóstico ni al revés: FRA-359).
 - Sin redirecciones y con timeout: el endpoint lo mandó un navegador; aunque pasó la lista de hosts conocidos
   al darse de alta, una respuesta de un servicio comprometido no puede llevarnos a otro lado.
 - 404 y 410 (la suscripción ya no existe) borran el registro; 429, 5xx, errores de red y cualquier otro
@@ -31,8 +32,10 @@ import os
 import hashlib
 import json
 import logging
+import re
 from datetime import date, datetime, timezone
 from enum import Enum
+from typing import TYPE_CHECKING
 
 import requests
 from cryptography.hazmat.primitives import serialization
@@ -45,6 +48,9 @@ from app.core.upstash import UpstashRedis
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.textos import Mensaje, texto_prueba
 from app.services.alertas.zonas import zona_por_slug
+
+if TYPE_CHECKING:  # only the type of the dedupe key: the sender never reads the SMN feed
+    from app.services.smn_alertas import ClaveDedupe
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +77,13 @@ MAX_PAYLOAD_BYTES = 4096 - 86 - 1 - 16
 # Tags de la notificación: una nueva con el mismo tag reemplaza a la anterior en vez de apilarse.
 TAG_ALERTA = "skypulse-alerta"
 TAG_PRUEBA = "skypulse-prueba"
+TAG_SMN = "skypulse-smn"  # un aviso oficial del SMN (FRA-359) nunca reemplaza al del pronóstico propio, ni al revés
 
 VENTANA_PRUEBA_SEGUNDOS = 60  # una prueba por suscripción por minuto
 
-_LARGO_TOPIC = 32  # RFC 8030: hasta 32 caracteres del alfabeto base64url
+_LARGO_TOPIC = 32  # RFC 8030 §5.4: hasta 32 caracteres del alfabeto base64url (URL and filename-safe)
+_TOPIC_VALIDO = re.compile(r"[A-Za-z0-9_-]{1,32}")  # lo que un servicio push acepta sin responder 400
+_LARGO_TAG_SMN = 12  # cuánto del Topic del SMN lleva su tag: alcanza para distinguir avisos, y el tag se lee en el log del navegador
 # Solo para probar que la clave firma al cargarla; en un envío real el `aud` es el del endpoint.
 _AUD_DE_COMPROBACION = "https://fcm.googleapis.com"
 
@@ -194,6 +203,38 @@ def tag_de(zona: str, fecha: date) -> str:
     return f"{TAG_ALERTA}-{zona}-{fecha:%Y-%m-%d}"
 
 
+def _preimagen_smn(clave: ClaveDedupe) -> bytes:
+    """What the Topic of an SMN notice is derived from: the dedupe key of T1 (zone, type, level, start), with the start
+    as an instant in UTC so the same alert read with another offset gives the same Topic. The prefix keeps it apart
+    from the forecast Topic (`zona:fecha`) even if a zone slug and a date ever looked alike."""
+    zona, tipo, nivel, fecha_desde = clave
+    if fecha_desde is None:
+        inicio = ""
+    else:
+        if fecha_desde.tzinfo is None:  # a guard: the CAP feed carries offsets
+            fecha_desde = fecha_desde.replace(tzinfo=timezone.utc)
+        inicio = fecha_desde.astimezone(timezone.utc).isoformat()
+    return f"smn:{zona}:{tipo}:{nivel}:{inicio}".encode()
+
+
+def topic_smn(clave: ClaveDedupe) -> str:
+    """The `Topic` RFC 8030 of an official SMN notice (FRA-359): 32 base64url characters of a SHA-256 of its dedupe key.
+
+    Same alert (same key, even if the SMN rewrote its text), same Topic: a copy still waiting at the push service is
+    replaced, never stacked. Another alert (a rise from amarillo to naranja, another start) is another Topic. It is
+    never the Topic of the forecast push of the same city and day (`topic_de`): one must not replace the other.
+    """
+    digest = hashlib.sha256(_preimagen_smn(clave)).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")[:_LARGO_TOPIC]
+
+
+def tag_smn(clave: ClaveDedupe) -> str:
+    """The `tag` of the notification of an official SMN notice: the pair of `topic_smn` on the device (a repeated push
+    of the same alert replaces the one shown; another alert is shown next to it). It carries the zone slug so the
+    service worker log stays readable, and the start of the Topic, never the free text of the alert."""
+    return f"{TAG_SMN}-{clave[0]}-{topic_smn(clave)[:_LARGO_TAG_SMN]}"
+
+
 def construir_payload(mensaje: Mensaje, *, tag: str = TAG_ALERTA) -> str:
     """El JSON que viaja cifrado: lleva los dos formatos, porque cada navegador lee uno distinto.
 
@@ -311,16 +352,19 @@ async def enviar(
     ttl: int = TTL_ALERTA_SEGUNDOS,
     vapid: Vapid | None = None,
     borrar: bool = True,
+    topic: str | None = None,
 ) -> Resultado:
     """Manda `payload` a la suscripción guardada como `registro` (el JSON de `alertas:sub:{sub_id}`).
 
-    `zona` y `fecha` solo arman el Topic. `vapid` permite cargar la clave una vez para muchos envíos
-    (`cargar_vapid()`); sin él se carga de `settings` en cada llamada. Con `borrar=False` un 404/410 se informa
-    (`VENCIDA`) pero NO se borra nada: lo decide quien llama (el envío programado lo hace detrás de un cortacircuitos
-    que evita vaciar las suscripciones si un proxy devolviera 404 para todo).
+    `zona` y `fecha` solo arman el Topic (`topic_de`), salvo que `topic` traiga uno propio (el de un aviso oficial del
+    SMN, `topic_smn`: no debe reemplazar al del pronóstico del mismo día). `vapid` permite cargar la clave una vez
+    para muchos envíos (`cargar_vapid()`); sin él se carga de `settings` en cada llamada. Con `borrar=False` un
+    404/410 se informa (`VENCIDA`) pero NO se borra nada: lo decide quien llama (el envío programado lo hace detrás de
+    un cortacircuitos que evita vaciar las suscripciones si un proxy devolviera 404 para todo).
 
     Raises:
-        ValueError: `ttl` no es positivo o `payload` no entra en un mensaje push (no se envía nada).
+        ValueError: `ttl` no es positivo, `payload` no entra en un mensaje push o `topic` no cumple RFC 8030 (no se
+            envía nada).
         VapidNoDisponibleError: no hay clave VAPID usable.
         UpstashUnavailableError: el servicio push dijo 404/410 y Upstash no dejó borrar el registro.
     """
@@ -328,6 +372,10 @@ async def enviar(
         raise ValueError("el TTL debe ser positivo: Apple rechaza TTL 0")
     if len(payload.encode("utf-8")) > MAX_PAYLOAD_BYTES:
         raise ValueError("el mensaje no entra en una notificación push")
+    if topic is None:
+        topic = topic_de(zona, fecha)
+    elif not _TOPIC_VALIDO.fullmatch(topic):
+        raise ValueError("el Topic debe tener de 1 a 32 caracteres base64url (RFC 8030)")
     suscripcion = leer_registro(registro)
     if suscripcion is None:
         logger.warning(
@@ -338,9 +386,7 @@ async def enviar(
         vapid = cargar_vapid()
 
     try:
-        await asyncio.to_thread(
-            _enviar_sync, suscripcion, payload, vapid, ttl, topic_de(zona, fecha)
-        )
+        await asyncio.to_thread(_enviar_sync, suscripcion, payload, vapid, ttl, topic)
     except SuscripcionInservible:
         logger.warning("alertas: no se puede cifrar un mensaje para una suscripción; es inválida")
         return Resultado.INVALIDA
