@@ -30,6 +30,7 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name)
     AR,
     CLAVE_APAGADO,
     CLAVE_LOCK_SMN,
+    conteo_del_dia,
     envio_activo,
     esperas,
     estado_de_alertas_limpio,
@@ -387,11 +388,13 @@ async def test_the_smn_mode_at_night_omits_the_yellow_alert_answers_and_logs_smn
         assert response.status_code == 200 and response.json() == RESPUESTA_SMN_OMITIDA, momento
         assert push.llamadas == [] and conjuntos_smn(fake_upstash) == []
         valor = fake_upstash.strings[CLAVE_LOCK_SMN]
-        assert fake_upstash.commands == [  # the switch, the lock and the index: nothing else is read or written
+        assert fake_upstash.commands == [  # the switch, the lock and the index: nothing else is read or written...
             ["GET", CLAVE_APAGADO],
             ["SET", CLAVE_LOCK_SMN, valor, "NX", "EX", str(fake_upstash.ttls[CLAVE_LOCK_SMN])],
             ["SMEMBERS", "alertas:zonas"],
-        ]
+        ] + conteo_del_dia(  # ...but the daily count of FRA-360, after the run, on the Argentine day of `momento`
+            momento.date().isoformat(), ("smn:corridas:evaluada", 1), ("smn:smn_avisos", 1), ("smn:smn_omitidas", 1)
+        )
         lineas = lineas_de_resumen_smn(caplog)
         assert [(r.levelno, r.getMessage()) for r in lineas] == [(logging.INFO, LINEA_SMN_OMITIDA)], momento
         assert lineas_de_resumen(caplog) == []

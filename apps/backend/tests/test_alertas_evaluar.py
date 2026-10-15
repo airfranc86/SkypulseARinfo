@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 
 import pytest
 import respx
@@ -34,6 +35,7 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; e
     CUERPO,
     NO_AUTORIZADO,
     RUTA,
+    conteo_del_dia,
     envio_activo,
     estado_de_alertas_limpio,
     evaluador_inerte,
@@ -149,12 +151,17 @@ async def test_a_valid_signature_with_sending_off_answers_apagado_without_touchi
 
 
 async def test_with_sending_on_and_no_kill_key_the_answer_is_listo_and_nothing_is_sent(
-    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, push_http, evaluador_inerte
+    async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, push_http, evaluador_inerte, monkeypatch
 ) -> None:
+    monkeypatch.setattr(router_alertas, "_ahora_utc", lambda: datetime(2026, 10, 14, 13, 30, tzinfo=timezone.utc))  # 10:30 AR
     response = await llamar_evaluar(async_client)
     assert response.status_code == 200
     assert response.json() == {"estado": "listo"}
-    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]]
+    # The switch, and after the run its daily count (FRA-360) on the Argentine day of the run: `listo` is a state outside
+    # the closed list of the real runs, so it is counted under the fixed `desconocido` field (never under its own text).
+    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] + conteo_del_dia(
+        "2026-10-14", ("pronostico:corridas:desconocido", 1)
+    )
     for request in fake_upstash.requests:
         assert str(request.url) == f"{FAKE_UPSTASH_URL}/"  # la consulta va en el cuerpo, no en la URL
     assert push_http.requests == []  # esta pieza no manda ninguna notificación
@@ -185,7 +192,8 @@ async def test_the_kill_key_is_read_on_every_request(
 ) -> None:
     for _ in range(3):
         await llamar_evaluar(async_client)
-    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] * 3
+    assert [c for c in fake_upstash.commands if c[0] == "GET"] == [["GET", CLAVE_APAGADO]] * 3
+    assert [c[0] for c in fake_upstash.commands] == ["GET", "HINCRBY", "EXPIRE"] * 3  # FRA-360: each run is counted
 
 
 async def test_an_unreachable_upstash_means_apagado_not_listo_and_not_an_error(

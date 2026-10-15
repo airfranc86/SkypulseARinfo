@@ -291,11 +291,12 @@ async def test_the_smn_run_does_not_pass_a_deadline_so_the_configured_one_applie
 
 
 # ---------------------------------------------------------------------------
-# Upstash cost through HTTP: 3 commands for an empty run, 11 with 50 zones and one alert
+# Upstash cost through HTTP: 3 commands for an empty run, 11 with 50 zones and one alert, plus the daily count of
+# FRA-360 after the run (one HINCRBY per counter different from zero, then the expiry of the day)
 # ---------------------------------------------------------------------------
 
 
-async def test_an_smn_run_with_50_zones_and_no_alert_costs_3_commands_through_http(
+async def test_an_smn_run_with_50_zones_and_no_alert_costs_3_commands_plus_2_of_the_daily_count_through_http(
     async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, push, feed, open_meteo_prohibido, reloj_smn,
 ) -> None:
     for zona in ZONAS:
@@ -304,11 +305,11 @@ async def test_an_smn_run_with_50_zones_and_no_alert_costs_3_commands_through_ht
     fake_upstash.commands.clear()
     response = await llamar(async_client, CUERPO_SMN)
     assert response.status_code == 200 and response.json()["estado"] == "evaluada"
-    assert [c[0] for c in fake_upstash.commands] == ["GET", "SET", "SMEMBERS"]
+    assert [c[0] for c in fake_upstash.commands] == ["GET", "SET", "SMEMBERS", "HINCRBY", "EXPIRE"]
     assert push.llamadas == []
 
 
-async def test_an_smn_run_with_50_zones_and_one_alert_costs_11_commands_through_http(
+async def test_an_smn_run_with_50_zones_and_one_alert_costs_11_commands_plus_6_of_the_daily_count_through_http(
     async_client: AsyncClient, alertas_redis, fake_upstash, envio_activo, push, feed, open_meteo_prohibido, reloj_smn,
 ) -> None:
     for zona in ZONAS:
@@ -320,7 +321,7 @@ async def test_an_smn_run_with_50_zones_and_one_alert_costs_11_commands_through_
     assert response.status_code == 200 and response.json() == RESPUESTA_SMN_ENVIADA
     assert [c[0] for c in fake_upstash.commands] == [
         "GET", "SET", "SMEMBERS", "SMEMBERS", "SMEMBERS", "GET", "GET", "GET", "GET", "SADD", "EXPIRE",
-    ]
+    ] + ["HINCRBY"] * 5 + ["EXPIRE"]  # the state, smn_avisos, smn_avisadas, avisadas and enviados; then the day's expiry
 
 
 # ---------------------------------------------------------------------------

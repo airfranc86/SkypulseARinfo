@@ -41,6 +41,7 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; e
     TORMENTA,
     FuenteQueSeCuelga,
     RedisSinSet,
+    conteo_del_dia,
     en_seco,
     envio_activo,
     esperas,
@@ -191,7 +192,10 @@ async def test_outside_the_review_hours_the_answer_says_so_and_nothing_else_happ
     suscribir(fake_upstash, "cordoba")
     response = await llamar_evaluar(async_client)
     assert response.status_code == 200 and response.json() == {"estado": "fuera_de_ventana"}
-    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]]  # not even the lock
+    # Not even the lock; only the daily count of the state (FRA-360), after the run.
+    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] + conteo_del_dia(
+        "2026-10-14", ("pronostico:corridas:fuera_de_ventana", 1)
+    )
     assert fuente.calls == []
 
 
