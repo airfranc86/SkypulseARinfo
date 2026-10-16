@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { leerConfigAsistente } from '@/lib/asistente/config'
+import { tituloDeRuta } from '@/lib/tituloPagina'
 
 const TITLES: Record<string, string> = {
   '/':             'SkyPulse — Inicio',
@@ -23,20 +25,24 @@ const TITLES: Record<string, string> = {
   '/alertas':      'SkyPulse — Avisos de tormenta',
   '/privacidad':   'SkyPulse — Política de privacidad',
   '/datos':        'SkyPulse — De dónde salen los datos',
+  '/preguntale':   'SkyPulse — Preguntale a Mora',
 }
 
 /** Toda ruta real debe estar en TITLES: lo que no figura acá cae en el 404. */
 const NOT_FOUND_TITLE = 'SkyPulse — 404 · Visibilidad nula'
 
-/** react-router ignora mayúsculas y la barra final al matchear; el lookup también debe hacerlo. */
-function normalizePath(pathname: string): string {
-  return pathname.toLowerCase().replace(/\/+$/, '') || '/'
-}
+/**
+ * Rutas que solo existen con una bandera de build encendida. Con la bandera apagada la ruta no se registra (cae en
+ * el 404) y la pestaña tampoco debe delatarla: lleva el título del 404. La regla (pura, con pruebas) está en
+ * `lib/tituloPagina.ts`; `react-router` ignora mayúsculas y la barra final y ahí el lookup también.
+ */
+const RUTAS_CON_BANDERA = new Set(['/preguntale'])
+const ASISTENTE_VISIBLE = leerConfigAsistente(import.meta.env).visible
 
 export function usePageTitle(): void {
   const location = useLocation()
 
   useEffect(() => {
-    document.title = TITLES[normalizePath(location.pathname)] ?? NOT_FOUND_TITLE
+    document.title = tituloDeRuta(location.pathname, TITLES, NOT_FOUND_TITLE, RUTAS_CON_BANDERA, ASISTENTE_VISIBLE)
   }, [location.pathname])
 }

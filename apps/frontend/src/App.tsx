@@ -15,6 +15,7 @@ import { useRenovarAvisos } from '@/hooks/useRenovarAvisos'
 import { LocationPicker } from '@/components/LocationPicker'
 import { CampanaAvisos } from '@/components/alertas/CampanaAvisos'
 import { leerConfigAlertas } from '@/lib/alertas/config'
+import { leerConfigAsistente } from '@/lib/asistente/config'
 import { getConsent, setConsent, loadGTM, type ConsentStatus } from '@/lib/consent'
 import { DESKTOP_MEDIA_QUERY, shouldShowThreads } from '@/lib/motionPreference'
 import { navRow, type Tool } from '@/lib/toolRegistry'
@@ -59,6 +60,7 @@ const Cizalladura = lazy(() => import('@/pages/Cizalladura').then(m => ({ defaul
 const Alertas       = lazy(() => import('@/pages/Alertas').then(m => ({ default: m.Alertas })))
 const Privacidad    = lazy(() => import('@/pages/Privacidad').then(m => ({ default: m.Privacidad })))
 const DatosFuentes  = lazy(() => import('@/pages/DatosFuentes').then(m => ({ default: m.DatosFuentes })))
+const Preguntale = lazy(() => import('@/pages/Preguntale').then(m => ({ default: m.Preguntale })))
 const NotFound      = lazy(() => import('@/pages/NotFound').then(m => ({ default: m.NotFound })))
 
 import { useVolcanes } from '@/hooks/useWeather'
@@ -168,6 +170,12 @@ const THREADS_COLOR: [number, number, number] = [0.753, 0.612, 0.169]
  * page itself is always reachable by URL; only the bell waits for `VITE_ALERTAS_VISIBLE === 'true'`.
  */
 const CONFIG_ALERTAS = leerConfigAlertas(import.meta.env)
+
+/**
+ * Mora, the assistant (owner decision D8): `/preguntale` exists only with `VITE_ASISTENTE_VISIBLE === 'true'`.
+ * Without the flag the route is not registered, so it falls through to the 404. No menu link either way.
+ */
+const CONFIG_ASISTENTE = leerConfigAsistente(import.meta.env)
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
@@ -350,6 +358,7 @@ function RootLayout() {
               <Route path="/alertas" element={<Alertas location={location} config={CONFIG_ALERTAS} />} />
               <Route path="/privacidad" element={<Privacidad />} />
               <Route path={DATA_PAGE_PATH} element={<DatosFuentes />} />
+              {CONFIG_ASISTENTE.visible && <Route path="/preguntale" element={<Preguntale />} />}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

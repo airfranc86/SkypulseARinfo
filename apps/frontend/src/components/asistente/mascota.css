@@ -1,0 +1,267 @@
+/*
+ * Mora, the mascot of the assistant: palette, blink and the nine moods.
+ *
+ * Every part of the drawing is a group with a class (see Mascota.tsx); a mood only moves, hides or recolors parts,
+ * it never redraws them. The geometry is in user units of the SVG (1024 canvas, see moraGeometria.ts).
+ *
+ * The palette below is the ONE place with literal colors (the mascot has its own look and does not follow the site
+ * theme: she is the same on a light and on a dark page). Everything else uses `var(--mora-*)`.
+ */
+
+/* paleta:inicio */
+.mora {
+  --mora-tinta: #0e1620;
+  --mora-tinta-ojo: #161d24;
+  --mora-blanco: #ffffff;
+  --mora-cara: #f0e9d8;
+  --mora-casquete: #f6f5ec;
+  --mora-escudo: #eae2d0;
+  --mora-banda: #dccfb8;
+  --mora-linea: #d4c7ad;
+  --mora-parche: #ddcfb7;
+  --mora-claro: #efe6d3;
+  --mora-pluma: #f6f3e9;
+  --mora-cuerpo: #e8e0c9;
+  --mora-esclera-sombra: #d3d9de;
+  --mora-iris: #b05a3e;
+  --mora-iris-bajo: #e49459;
+  --mora-pupila: #131d27;
+  --mora-ceja: #ddd0b9;
+  --mora-ceja-trazo: #8b857d;
+  --mora-narina: #171d20;
+  --mora-pico: #dcb052;
+  --mora-pico-sombra: #b58533;
+  --mora-pico-banda-izq: #b8883c;
+  --mora-pico-banda-der: #aa8042;
+  --mora-pico-cresta: #ecd38f;
+  --mora-pico-brillo: #f3dfa1;
+  --mora-oro: #d2a74e;
+  --mora-alerta: #e0472f;
+  --mora-gota: #6fb3e3;
+  --mora-corriente: #9bbfd6;
+}
+/* paleta:fin */
+
+.mora {
+  display: block;
+  overflow: visible;
+}
+
+/* parts that only exist in some moods */
+.mora .gotas,
+.mora .mechones-extra,
+.mora .corrientes,
+.mora .ojo-cerrado {
+  opacity: 0;
+}
+
+/*
+ * eyelids: the UPPER one is the blink (it comes down from above, owner decision 2026-10-16) and also how she squints;
+ * its resting offset is the variable --mora-ojo-alto (fully open = -132px), which the squinting moods change so the
+ * blink starts and ends at the mood's own eyelid level. The lower one only rises for the smiling eyes of respondiendo.
+ */
+.mora {
+  --mora-ojo-alto: -132px;
+}
+.mora .parpado-bajo {
+  transform: translateY(132px);
+}
+.mora .parpado-alto {
+  transform: translateY(var(--mora-ojo-alto, -132px));
+}
+
+/* pivots */
+.mora .cabeza-grupo {
+  transform-origin: 705px 720px;
+}
+.mora .mechones {
+  transform-origin: 850px 300px;
+}
+.mora .ceja,
+.mora .pupila,
+.mora .pico {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* changes between moods are soft; with reduced motion they are a hard cut (see the end of the file) */
+.mora .cabeza-grupo,
+.mora .mirada,
+.mora .ceja,
+.mora .pupila,
+.mora .pico,
+.mora .mechones,
+.mora .parpado-alto,
+.mora .parpado-bajo,
+.mora .gotas,
+.mora .mechones-extra,
+.mora .corrientes,
+.mora .ojo-cerrado {
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+/* ── blink: the upper eyelid comes down, holds and goes back up (240 ms = 90 + 40 + 110, see parpadeo.ts) ── */
+@keyframes mora-parpadeo {
+  0% {
+    transform: translateY(var(--mora-ojo-alto, -132px));
+  }
+  37.5% {
+    transform: translateY(0);
+  }
+  54.2% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(var(--mora-ojo-alto, -132px));
+  }
+}
+
+.mora[data-parpadeo="1"] .parpado-alto,
+.mora[data-parpadeo="2"] .parpado-alto {
+  animation: mora-parpadeo 240ms linear;
+}
+.mora[data-parpadeo="1"] .parpado-alto {
+  animation-iteration-count: 1;
+}
+.mora[data-parpadeo="2"] .parpado-alto {
+  animation-iteration-count: 2;
+}
+
+/* ── alerta: eyebrows up, fixed pupils, tufts up and the pulse turns red ── */
+.mora[data-estado="alerta"] .ceja {
+  transform: translateY(-12px);
+}
+.mora[data-estado="alerta"] .pupila {
+  transform: scale(0.85);
+}
+.mora[data-estado="alerta"] .mechones {
+  transform: rotate(-12deg);
+}
+.mora[data-estado="alerta"] .oro-relleno {
+  fill: var(--mora-alerta);
+}
+.mora[data-estado="alerta"] .oro-trazo {
+  stroke: var(--mora-alerta);
+}
+
+/* ── pensando: looks UP (both eyes the same: the irises already sit toward the beak, so a sideways shift would make one eye look off), one eyebrow raised, head slightly tilted ── */
+.mora[data-estado="pensando"] .mirada {
+  transform: translateY(-13px);
+}
+.mora[data-estado="pensando"] .ceja-der {
+  transform: translateY(-12px);
+}
+.mora[data-estado="pensando"] .cabeza-grupo {
+  transform: rotate(-3deg);
+}
+
+/* ── respondiendo: beak open (it drops), smiling eyes, relaxed eyebrows ── */
+.mora[data-estado="respondiendo"] .pico {
+  transform: translateY(4px);
+}
+.mora[data-estado="respondiendo"] .parpado-bajo {
+  transform: translateY(100px);
+}
+.mora[data-estado="respondiendo"] .ceja {
+  transform: translateY(-4px);
+}
+
+/* ── confundido: head tilted, uneven eyebrows, small pupils ── */
+.mora[data-estado="confundido"] .cabeza-grupo {
+  transform: rotate(-7deg);
+}
+.mora[data-estado="confundido"] .ceja-izq {
+  transform: translateY(-10px);
+}
+.mora[data-estado="confundido"] .ceja-der {
+  transform: translateY(5px) rotate(5deg);
+}
+.mora[data-estado="confundido"] .pupila {
+  transform: scale(0.8);
+}
+.mora[data-estado="confundido"] .mirada {
+  transform: translateY(2px);
+}
+
+/* ── dormido: closed eyes, drooping eyebrows and head ── */
+.mora[data-estado="dormido"] .ojo-cerrado {
+  opacity: 1;
+}
+.mora[data-estado="dormido"] .mirada {
+  opacity: 0;
+}
+.mora[data-estado="dormido"] .ceja {
+  transform: translateY(8px);
+}
+.mora[data-estado="dormido"] .cabeza-grupo {
+  transform: translateY(10px) rotate(3deg);
+}
+
+/* ── erizado (wind): bigger and extra tufts, squinting eyes ── */
+.mora[data-estado="erizado"] .mechones {
+  transform: rotate(10deg) scale(1.25);
+}
+.mora[data-estado="erizado"] .mechones-extra {
+  opacity: 1;
+}
+.mora[data-estado="erizado"] .parpado-alto {
+  --mora-ojo-alto: -105px;
+}
+.mora[data-estado="erizado"] .pupila {
+  transform: scale(0.85);
+}
+.mora[data-estado="erizado"] .ceja {
+  transform: translateY(4px);
+}
+.mora[data-estado="erizado"] .cabeza-grupo {
+  transform: scale(1.02);
+}
+
+/* ── encogido (rain): she takes shelter: head sunk into the shoulders, worried eyebrows, eyes looking UP at the rain, drops above ── */
+.mora[data-estado="encogido"] .cabeza-grupo {
+  transform: translateY(24px) scale(0.96);
+}
+.mora[data-estado="encogido"] .parpado-alto {
+  --mora-ojo-alto: -118px;
+}
+.mora[data-estado="encogido"] .mirada {
+  transform: translateY(-9px);
+}
+.mora[data-estado="encogido"] .gotas {
+  opacity: 1;
+}
+.mora[data-estado="encogido"] .ceja-izq {
+  transform: translateY(-2px) rotate(-7deg);
+}
+.mora[data-estado="encogido"] .ceja-der {
+  transform: translateY(-2px) rotate(7deg);
+}
+
+/* ── planeando (thermals): head up, looks up, air currents on both sides (no wings in v1) ── */
+.mora[data-estado="planeando"] .cabeza-grupo {
+  transform: translateY(-6px) rotate(4deg);
+}
+.mora[data-estado="planeando"] .mirada {
+  transform: translateY(-9px);
+}
+.mora[data-estado="planeando"] .ceja {
+  transform: translateY(-5px);
+}
+.mora[data-estado="planeando"] .corrientes {
+  opacity: 1;
+}
+.mora[data-estado="planeando"] .mechones {
+  transform: rotate(12deg);
+}
+
+/* ── reduced motion: no blink and a hard cut between moods ── */
+@media (prefers-reduced-motion: reduce) {
+  .mora .parpado-alto {
+    animation: none !important;
+  }
+  .mora * {
+    transition: none !important;
+  }
+}

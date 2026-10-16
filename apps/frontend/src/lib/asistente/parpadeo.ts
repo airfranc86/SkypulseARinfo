@@ -3,7 +3,8 @@
  * parameter and the function returns a plan (how long to wait and how long each phase lasts). Whoever uses it
  * schedules the timeout.
  *
- * The v1 blink is the lower eyelid rising (one rectangle per eye moved with `translateY`): it closes in 90 ms,
+ * The v1 blink is the UPPER eyelid coming down (one rectangle per eye moved with `translateY`; owner decision
+ * 2026-10-16, the first draft had the lower eyelid rising): it closes in 90 ms,
  * holds for 40 ms and opens in 110 ms (240 ms in all). The eye stays open for 2.5 to 6.5 s (uniform random)
  * between the END of one blink and the START of the next, and 12 % of the blinks are double blinks.
  *
@@ -21,7 +22,7 @@
  * function programar(): void {
  *   const plan = planificarParpadeo(Math.random)
  *   timeout = setTimeout(() => {
- *     // start the CSS blink animation on the lower eyelids:
+ *     // start the CSS blink animation on the upper eyelids:
  *     //   animation-iteration-count: plan.doble ? 2 : 1   (plan.duracionMs long in total)
  *     // its `animationend` handler calls programar() again for the next blink
  *   }, plan.esperaMs)
