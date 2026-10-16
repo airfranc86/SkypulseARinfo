@@ -61,6 +61,7 @@ const Alertas       = lazy(() => import('@/pages/Alertas').then(m => ({ default:
 const Privacidad    = lazy(() => import('@/pages/Privacidad').then(m => ({ default: m.Privacidad })))
 const DatosFuentes  = lazy(() => import('@/pages/DatosFuentes').then(m => ({ default: m.DatosFuentes })))
 const Preguntale = lazy(() => import('@/pages/Preguntale').then(m => ({ default: m.Preguntale })))
+const BotonAsistente = lazy(() => import('@/components/asistente/BotonAsistente').then(m => ({ default: m.BotonAsistente })))
 const NotFound      = lazy(() => import('@/pages/NotFound').then(m => ({ default: m.NotFound })))
 
 import { useVolcanes } from '@/hooks/useWeather'
@@ -211,7 +212,12 @@ function skipToContent(event: ReactMouseEvent<HTMLAnchorElement>) {
 
 // ── RootLayout — wired to the ModelStatusProvider ─────────────────────────────
 
-function RootLayout() {
+interface RootLayoutProps {
+  /** The cookie banner is open: it covers the bottom corners, so Mora's bubble waits. */
+  bannerDeCookiesAbierto: boolean
+}
+
+function RootLayout(props: RootLayoutProps) {
   const { location, isFallback, geoLoading, geoError, selectCity, detectLocation } =
     useLocationState()
 
@@ -396,6 +402,11 @@ function RootLayout() {
       </footer>
 
       <ScrollToTopBubble />
+      {CONFIG_ASISTENTE.visible && (
+        <Suspense fallback={null}>
+          <BotonAsistente lat={location?.lat ?? null} lon={location?.lon ?? null} oculto={props.bannerDeCookiesAbierto} />
+        </Suspense>
+      )}
     </div>
   )
 }
@@ -422,7 +433,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ModelStatusProvider>
-          <RootLayout />
+          <RootLayout bannerDeCookiesAbierto={consent === null} />
         </ModelStatusProvider>
         {consent === 'accepted' && <Analytics />}
         {consent === null && <CookieConsentBanner onAccept={handleAccept} onReject={handleReject} />}
