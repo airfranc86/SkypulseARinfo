@@ -13,6 +13,10 @@ const FILES = [
   'src/pages/CotaDeNieve.tsx',
   'src/pages/Incendios.tsx',
   'src/pages/HacerDeporte.tsx',
+  'src/pages/MapaPresion.tsx',
+  'src/components/mapa/IsobarMap.tsx',
+  'src/components/mapa/HourSlider.tsx',
+  'src/hooks/useIsobaras.ts',
 ]
 
 for (const file of FILES) {
