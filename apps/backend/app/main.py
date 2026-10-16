@@ -66,7 +66,9 @@ def _scrub_span(span: dict) -> dict:
 # de cabeceras sensibles del SDK no la incluye: nunca debe viajar a Sentry (ver `firma_qstash.py`). Nombres en minúsculas.
 # Ojo al subir el SDK: con el streaming de spans (`_experiments={"trace_lifecycle": "stream"}`, o el SDK 3) las cabeceras
 # pasan a atributos de span `http.request.header.<nombre>`, un camino que NO pasa por estos ganchos.
-_CABECERAS_QUITADAS = frozenset({"upstash-signature"})
+# Tampoco la IP real del cliente: Cloudflare la escribe en `CF-Connecting-IP` (y `True-Client-IP`), y la lista del SDK
+# filtra `X-Forwarded-For` pero no esas dos, así que viajaba en claro con `send_default_pii=False`.
+_CABECERAS_QUITADAS = frozenset({"upstash-signature", "cf-connecting-ip", "true-client-ip"})
 
 
 def _es_cabecera_quitada(nombre: object) -> bool:
@@ -157,7 +159,8 @@ from .core.http_client import create_client, close_client
 from .core.rate_limit import client_key, limiter
 from .core.upstash import UpstashRedis, configure_redis as configure_alertas_redis
 from .core import usage_counter
-from .routers import aeronautica, alertas, earthquakes, incendios, metar, niebla, smn_alertas, taf, tools, volcanes, weather
+from .services.asistente import cupos as cupos_del_asistente
+from .routers import aeronautica, alertas, asistente, earthquakes, incendios, metar, niebla, smn_alertas, taf, tools, volcanes, weather
 from .services import checkwx as checkwx_svc
 
 
@@ -269,13 +272,18 @@ async def request_logging(request: Request, call_next) -> Response:
     finally:
         reset_client_key(token)
     duration_ms = (time.perf_counter() - start) * 1000
+    # Del asistente no se registra la IP: junto con la línea "asistente: estado=... bloques=..." diría quién preguntó qué.
+    # En su lugar va la etiqueta anónima que usan los cupos (o `-` si falta el secreto).
+    en_el_log = key
+    if request.url.path.startswith("/api/asistente"):
+        en_el_log = cupos_del_asistente.etiqueta_del_cliente(key, settings.asistente_cupo_secreto)
     logger.info(
         "%s %s -> %d (%.1fms) client=%s",
         request.method,
         request.url.path,
         response.status_code,
         duration_ms,
-        key,
+        en_el_log,
     )
     return response
 
@@ -309,8 +317,9 @@ def _is_nan_or_inf(value: object) -> bool:
 _ICAO_PATHS = frozenset({"/api/metar", "/api/taf"})
 
 # Rutas con body JSON que no reciben coordenadas. `/api/alertas/` lleva la barra final a propósito:
-# `/api/alertas-smn` sí recibe lat/lon y conserva sus mensajes.
-_INVALID_REQUEST_PREFIXES = ("/api/v1/aeronautica", "/api/alertas/")
+# `/api/alertas-smn` sí recibe lat/lon y conserva sus mensajes. `/api/asistente` recibe lat/lon DENTRO del body
+# junto con la pregunta: un cuerpo inválido es un pedido inválido, no "coordenadas inválidas".
+_INVALID_REQUEST_PREFIXES = ("/api/v1/aeronautica", "/api/alertas/", "/api/asistente")
 
 
 @app.exception_handler(RequestValidationError)
@@ -377,4 +386,5 @@ app.include_router(metar.router,     prefix="/api/metar",     tags=["metar"])
 app.include_router(taf.router,       prefix="/api/taf",       tags=["taf"])
 app.include_router(smn_alertas.router, prefix="/api/alertas-smn", tags=["alertas-smn"])
 app.include_router(alertas.router,    prefix="/api/alertas",    tags=["alertas"])
+app.include_router(asistente.router,  prefix="/api/asistente",  tags=["asistente"])
 app.include_router(aeronautica.router, prefix="/api/v1/aeronautica", tags=["aeronautica"])

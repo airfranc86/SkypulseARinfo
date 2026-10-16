@@ -182,6 +182,23 @@ class Settings(BaseSettings):
             )
         return self
 
+    # Asistente de Mora (PR 2b). `asistente_enabled` nace APAGADO: con `false` la ruta `/api/asistente` responde 404
+    # (como si no existiera). La clave `skypulse:asistente:apagado` en Upstash es el segundo interruptor (apaga sin
+    # redeploy). Los cupos son por día de Argentina: por cliente (se guarda un hash de la clave, nunca la IP) y global.
+    asistente_enabled: bool = False
+    asistente_cupo_cliente_dia: int = Field(default=30, ge=1)
+    asistente_cupo_global_dia: int = Field(default=400, ge=1)
+    # Largo máximo de la pregunta, en caracteres (se cuenta después de recortar los espacios).
+    asistente_pregunta_max: int = Field(default=300, ge=20, le=1000)
+    # Plazo para que el modelo conteste; pasado ese tiempo la respuesta es 503 `asistente_no_disponible`.
+    asistente_timeout_segundos: float = Field(default=12.0, ge=1.0, le=60.0)
+    # Cuánto se recuerda en memoria lo que dijo la clave de apagado (0 = leerla en cada pedido).
+    asistente_interruptor_cache_segundos: int = Field(default=60, ge=0, le=600)
+    # Secreto (16 caracteres o más, al azar) con el que se firma el campo de cada cliente en los cupos y la etiqueta del
+    # log: sin él, un hash de la IP se podría revertir probando las 2^32 direcciones. Solo en Render y en el `.env` local;
+    # vacío = el endpoint responde 503 y no cuenta nada (falla cerrado).
+    asistente_cupo_secreto: str = Field(default="", repr=False)
+
     # Clave del límite de pedidos por IP (ver `core/rate_limit.py::client_key`). Render pone Cloudflare delante:
     # Cloudflare escribe `CF-Connecting-IP` con la IP real y agrega al `X-Forwarded-For` (el valor de la
     # izquierda lo manda el cliente). `RATE_LIMIT_TRUST_CF_HEADER=false` ignora `CF-Connecting-IP` (si el

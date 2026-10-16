@@ -1,6 +1,7 @@
 """`responder` une enrutador, hoja, modelo y verificador: lo único que el endpoint (2b) va a llamar."""
 import pytest
 
+from app.services.asistente.enrutador import Ruta
 from app.services.asistente.modelo import ModeloFalso
 from app.services.asistente.nucleo import REDIRECCION_SISMOS_Y_VOLCANES, RESPUESTA_SIN_DATO, responder
 from app.services.asistente.verificador import FRASE_AERONAUTICA, FRASE_AVISO_OFICIAL, MAX_CARACTERES
@@ -112,3 +113,13 @@ async def test_si_el_modelo_falla_el_error_sube_para_que_lo_resuelva_el_router()
 
     with pytest.raises(TimeoutError):
         await _responder("¿Temperatura?", esc.templado(), Roto())
+
+
+async def test_si_se_le_da_la_ruta_ya_calculada_no_vuelve_a_enrutar():
+    """El router enruta para pedir los datos y le pasa la misma ruta al núcleo: así nunca divergen."""
+    espia = ModeloEspia()
+    ruta = Ruta(bloques=("ahora",))
+    r = await responder(
+        "¿Hubo un terremoto?", esc.templado(), espia, ruta=ruta, ahora_utc=esc.AHORA,
+    )  # la pregunta sola sería "fuera de alcance"
+    assert r.estado == "ok" and r.bloques == ("ahora",) and espia.llamados == 1
