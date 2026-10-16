@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { HourSlider } from '@/components/mapa/HourSlider'
@@ -29,6 +30,13 @@ export function MapaPresion({ location }: Props) {
   const indice = manifest && f !== null ? manifest.hours.findIndex((h) => h.f === f) : -1
   const textosCentros = hora ? textosDeLosCentros(hora.centros, location) : []
   const avisoFuerte = edad?.nivel === 'muy-viejo'
+  // Stable on purpose: the hour slider schedules its playback steps with it.
+  const cambiarHora = useCallback(
+    (i: number) => {
+      if (manifest) elegirHora(manifest.hours[i].f)
+    },
+    [manifest, elegirHora],
+  )
 
   return (
     <FadeContent>
@@ -73,7 +81,7 @@ export function MapaPresion({ location }: Props) {
         <IsobarMap hora={hora ?? null} bbox={manifest?.bbox ?? RECORTE_POR_DEFECTO} base={base} />
 
         {manifest && (
-          <HourSlider horas={manifest.hours} indice={Math.max(0, indice)} onCambio={(i) => elegirHora(manifest.hours[i].f)} />
+          <HourSlider horas={manifest.hours} indice={Math.max(0, indice)} onCambio={cambiarHora} fDibujada={hora?.f ?? null} />
         )}
 
         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
