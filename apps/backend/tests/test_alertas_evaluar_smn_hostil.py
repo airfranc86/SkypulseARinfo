@@ -36,6 +36,7 @@ from tests.alertas_helpers import (  # noqa: F401
     lineas_de_resumen,
     lineas_de_resumen_smn,
     llamar_evaluar,
+    marca_de_sentry,
     redis,
     registrar,
     reloj_de_openmeteo,
@@ -190,7 +191,8 @@ async def test_an_unknown_mode_with_an_invalid_signature_is_the_401_never_the_42
     fake_upstash.commands.clear()
     response = await llamar(async_client, b'{"modo":"otro"}', firma=firma)
     assert response.status_code == 401 and response.json() == NO_AUTORIZADO
-    assert fake_upstash.commands == [] and push.llamadas == [] and feed.llamadas == []
+    # All five signatures parse but do not match: each warns Sentry (FRA-360, part 2) with its 6-hour mark only.
+    assert fake_upstash.commands == [marca_de_sentry("firma")] and push.llamadas == [] and feed.llamadas == []
     assert not any("modo desconocido" in r.getMessage() for r in caplog.records)  # the mode was never looked at
 
 

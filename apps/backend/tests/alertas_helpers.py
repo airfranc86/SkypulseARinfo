@@ -30,7 +30,7 @@ from app.core import usage_counter
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.core.upstash import UpstashRedis, UpstashUnavailableError, configure_redis
-from app.services.alertas import despacho, envio, evaluacion, firma_qstash
+from app.services.alertas import avisos_sentry, despacho, envio, evaluacion, firma_qstash
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.zonas import zona_por_slug
 from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL, nuevo_receptor
@@ -186,6 +186,12 @@ def conteo_del_dia(dia: str, *campos: tuple[str, int]) -> list[list[str]]:
     return [["HINCRBY", clave, campo, str(valor)] for campo, valor in campos] + [["EXPIRE", clave, "3456000", "NX"]]
 
 
+def marca_de_sentry(tipo: str) -> list[str]:
+    """The ONE command the Sentry alerts of FRA-360 (part 2) add when they go out: the 6-hour mark of their kind
+    (`corrida`, `envios` or `firma`). A healthy run, a quiet rejection and a repeated alert add nothing."""
+    return ["SET", f"alertas:sentry:{tipo}", "1", "NX", "EX", "21600"]
+
+
 def lineas_de_resumen(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
     """The one summary line (state and counters) that a FORECAST run of the evaluation logs (never the SMN one)."""
     return [
@@ -315,6 +321,7 @@ def estado_de_alertas_limpio(monkeypatch):
     """Rate limiter, signing keys, URL, both flags off and no Upstash configured: the starting point of every test."""
     limiter.reset()
     firma_qstash.reset_aviso_de_configuracion_para_tests()
+    avisos_sentry.reset_para_tests()  # the 6-hour memory of the Sentry alerts (FRA-360, part 2)
     configure_redis(None)
     monkeypatch.setattr(settings, "qstash_current_signing_key", CLAVE_ACTUAL)
     monkeypatch.setattr(settings, "qstash_next_signing_key", CLAVE_SIGUIENTE)
@@ -323,7 +330,21 @@ def estado_de_alertas_limpio(monkeypatch):
     monkeypatch.setattr(settings, "alertas_evaluar_en_seco", False)
     yield
     limiter.reset()
+    avisos_sentry.reset_para_tests()
     configure_redis(None)
+
+
+@pytest.fixture
+def sentry_espia(monkeypatch):
+    """`avisos_sentry.capture_message` replaced by a spy: the list of `(message, kwargs)` of every event it was asked to
+    send (FRA-360, part 2). Nothing reaches Sentry; the kwargs are exactly what the SDK would receive."""
+    capturas: list[tuple[str, dict]] = []
+
+    def espia(mensaje: str, **kwargs) -> None:
+        capturas.append((mensaje, kwargs))
+
+    monkeypatch.setattr(avisos_sentry, "capture_message", espia)
+    return capturas
 
 
 @pytest.fixture

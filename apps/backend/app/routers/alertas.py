@@ -15,6 +15,10 @@ registra método, ruta y estado).
 Contadores diarios (FRA-360, `services/alertas/metricas.py`): al final de cada camino se suma en Upstash la corrida
 (con su estado y sus contadores), el alta nueva o la baja efectiva. Es un efecto secundario: nunca cambia una
 respuesta ni un envío, y `apagado` (no hubo corrida) no se cuenta.
+
+Avisos a Sentry (FRA-360, parte 2, `services/alertas/avisos_sentry.py`): una corrida fallida, fallos de envío por encima del 20 %
+y una firma de QStash bien formada que no coincide generan un evento, como mucho uno cada 6 horas por tipo. También un
+efecto secundario que va DESPUÉS del conteo: nunca cambia una respuesta ni un envío, y una corrida sana no cuesta nada.
 """
 
 from __future__ import annotations
@@ -39,7 +43,7 @@ from app.schemas.alertas import (
     SuscripcionCreada,
     SuscripcionRequest,
 )
-from app.services.alertas import envio, evaluacion, firma_qstash, interruptor, metricas
+from app.services.alertas import avisos_sentry, envio, evaluacion, firma_qstash, interruptor, metricas
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.firma_qstash import motivo_de_rechazo
 
@@ -293,6 +297,9 @@ async def post_evaluar(request: Request) -> dict[str, str | int]:
     motivo, cuerpo = await _motivo_de_rechazo_del_pedido(request)
     if motivo is not None:
         logger.warning("alertas: /evaluar rechazó un pedido sin firma válida motivo=%s", motivo)
+        # Una firma bien formada que no coincide avisa a Sentry (FRA-360, parte 2; el ruido de escáneres calla): solo el
+        # motivo fijo, con el límite de 6 horas; nunca cambia la respuesta (si falla, un WARNING y el mismo 401).
+        await avisos_sentry.avisar_firma_invalida(get_redis(), motivo)
         raise HTTPException(status_code=401, detail=_NO_AUTORIZADO)
     try:
         pedido = modo_pedido(cuerpo)
@@ -316,4 +323,7 @@ async def post_evaluar(request: Request) -> dict[str, str | int]:
         # Los contadores diarios (FRA-360) se suman al FINAL, con la corrida ya hecha y en el día de Argentina de su
         # arranque; nunca cambian el estado, los contadores ni la respuesta (un fallo al contar solo deja un WARNING).
         await metricas.contar_corrida(redis, tipo, resultado, ahora)
+        # Los avisos a Sentry (FRA-360, parte 2) van DESPUÉS del conteo: corrida fallida y fallos de envío, cada uno con su
+        # límite de 6 horas. Una corrida sana no cuesta ni un comando; nunca cambian la respuesta ni el envío.
+        await avisos_sentry.avisar_corrida(redis, tipo, resultado)
         return resultado.como_respuesta()
