@@ -46,6 +46,7 @@ const Terremotos  = lazy(() => import('@/pages/Terremotos').then(m => ({ default
 const LavarCoche  = lazy(() => import('@/pages/LavarCoche').then(m => ({ default: m.LavarCoche })))
 const Lluvias     = lazy(() => import('@/pages/Lluvias').then(m => ({ default: m.Lluvias })))
 const Radar       = lazy(() => import('@/pages/Radar').then(m => ({ default: m.Radar })))
+const MapaPresion = lazy(() => import('@/pages/MapaPresion').then(m => ({ default: m.MapaPresion })))
 const Desastres   = lazy(() => import('@/pages/Desastres').then(m => ({ default: m.Desastres })))
 const Nubes       = lazy(() => import('@/pages/Nubes').then(m => ({ default: m.Nubes })))
 const Metar       = lazy(() => import('@/pages/Metar').then(m => ({ default: m.Metar })))
@@ -339,6 +340,7 @@ function RootLayout() {
               <Route path="/lavar-coche" element={<Navigate to="/lavar-auto" replace />} />
               <Route path="/lluvias" element={<Lluvias />} />
               <Route path="/radar" element={<Radar />} />
+              <Route path="/mapa" element={<MapaPresion location={location} />} />
               <Route path="/desastres" element={<Desastres />} />
               <Route path="/nubes" element={<Nubes />} />
               <Route path="/metar" element={<Metar />} />

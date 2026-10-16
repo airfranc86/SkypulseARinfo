@@ -32,6 +32,12 @@ export interface OpcionesDeCarga {
   signal?: AbortSignal
   /** Overrides the 15 s timeout of each request (tests). */
   timeoutMs?: number
+  /**
+   * Background preloading: when the hour is missing or stale, fail instead of asking for the manifest again. The
+   * preloads of 40 hours must not each trigger a manifest request when a new cycle appears; the hour the user
+   * actually looks at is loaded without this option and does the full retry.
+   */
+  sinReintento?: boolean
 }
 
 export const TIMEOUT_POR_DEFECTO_MS = 15_000
@@ -108,6 +114,7 @@ export async function cargarHora(
   if (!entrada) throw new ErrorCarga('no-encontrado', `el manifest no tiene la hora +${f} h`)
   const primero = await pedirHora(fetcher, manifest, entrada.file, opciones, false)
   if ('hora' in primero) return { hora: primero.hora, manifest }
+  if (opciones.sinReintento) throw new ErrorCarga('no-encontrado', `el archivo de la hora +${f} h no está disponible`)
 
   const nuevo = await cargarManifest(fetcher, { ...opciones, sinCache: true })
   const nuevaEntrada = nuevo.hours.find((h) => h.f === f)
