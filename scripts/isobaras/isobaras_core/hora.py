@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .ciclo import Ciclo
+from .centros import detectar_centros
 from .curvas import etiquetas, simplificar, suavizar, trazar
 from .formato import (
     Bbox,
@@ -37,8 +38,8 @@ def _texto(fecha: datetime) -> str:
     return fecha.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
 
 
-def construir_hora(campo_pa: Campo, *, ciclo: Ciclo, f: int) -> Hora:
-    """The isobar lines of one forecast hour from its pressure field in Pa (no centers yet)."""
+def construir_hora(campo_pa: Campo, *, ciclo: Ciclo, f: int, terreno: Campo) -> Hora:
+    """Isobar lines and H/L centers of one forecast hour from its pressure field in Pa and the terrain height in m."""
     margen = recortar(
         campo_pa,
         lat_min=BBOX.lat_min,
@@ -70,7 +71,7 @@ def construir_hora(campo_pa: Campo, *, ciclo: Ciclo, f: int) -> Hora:
         f=f,
         valid=_texto(ciclo.fecha + timedelta(hours=f)),
         lineas=tuple(lineas),
-        centros=(),
+        centros=tuple(detectar_centros(suave, terreno, BBOX)),
     )
 
 
