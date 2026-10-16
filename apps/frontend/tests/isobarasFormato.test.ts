@@ -241,3 +241,25 @@ test('topes: demasiadas líneas, puntos, etiquetas o centros', () => {
   const muchosCentros = horaCon((h) => (h.centers = Array.from({ length: 31 }, () => structuredClone(h.centers[0]))))
   assert.equal(!leerHora(muchosCentros, m).ok, true)
 })
+
+// ── Archivo generado por el pipeline (`f000.pozo.json`: un alto gaussiano sintético) ──
+
+test('el archivo que escribe el pipeline para un alto gaussiano se decodifica: 5 anillos cerrados dentro del recorte', () => {
+  const m = manifestValido()
+  const r = leerHora(leer('f000.pozo.json'), m)
+  assert.ok(r.ok, r.ok ? '' : r.detalle)
+  assert.deepEqual(
+    r.valor.lineas.map((l) => l.p),
+    [1016, 1020, 1024, 1028, 1032],
+  )
+  for (const linea of r.valor.lineas) {
+    assert.equal(linea.cerrada, true)
+    assert.notDeepEqual(linea.puntos[0], linea.puntos[linea.puntos.length - 1])
+    assert.ok(linea.etiquetas.length >= 1 && linea.etiquetas.length <= 2)
+    const dibujo = puntosParaDibujar(linea)
+    assert.deepEqual(dibujo[0], dibujo[dibujo.length - 1])
+    for (const p of linea.puntos) {
+      assert.ok(p.lat >= m.bbox.latMin && p.lat <= m.bbox.latMax && p.lon >= m.bbox.lonMin && p.lon <= m.bbox.lonMax)
+    }
+  }
+})
