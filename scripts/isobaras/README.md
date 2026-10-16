@@ -70,6 +70,7 @@ desde `main`. El trabajo `test` corre además en cada pull request que toque `sc
 | `formato.py` | El contrato v1: lee y valida (con topes de tamaño) y escribe el manifest y los archivos de hora. |
 | `hora.py` | Arma cada archivo de hora y el manifest, y los valida con el lector del contrato antes de escribirlos. |
 | `base.py` | Arma una sola vez el fondo del mapa (costas y fronteras de Natural Earth, recortadas y simplificadas). |
+| `ciudades.py` | Arma una sola vez la lista de ciudades del mapa (Natural Earth, 6 países, con nivel según el tamaño) como un módulo de TypeScript. |
 | `pipeline.py` | La corrida completa que ejecuta el workflow. |
 | `descarga.py` | Baja una hora y la describe (para probar a mano). |
 
@@ -77,7 +78,7 @@ desde `main`. El trabajo `test` corre además en cada pull request que toque `sc
 
 Datos: NOAA GFS, del conjunto abierto `noaa-gfs-bdp-pds` (Open Data on AWS). Las isobaras son datos de NOAA
 **modificados por SkyPulse**: no se debe dar a entender que son originales ni que NOAA avala a SkyPulse ni está
-afiliada a él (así lo piden las condiciones de ese conjunto). Fondo del mapa (costas y fronteras): Natural Earth,
+afiliada a él (así lo piden las condiciones de ese conjunto). Fondo del mapa (costas, fronteras y ciudades): Natural Earth,
 de dominio público, de uso comercial permitido y sin atribución obligatoria (el mapa la nombra igual). No hay ninguna
 clave ni servidor de mapas de terceros. Los créditos están en la página "De dónde salen los datos".
 
@@ -94,3 +95,24 @@ uv run python -m isobaras_core.base      # baja ~25 MB de GitHub y reescribe app
 ```
 
 Las Malvinas salen como costa y sin ninguna línea de frontera (se bajan solo las fronteras terrestres).
+
+## Las ciudades del mapa
+
+`apps/frontend/src/lib/mapa/ciudadesDatos.ts` se genera una sola vez con `isobaras_core/ciudades.py` y se commitea; la web
+lo importa (no pide nada a la red). Baja los lugares poblados de Natural Earth v5.1.2 (~5 MB), se queda con los de
+Argentina, Chile, Uruguay, Paraguay, Bolivia y Brasil que caen en la zona de los datos (lat −62 a −12, lon −90 a −30) y
+les da un nivel: 1 (capitales nacionales y ciudades de más de 1,5 millones: siempre se ven), 2 (capitales de
+provincia de más de 50 mil habitantes y ciudades de más de 500 mil) y 3 (el resto, solo con zoom). Brasil pide más
+gente en los tres niveles, porque en la zona tiene ~240 lugares, muchos de ellos suburbios. Un lugar que no es capital
+y está a menos de 0,5° de uno más grande se descarta (Santo André junto a São Paulo). Los nombres que dos países
+comparten llevan el país: "Concepción (CL)".
+
+La fuente tiene datos viejos en esta región, así que el script lleva dos tablas chicas y explícitas
+(`EXCLUIDAS` y `RENOMBRADAS`). Solo hay que volver a generar el archivo si cambia la zona, los países o los umbrales:
+
+```bash
+uv run python -m isobaras_core.ciudades      # baja ~5 MB de GitHub y reescribe ciudadesDatos.ts
+```
+
+Qué ciudades se dibujan en cada zoom y cómo no se pisan los nombres lo decide `apps/frontend/src/lib/mapa/ciudades.ts`.
+Las Malvinas no aparecen como ciudad de ningún país: la fuente las archiva bajo el Reino Unido, que no está en la lista.

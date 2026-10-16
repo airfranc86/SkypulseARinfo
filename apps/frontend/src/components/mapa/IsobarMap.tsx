@@ -13,6 +13,7 @@ import {
   esPlataformaMac,
   ruedaHaceZoom,
 } from '@/lib/mapa/gestos'
+import { CiudadesDelMapa } from './CiudadesDelMapa'
 import { MeasureTool } from './MeasureTool'
 
 interface IsobarMapProps {
@@ -27,7 +28,7 @@ const COLOR_LINEA = '#7dd3fc'
 const COLOR_ALTA = '#93c5fd'
 const COLOR_BAJA = '#fca5a5'
 const ZOOM_INICIAL = 4
-const ATRIBUCION_DATOS = 'Datos: NOAA GFS · Costas y fronteras: Natural Earth'
+const ATRIBUCION_DATOS = 'Datos: NOAA GFS · Costas, fronteras y ciudades: Natural Earth'
 
 /** How each layer of the background is drawn: quiet lines under the isobars, the coast the strongest. */
 const ESTILOS_BASE = {
@@ -208,6 +209,8 @@ export function IsobarMap({ hora, bbox, base }: IsobarMapProps) {
         preferCanvas
         style={{ height: '100%', width: '100%', background: 'var(--color-card)' }}
       >
+        {/* Before LimitarAlDato: its effect subscribes to the map events first, so it also hears a zoom change made at mount. */}
+        <CiudadesDelMapa />
         <LimitarAlDato limites={limites} />
         <GestosCooperativos />
         <Atribucion />
