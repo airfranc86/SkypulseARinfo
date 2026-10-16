@@ -44,3 +44,7 @@ dist/
 # ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# Pressure-map pipeline (scripts/isobaras): generated files and downloaded fields
+scripts/isobaras/out/
+scripts/isobaras/data/
