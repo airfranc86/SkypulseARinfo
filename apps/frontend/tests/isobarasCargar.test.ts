@@ -192,6 +192,13 @@ test('un error de red al pedir la hora es un error de red', async () => {
   await assert.rejects(cargarHora(red({}).fetcher, m, 6), motivo('red'))
 })
 
+test('con sinReintento (la precarga en segundo plano) un 404 es un error y no se vuelve a pedir nada', async () => {
+  const m = await manifestInicial()
+  const { fetcher, llamadas } = red({ [`${BASE}/isobaras_f006.json`]: () => json({}, 404) })
+  await assert.rejects(cargarHora(fetcher, m, 6, { sinReintento: true }), motivo('no-encontrado'))
+  assert.equal(llamadas.length, 1)
+})
+
 // ── Tiempo límite y cancelación ──────────────────────────────────────────────
 
 const colgado: Fetcher = (_url, init) =>
