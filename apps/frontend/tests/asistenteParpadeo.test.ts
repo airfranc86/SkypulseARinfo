@@ -10,7 +10,7 @@ import {
   planificarParpadeo,
 } from '../src/lib/asistente/parpadeo.ts'
 
-// Mora's lower eyelid blink planner. The randomness is injected, so every case here is deterministic.
+// Mora's blink planner (upper eyelid). The randomness is injected, so every case here is deterministic.
 
 /** Randomness that yields the given values in order and fails if asked for more (counts the draws too). */
 function secuencia(...valores: number[]): { azar: () => number; llamadas: () => number } {
