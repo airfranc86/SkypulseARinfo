@@ -614,6 +614,32 @@ def _select_alerts(
     return selected
 
 
+def _respuesta(
+    state: _FeedState, available: bool, now: datetime, lat: float | None, lon: float | None
+) -> SmnAlertasResponse:
+    """La respuesta pública a partir de un estado ya leído; la comparten `get_smn_alertas` y `peek_smn_alertas`."""
+    if not available:
+        return SmnAlertasResponse(alertas=[], available=False, fetched_at=now)
+    return SmnAlertasResponse(
+        alertas=_select_alerts(state.entries, now, lat, lon),
+        available=True,
+        fetched_at=now,
+    )
+
+
+def peek_smn_alertas(
+    lat: float | None = None, lon: float | None = None, now: datetime | None = None
+) -> SmnAlertasResponse:
+    """Lo que `get_smn_alertas` contestaría con lo que YA está en memoria, sin refrescar el feed ni esperar el candado.
+
+    Para quien no puede provocar un pedido al SMN (el asistente). El feed se mantiene fresco con las páginas y con la
+    corrida de avisos cada 30 min. `available=False` = el feed no está verificado ("no sé"), nunca "no hay avisos".
+    `now` (con zona horaria) es la hora con la que se descartan los avisos vencidos; por defecto, la de ahora. Es síncrona
+    y no levanta.
+    """
+    return _respuesta(_state, _is_available(_state, _monotonic()), now or _utcnow(), lat, lon)
+
+
 async def get_smn_alertas(
     lat: float | None = None, lon: float | None = None
 ) -> SmnAlertasResponse:
@@ -633,10 +659,4 @@ async def get_smn_alertas(
         state = _state
         available = _is_available(state, _monotonic())
 
-    if not available:
-        return SmnAlertasResponse(alertas=[], available=False, fetched_at=now)
-    return SmnAlertasResponse(
-        alertas=_select_alerts(state.entries, now, lat, lon),
-        available=True,
-        fetched_at=now,
-    )
+    return _respuesta(state, available, now, lat, lon)

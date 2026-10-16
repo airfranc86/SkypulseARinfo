@@ -22,8 +22,8 @@ pedido lleva la etiqueta anónima de los cupos, ver `main.py`); hay UNA línea d
 y la duración. Los logs de error no llevan `exc_info`, y Sentry corre sin cuerpos de pedido ni variables locales. Lo que
 queda fuera de este módulo: la línea de "ratelimit exceeded" de slowapi escribe la IP.
 
-Los datos y el modelo entran por dependencias para poder reemplazarlos: hoy son `FuentesVacias` y `ModeloFalso`; el PR 2c
-pone las fuentes que leen de la caché y la Fase 3 el proveedor real.
+Los datos y el modelo entran por dependencias para poder reemplazarlos: hoy son `FuentesDeCache` (lee solo de las cachés,
+sin provocar pedidos de red; PR 2c) y `ModeloFalso` (la Fase 3 pone el proveedor real).
 """
 from __future__ import annotations
 
@@ -42,7 +42,8 @@ from app.core.upstash import UpstashRedis, UpstashUnavailableError, get_redis
 from app.schemas.asistente import PreguntaRequest, RespuestaAsistente
 from app.services.asistente import cupos, interruptor
 from app.services.asistente.enrutador import enrutar
-from app.services.asistente.fuentes import FuentesVacias, ProveedorDeFuentes
+from app.services.asistente.fuentes import ProveedorDeFuentes
+from app.services.asistente.fuentes_cache import FuentesDeCache
 from app.services.asistente.hoja_datos import Fuentes
 from app.services.asistente.modelo import Modelo, ModeloFalso
 from app.services.asistente.nucleo import Respuesta, responder
@@ -77,7 +78,7 @@ def redis_del_asistente() -> UpstashRedis | None:
 
 
 def fuentes_del_asistente() -> ProveedorDeFuentes:
-    return FuentesVacias()
+    return FuentesDeCache()
 
 
 def modelo_del_asistente() -> Modelo:

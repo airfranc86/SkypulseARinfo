@@ -17,6 +17,7 @@ from app.services.openmeteo_source import (
     fetch_derived,
     fetch_series,
     fetch_series_or_raise,
+    peek_series,
 )
 from app.services.visibilidad import MAX_VISIBILITY_M, classify_visibility
 from app.utils.parsing import parse_float
@@ -136,6 +137,12 @@ async def get_current(
     compartido e inmutable, así que la procedencia no puede viajar dentro de él.
     """
     return await fetch_series(_current_request(lat, lon), _parse_current, outcome=cache_outcome)
+
+
+def peek_current(lat: float, lon: float) -> OpenMeteoCurrent | None:
+    """Lo que la caché tiene de las condiciones actuales (`get_current`; la entrada que muestra la tarjeta "Ahora"), fresco
+    o la última copia buena, SIN pedir nada. `None` = no hay."""
+    return peek_series(_current_request(lat, lon))
 
 
 # ---------------------------------------------------------------------------
@@ -528,6 +535,12 @@ _HOURLY_FIELDS = (
 )
 
 
+# Los días de la serie horaria que piden Previsión (dashboard), las herramientas y el riesgo de incendios: los tres
+# comparten UNA entrada de caché porque la clave incluye los días. El asistente lee esa entrada (`peek_*`): si esta
+# cantidad se cambiara en un solo lugar, el asistente se quedaría sin dato en silencio. Por eso es una constante única.
+DASHBOARD_HOURLY_DAYS = 7
+
+
 def _hourly_request(lat: float, lon: float, days: int) -> SeriesRequest:
     # Sin modelo: best_match (una mezcla de modelos) para máxima disponibilidad.
     return SeriesRequest(
@@ -560,6 +573,12 @@ async def get_hourly_forecast_ext(
         failure_message="Open-Meteo hourly_ext forecast failed: %s",
         parse_error_message="Open-Meteo hourly_ext parse error: %s",
     )
+
+
+def peek_hourly_forecast_ext(lat: float, lon: float, days: int = DASHBOARD_HOURLY_DAYS) -> HourlyForecastExt | None:
+    """Lo que la caché tiene de la serie `get_hourly_forecast_ext(lat, lon, days)` (fresca o la última copia buena), SIN
+    pedir nada. Con los 7 días por defecto es la misma entrada que usan el dashboard y las herramientas. `None` = no hay."""
+    return peek_series(_hourly_request(lat, lon, days))
 
 
 # ---------------------------------------------------------------------------
@@ -622,6 +641,11 @@ async def get_hourly_forecast_ecmwf(
         failure_message="Open-Meteo hourly ECMWF forecast failed: %s",
         parse_error_message="Open-Meteo hourly ECMWF parse error: %s",
     )
+
+
+def peek_hourly_forecast_ecmwf(lat: float, lon: float, days: int = DASHBOARD_HOURLY_DAYS) -> HourlyForecastExt | None:
+    """Lo mismo que `peek_hourly_forecast_ext`, para la serie de ECMWF que el dashboard superpone a best_match."""
+    return peek_series(_hourly_ecmwf_request(lat, lon, days))
 
 
 def oldest_forecast_fetched_at(*fetched: datetime | None) -> datetime | None:
