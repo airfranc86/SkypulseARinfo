@@ -96,6 +96,13 @@ export const DATA_SOURCES: readonly DataSource[] = [
     providers: ['OAVV · SEGEMAR'],
   },
   {
+    id: 'mapa-presion',
+    title: 'Mapa de presión',
+    summary:
+      'Las isobaras y los centros de alta y baja presión los calcula SkyPulse con la presión a nivel del mar del modelo GFS (NOAA, EE. UU.), a 0,25° de resolución, hasta 5 días (120 horas) desde la corrida del modelo, en pasos de 3 horas. Se recalculan 4 veces al día, unas 5 horas después de cada corrida del modelo (00, 06, 12 y 18 UTC). Los centros sobre terreno de más de 1500 m no se marcan, porque ahí el cálculo a nivel del mar inventa altas y bajas. Es un pronóstico de modelo, no es un aviso oficial: para avisos, consultá al SMN. Los datos son de NOAA, modificados por SkyPulse: SkyPulse no está afiliado a NOAA ni cuenta con su aval. El mapa de fondo es de CARTO, © OpenStreetMap contributors, © CARTO.',
+    providers: ['GFS (NOAA, EE. UU.)', 'CARTO', 'OpenStreetMap'],
+  },
+  {
     id: 'explicativas',
     title: 'Radar, Nubes, Lluvias y Desastres',
     summary:
