@@ -16,6 +16,10 @@ export const TEXTOS = {
   sinPuntos: 'Todavía no hay puntos.',
   unPunto: 'Agregá otro punto para medir.',
   encabezadoTramos: 'Tramos',
+  unidadKm: 'km',
+  unidadMillas: 'NM',
+  cambiarAMillas: 'Unidad: km (kilómetros). Cambiar a NM (millas náuticas)',
+  cambiarAKilometros: 'Unidad: NM (millas náuticas). Cambiar a km (kilómetros)',
 } as const
 
 export interface BotonesHabilitados {

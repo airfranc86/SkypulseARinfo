@@ -93,3 +93,30 @@ export function formatearKm(km: number): string {
   if (metros < WHOLE_KM_FROM_M) return `${UN_DECIMAL.format(Math.round(metros / 100) / 10)} km`
   return `${KM_ENTEROS.format(Math.round(km))} km`
 }
+
+/** The units a measurement can be written in: kilometres (the default) or nautical miles. */
+export type Unidad = 'km' | 'nm'
+
+/** One nautical mile is exactly 1.852 km (the international definition). */
+export const KM_POR_MILLA_NAUTICA = 1.852
+
+/** From this many tenths of a nautical mile (100.0 NM) on, whole miles. */
+const ENTERAS_DESDE_DECIMAS_NM = 1000
+
+/**
+ * Human text for a length given in km, written in nautical miles, es-AR. Rounded to tenths first so the 100 NM edge does
+ * not print "100,0": under 100 NM one decimal ("54,3 NM"), from there whole miles with a thousands dot ("1.235 NM").
+ * `NaN`, infinite or negative → "—".
+ */
+export function formatearMillasNauticas(km: number): string {
+  if (!Number.isFinite(km) || km < 0) return '—'
+  const millas = km / KM_POR_MILLA_NAUTICA
+  const decimas = Math.round(millas * 10) + 0 // `+ 0` turns -0 into 0 so it never prints "-0,0"
+  if (decimas < ENTERAS_DESDE_DECIMAS_NM) return `${UN_DECIMAL.format(decimas / 10)} NM`
+  return `${KM_ENTEROS.format(Math.round(millas))} NM`
+}
+
+/** A length given in km, written in the chosen unit. The distance is always computed in km; only the text changes. */
+export function formatearDistancia(km: number, unidad: Unidad): string {
+  return unidad === 'nm' ? formatearMillasNauticas(km) : formatearKm(km)
+}

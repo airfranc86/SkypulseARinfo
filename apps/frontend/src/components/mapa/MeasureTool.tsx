@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { CircleMarker, Marker, Pane, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
-import { Check, ChevronDown, ChevronUp, Crosshair, Ruler, Trash2, Undo2, X } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronDown, ChevronUp, Crosshair, List, Ruler, Trash2, Undo2, X } from 'lucide-react'
 import { densificar } from '@/lib/medicion/distancia'
 import {
   ESTADO_INICIAL,
   abrir,
   agregar,
   borrar,
+  cambiarUnidad,
   cerrar,
   deshacer,
   escape,
@@ -17,9 +18,10 @@ import {
 import { LARGO_MINIMO_PX, etiquetasDeTramos } from '@/lib/medicion/etiquetas'
 import { TEXTOS, botonesHabilitados } from '@/lib/medicion/panel'
 import { esElMismoToque, type Toque } from '@/lib/medicion/toque'
+import { COLOR_MEDICION, iconoDeTramo, iconoDelTotal } from './etiquetasDelMapa'
 import { cajasDeLaInterfaz, puntoDelToque } from './puntoDelToque'
 
-const COLOR = '#fbbf24'
+const COLOR = COLOR_MEDICION
 const PASO_DENSIFICADO_KM = 50
 const CERRADA: EstadoMedicion = { ...ESTADO_INICIAL, abierta: false }
 /** A message equal to the previous one is only re-announced if the live region is emptied first. */
@@ -35,9 +37,10 @@ const RADIO_ANILLO_PX = 9
 
 function estiloBoton(deshabilitado = false): CSSProperties {
   return {
+    // 40 x 44 px: the five actions have to fit in one row at 320 px (the narrowest width WCAG reflow asks for).
     minHeight: 44,
-    minWidth: 44,
-    padding: '0 10px',
+    minWidth: 40,
+    padding: '0 8px',
     borderRadius: 8,
     border: '1px solid var(--color-border-strong)',
     background: 'var(--color-card)',
@@ -50,42 +53,6 @@ function estiloBoton(deshabilitado = false): CSSProperties {
     opacity: deshabilitado ? 0.45 : 1,
     cursor: deshabilitado ? 'not-allowed' : 'pointer',
   }
-}
-
-/**
- * A small label for the map. `texto` comes from `formatearKm`: digits, a dot or comma, "km". Anything else is dropped
- * before it reaches the html. `desplazamiento` places it: next to a point, or centred on a spot. The icon container
- * has zero width, so the box asks for its own text width (`max-content`): without it the dark box would be only as wide
- * as its padding and the number would stick out of it.
- */
-function chipDeDistancia(texto: string, desplazamiento: string, fuente: string, borde: string): L.DivIcon {
-  const seguro = texto.replace(/[^0-9.,\sk—m]/g, '')
-  return L.divIcon({
-    className: '',
-    html: `<span style="display:block;width:max-content;transform:${desplazamiento};padding:2px 6px;border-radius:6px;background:#0b1220;border:1px solid ${borde};color:#fde68a;font:${fuente} system-ui,sans-serif;white-space:nowrap">${seguro}</span>`,
-    iconSize: [0, 0],
-  })
-}
-
-/**
- * Label with the total next to the last point. When that point is fixed on a city the name of the city is written right
- * there, so the total goes above it instead of on top of the name.
- */
-function iconoDelTotal(texto: string, enUnaCiudad: boolean): L.DivIcon {
-  const desplazamiento = enUnaCiudad ? 'translate(10px,calc(-100% - 10px))' : 'translate(10px,-50%)'
-  return chipDeDistancia(texto, desplazamiento, '600 12px/1.2', COLOR)
-}
-
-const iconosDeTramo = new Map<string, L.DivIcon>()
-
-/** Label with the length of one leg, centred on the middle of the leg. One icon per text, built once. */
-function iconoDeTramo(texto: string): L.DivIcon {
-  let icono = iconosDeTramo.get(texto)
-  if (!icono) {
-    icono = chipDeDistancia(texto, 'translate(-50%,-50%)', '600 11px/1.2', 'rgba(251,191,36,.55)')
-    iconosDeTramo.set(texto, icono)
-  }
-  return icono
 }
 
 /**
@@ -204,8 +171,8 @@ export function MeasureTool() {
   // The length of a leg on screen depends on the zoom: project at the current one, and the labels are counted again
   // when it changes.
   const etiquetas = useMemo(
-    () => (estado.abierta ? etiquetasDeTramos(estado.puntos, (p) => map.project([p.lat, p.lon], zoom), LARGO_MINIMO_PX, estado.total) : []),
-    [map, estado.abierta, estado.puntos, estado.total, zoom],
+    () => (estado.abierta ? etiquetasDeTramos(estado.puntos, (p) => map.project([p.lat, p.lon], zoom), LARGO_MINIMO_PX, estado.total, estado.unidad) : []),
+    [map, estado.abierta, estado.puntos, estado.total, estado.unidad, zoom],
   )
   const ultimoEnUnaCiudad = Boolean(estado.puntos[estado.puntos.length - 1]?.nombre)
   const iconoTotal = useMemo(() => iconoDelTotal(estado.total, ultimoEnUnaCiudad), [estado.total, ultimoEnUnaCiudad])
@@ -281,7 +248,7 @@ export function MeasureTool() {
           onClick={() => {
             medirBorde()
             setVerTramos(false)
-            setEstado((previo) => (previo.abierta ? cerrar(previo) : abrir()))
+            setEstado((previo) => (previo.abierta ? cerrar(previo) : abrir(previo.unidad)))
           }}
         >
           <Ruler size={16} aria-hidden="true" />
@@ -328,19 +295,31 @@ export function MeasureTool() {
               </p>
               <p className="text-lg font-semibold leading-tight">{estado.total}</p>
             </div>
+            <button
+              type="button"
+              aria-label={estado.unidad === 'km' ? TEXTOS.cambiarAMillas : TEXTOS.cambiarAKilometros}
+              title={estado.unidad === 'km' ? TEXTOS.cambiarAMillas : TEXTOS.cambiarAKilometros}
+              style={{ ...estiloBoton(), fontSize: 13, fontWeight: 600 }}
+              onClick={() => setEstado((previo) => cambiarUnidad(previo, previo.unidad === 'km' ? 'nm' : 'km'))}
+            >
+              <ArrowLeftRight size={14} aria-hidden="true" className="hidden sm:block" />
+              {estado.unidad === 'km' ? TEXTOS.unidadKm : TEXTOS.unidadMillas}
+            </button>
             {hayTramos && (
               <button
                 type="button"
+                aria-label={`${TEXTOS.encabezadoTramos} (${estado.tramos.length})`}
                 aria-expanded={tramosAbiertos}
                 aria-controls="medir-tramos"
                 style={{ ...estiloBoton(), fontSize: 13 }}
                 onClick={() => setVerTramos((previo) => !previo)}
               >
-                {TEXTOS.encabezadoTramos} ({estado.tramos.length})
+                <List size={16} aria-hidden="true" />
+                <span className="hidden sm:inline">{TEXTOS.encabezadoTramos}</span>({estado.tramos.length})
                 {tramosAbiertos ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
               </button>
             )}
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <div className="flex flex-wrap items-center justify-end gap-1">
               <button ref={botonCentroRef} type="button" aria-label={TEXTOS.agregarEnElCentro} title={TEXTOS.agregarEnElCentro} style={estiloBoton()} onClick={agregarEnElCentro}>
                 <Crosshair size={18} aria-hidden="true" />
                 <span className="hidden sm:inline">{TEXTOS.agregarEnElCentro}</span>
