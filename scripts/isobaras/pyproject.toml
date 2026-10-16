@@ -3,7 +3,12 @@ name = "skypulse-isobaras"
 version = "0.1.0"
 description = "Pipeline that turns NOAA GFS pressure fields into the isobar files the SkyPulse pressure map draws."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "eccodes==2.50.0",
+    "eccodeslib==2.50.0.32 ; sys_platform == 'linux'",
+    "eckitlib==2.5.0.32 ; sys_platform == 'linux'",
+    "numpy>=2.5.4",
+]
 
 [dependency-groups]
 dev = ["pytest>=8"]
