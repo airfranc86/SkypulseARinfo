@@ -261,6 +261,16 @@ async def avisar_corrida(
     await _avisar(redis, lambda: aviso_de_envios(tipo_corrida, resultado))
 
 
+async def avisar_upstash_no_disponible(redis: UpstashRedis | None, tipo_corrida: str) -> None:
+    """Emit the `upstash_no_disponible` alert of a run that never started: the router answered `apagado` because the kill
+    key could not be read with a sending flag ON (Upstash down or not configured). Same event as a run that ends in that
+    state, same 6-hour limit (when Upstash is down the mark cannot be stored and the process memory stops the spam)."""
+    resultado = ResultadoEvaluacionSmn if tipo_corrida == metricas.TIPO_SMN else ResultadoEvaluacion
+    await _avisar(
+        redis, lambda: aviso_de_corrida(tipo_corrida, resultado(estado=evaluacion.ESTADO_UPSTASH_NO_DISPONIBLE))
+    )
+
+
 async def avisar_firma_invalida(redis: UpstashRedis | None, motivo: str) -> None:
     """Emit the alert of a rejected signature, if its reason deserves one. Never raises."""
     await _avisar(redis, lambda: aviso_de_firma(motivo))
