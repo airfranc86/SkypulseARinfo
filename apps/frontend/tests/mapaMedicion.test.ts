@@ -10,6 +10,7 @@ const SRC = new URL('../src/', import.meta.url)
 const leer = (ruta: string) => readFileSync(new URL(ruta, SRC), 'utf8').replaceAll('\r\n', '\n')
 
 const herramienta = leer('components/mapa/MeasureTool.tsx')
+const etiquetasDelMapa = leer('components/mapa/etiquetasDelMapa.ts')
 
 test('la medición se monta dentro del mapa de /mapa y en ningún otro lado (v1)', () => {
   assert.match(leer('components/mapa/IsobarMap.tsx'), /<MeasureTool \/>/)
@@ -139,7 +140,9 @@ test('los tramos van en una lista que se abre con un botón (cerrada por defecto
   assert.match(herramienta, /const \[verTramos, setVerTramos\] = useState\(false\)/)
   assert.match(herramienta, /const tramosAbiertos = verTramos && hayTramos/)
   assert.match(herramienta, /aria-expanded=\{tramosAbiertos\}\s*aria-controls="medir-tramos"/)
-  assert.match(herramienta, /\{TEXTOS\.encabezadoTramos\} \(\{estado\.tramos\.length\}\)/)
+  assert.match(herramienta, /aria-label=\{`\$\{TEXTOS\.encabezadoTramos\} \(\$\{estado\.tramos\.length\}\)`\}/)
+  // On a narrow screen only the icon and the count show; the word "Tramos" appears from `sm` (the name is always complete).
+  assert.match(herramienta, /<List size=\{16\} aria-hidden="true" \/>\s*<span className="hidden sm:inline">\{TEXTOS\.encabezadoTramos\}<\/span>\(\{estado\.tramos\.length\}\)/)
   assert.match(herramienta, /\{tramosAbiertos && \(\s*<div id="medir-tramos"/)
   assert.ok(herramienta.indexOf('{TEXTOS.notaTotal}') > herramienta.indexOf('id="medir-tramos"'))
 })
@@ -154,8 +157,8 @@ test('cada botón de la barra tiene nombre accesible, un ícono decorativo y el 
     assert.ok(herramienta.includes(`aria-label={TEXTOS.${clave}}`), `${clave}: aria-label`)
     assert.ok(herramienta.includes(`<span className="hidden sm:inline">{TEXTOS.${clave}}</span>`), `${clave}: texto en pantallas anchas`)
   }
-  assert.equal((herramienta.match(/aria-hidden="true" \/>\s*<span className="hidden sm:inline"/g) ?? []).length, 5)
-  assert.match(herramienta, /minHeight: 44,\s*minWidth: 44,/)
+  assert.equal((herramienta.match(/aria-hidden="true" \/>\s*<span className="hidden sm:inline"/g) ?? []).length, 6) // the five actions and the Tramos button
+  assert.match(herramienta, /minHeight: 44,\s*minWidth: 40,/)
 })
 
 test('el botón de la barra y el panel no dejan pasar sus clics al mapa (un clic en un botón no agrega un punto)', () => {
@@ -170,9 +173,9 @@ test('el botón de la barra y el panel no dejan pasar sus clics al mapa (un clic
 
 test('cada tramo lleva su distancia sobre el mapa, calculada con la lógica pura y recontada al hacer zoom', () => {
   assert.match(herramienta, /from '@\/lib\/medicion\/etiquetas'/)
-  assert.match(herramienta, /etiquetasDeTramos\(estado\.puntos, \(p\) => map\.project\(\[p\.lat, p\.lon\], zoom\), LARGO_MINIMO_PX, estado\.total\)/)
+  assert.match(herramienta, /etiquetasDeTramos\(estado\.puntos, \(p\) => map\.project\(\[p\.lat, p\.lon\], zoom\), LARGO_MINIMO_PX, estado\.total, estado\.unidad\)/)
   assert.match(herramienta, /zoomend: \(\) => setZoom\(map\.getZoom\(\)\)/)
-  assert.match(herramienta, /\[map, estado\.abierta, estado\.puntos, estado\.total, zoom\]/)
+  assert.match(herramienta, /\[map, estado\.abierta, estado\.puntos, estado\.total, estado\.unidad, zoom\]/)
   assert.match(herramienta, /icon=\{iconoDeTramo\(e\.texto\)\}/)
 })
 
@@ -180,31 +183,30 @@ test('las etiquetas de tramo no atrapan el mouse ni el teclado y su texto pasa p
   const marcadores = herramienta.match(/<Marker key=\{`tramo-[^>]*\/>/)?.[0] ?? ''
   assert.match(marcadores, /interactive=\{false\}/)
   assert.match(marcadores, /keyboard=\{false\}/)
-  assert.ok(herramienta.includes("texto.replace(/[^0-9.,\\sk—m]/g, '')"))
-  assert.equal((herramienta.match(/texto\.replace\(\/\[\^0-9/g) ?? []).length, 1) // one filter for both labels
+  assert.equal((etiquetasDelMapa.match(/texto\.replace\(\/\[\^0-9/g) ?? []).length, 1) // one filter for both labels
 })
 
 test('la caja oscura de una etiqueta mide lo que mide su texto aunque el contenedor del ícono tenga ancho cero', () => {
   // Without `width: max-content` the block box took the width of its container (0) and only its padding was drawn.
-  assert.match(herramienta, /display:block;width:max-content;transform:\$\{desplazamiento\};/)
-  assert.equal((herramienta.match(/width:max-content/g) ?? []).length, 1) // one builder for the total and the legs
+  assert.match(etiquetasDelMapa, /display:block;width:max-content;transform:\$\{desplazamiento\};/)
+  assert.equal((etiquetasDelMapa.match(/width:max-content/g) ?? []).length, 1) // one builder for the total and the legs
 })
 
 test('la lista de tramos vuelve a empezar cerrada al cerrar la herramienta, al borrar y con Escape', () => {
   assert.match(herramienta, /if \(e\.key === 'Escape'\) \{\s*setVerTramos\(false\)\s*setEstado\(\(previo\) => escape\(previo\)\)/)
-  assert.match(herramienta, /medirBorde\(\)\s*setVerTramos\(false\)\s*setEstado\(\(previo\) => \(previo\.abierta \? cerrar\(previo\) : abrir\(\)\)\)/)
+  assert.match(herramienta, /medirBorde\(\)\s*setVerTramos\(false\)\s*setEstado\(\(previo\) => \(previo\.abierta \? cerrar\(previo\) : abrir\(previo\.unidad\)\)\)/)
   assert.match(herramienta, /onClick=\{\(\) => \{ setVerTramos\(false\); setEstado\(borrar\) \}\}/)
   assert.match(herramienta, /onClick=\{\(\) => \{ setVerTramos\(false\); setEstado\(cerrar\) \}\}/)
 })
 
 test('las etiquetas de tramo tienen una clave que no cambia cuando otra aparece o desaparece, y las acciones se parten en filas en pantallas angostas', () => {
   assert.match(herramienta, /<Marker key=\{`tramo-\$\{e\.indice\}`\}/)
-  assert.match(herramienta, /<div className="flex flex-wrap items-center justify-end gap-1\.5">/)
+  assert.match(herramienta, /<div className="flex flex-wrap items-center justify-end gap-1">/)
 })
 
 test('los íconos de tramo se arman una sola vez por texto', () => {
-  assert.match(herramienta, /const iconosDeTramo = new Map<string, L\.DivIcon>\(\)/)
-  assert.match(herramienta, /iconosDeTramo\.set\(texto, icono\)/)
+  assert.match(etiquetasDelMapa, /const iconosDeTramo = new Map<string, L\.DivIcon>\(\)/)
+  assert.match(etiquetasDelMapa, /iconosDeTramo\.set\(texto, icono\)/)
 })
 
 test('la línea sigue el círculo máximo (tramos densificados cada 50 km) y hay una mira fija en el centro al medir', () => {
@@ -230,10 +232,11 @@ test('el estado vive en el reductor puro y la herramienta no guarda nada en el n
   assert.doesNotMatch(herramienta, /localStorage|sessionStorage|indexedDB/)
 })
 
-test('el total sobre el mapa solo deja pasar números, signos y la unidad, y solo eso va al html', () => {
-  assert.ok(herramienta.includes("texto.replace(/[^0-9.,\\sk—m]/g, '')"))
-  assert.match(herramienta, /\$\{seguro\}<\/span>/)
-  assert.doesNotMatch(herramienta, /\$\{texto\}/)
+test('el total sobre el mapa solo deja pasar números, signos y la unidad (km o NM), y solo eso va al html', () => {
+  assert.ok(etiquetasDelMapa.includes("texto.replace(/[^0-9.,\\skmNM—]/g, '')"))
+  assert.match(etiquetasDelMapa, /\$\{seguro\}<\/span>/)
+  assert.doesNotMatch(etiquetasDelMapa, /\$\{texto\}/)
+  assert.doesNotMatch(herramienta, /\$\{texto\}|innerHTML/)
 })
 
 test('el icono del total no se rehace en cada render', () => {
@@ -273,11 +276,33 @@ test('un punto fijado en una ciudad se ve: un anillo, en una capa por encima de 
   assert.match(herramienta, /<Pane name="medicion-puntos" style=\{\{ zIndex: Z_INDEX_PUNTOS, pointerEvents: 'none' \}\}>/)
   assert.match(herramienta, /p\.nombre \? \(\s*<CircleMarker\s*key=\{`anillo-/)
   assert.match(herramienta, /radius=\{RADIO_ANILLO_PX\}/)
-  assert.match(herramienta, /enUnaCiudad \? 'translate\(10px,calc\(-100% - 10px\)\)' : 'translate\(10px,-50%\)'/)
+  assert.match(etiquetasDelMapa, /enUnaCiudad \? 'translate\(10px,calc\(-100% - 10px\)\)' : 'translate\(10px,-50%\)'/)
   // The cities layer is the pane 450 of CiudadesDelMapa: the points must be above it.
   assert.match(leer('components/mapa/CiudadesDelMapa.tsx'), /const Z_INDEX_CIUDADES = 450/)
 })
 
 test('el imán no agrega ninguna dependencia de red', () => {
   for (const archivo of [herramienta, puntoDelToque, ciudadesEnPantalla]) assert.doesNotMatch(archivo, /fetch\(|https?:\/\//)
+})
+
+// ── Unidades ─────────────────────────────────────────────────────────────────
+
+test('hay un botón que cambia entre km y NM, con la unidad de ahora a la vista y el nombre accesible que dice a cuál se cambia', () => {
+  assert.match(herramienta, /aria-label=\{estado\.unidad === 'km' \? TEXTOS\.cambiarAMillas : TEXTOS\.cambiarAKilometros\}/)
+  assert.match(herramienta, /\{estado\.unidad === 'km' \? TEXTOS\.unidadKm : TEXTOS\.unidadMillas\}/)
+  assert.match(herramienta, /cambiarUnidad\(previo, previo\.unidad === 'km' \? 'nm' : 'km'\)/)
+  // Icon only from `sm`: at 320 px the first row (total, unit, Tramos) has to fit without wrapping.
+  assert.match(herramienta, /<ArrowLeftRight size=\{14\} aria-hidden="true" className="hidden sm:block" \/>/)
+})
+
+test('el botón de la unidad va en la fila del total, antes del de tramos y de las acciones', () => {
+  const unidad = herramienta.indexOf('TEXTOS.cambiarAMillas')
+  assert.ok(herramienta.indexOf('{estado.total}') < unidad)
+  assert.ok(unidad < herramienta.indexOf('aria-controls="medir-tramos"'))
+  assert.ok(unidad < herramienta.indexOf('{TEXTOS.agregarEnElCentro}'))
+})
+
+test('la unidad elegida se conserva al cerrar y volver a abrir la herramienta, sin guardarla en el navegador', () => {
+  assert.match(herramienta, /abrir\(previo\.unidad\)/)
+  assert.doesNotMatch(herramienta, /localStorage|sessionStorage|indexedDB/)
 })

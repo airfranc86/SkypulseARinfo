@@ -27,6 +27,10 @@ test('los textos del panel son exactamente los del plan', () => {
     sinPuntos: 'Todavía no hay puntos.',
     unPunto: 'Agregá otro punto para medir.',
     encabezadoTramos: 'Tramos',
+    unidadKm: 'km',
+    unidadMillas: 'NM',
+    cambiarAMillas: 'Unidad: km (kilómetros). Cambiar a NM (millas náuticas)',
+    cambiarAKilometros: 'Unidad: NM (millas náuticas). Cambiar a km (kilómetros)',
   })
 })
 

@@ -5,14 +5,14 @@
  * With one leg the total next to the last point already says it, so labels start at two legs. A leg that is shorter on
  * screen than its label would be drawn on top of the neighbours, so it gets no label until the map is zoomed in.
  */
-import { formatearKm, haversineKm, type LatLon } from './distancia.ts'
+import { formatearDistancia, haversineKm, type LatLon, type Unidad } from './distancia.ts'
 
 export interface EtiquetaDeTramo {
   /** Which leg it belongs to (0 is the first): a stable key, it does not shift when another leg's label comes and goes. */
   readonly indice: number
   /** Where the label sits: the middle of the leg along the great circle. */
   readonly posicion: LatLon
-  /** The length of the leg, as `formatearKm` writes it ("647 km"). */
+  /** The length of the leg, as `formatearDistancia` writes it ("647 km" or "349 NM"). */
   readonly texto: string
 }
 
@@ -30,7 +30,7 @@ const PX_POR_LETRA_TOTAL = 7.2
 const RELLENO_DE_LA_CAJA_PX = 14
 const ALTO_ETIQUETA_PX = 20
 const ALTO_TOTAL_PX = 24
-/** The total chip starts this far to the right of the last point (see `iconoDelTotal` in MeasureTool). */
+/** The total chip starts this far to the right of the last point (see `iconoDelTotal` in `components/mapa/etiquetasDelMapa.ts`). */
 const DESPLAZAMIENTO_DEL_TOTAL_PX = 10
 
 const DEG_TO_RAD = Math.PI / 180
@@ -52,13 +52,15 @@ export function puntoMedio(a: LatLon, b: LatLon): LatLon {
 /**
  * One label per leg of `puntos`, in order. Empty with fewer than two legs. A leg whose ends cannot be placed on screen,
  * or that is shorter than `largoMinimoPx` there, is left out. When `totalTexto` is given (the total is drawn next to the
- * last point), the last leg's label is also left out if it would sit on top of that total.
+ * last point), the last leg's label is also left out if it would sit on top of that total. The texts are written in
+ * `unidad` (kilometres by default).
  */
 export function etiquetasDeTramos(
   puntos: ReadonlyArray<LatLon>,
   aPixeles: (punto: LatLon) => PuntoEnPantalla,
   largoMinimoPx: number = LARGO_MINIMO_PX,
   totalTexto?: string,
+  unidad: Unidad = 'km',
 ): EtiquetaDeTramo[] {
   if (puntos.length < 3) return []
   const etiquetas: EtiquetaDeTramo[] = []
@@ -67,7 +69,7 @@ export function etiquetasDeTramos(
     const hasta = aPixeles(puntos[i])
     const largo = Math.hypot(hasta.x - desde.x, hasta.y - desde.y)
     if (!Number.isFinite(largo) || largo < largoMinimoPx) continue
-    const texto = formatearKm(haversineKm(puntos[i - 1], puntos[i]))
+    const texto = formatearDistancia(haversineKm(puntos[i - 1], puntos[i]), unidad)
     if (totalTexto !== undefined && i === puntos.length - 1 && pisaAlTotal(desde, hasta, texto, totalTexto)) continue
     etiquetas.push({ indice: i - 1, posicion: puntoMedio(puntos[i - 1], puntos[i]), texto })
   }

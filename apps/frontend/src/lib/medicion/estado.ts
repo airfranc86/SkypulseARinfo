@@ -7,7 +7,7 @@
  * nothing (undo with no points, finish with fewer than two points, ...) it returns the SAME state
  * reference, so the component can skip a render and the tests can tell "nothing happened" apart.
  */
-import { formatearKm, haversineKm, totalKm, type LatLon } from './distancia.ts'
+import { formatearDistancia, haversineKm, totalKm, type LatLon, type Unidad } from './distancia.ts'
 
 /** A new point closer than this to the last one is a double tap, not a measurement. */
 const MIN_STEP_M = 1
@@ -30,6 +30,8 @@ export interface EstadoMedicion {
   readonly puntos: ReadonlyArray<PuntoMedido>
   /** True after "Terminar": the next added point starts a new measurement. */
   readonly terminada: boolean
+  /** The unit the texts are written in. It survives clearing, finishing and closing the panel. */
+  readonly unidad: Unidad
   /** Total length text, "—" with fewer than two points. */
   readonly total: string
   /** One line per leg: "Tramo 1: 647 km", with the cities when the ends have one: "Tramo 1: 647 km (Córdoba → Buenos Aires)". */
@@ -43,6 +45,7 @@ export const ESTADO_INICIAL: EstadoMedicion = Object.freeze({
   abierta: true,
   puntos: Object.freeze([]) as ReadonlyArray<LatLon>,
   terminada: false,
+  unidad: 'km',
   total: SIN_TOTAL,
   tramos: Object.freeze([]) as ReadonlyArray<string>,
   anuncio: '',
@@ -51,21 +54,21 @@ export const ESTADO_INICIAL: EstadoMedicion = Object.freeze({
 const plural = (n: number) => (n === 1 ? '1 punto' : `${n} puntos`)
 
 /** A leg between two points: its number and length, and the cities at its ends when at least one has a name. */
-function textoDelTramo(puntos: ReadonlyArray<PuntoMedido>, i: number): string {
+function textoDelTramo(puntos: ReadonlyArray<PuntoMedido>, i: number, unidad: Unidad): string {
   const desde = puntos[i]
   const hasta = puntos[i + 1]
-  const base = `Tramo ${i + 1}: ${formatearKm(haversineKm(desde, hasta))}`
+  const base = `Tramo ${i + 1}: ${formatearDistancia(haversineKm(desde, hasta), unidad)}`
   if (!desde.nombre && !hasta.nombre) return base
   return `${base} (${desde.nombre ?? `punto ${i + 1}`} → ${hasta.nombre ?? `punto ${i + 2}`})`
 }
 
 function construir(
-  base: Pick<EstadoMedicion, 'abierta' | 'terminada'>,
+  base: Pick<EstadoMedicion, 'abierta' | 'terminada' | 'unidad'>,
   puntos: ReadonlyArray<PuntoMedido>,
   anuncio: (resumen: { total: string; cantidad: string }) => string,
 ): EstadoMedicion {
-  const total = puntos.length >= 2 ? formatearKm(totalKm(puntos)) : SIN_TOTAL
-  const tramos = puntos.slice(1).map((_, i) => textoDelTramo(puntos, i))
+  const total = puntos.length >= 2 ? formatearDistancia(totalKm(puntos), base.unidad) : SIN_TOTAL
+  const tramos = puntos.slice(1).map((_, i) => textoDelTramo(puntos, i, base.unidad))
   return { ...base, puntos, total, tramos, anuncio: anuncio({ total, cantidad: plural(puntos.length) }) }
 }
 
@@ -75,9 +78,9 @@ function copiarPunto(punto: PuntoMedido): PuntoMedido {
   return nombre ? { lat: punto.lat, lon: punto.lon, nombre } : { lat: punto.lat, lon: punto.lon }
 }
 
-/** Opens the panel with an empty measurement. */
-export function abrir(): EstadoMedicion {
-  return ESTADO_INICIAL
+/** Opens the panel with an empty measurement, in kilometres unless a unit is given (the one chosen before). */
+export function abrir(unidad: Unidad = 'km'): EstadoMedicion {
+  return unidad === 'nm' ? { ...ESTADO_INICIAL, unidad } : ESTADO_INICIAL
 }
 
 /**
@@ -97,7 +100,7 @@ export function agregar(estado: EstadoMedicion, punto: PuntoMedido): EstadoMedic
     return { ...estado, anuncio: 'Ese punto ya estaba: no se agregó.' }
   }
   const fijado = copia.nombre ? `Punto fijado en ${copia.nombre}. ` : ''
-  return construir({ abierta: estado.abierta, terminada: false }, [...previos, copia], ({ total, cantidad }) =>
+  return construir({ abierta: estado.abierta, terminada: false, unidad: estado.unidad }, [...previos, copia], ({ total, cantidad }) =>
     previos.length === 0 ? `${fijado}${cantidad}. Agregá otro para medir.` : `${fijado}Total: ${total}, ${cantidad}.`,
   )
 }
@@ -106,7 +109,7 @@ export function agregar(estado: EstadoMedicion, punto: PuntoMedido): EstadoMedic
 export function deshacer(estado: EstadoMedicion): EstadoMedicion {
   if (estado.puntos.length === 0) return estado
   return construir(
-    { abierta: estado.abierta, terminada: false },
+    { abierta: estado.abierta, terminada: false, unidad: estado.unidad },
     estado.puntos.slice(0, -1),
     ({ total, cantidad }) => {
       if (estado.puntos.length - 1 === 0) return 'Se quitó el último punto. No quedan puntos.'
@@ -119,7 +122,7 @@ export function deshacer(estado: EstadoMedicion): EstadoMedicion {
 /** Clears the points and keeps the panel open. Same state when there is nothing to clear. */
 export function borrar(estado: EstadoMedicion): EstadoMedicion {
   if (estado.puntos.length === 0) return estado
-  return construir({ abierta: estado.abierta, terminada: false }, [], () => 'Medición borrada.')
+  return construir({ abierta: estado.abierta, terminada: false, unidad: estado.unidad }, [], () => 'Medición borrada.')
 }
 
 /** Finishes the measurement. Needs two points and an unfinished measurement, otherwise the same state. */
@@ -132,9 +135,21 @@ export function terminar(estado: EstadoMedicion): EstadoMedicion {
   }
 }
 
-/** Closes the panel and drops the measurement. */
-export function cerrar(_estado: EstadoMedicion): EstadoMedicion {
-  return { ...ESTADO_INICIAL, abierta: false, anuncio: 'Medición cerrada.' }
+/** Closes the panel and drops the measurement (the unit chosen is kept). */
+export function cerrar(estado: EstadoMedicion): EstadoMedicion {
+  return { ...ESTADO_INICIAL, abierta: false, unidad: estado.unidad, anuncio: 'Medición cerrada.' }
+}
+
+/**
+ * Writes the total and the legs in another unit; the points do not change. The same unit (or one that does not exist)
+ * gives the same state. A finished measurement stays finished.
+ */
+export function cambiarUnidad(estado: EstadoMedicion, unidad: Unidad): EstadoMedicion {
+  if ((unidad !== 'km' && unidad !== 'nm') || unidad === estado.unidad) return estado
+  const nombre = unidad === 'nm' ? 'millas náuticas' : 'kilómetros'
+  return construir({ abierta: estado.abierta, terminada: estado.terminada, unidad }, estado.puntos, ({ total }) =>
+    estado.puntos.length >= 2 ? `Unidad: ${nombre}. Total: ${total}.` : `Unidad: ${nombre}.`,
+  )
 }
 
 /** Escape key: clears when there are points, closes the panel when there are none. */
