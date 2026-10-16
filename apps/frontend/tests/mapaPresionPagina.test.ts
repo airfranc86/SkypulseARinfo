@@ -63,7 +63,7 @@ test('el control de hora es un deslizador con nombre, texto de valor y botones d
   assert.match(control, /aria-valuetext=\{texto\}/)
   assert.match(control, /aria-label="Hora anterior"/)
   assert.match(control, /aria-label="Hora siguiente"/)
-  assert.equal((control.match(/width: 44, height: 44/g) ?? []).length, 2)
+  assert.equal((control.match(/width: 44, height: 44/g) ?? []).length, 3)
   assert.match(control, /style=\{\{ height: 44 \}\}/)
 })
 
