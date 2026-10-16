@@ -48,6 +48,7 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; e
     estado_de_alertas_limpio,
     llamar_evaluar,
     lineas_de_resumen,
+    marca_de_sentry,
     payload_horario,
     push,
     redis,
@@ -763,7 +764,8 @@ async def test_with_the_send_switch_on_but_no_usable_vapid_key_the_answer_is_sin
     response = await llamar_evaluar(async_client)
     assert response.status_code == 200  # a 5xx would make QStash retry for nothing
     assert response.json() == {"estado": "sin_vapid"}
-    assert fuente.calls == [] and "SET" not in [c[0] for c in fake_upstash.commands]
+    # No run lock is taken (the only SET is the 6-hour mark of the Sentry alert for the failed run, FRA-360 part 2).
+    assert fuente.calls == [] and [c for c in fake_upstash.commands if c[0] == "SET"] == [marca_de_sentry("corrida")]
 
 
 async def test_a_run_whose_sends_all_fail_still_answers_a_200_with_the_counters(

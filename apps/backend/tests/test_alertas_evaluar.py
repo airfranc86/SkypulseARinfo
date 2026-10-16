@@ -40,6 +40,7 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; e
     estado_de_alertas_limpio,
     evaluador_inerte,
     llamar_evaluar,
+    marca_de_sentry,
 )
 from tests.conftest import FAKE_UPSTASH_TOKEN, FAKE_UPSTASH_URL
 from tests.qstash_helpers import CLAVE_ACTUAL, CLAVE_AJENA, CLAVE_SIGUIENTE, firmar
@@ -82,7 +83,9 @@ async def test_every_rejection_cause_gets_the_same_401_response(
     assert {valor for valor in respuestas.values()} == {
         (401, json.dumps(NO_AUTORIZADO, separators=(",", ":")).encode(), "application/json")
     }, respuestas
-    assert fake_upstash.commands == []  # un rechazo no toca Upstash
+    # Un rechazo no toca Upstash, salvo la marca de 6 horas del aviso a Sentry por una firma con forma de JWT que no
+    # coincide (FRA-360, parte 2): UN comando en total (las causas siguientes las frena la memoria del proceso).
+    assert fake_upstash.commands == [marca_de_sentry("firma")]
 
 
 async def test_without_signing_keys_configured_even_a_well_formed_signature_is_rejected(

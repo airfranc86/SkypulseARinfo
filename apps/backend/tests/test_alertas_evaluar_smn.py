@@ -54,6 +54,7 @@ from tests.alertas_helpers import (  # noqa: F401  (fixtures are used by name; e
     lineas_de_resumen,
     lineas_de_resumen_smn,
     llamar_evaluar,
+    marca_de_sentry,
     redis,
     registrar,
     reloj_de_openmeteo,
@@ -337,7 +338,8 @@ async def test_a_signature_for_another_body_cannot_switch_the_mode_and_nothing_r
     response = await llamar_smn(async_client, cuerpo=cuerpo_enviado, firma=firmar(cuerpo_firmado))
 
     assert response.status_code == 401 and response.json() == NO_AUTORIZADO
-    assert fake_upstash.commands == [] and push.llamadas == [] and feed.llamadas == []
+    # A signature that parses but does not match warns Sentry (FRA-360, part 2): the only command is its 6-hour mark.
+    assert fake_upstash.commands == [marca_de_sentry("firma")] and push.llamadas == [] and feed.llamadas == []
     assert open_meteo_prohibido.calls == [] and locks(fake_upstash) == []
 
 
@@ -360,7 +362,7 @@ async def test_a_signature_of_a_foreign_key_cannot_run_the_smn_mode(
     fake_upstash.commands.clear()
     response = await llamar_smn(async_client, firma=firmar(CUERPO_SMN, clave=CLAVE_AJENA))
     assert response.status_code == 401 and response.json() == NO_AUTORIZADO
-    assert fake_upstash.commands == [] and push.llamadas == [] and feed.llamadas == []
+    assert fake_upstash.commands == [marca_de_sentry("firma")] and push.llamadas == [] and feed.llamadas == []
 
 
 async def test_the_next_signing_key_runs_the_smn_mode_too(
@@ -614,7 +616,9 @@ async def test_with_the_send_switch_on_but_no_usable_vapid_key_the_smn_mode_answ
     response = await llamar_smn(async_client)
     assert response.status_code == 200 and response.json() == {"estado": "sin_vapid"}  # never a 5xx: QStash would retry
     # Nothing of the run is touched; only the daily count of the state (FRA-360), after the run.
-    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] + conteo_del_dia("2026-10-14", ("smn:corridas:sin_vapid", 1))
+    assert fake_upstash.commands == [["GET", CLAVE_APAGADO]] + conteo_del_dia("2026-10-14", ("smn:corridas:sin_vapid", 1)) + [
+        marca_de_sentry("corrida")  # FRA-360, part 2: the failed run is alerted to Sentry, after the count
+    ]
     assert locks(fake_upstash) == []
     assert feed.llamadas == [] and push.llamadas == []
     lineas = lineas_de_resumen_smn(caplog)
