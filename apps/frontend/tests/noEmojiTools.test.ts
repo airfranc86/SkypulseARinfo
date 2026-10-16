@@ -19,6 +19,7 @@ const FILES = [
   'src/hooks/useIsobaras.ts',
   'src/components/mapa/MeasureTool.tsx',
   'src/lib/medicion/panel.ts',
+  'src/lib/medicion/etiquetas.ts',
 ]
 
 for (const file of FILES) {

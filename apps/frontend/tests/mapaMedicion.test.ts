@@ -58,10 +58,11 @@ test('al abrir el foco va al botón del centro y al cerrar vuelve al botón de l
   assert.match(herramienta, /if \(!estado\.abierta && estabaAbierta\.current\) botonAbrirRef\.current\?\.focus\(\)/)
 })
 
-test('si el botón con foco se deshabilita (Terminar, Deshacer hasta 0, Borrar) el foco pasa al botón del centro', () => {
+test('si el botón con foco se deshabilita (Terminar, Deshacer hasta 0, Borrar) o sale de la página (Tramos) el foco pasa al botón del centro', () => {
   assert.match(herramienta, /useLayoutEffect\(\(\) => \{\s*const previo = ultimoFoco\.current/)
   assert.match(herramienta, /onFocusCapture=\{\(e\) => \{\s*ultimoFoco\.current = e\.target as HTMLElement/)
-  assert.match(herramienta, /previo instanceof HTMLButtonElement && previo\.disabled\) botonCentroRef\.current\?\.focus\(\)/)
+  assert.match(herramienta, /\(previo\.disabled \|\| !previo\.isConnected\)\) return/)
+  assert.match(herramienta, /if \(activo === previo \|\| activo === document\.body \|\| activo === null\) botonCentroRef\.current\?\.focus\(\)/)
   assert.match(herramienta, /botonCentroRef\.current\?\.focus\(\)/)
 })
 
@@ -102,11 +103,108 @@ test('el contenedor del panel no tapa el mapa: solo los botones y el panel recib
   assert.ok((herramienta.match(/pointerEvents: 'auto'/g) ?? []).length >= 2)
 })
 
-test('el panel es una columna que no ocupa más de una parte del alto del mapa, y la mira queda por encima', () => {
-  assert.match(herramienta, /flexDirection: 'column'/)
-  assert.match(herramienta, /maxHeight: 'max\(150px, 26svh\)'/)
+test('el panel es una barra pegada abajo, que no ocupa más de una parte del alto del mapa, y la mira queda por encima', () => {
+  assert.match(herramienta, /const MARGEN_LATERAL_PX = 8/)
+  assert.match(herramienta, /const BORDE_INFERIOR_PX = 26/)
+  assert.match(herramienta, /position: 'absolute',\s*left: MARGEN_LATERAL_PX,\s*right: MARGEN_LATERAL_PX,\s*bottom: borde,/)
+  assert.doesNotMatch(herramienta, /top: 10,\s*right: 10,\s*zIndex: 1000,\s*width:/)
+  // A percentage of the MAP (not of the screen): on a short phone the bar still stops before the middle of the map.
+  assert.match(herramienta, /maxHeight: `max\(120px, calc\(50% - \$\{borde\}px - 20px\)\)`/)
+  assert.doesNotMatch(herramienta, /svh/)
   assert.match(herramienta, /overflowY: 'auto'/)
   assert.match(herramienta, /zIndex: 1001/)
+})
+
+test('la barra queda justo arriba de los créditos del mapa, que se miden y no se tapan', () => {
+  assert.match(herramienta, /map\.attributionControl\?\.getContainer\(\)\?\.offsetHeight \?\? 0/)
+  assert.match(herramienta, /setBorde\(Math\.max\(BORDE_INFERIOR_PX, creditos \+ AIRE_SOBRE_CREDITOS_PX\)\)/)
+  // Measured in event handlers (the button, a resize of the map), not in an effect and not while rendering.
+  assert.match(herramienta, /resize: medirBorde,/)
+  assert.match(herramienta, /onClick=\{\(\) => \{\s*medirBorde\(\)\s*setVerTramos\(false\)\s*setEstado/)
+})
+
+test('el resultado está arriba de los botones, a la vista, y no hay que hacer scroll para leerlo', () => {
+  assert.ok(herramienta.indexOf('{estado.total}') > 0)
+  assert.ok(herramienta.indexOf('{estado.total}') < herramienta.indexOf('{TEXTOS.agregarEnElCentro}'))
+  // Everything that can be long (the leg list) is closed until asked for, and comes after the result and the buttons.
+  assert.ok(herramienta.indexOf('id="medir-tramos"') > herramienta.indexOf('{TEXTOS.cerrar}'))
+})
+
+test('la instrucción larga solo se muestra sin puntos; con un punto, la corta', () => {
+  assert.match(herramienta, /\{estado\.puntos\.length === 0 && \(\s*<p[^>]*>\s*\{TEXTOS\.instruccion\}/)
+  assert.match(herramienta, /\{estado\.puntos\.length === 1 && \(\s*<p[^>]*>\s*\{TEXTOS\.unPunto\}/)
+})
+
+test('los tramos van en una lista que se abre con un botón (cerrada por defecto), con la cantidad y la aclaración de que es aproximado', () => {
+  assert.match(herramienta, /const \[verTramos, setVerTramos\] = useState\(false\)/)
+  assert.match(herramienta, /const tramosAbiertos = verTramos && hayTramos/)
+  assert.match(herramienta, /aria-expanded=\{tramosAbiertos\}\s*aria-controls="medir-tramos"/)
+  assert.match(herramienta, /\{TEXTOS\.encabezadoTramos\} \(\{estado\.tramos\.length\}\)/)
+  assert.match(herramienta, /\{tramosAbiertos && \(\s*<div id="medir-tramos"/)
+  assert.ok(herramienta.indexOf('{TEXTOS.notaTotal}') > herramienta.indexOf('id="medir-tramos"'))
+})
+
+test('el botón de tramos va en la misma fila que el total, antes de las acciones', () => {
+  assert.ok(herramienta.indexOf('{estado.total}') < herramienta.indexOf('aria-controls="medir-tramos"'))
+  assert.ok(herramienta.indexOf('aria-controls="medir-tramos"') < herramienta.indexOf('{TEXTOS.agregarEnElCentro}'))
+})
+
+test('cada botón de la barra tiene nombre accesible, un ícono decorativo y el texto solo en pantallas anchas', () => {
+  for (const clave of ['agregarEnElCentro', 'deshacer', 'borrar', 'terminar', 'cerrar']) {
+    assert.ok(herramienta.includes(`aria-label={TEXTOS.${clave}}`), `${clave}: aria-label`)
+    assert.ok(herramienta.includes(`<span className="hidden sm:inline">{TEXTOS.${clave}}</span>`), `${clave}: texto en pantallas anchas`)
+  }
+  assert.equal((herramienta.match(/aria-hidden="true" \/>\s*<span className="hidden sm:inline"/g) ?? []).length, 5)
+  assert.match(herramienta, /minHeight: 44,\s*minWidth: 44,/)
+})
+
+test('el botón de la barra y el panel no dejan pasar sus clics al mapa (un clic en un botón no agrega un punto)', () => {
+  assert.match(herramienta, /ref=\{contenedorBotonRef\}/)
+  assert.match(herramienta, /L\.DomEvent\.disableClickPropagation\(contenedorBotonRef\.current\)/)
+  // Anchored to the effect that wires the panel (the focus effect has the same dependency list): with `[]` the panel, mounted
+  // later, would never be isolated and every tap on the bar would drop a point.
+  assert.match(herramienta, /disableScrollPropagation\(panelRef\.current\)\s*\}, \[estado\.abierta\]\)/)
+})
+
+// ── Etiquetas por tramo ──────────────────────────────────────────────────────
+
+test('cada tramo lleva su distancia sobre el mapa, calculada con la lógica pura y recontada al hacer zoom', () => {
+  assert.match(herramienta, /from '@\/lib\/medicion\/etiquetas'/)
+  assert.match(herramienta, /etiquetasDeTramos\(estado\.puntos, \(p\) => map\.project\(\[p\.lat, p\.lon\], zoom\), LARGO_MINIMO_PX, estado\.total\)/)
+  assert.match(herramienta, /zoomend: \(\) => setZoom\(map\.getZoom\(\)\)/)
+  assert.match(herramienta, /\[map, estado\.abierta, estado\.puntos, estado\.total, zoom\]/)
+  assert.match(herramienta, /icon=\{iconoDeTramo\(e\.texto\)\}/)
+})
+
+test('las etiquetas de tramo no atrapan el mouse ni el teclado y su texto pasa por el mismo filtro que el total', () => {
+  const marcadores = herramienta.match(/<Marker key=\{`tramo-[^>]*\/>/)?.[0] ?? ''
+  assert.match(marcadores, /interactive=\{false\}/)
+  assert.match(marcadores, /keyboard=\{false\}/)
+  assert.ok(herramienta.includes("texto.replace(/[^0-9.,\\sk—m]/g, '')"))
+  assert.equal((herramienta.match(/texto\.replace\(\/\[\^0-9/g) ?? []).length, 1) // one filter for both labels
+})
+
+test('la caja oscura de una etiqueta mide lo que mide su texto aunque el contenedor del ícono tenga ancho cero', () => {
+  // Without `width: max-content` the block box took the width of its container (0) and only its padding was drawn.
+  assert.match(herramienta, /display:block;width:max-content;transform:\$\{desplazamiento\};/)
+  assert.equal((herramienta.match(/width:max-content/g) ?? []).length, 1) // one builder for the total and the legs
+})
+
+test('la lista de tramos vuelve a empezar cerrada al cerrar la herramienta, al borrar y con Escape', () => {
+  assert.match(herramienta, /if \(e\.key === 'Escape'\) \{\s*setVerTramos\(false\)\s*setEstado\(\(previo\) => escape\(previo\)\)/)
+  assert.match(herramienta, /medirBorde\(\)\s*setVerTramos\(false\)\s*setEstado\(\(previo\) => \(previo\.abierta \? cerrar\(previo\) : abrir\(\)\)\)/)
+  assert.match(herramienta, /onClick=\{\(\) => \{ setVerTramos\(false\); setEstado\(borrar\) \}\}/)
+  assert.match(herramienta, /onClick=\{\(\) => \{ setVerTramos\(false\); setEstado\(cerrar\) \}\}/)
+})
+
+test('las etiquetas de tramo tienen una clave que no cambia cuando otra aparece o desaparece, y las acciones se parten en filas en pantallas angostas', () => {
+  assert.match(herramienta, /<Marker key=\{`tramo-\$\{e\.indice\}`\}/)
+  assert.match(herramienta, /<div className="flex flex-wrap items-center justify-end gap-1\.5">/)
+})
+
+test('los íconos de tramo se arman una sola vez por texto', () => {
+  assert.match(herramienta, /const iconosDeTramo = new Map<string, L\.DivIcon>\(\)/)
+  assert.match(herramienta, /iconosDeTramo\.set\(texto, icono\)/)
 })
 
 test('la línea sigue el círculo máximo (tramos densificados cada 50 km) y hay una mira fija en el centro al medir', () => {
@@ -116,13 +214,13 @@ test('la línea sigue el círculo máximo (tramos densificados cada 50 km) y hay
 })
 
 test('después de Terminar el panel dice qué hacer para empezar otra medición', () => {
-  assert.match(herramienta, /\{estado\.terminada && <p className="text-xs mb-2">\{TEXTOS\.terminada\}<\/p>\}/)
+  assert.match(herramienta, /\{estado\.terminada && <p className="text-xs mt-2">\{TEXTOS\.terminada\}<\/p>\}/)
 })
 
-test('los títulos del panel siguen la jerarquía de la página (h2 y h3, sin saltar de h1 a h3)', () => {
-  assert.match(herramienta, /<h2 id="medir-titulo"/)
-  assert.match(herramienta, /<h3 className="text-xs font-semibold mb-1">\{TEXTOS\.encabezadoTramos\}<\/h3>/)
-  assert.doesNotMatch(herramienta, /<h4/)
+test('el panel tiene su título (h2, solo para lectores de pantalla) y no salta de nivel', () => {
+  assert.match(herramienta, /<h2 id="medir-titulo" className="sr-only">/)
+  assert.match(herramienta, /aria-labelledby="medir-titulo"/)
+  assert.doesNotMatch(herramienta, /<h3|<h4|<details|<summary/)
 })
 
 // ── Estado y seguridad ───────────────────────────────────────────────────────
