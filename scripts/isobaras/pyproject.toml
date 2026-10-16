@@ -1,0 +1,13 @@
+[project]
+name = "skypulse-isobaras"
+version = "0.1.0"
+description = "Pipeline that turns NOAA GFS pressure fields into the isobar files the SkyPulse pressure map draws."
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
