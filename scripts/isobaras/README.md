@@ -41,18 +41,40 @@ Códigos de salida del pipeline: `0` listo (o "ciclo ya publicado"), `2` ningún
 
 ## Cuándo corre solo
 
-El workflow `.github/workflows/isobaras.yml` corre a las 04:45, 10:45, 16:45 y 22:45 UTC (4 h 45 min después de cada
-corrida del modelo de NOAA: 00, 06, 12 y 18 UTC) y otra vez una hora después como reintento. Si el ciclo ya está
-publicado, termina sin desplegar. También se puede lanzar a mano desde Actions → isobaras → Run workflow. Solo publica
-desde `main`. El trabajo `test` corre además en cada pull request que toque `scripts/isobaras/**` o el workflow.
+El workflow `.github/workflows/isobaras.yml` pregunta por un ciclo nuevo **cada 20 minutos** (a los minutos 7, 27 y 47 de
+cada hora, nunca a la hora en punto, que es cuando GitHub más atrasa las corridas programadas). NOAA publica un ciclo cada
+6 horas (00, 06, 12 y 18 UTC, completo unas 4 h 45 min después), pero GitHub retrasa las corridas programadas, a veces por
+horas, y descarta algunas: preguntando seguido, una corrida tardía o perdida atrasa el mapa unos minutos y no un ciclo
+entero. Si el ciclo ya está publicado, la corrida termina en segundos sin desplegar nada, así que preguntar seguido casi
+no cuesta (el repo es público). También se puede lanzar a mano desde Actions → isobaras → Run workflow. Solo publica desde
+`main`.
+
+El trabajo `test` corre en cada pull request que toque `scripts/isobaras/**` o el workflow, y antes de cada publicación
+(en las corridas programadas y a mano): como `main` no tiene protección de rama, es lo que impide que un `main` roto
+llegue a los usuarios. El trabajo `generar` solo arranca si `test` pasó, y baja y arma los archivos si hay ciclo nuevo;
+el trabajo `desplegar`, el único con el entorno de Pages y los permisos de escritura, solo corre en ese caso: las
+corridas que no encuentran nada nuevo no dejan registros de despliegue.
+
+### Si GitHub igual atrasa las corridas
+
+La programación de GitHub es "lo mejor posible", sin garantía de horario. Si el mapa sigue mostrando el aviso de
+"isobaras no actualizadas" con frecuencia, hay una segunda capa gratuita y confiable: un disparador externo que lance el
+workflow por la API de GitHub, por ejemplo con un horario de QStash (plan Free) cada 20 minutos que haga
+`POST https://api.github.com/repos/airfranc86/SkypulseARinfo/actions/workflows/isobaras.yml/dispatches` con el cuerpo
+`{"ref":"main"}`. Necesita un token fino de GitHub limitado a este repositorio con el único permiso *Actions: Read and
+write*, que se guarda como encabezado reenviado en el propio QStash: **nunca** en el repositorio ni en el chat. Ojo con
+el alcance: ese permiso también puede cancelar, repetir o borrar corridas y lanzar cualquier otro workflow del repo, y
+cada disparo corre también `test`, así que conviene un token con vencimiento y revisarlo si se sospecha de una fuga.
 
 ## Qué hacer si falla
 
 - **El job quedó en rojo:** Pages sigue sirviendo el último deploy bueno; el mapa muestra la edad del dato (aviso a las
   12 h, aviso fuerte a las 36 h). Mirá el log del paso que ejecuta `isobaras_core.pipeline` (en Actions aparece como
   "Run uv run python -m isobaras_core.pipeline …").
-- **Código 2 ("no se publica"):** NOAA todavía no terminó de subir el ciclo (llega fuera de orden). El reintento de una
-  hora después suele resolverlo. Si pasa varias veces seguidas, revisá https://www.nco.ncep.noaa.gov/pmb/nwprod/prodstat/
+- **Código 2 ("no se publica"):** ninguno de los últimos cuatro ciclos (unas 18 horas) tiene el índice de las 41 horas.
+  Si un ciclo todavía se está subiendo, el pipeline usa el anterior y termina en "ciclo ya publicado" (código 0), así
+  que el código 2 indica algo más serio: un corte de NOAA o un cambio en el bucket. Mirá
+  https://www.nco.ncep.noaa.gov/pmb/nwprod/prodstat/ y, si el bucket cambió, el `ciclo.py`.
 - **Código 4 con "no se pudo bajar":** el bucket público de NOAA (`noaa-gfs-bdp-pds`) no respondió; reintentar.
 - **`eccodes` no se instala en Linux:** las ruedas de `eccodes`, `eccodeslib` y `eckitlib` están fijadas en `uv.lock`
   para Python 3.12 (el workflow lo fija). El trabajo `test` de cada pull request lo prueba en `ubuntu-latest`.

@@ -1,9 +1,17 @@
 # Pressure map (isobars): builds the files the /mapa page reads from NOAA GFS and publishes them on GitHub Pages.
 #
-# - Every pull request that touches the pipeline runs `test` (this is where eccodes is first installed on Linux).
-# - `schedule` runs 4 h 45 min after each model cycle (00/06/12/18 UTC) and retries one hour later. If the cycle
-#   is already published the run ends without deploying, so the retry costs almost nothing.
-# - `publicar` only runs from main (schedule or manual) and only deploys when there is a new cycle.
+# - `test` runs on every pull request that touches the pipeline and before every publishing run (this is where eccodes
+#   is first installed on Linux). `main` has no branch protection, so this is what keeps a red `main` from reaching users.
+# - `schedule` asks for a new model cycle every 20 minutes. NOAA publishes one every 6 h (00/06/12/18 UTC, complete
+#   about 4 h 45 min later), but GitHub delays scheduled runs, sometimes by hours, and drops some: asking often means a
+#   late or lost run delays the map by minutes instead of by a whole cycle. A run that finds the cycle already
+#   published ends in seconds and deploys nothing, so asking often costs about a minute of a free runner (the repo is
+#   public).
+#   The minutes avoid the top of the hour, when GitHub delays scheduled runs the most.
+# - `generar` only runs from main (schedule or manual), once `test` has passed. It builds the files when there is a new
+#   cycle and uploads them.
+# - `desplegar` is the only job with the Pages environment and the write permissions, and it only runs when `generar`
+#   found a new cycle: the runs that find nothing leave no deployment record behind.
 # Pages replaces the whole site on each deploy: the artifact is exactly `scripts/isobaras/out`.
 name: isobaras
 
@@ -13,14 +21,13 @@ on:
       - "scripts/isobaras/**"
       - ".github/workflows/isobaras.yml"
   schedule:
-    - cron: "45 4,10,16,22 * * *"
-    - cron: "45 5,11,17,23 * * *"
+    - cron: "7,27,47 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Publishing runs (cron, retry, manual) share one group and queue; a pull request has its own group so its tests
+# Publishing runs (cron, manual) share one group and queue; a pull request has its own group so its tests
 # never take the single pending slot of a scheduled run.
 concurrency:
   group: isobaras-${{ github.event_name == 'pull_request' && github.ref || 'publicar' }}
@@ -46,18 +53,13 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest -q
 
-  publicar:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+  generar:
     needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    outputs:
+      publicar: ${{ steps.generar.outputs.publicar }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,11 +73,22 @@ jobs:
       - id: generar
         run: uv run python -m isobaras_core.pipeline --salida out --github-output "$GITHUB_OUTPUT"
       - if: steps.generar.outputs.publicar == 'true'
-        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - if: steps.generar.outputs.publicar == 'true'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: scripts/isobaras/out
+
+  desplegar:
+    needs: generar
+    if: needs.generar.outputs.publicar == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - id: deploy
-        if: steps.generar.outputs.publicar == 'true'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
