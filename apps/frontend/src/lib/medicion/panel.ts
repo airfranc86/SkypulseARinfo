@@ -4,7 +4,7 @@ import type { EstadoMedicion } from './estado.ts'
 export const TEXTOS = {
   abrir: 'Medir distancia',
   titulo: 'Medir distancia',
-  instruccion: 'Tocá o hacé clic en el mapa para agregar puntos. También podés usar «Agregar punto en el centro».',
+  instruccion: 'Tocá o hacé clic en el mapa para agregar puntos. También podés usar el botón de la mira para agregar uno en el centro.',
   agregarEnElCentro: 'Agregar punto en el centro',
   deshacer: 'Deshacer',
   borrar: 'Borrar',
