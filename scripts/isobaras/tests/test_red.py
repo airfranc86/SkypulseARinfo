@@ -131,3 +131,7 @@ def test_un_404_del_get_no_se_reintenta(servidor):
 def test_un_503_del_get_si_se_reintenta(servidor):
     assert red.fetch(servidor + "/inestable-get") == b"ok"
     assert _Manejador.llamadas["/inestable-get"] == 2
+
+
+def test_el_tope_se_puede_subir_para_un_archivo_grande_conocido(servidor):
+    assert len(red.fetch(servidor + "/enorme-sin-rango", tope=red.MAX_SIN_RANGO + 100)) == red.MAX_SIN_RANGO + 10

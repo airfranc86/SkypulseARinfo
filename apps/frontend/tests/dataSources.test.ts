@@ -59,17 +59,19 @@ test('the consensus sentence matches the one in the "Avanzado" panel of Previsi�
   assert.ok(read('../src/components/clima/Forecast7d.tsx').includes(sentence))
 })
 
-test('the pressure map credits NOAA GFS, CARTO and OpenStreetMap and says it is not an official warning', () => {
+test('the pressure map credits NOAA GFS and Natural Earth and says it is not an official warning', () => {
   const source = byId('mapa-presion')
   assert.equal(source.title, 'Mapa de presión')
-  for (const provider of ['GFS (NOAA, EE. UU.)', 'CARTO', 'OpenStreetMap']) {
+  for (const provider of ['GFS (NOAA, EE. UU.)', 'Natural Earth']) {
     assert.ok(source.providers.includes(provider), `credits ${provider}`)
   }
   assert.match(source.summary, /no es un aviso oficial/)
   assert.match(source.summary, /smn\.gob\.ar|SMN/)
   // NOAA's terms (Open Data on AWS) forbid implying endorsement OR affiliation, and the data are modified here.
   assert.match(source.summary, /modificados por SkyPulse: SkyPulse no está afiliado a NOAA ni cuenta con su aval/)
-  assert.match(source.summary, /© OpenStreetMap contributors, © CARTO/)
+  assert.match(source.summary, /El mapa de fondo \(costas y fronteras\) es de Natural Earth, de dominio público/)
+  assert.doesNotMatch(source.summary, /CARTO|OpenStreetMap/)
+  assert.ok(!source.providers.some((p) => /CARTO|OpenStreetMap/.test(p)))
 })
 
 test('the pressure map says what it shows: 0.25 degrees, up to 5 days in 3-hour steps, 4 times a day', () => {

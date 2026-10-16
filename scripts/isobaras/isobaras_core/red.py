@@ -57,12 +57,13 @@ def existe(url: str) -> bool:
     return _con_reintentos(url, pedir)
 
 
-def fetch(url: str, rango: tuple[int, int | None] | None = None) -> bytes:
+def fetch(url: str, rango: tuple[int, int | None] | None = None, *, tope: int | None = None) -> bytes:
     """GET `url`, or only the bytes `rango = (first, last)` (last None = to the end).
 
     With a range the server must answer 206 and exactly the bytes asked; otherwise nothing is read, so a
     server that ignores `Range` cannot make us load a ~500 MB file. Without a range the body is capped.
-    Transient failures (5xx, timeouts) are retried; a 4xx or a protocol mismatch is not.
+    Transient failures (5xx, timeouts) are retried; a 4xx or a protocol mismatch is not. `tope` raises the cap of a
+    request WITHOUT a range, for a big file whose size is known (the Natural Earth layers); it never applies to a range.
     """
     cabeceras = {"User-Agent": _USER_AGENT}
     if rango is not None:
@@ -70,7 +71,7 @@ def fetch(url: str, rango: tuple[int, int | None] | None = None) -> bytes:
         cabeceras["Range"] = f"bytes={inicio}-{'' if fin is None else fin}"
         tope = (fin - inicio + 1) if fin is not None else MAX_RANGO_ABIERTO
     else:
-        tope = MAX_SIN_RANGO
+        tope = tope if tope is not None else MAX_SIN_RANGO
 
     def pedir() -> bytes:
         with urllib.request.urlopen(urllib.request.Request(url, headers=cabeceras), timeout=TIMEOUT_S) as r:
