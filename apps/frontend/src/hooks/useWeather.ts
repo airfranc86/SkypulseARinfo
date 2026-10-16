@@ -1,3 +1,4 @@
+import { weatherDashboardQueryKey } from '@/lib/weatherQueryKeys'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { isColdStart, isProviderSaturated, isClientError } from '@/lib/apiErrors'
@@ -91,7 +92,7 @@ export function useWeatherDashboard(
   model: 'gfs' | 'ecmwf' | 'consensus' = 'consensus'
 ) {
   return useQuery({
-    queryKey: ['weather-dashboard', lat, lon, model],
+    queryKey: weatherDashboardQueryKey(lat, lon, model),
     queryFn: () => {
       if (lat === null || lon === null) throw new Error('coordinates required')
       return api.weatherDashboard(lat, lon, model)
