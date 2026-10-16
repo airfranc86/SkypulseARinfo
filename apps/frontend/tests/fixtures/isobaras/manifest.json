@@ -1,0 +1,5 @@
+{"v":1,"source":"NOAA GFS 0.25° PRMSL","cycle":"2026-10-14T00:00Z","generated":"2026-10-14T04:52Z",
+ "bbox":[-90,-62,-30,-12],"interval_hpa":4,"scale":100,
+ "hours":[{"f":0,"valid":"2026-10-14T00:00Z","file":"isobaras_f000.json"},
+          {"f":3,"valid":"2026-10-14T03:00Z","file":"isobaras_f003.json"},
+          {"f":6,"valid":"2026-10-14T06:00Z","file":"isobaras_f006.json"}]}
