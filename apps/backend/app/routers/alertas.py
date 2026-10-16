@@ -222,6 +222,14 @@ async def _modo_de_la_corrida(redis: UpstashRedis | None) -> bool | None:
     return True if await interruptor.envio_activo(redis) else None
 
 
+def _apagado_por_upstash_ilegible() -> bool:
+    """La corrida quedó apagada PORQUE la clave de apagado no se pudo leer (Upstash caído o sin Upstash) con un flag de envío
+    encendido: la única apagada que no es una orden. Se mira solo después de que `_modo_de_la_corrida` dijo "apagado" (sin una
+    lectura nueva). Con los dos flags apagados no se toca Upstash y la respuesta es un "no" deliberado."""
+    flag_encendido = settings.alertas_evaluar_en_seco or settings.alertas_envio_activo
+    return flag_encendido and interruptor.ultimo_estado_de_la_clave() == interruptor.CLAVE_ILEGIBLE
+
+
 async def _motivo_de_rechazo_del_pedido(request: Request) -> tuple[str | None, bytes]:
     """`(None, cuerpo)` si el pedido trae una firma de QStash válida para su cuerpo crudo (que se devuelve tal cual,
     ya verificado, para leer el modo); si no, `(motivo, b"")` con el código fijo del motivo."""
@@ -307,19 +315,23 @@ async def post_evaluar(request: Request) -> dict[str, str | int]:
         logger.warning("alertas: /evaluar rechazó un pedido firmado con un modo desconocido")
         raise HTTPException(status_code=422, detail=_MODO_DESCONOCIDO) from None
     redis = get_redis()
+    tipo = metricas.TIPO_SMN if pedido == MODO_SMN else metricas.TIPO_PRONOSTICO
     with con_clave_de_cliente(ALERTAS_JOB_CLIENT_KEY):
+        interruptor.olvidar_el_ultimo_estado_de_la_clave()
         modo = await _modo_de_la_corrida(redis)
         if modo is None or redis is None:
+            if _apagado_por_upstash_ilegible():
+                # Un apagado por no poder LEER la clave no es una orden: avisa a Sentry, con el límite de 6 horas (FRA-360,
+                # parte 2). La respuesta es la misma de siempre.
+                await avisos_sentry.avisar_upstash_no_disponible(redis, tipo)
             return {"estado": evaluacion.ESTADO_APAGADO}
         # `reloj` lee la hora cuando se le pide: el pronóstico de cada zona se juzga contra la hora de ESE momento, no contra la
         # del arranque (los envíos de las zonas anteriores pueden haber tardado minutos).
         ahora = _ahora_utc()
         if pedido == MODO_SMN:
             resultado = await evaluacion.evaluar_smn(redis, ahora, enviar=modo, reloj=_ahora_utc)
-            tipo = metricas.TIPO_SMN
         else:
             resultado = await evaluacion.evaluar(redis, ahora, enviar=modo, reloj=_ahora_utc)
-            tipo = metricas.TIPO_PRONOSTICO
         # Los contadores diarios (FRA-360) se suman al FINAL, con la corrida ya hecha y en el día de Argentina de su
         # arranque; nunca cambian el estado, los contadores ni la respuesta (un fallo al contar solo deja un WARNING).
         await metricas.contar_corrida(redis, tipo, resultado, ahora)

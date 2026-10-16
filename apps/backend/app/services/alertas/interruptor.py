@@ -22,6 +22,7 @@ explícito significa "la clave no existe".
 from __future__ import annotations
 
 import logging
+from contextvars import ContextVar
 
 from app.core.config import settings
 from app.core.upstash import UpstashRedis, UpstashUnavailableError
@@ -36,9 +37,31 @@ CLAVE_PRESENTE = "presente"  # se leyó y existe: alguien apagó el envío a pro
 CLAVE_ILEGIBLE = "ilegible"  # no se pudo leer (sin Upstash, caído, respuesta rara): cuenta como apagado, pero no es una orden
 
 
+# El resultado de la última lectura de la clave en el pedido en curso (FRA-360, parte 2). El router decide con `envio_activo` /
+# `evaluacion_permitida` (que devuelven un bool y que sus tests fijan como contrato) y, SI la respuesta fue "apagado", mira acá
+# si fue porque la clave no se pudo LEER (Upstash caído: avisa a Sentry) o por una orden (no avisa), sin leerla otra vez. Un
+# ContextVar vive en el contexto del pedido: una corrida no ve la lectura de otra.
+_ultimo_estado: ContextVar[str | None] = ContextVar("alertas_ultimo_estado_de_la_clave", default=None)
+
+
+def ultimo_estado_de_la_clave() -> str | None:
+    """`CLAVE_*` de la última lectura de la clave hecha en este pedido, o None si todavía no se leyó."""
+    return _ultimo_estado.get()
+
+
+def olvidar_el_ultimo_estado_de_la_clave() -> None:
+    _ultimo_estado.set(None)
+
+
 async def estado_de_la_clave(redis: UpstashRedis | None) -> str:
     """`CLAVE_AUSENTE`, `CLAVE_PRESENTE` o `CLAVE_ILEGIBLE`. Distingue "alguien apagó" de "no pude leer", que se tratan
     igual para decidir si se manda (nunca) pero no igual para decidir qué pasa con lo que quedó a medias."""
+    estado = await _leer_estado(redis)
+    _ultimo_estado.set(estado)
+    return estado
+
+
+async def _leer_estado(redis: UpstashRedis | None) -> str:
     if redis is None:
         logger.warning("alertas: sin Upstash no se puede leer la clave de apagado; queda apagado")
         return CLAVE_ILEGIBLE
