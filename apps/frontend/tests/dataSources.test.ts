@@ -58,3 +58,37 @@ test('the consensus sentence matches the one in the "Avanzado" panel of Previsi�
   assert.ok(byId('consenso').summary.includes(sentence))
   assert.ok(read('../src/components/clima/Forecast7d.tsx').includes(sentence))
 })
+
+test('the pressure map credits NOAA GFS, CARTO and OpenStreetMap and says it is not an official warning', () => {
+  const source = byId('mapa-presion')
+  assert.equal(source.title, 'Mapa de presión')
+  for (const provider of ['GFS (NOAA, EE. UU.)', 'CARTO', 'OpenStreetMap']) {
+    assert.ok(source.providers.includes(provider), `credits ${provider}`)
+  }
+  assert.match(source.summary, /no es un aviso oficial/)
+  assert.match(source.summary, /smn\.gob\.ar|SMN/)
+  // NOAA's terms (Open Data on AWS) forbid implying endorsement OR affiliation, and the data are modified here.
+  assert.match(source.summary, /modificados por SkyPulse: SkyPulse no está afiliado a NOAA ni cuenta con su aval/)
+  assert.match(source.summary, /© OpenStreetMap contributors, © CARTO/)
+})
+
+test('the pressure map says what it shows: 0.25 degrees, up to 5 days in 3-hour steps, 4 times a day', () => {
+  const { summary } = byId('mapa-presion')
+  assert.match(summary, /a 0,25° de resolución/)
+  assert.match(summary, /(^|\D)5 días \(120 horas\) desde la corrida del modelo/)
+  assert.match(summary, /en pasos de 3 horas/)
+  assert.match(summary, /Se recalculan 4 veces al día, unas 5 horas después de cada corrida del modelo \(00, 06, 12 y 18 UTC\)/)
+  assert.match(summary, /centros sobre terreno de más de 1500 m no se marcan/)
+})
+
+// The numbers in the text must be the ones the pipeline really uses: read them from its code.
+const pipeline = (archivo: string) =>
+  read(`../../../scripts/isobaras/isobaras_core/${archivo}`).replaceAll('\r\n', '\n')
+
+test('the pressure map figures match the pipeline code and the workflow', () => {
+  assert.match(pipeline('centros.py'), /^ALTURA_MAXIMA_M = 1500\.0$/m)
+  assert.match(pipeline('ciclo.py'), /tuple\(range\(0, 121, 3\)\)/)
+  assert.match(pipeline('ciclo.py'), /pgrb2\.0p25/)
+  const workflow = read('../../../.github/workflows/isobaras.yml')
+  assert.match(workflow, /cron: "45 4,10,16,22 \* \* \*"/)
+})
