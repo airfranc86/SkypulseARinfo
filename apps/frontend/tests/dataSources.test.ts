@@ -92,5 +92,6 @@ test('the pressure map figures match the pipeline code and the workflow', () => 
   assert.match(pipeline('ciclo.py'), /tuple\(range\(0, 121, 3\)\)/)
   assert.match(pipeline('ciclo.py'), /pgrb2\.0p25/)
   const workflow = read('../../../.github/workflows/isobaras.yml')
-  assert.match(workflow, /cron: "45 4,10,16,22 \* \* \*"/)
+  // It asks for a new cycle every 20 minutes; a new one exists only 4 times a day (the text says so).
+  assert.match(workflow, /cron: "7,27,47 \* \* \* \*"/)
 })
