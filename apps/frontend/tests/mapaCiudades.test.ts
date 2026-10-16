@@ -230,11 +230,13 @@ test('si la lista no cambió no se vuelve a dibujar', () => {
 test('la lista se recalcula al hacer zoom, al mover el mapa y al cambiar de tamaño', () => {
   const capa = leer('../src/components/mapa/CiudadesDelMapa.tsx')
   assert.match(capa, /useMapEvents\(\{ zoomend: recalcular, moveend: recalcular, resize: recalcular \}\)/)
-  assert.match(capa, /ciudadesVisibles\(CIUDADES_DEL_MAPA, map\.getZoom\(\), /)
+  assert.match(capa, /useCallback\(\(\) => ciudadesDibujadas\(map\), \[map\]\)/)
+  const compartido = leer('../src/components/mapa/ciudadesEnPantalla.ts')
+  assert.match(compartido, /ciudadesVisibles\(CIUDADES_DEL_MAPA, map\.getZoom\(\), proyectarCiudad\(map\), \{ ancho: tamano\.x, alto: tamano\.y \}\)/)
+  assert.match(compartido, /map\.latLngToContainerPoint\(\[ciudad\.lat, ciudad\.lon\]\)/)
   // The first list comes from the initial state, not from an effect that sets state (lint: set-state-in-effect).
   assert.match(capa, /useState<readonly CiudadEnPantalla\[\]>\(elegir\)/)
   assert.doesNotMatch(capa, /useEffect/)
-  assert.match(capa, /map\.latLngToContainerPoint\(/)
 })
 
 test('el componente no pide nada a la red', () => {

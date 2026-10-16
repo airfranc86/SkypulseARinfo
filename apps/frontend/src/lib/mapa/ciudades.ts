@@ -73,7 +73,7 @@ function sePisan(a: Caja, b: Caja): boolean {
 }
 
 /** Lower level first, then more people, then an Argentine city, then by name (the same input always gives the same answer). */
-function porImportancia(a: CiudadDelMapa, b: CiudadDelMapa): number {
+export function porImportancia(a: CiudadDelMapa, b: CiudadDelMapa): number {
   const argentina = (c: CiudadDelMapa) => (c.pais === 'AR' ? 0 : 1)
   return a.nivel - b.nivel || b.pob - a.pob || argentina(a) - argentina(b) || (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : 0)
 }
