@@ -428,3 +428,11 @@ def test_setup_logging_keeps_httpx_quiet_below_warning() -> None:
         httpx_logger.setLevel(nivel_httpx)
         raiz.handlers[:] = handlers
         raiz.setLevel(nivel_raiz)
+
+
+@pytest.mark.parametrize("nombre", ["CF-Connecting-IP", "cf-connecting-ip", "True-Client-IP", "true-client-ip"])
+def test_the_real_client_ip_headers_of_cloudflare_never_travel_to_sentry(nombre: str) -> None:
+    """`send_default_pii=False` filtra X-Forwarded-For pero no `CF-Connecting-IP`, que lleva la IP real."""
+    evento = evento_con_cabeceras({**CABECERAS_BENIGNAS, nombre: "198.51.100.77"})
+    limpio = main._scrub_event(evento, {})
+    assert limpio["request"]["headers"] == CABECERAS_BENIGNAS

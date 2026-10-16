@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from app.services.asistente.enrutador import enrutar, normalizar
+from app.services.asistente.enrutador import Ruta, enrutar, normalizar
 from app.services.asistente.hoja_datos import Fuentes, Hoja, armar_hoja
 from app.services.asistente.modelo import Modelo
 from app.services.asistente.verificador import FRASE_AERONAUTICA, FRASE_AVISO_OFICIAL, verificar
@@ -51,8 +51,11 @@ def _sin_dato(hoja: Hoja, motivos: tuple[str, ...] = ()) -> Respuesta:
 
 async def responder(
     pregunta: str, fuentes: Fuentes, modelo: Modelo, *, pagina: str | None = None, ahora_utc: datetime,
+    ruta: Ruta | None = None,
 ) -> Respuesta:
-    ruta = enrutar(pregunta, pagina)
+    """`ruta` es opcional: quien ya enrutó (el router, para pedir solo los datos necesarios) pasa la suya y así no se
+    enruta dos veces con la posibilidad de que las dos pasadas no coincidan."""
+    ruta = ruta or enrutar(pregunta, pagina)
     if ruta.fuera_de_alcance:
         return Respuesta("fuera_de_alcance", REDIRECCION_SISMOS_Y_VOLCANES, ())
 
