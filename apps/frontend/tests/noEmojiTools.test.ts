@@ -17,6 +17,8 @@ const FILES = [
   'src/components/mapa/IsobarMap.tsx',
   'src/components/mapa/HourSlider.tsx',
   'src/hooks/useIsobaras.ts',
+  'src/components/mapa/MeasureTool.tsx',
+  'src/lib/medicion/panel.ts',
 ]
 
 for (const file of FILES) {

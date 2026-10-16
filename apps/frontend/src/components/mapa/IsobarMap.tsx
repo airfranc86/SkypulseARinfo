@@ -6,6 +6,7 @@ import type { Bbox, Centro, Hora } from '@/lib/isobaras/formato'
 import { puntosParaDibujar } from '@/lib/isobaras/formato'
 import { etiquetasDeLinea } from '@/lib/isobaras/etiquetas'
 import type { UrlsDelFondo } from '@/lib/mapa/fondo'
+import { MeasureTool } from './MeasureTool'
 
 interface IsobarMapProps {
   /** The hour to draw; null while there is none yet (or after an error): the map frame and the background still show. */
@@ -108,6 +109,7 @@ export function IsobarMap({ hora, bbox, fondo }: IsobarMapProps) {
           </Pane>
         )}
         <Atribucion />
+        <MeasureTool />
         <SeguirZoom onZoom={setZoom} />
         {lineas.map(({ linea, posiciones }, i) => (
           <Polyline
