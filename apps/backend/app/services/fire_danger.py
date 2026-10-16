@@ -17,12 +17,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.services.hourly_slots import at, window
-from app.services.openmeteo import HourlyForecastExt, get_hourly_forecast_ext
+from app.services.openmeteo import DASHBOARD_HOURLY_DAYS, HourlyForecastExt, get_hourly_forecast_ext
 
 logger = logging.getLogger(__name__)
 
 # Serie de 7 días: la misma que pide el dashboard, así comparten caché.
-_FORECAST_DAYS = 7
+_FORECAST_DAYS = DASHBOARD_HOURLY_DAYS
 
 # ---------------------------------------------------------------------------
 # Tipos de datos

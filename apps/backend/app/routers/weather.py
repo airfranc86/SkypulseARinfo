@@ -48,6 +48,7 @@ from app.services.metar_observation import MetarSelection, get_nearest_metar_obs
 from app.services.hourly_slots import current_temp_850
 from app.services.weather_aggregator import aggregate_current
 from app.services.openmeteo import (
+    DASHBOARD_HOURLY_DAYS,
     get_current as get_openmeteo_current,
     get_multi_model_daily,
     get_hourly_forecast_ecmwf,
@@ -144,8 +145,8 @@ async def get_dashboard(
     #     `aggregate_current`, así que no suma un request a Open-Meteo.
     current_task = aggregate_current(lat, lon)
     om_daily_task = get_multi_model_daily(lat, lon, days=7)
-    om_hourly_task = get_hourly_forecast_ext(lat, lon, days=7)
-    om_hourly_ecmwf_task = get_hourly_forecast_ecmwf(lat, lon, days=7)
+    om_hourly_task = get_hourly_forecast_ext(lat, lon, days=DASHBOARD_HOURLY_DAYS)
+    om_hourly_ecmwf_task = get_hourly_forecast_ecmwf(lat, lon, days=DASHBOARD_HOURLY_DAYS)
     metar_task = get_nearest_metar_observation(lat, lon)
     om_current_task = get_openmeteo_current(lat, lon)
 

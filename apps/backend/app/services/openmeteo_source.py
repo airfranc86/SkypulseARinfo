@@ -292,6 +292,16 @@ async def fetch_series_or_raise(
     return await cache.get_or_fetch(cache_key(params), _fetch, outcome=outcome, persist=request.persist)
 
 
+def peek_series(request: SeriesRequest) -> Any | None:
+    """What the cache of `request` holds right now (the fresh value or the last good copy), WITHOUT sending anything.
+
+    The source is never asked and the budget is never touched: a caller that wants to use what another page already
+    brought, without spending the shared Open-Meteo allowance (the assistant), reads it here. `None` = nothing is cached.
+    Same cache level and same key as `fetch_series`, so a request made after the page loaded lands on the same entry.
+    """
+    return _cache_for(request.level).peek(cache_key(request.params()))
+
+
 async def fetch_series(
     request: SeriesRequest,
     parse: Callable[[Any], T],

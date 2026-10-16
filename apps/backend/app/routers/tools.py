@@ -32,7 +32,7 @@ from app.schemas.tools import (
 )
 from app.services import calculators
 from app.services.hourly_slots import current_temp_850, upcoming_slots
-from app.services.openmeteo import HourlyForecastExt, get_hourly_forecast_ext
+from app.services.openmeteo import DASHBOARD_HOURLY_DAYS, HourlyForecastExt, get_hourly_forecast_ext
 from app.services.tools_builder import conditions_now, daily_aggregates, outlook, slot_scores
 from app.services.weather_aggregator import aggregate_current
 
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Serie de 7 días: la misma que pide el dashboard, así comparten caché.
-_FORECAST_DAYS = 7
+_FORECAST_DAYS = DASHBOARD_HOURLY_DAYS
 # Lluvia esperada para tender (próximas ~6 h) y para hacer deporte (próximas ~12 h).
 _TENDER_OUTLOOK_HOURS = 6
 _SPORT_OUTLOOK_HOURS = 12

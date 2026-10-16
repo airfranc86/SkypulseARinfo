@@ -154,6 +154,27 @@ class SingleFlightCache(Generic[T]):
             "hit_rate": self._hits / total if total > 0 else 0.0,
         }
 
+    def peek(self, key: str) -> T | None:
+        """Lo que la caché tiene de `key` AHORA, sin pedir nada: el valor fresco o, si venció, la última copia buena
+        que sigue en memoria (la que `get_or_fetch` serviría ante un fallo). `None` si no hay ninguna.
+
+        No ejecuta ningún fetch, no espera a un pedido en vuelo, no lee la persistencia (una copia ya recuperada de Redis
+        sí se sirve, hasta que se le acabe la vida allá), no cuenta como acierto ni como pedido y no cambia ningún
+        vencimiento ni ningún valor (lo único que mueve es el orden de desalojo de `TTLCache`, como cualquier lectura).
+        Es síncrona a propósito: no hay nada que esperar, y así no se puede colar un `await`. Sirve a quien quiere usar
+        lo que otra página ya trajo sin gastar el cupo del origen (el asistente).
+
+        `TTLCache` lee el reloj en cada acceso, así que una entrada puede vencer entre `in` y `[]`: se lee con `try`.
+        """
+        try:
+            return self._cache[key]
+        except KeyError:
+            pass
+        try:
+            return self._stale_get(key)
+        except KeyError:  # venció justo entre las dos lecturas internas
+            return None
+
     async def get_or_fetch(
         self,
         key: str,
