@@ -89,8 +89,8 @@ test('oklchHue: el rojo puro cae cerca de 29°, el verde de 142° y el azul de 2
   assert.ok(Math.abs(oklchHue('#0000ff') - 264.1) < 1)
 })
 
-test('la barra de navegación tiene los 16 destinos', () => {
-  assert.equal(Object.keys(NAV_PILL_COLORS).length, 16)
+test('la barra de navegación tiene los 17 destinos', () => {
+  assert.equal(Object.keys(NAV_PILL_COLORS).length, 17)
 })
 
 test('NAV_PILL_COLORS sale del registro (un solo lugar para los colores)', () => {

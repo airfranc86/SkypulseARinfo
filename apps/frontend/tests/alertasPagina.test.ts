@@ -105,8 +105,8 @@ test('ningún otro archivo monta la campana', () => {
   assert.deepEqual(montan, ['App.tsx'])
 })
 
-test('/alertas no está en el registro de herramientas (que tiene exactamente 16)', () => {
-  assert.equal(TOOLS.length, 16)
+test('/alertas no está en el registro de herramientas (que tiene exactamente 17)', () => {
+  assert.equal(TOOLS.length, 17)
   assert.ok(!TOOLS.some((herramienta) => herramienta.path === '/alertas'))
   assert.ok(!codigo('lib/toolRegistry.ts').includes('/alertas'))
 })

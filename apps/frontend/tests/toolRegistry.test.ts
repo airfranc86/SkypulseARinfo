@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { Map as MapIcon } from 'lucide-react'
 import {
   AERONAUTICS_TOOLS,
   GROUP_HEADING,
@@ -70,6 +71,7 @@ const APPROVED_LAYER_OF = {
   '/lluvias': 'clouds',
   '/radar': 'space',
   '/niebla': 'ground',
+  '/mapa': 'clouds',
 }
 
 function chroma(hex: string): number {
@@ -97,10 +99,10 @@ function looksLikeSeverity(color: string, reserved: string): string | null {
 
 // ── Contents ─────────────────────────────────────────────────────────────────
 
-test('el registro tiene las 16 herramientas, con id y ruta únicos', () => {
-  assert.equal(TOOLS.length, 16)
-  assert.equal(new Set(TOOLS.map((t) => t.id)).size, 16)
-  assert.equal(new Set(TOOLS.map((t) => t.path)).size, 16)
+test('el registro tiene las 17 herramientas, con id y ruta únicos', () => {
+  assert.equal(TOOLS.length, 17)
+  assert.equal(new Set(TOOLS.map((t) => t.id)).size, 17)
+  assert.equal(new Set(TOOLS.map((t) => t.path)).size, 17)
 })
 
 test('cada ruta del registro está declarada como path="..." en App.tsx', () => {
@@ -135,8 +137,8 @@ test('hay 4 grupos, en el orden de la portada, y cada herramienta está en exact
     ['decide', 'risks', 'sky', 'aeronautics'],
   )
   const seen = TOOL_FAMILIES.flatMap((group) => group.tools.map((t) => t.path))
-  assert.equal(seen.length, 16)
-  assert.equal(new Set(seen).size, 16)
+  assert.equal(seen.length, 17)
+  assert.equal(new Set(seen).size, 17)
   for (const group of TOOL_FAMILIES) {
     assert.ok(group.tools.length > 0, `${group.family.id} vacío`)
     for (const tool of group.tools) assert.equal(tool.family, group.family.id, tool.path)
@@ -147,7 +149,7 @@ test('cada grupo tiene las herramientas que decidió el producto', () => {
   const byFamily = Object.fromEntries(TOOL_FAMILIES.map((g) => [g.family.id, g.tools.map((t) => t.path)]))
   assert.deepEqual(byFamily.decide, ['/prevision', '/hacer-deporte', '/tender-ropa', '/lavar-auto', '/cota-de-nieve'])
   assert.deepEqual(byFamily.risks, ['/terremotos', '/volcanes', '/incendios', '/desastres'])
-  assert.deepEqual(byFamily.sky, ['/nubes', '/lluvias', '/radar', '/niebla'])
+  assert.deepEqual(byFamily.sky, ['/nubes', '/lluvias', '/radar', '/niebla', '/mapa'])
   assert.deepEqual(byFamily.aeronautics, ['/metar', '/altitud-de-densidad', '/cizalladura'])
 })
 
@@ -191,13 +193,13 @@ test('las dos filas del menú conservan sus etiquetas y su orden', () => {
   ])
   assert.deepEqual(navRow('catalog').map((t) => t.label), [
     'Nubes', 'METAR', 'Altitud de densidad', 'Cizalladura / LLWS',
-    'Desastres', 'Lluvias', 'Radar', 'Niebla',
+    'Desastres', 'Lluvias', 'Radar', 'Niebla', 'Mapa de presión',
   ])
 })
 
-test('entre las dos filas aparecen las 16 herramientas, una sola vez cada una', () => {
+test('entre las dos filas aparecen las 17 herramientas, una sola vez cada una', () => {
   const paths = [...navRow('tools'), ...navRow('catalog')].map((t) => t.path)
-  assert.equal(paths.length, 16)
+  assert.equal(paths.length, 17)
   assert.deepEqual(new Set(paths), new Set(TOOLS.map((t) => t.path)))
 })
 
@@ -293,7 +295,7 @@ test('la tinta de la pill seleccionada tiene 4,5:1 o más sobre cada color de ca
   }
 })
 
-test('el título y la descripción de las 16 tarjetas (reposo y hover/foco) tienen 4,5:1 o más', () => {
+test('el título y la descripción de las 17 tarjetas (reposo y hover/foco) tienen 4,5:1 o más', () => {
   const texts = { título: cssToken('color-foreground'), descripción: cssToken('color-muted-foreground') }
   const failures: string[] = []
   for (const tool of TOOLS) {
@@ -326,4 +328,22 @@ test('el título de los grupos de la portada es el dorado de la marca y tiene 4,
   const shown = blendHex(GROUP_HEADING.color, PAGE, parseInt(GROUP_HEADING.alpha, 16) / 255)
   const ratio = contrastRatio(shown, PAGE)
   assert.ok(ratio >= MIN_TEXT_CONTRAST, `${ratio.toFixed(2)}:1`)
+})
+
+// ── "Mapa de presión" (decisión D1 del dueño, 2026-10-16) ──────────────────────
+
+test('"Mapa de presión": grupo Cielo, segunda fila al final, capa de las nubes, con su título y su ícono', () => {
+  const tool = toolByPath('/mapa')
+  assert.ok(tool)
+  assert.equal(tool.id, 'pressure-map')
+  assert.equal(tool.label, 'Mapa de presión')
+  assert.equal(tool.title, 'Mapa de presión')
+  assert.equal(tool.Icon, MapIcon)
+  assert.equal(tool.family, 'sky')
+  assert.equal(tool.look, 'layer')
+  assert.equal(tool.layer, 'clouds')
+  assert.deepEqual(tool.colors, LAYERS.clouds.colors)
+  assert.equal(navRow('catalog').at(-1), tool)
+  assert.ok(!navRow('tools').includes(tool))
+  assert.equal(TOOL_FAMILIES.find((g) => g.family.id === 'sky')?.tools.at(-1), tool)
 })
