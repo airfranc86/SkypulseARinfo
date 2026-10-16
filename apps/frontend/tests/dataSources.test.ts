@@ -69,7 +69,7 @@ test('the pressure map credits NOAA GFS and Natural Earth and says it is not an 
   assert.match(source.summary, /smn\.gob\.ar|SMN/)
   // NOAA's terms (Open Data on AWS) forbid implying endorsement OR affiliation, and the data are modified here.
   assert.match(source.summary, /modificados por SkyPulse: SkyPulse no está afiliado a NOAA ni cuenta con su aval/)
-  assert.match(source.summary, /El mapa de fondo \(costas y fronteras\) es de Natural Earth, de dominio público/)
+  assert.match(source.summary, /El mapa de fondo \(costas, fronteras y ciudades\) es de Natural Earth, de dominio público/)
   assert.doesNotMatch(source.summary, /CARTO|OpenStreetMap/)
   assert.ok(!source.providers.some((p) => /CARTO|OpenStreetMap/.test(p)))
 })

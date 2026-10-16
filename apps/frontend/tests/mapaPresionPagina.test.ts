@@ -126,6 +126,6 @@ test('el alto del mapa descuenta el encabezado fijo del celular', () => {
 test('la atribución de NOAA y de Natural Earth está en el mapa y se monta', () => {
   const mapa = leer('components/mapa/IsobarMap.tsx')
   assert.ok(mapa.includes('Datos: NOAA GFS'))
-  assert.ok(mapa.includes('Costas y fronteras: Natural Earth'))
+  assert.ok(mapa.includes('Costas, fronteras y ciudades: Natural Earth'))
   assert.match(mapa, /<Atribucion \/>/)
 })

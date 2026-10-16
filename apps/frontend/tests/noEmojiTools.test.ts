@@ -15,6 +15,8 @@ const FILES = [
   'src/pages/HacerDeporte.tsx',
   'src/pages/MapaPresion.tsx',
   'src/components/mapa/IsobarMap.tsx',
+  'src/components/mapa/CiudadesDelMapa.tsx',
+  'src/lib/mapa/ciudades.ts',
   'src/components/mapa/HourSlider.tsx',
   'src/hooks/useIsobaras.ts',
   'src/components/mapa/MeasureTool.tsx',
