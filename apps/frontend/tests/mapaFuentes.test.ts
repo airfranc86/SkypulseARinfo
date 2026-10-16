@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { ISOBARAS_BASE_URL, urlDeArchivoIsobaras, urlManifestIsobaras } from '../src/lib/isobaras/fuente.ts'
-import { VARIABLE_CLAVE_CARTO, leerClaveCarto, urlsDelFondo } from '../src/lib/mapa/fondo.ts'
+import { URL_BASE_CARTOGRAFICA } from '../src/lib/mapa/base.ts'
 
 // ── fuente.ts: dónde están los JSON de las isobaras ──────────────────────────
 
@@ -36,56 +36,7 @@ test('un nombre que no es un archivo de hora se rechaza (nada de rutas ni de otr
   }
 })
 
-// ── fondo.ts: el mapa de fondo de CARTO con una clave pública ─────────────────
-
-test('el nombre de la variable es VITE_CARTO_API_KEY', () => {
-  assert.equal(VARIABLE_CLAVE_CARTO, 'VITE_CARTO_API_KEY')
-})
-
-test('leerClaveCarto devuelve la clave recortada', () => {
-  assert.equal(leerClaveCarto({ VITE_CARTO_API_KEY: '  abc123  ' }), 'abc123')
-})
-
-test('sin clave (ausente, vacía, en blanco, que no es texto o sin entorno) no hay fondo', () => {
-  for (const env of [
-    {},
-    { VITE_CARTO_API_KEY: '' },
-    { VITE_CARTO_API_KEY: '   ' },
-    { VITE_CARTO_API_KEY: 123 },
-    { VITE_CARTO_API_KEY: null },
-    { VITE_CARTO_API_KEY: undefined },
-    undefined,
-  ]) {
-    assert.equal(leerClaveCarto(env), null)
-  }
-})
-
-test('urlsDelFondo devuelve null sin clave, o con una clave vacía o en blanco', () => {
-  assert.equal(urlsDelFondo(null), null)
-  assert.equal(urlsDelFondo(''), null)
-  assert.equal(urlsDelFondo('   '), null)
-})
-
-test('urlsDelFondo arma las plantillas de los dos estilos con la clave', () => {
-  assert.deepEqual(urlsDelFondo('clave-falsa'), {
-    base: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png?key=clave-falsa',
-    etiquetas: 'https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png?key=clave-falsa',
-  })
-})
-
-test('la clave se escapa: un valor raro no puede agregar parámetros ni cambiar el host', () => {
-  const urls = urlsDelFondo('a&b=c#x/y')
-  assert.ok(urls)
-  assert.equal(new URL(urls.base.replace('{z}/{x}/{y}', '1/2/3')).host, 'basemaps.cartocdn.com')
-  assert.equal(new URL(urls.base.replace('{z}/{x}/{y}', '1/2/3')).searchParams.get('key'), 'a&b=c#x/y')
-  assert.ok(!urls.base.includes('&b=c'))
-})
-
-test('una clave con un carácter suelto de par sustituto no rompe la página: no hay fondo', () => {
-  assert.equal(urlsDelFondo('abc\uD800'), null)
-})
-
-// ── CSP (vercel.json): los dos orígenes nuevos y nada más ────────────────────
+// ── CSP (vercel.json): una sola fuente nueva, la de Pages ────────────────────
 
 function cspDirective(name: string): string[] {
   const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8')) as {
@@ -122,32 +73,24 @@ test('connect-src suma exactamente la base de Pages del repo, y lo previo no cam
   assert.deepEqual(cspDirective('connect-src'), [...CONNECT_SRC_PREVIO, `${ISOBARAS_BASE_URL}/`])
 })
 
-test('img-src suma exactamente el host único de CARTO, y lo previo no cambia', () => {
-  assert.deepEqual(cspDirective('img-src'), [...IMG_SRC_PREVIO, 'https://basemaps.cartocdn.com'])
+test('img-src no cambia: el mapa de presión no pide imágenes a ningún tercero (la base va en un archivo propio)', () => {
+  assert.deepEqual(cspDirective('img-src'), IMG_SRC_PREVIO)
 })
 
-test('ninguna fuente nueva usa comodín ni es un esquema suelto', () => {
-  const nuevas = [
-    ...cspDirective('connect-src').filter((s) => !CONNECT_SRC_PREVIO.includes(s)),
-    ...cspDirective('img-src').filter((s) => !IMG_SRC_PREVIO.includes(s)),
-  ]
-  assert.equal(nuevas.length, 2)
-  for (const fuente of nuevas) {
-    assert.doesNotMatch(fuente, /\*/, fuente)
-    assert.match(fuente, /^https:\/\/[a-z0-9.-]+(\/[A-Za-z0-9._-]+\/)?$/, fuente)
-  }
+test('la fuente nueva no usa comodín ni es un esquema suelto', () => {
+  const nuevas = cspDirective('connect-src').filter((s) => !CONNECT_SRC_PREVIO.includes(s))
+  assert.equal(nuevas.length, 1)
+  assert.doesNotMatch(nuevas[0], /\*/)
+  assert.match(nuevas[0], /^https:\/\/[a-z0-9.-]+(\/[A-Za-z0-9._-]+\/)?$/)
 })
 
 test('las URLs que arma el código caen dentro de lo que la CSP permite', () => {
   const connect = cspDirective('connect-src')
   assert.ok(connect.some((fuente) => urlManifestIsobaras().startsWith(fuente)), 'connect-src permite el manifest')
   assert.ok(connect.some((fuente) => urlDeArchivoIsobaras('isobaras_f120.json').startsWith(fuente)), 'y las horas')
-  const fondo = urlsDelFondo('x')
-  assert.ok(fondo)
-  const img = cspDirective('img-src')
-  for (const plantilla of [fondo.base, fondo.etiquetas]) {
-    assert.ok(img.includes(new URL(plantilla).origin), `img-src permite ${new URL(plantilla).origin}`)
-  }
+  // the background is the site's own file: same origin, covered by 'self'
+  assert.ok(URL_BASE_CARTOGRAFICA.startsWith('/') && !URL_BASE_CARTOGRAFICA.startsWith('//'))
+  assert.ok(connect.includes("'self'"))
 })
 
 test('la CSP sigue sin permitir scripts ni frames nuevos', () => {

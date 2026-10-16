@@ -80,30 +80,56 @@ test('el hook conserva la hora anterior mientras llega la nueva y no deja vencer
   assert.match(hook, /cancelQueries/)
 })
 
-test('el mapa: aislado, en canvas, con las etiquetas de CARTO en un pane propio por encima de las líneas', () => {
+test('el mapa: aislado y en canvas', () => {
   const mapa = leer('components/mapa/IsobarMap.tsx')
   assert.match(mapa, /className="isolate /)
   assert.match(mapa, /\bpreferCanvas\b/)
-  assert.match(mapa, /<Pane name="fondo-etiquetas" style=\{\{ zIndex: 450, pointerEvents: 'none' \}\}>/)
-  assert.match(mapa, /<TileLayer url=\{fondo\.etiquetas\} pane="fondo-etiquetas" \/>/)
 })
 
-test('el mapa no tiene fondo de terceros sin clave: las capas de CARTO dependen de `fondo`', () => {
+test('la base propia va en un pane propio por debajo de las isobaras, sin importar cuándo llegue', () => {
   const mapa = leer('components/mapa/IsobarMap.tsx')
-  assert.match(mapa, /\{fondo && <TileLayer url=\{fondo\.base\}/)
-  assert.match(mapa, /\{fondo && \(\s*<Pane name="fondo-etiquetas"/)
+  // Leaflet draws canvas vectors in the order they were ADDED, not in JSX order: a separate pane (its own canvas) is what
+  // keeps the background below the isobars even when base.json arrives after the first hour.
+  assert.match(mapa, /<Pane name="base-cartografica" style=\{\{ zIndex: Z_INDEX_BASE, pointerEvents: 'none' \}\}>/)
+  assert.match(mapa, /const Z_INDEX_BASE = 350/)
+  assert.match(mapa, /\['provincias', 'paises', 'costas'\] as const/)
+  assert.match(mapa, /<Pane name="base-cartografica"[\s\S]*capasDeLaBase\.map/)
+})
+
+test('la base son tres polilíneas (una por capa) y no una por línea', () => {
+  const mapa = leer('components/mapa/IsobarMap.tsx')
+  assert.match(mapa, /capasDeLaBase\.map\(\(\{ capa, posiciones \}\) => \(/)
+  assert.match(mapa, /posiciones: base\[capa\]\.map\(\(linea\) => linea\.map\(/)
+})
+
+test('el trazo de la base es más suave que el de las isobaras (la costa no les roba protagonismo)', () => {
+  const mapa = leer('components/mapa/IsobarMap.tsx')
+  assert.match(mapa, /provincias: \{ color: '#475569', weight: 0\.7, opacity: 0\.6 \}/)
+  assert.match(mapa, /paises: \{ color: '#64748b', weight: 1, opacity: 0\.8, dashArray: '6 4' \}/)
+  assert.match(mapa, /costas: \{ color: '#94a3b8', weight: 1\.1, opacity: 0\.8 \}/)
+})
+
+test('el mapa no pide nada a terceros: ni capas de mosaicos ni claves', () => {
+  const mapa = leer('components/mapa/IsobarMap.tsx')
+  assert.doesNotMatch(mapa, /TileLayer|cartocdn|carto\.com|VITE_/)
+  assert.doesNotMatch(leer('pages/MapaPresion.tsx'), /fondo|VITE_|cartocdn|carto\.com/i)
+})
+
+test('la base se carga una sola vez, del mismo origen, y si falta el mapa se ve igual', () => {
+  const hook = leer('hooks/useBaseCartografica.ts')
+  assert.match(hook, /staleTime: Infinity/)
+  assert.match(hook, /cargarBase\(/)
+  assert.match(hook, /return \{ base: query\.data \?\? null \}/)
+  assert.match(leer('pages/MapaPresion.tsx'), /<IsobarMap hora=\{hora \?\? null\} bbox=\{manifest\?\.bbox \?\? RECORTE_POR_DEFECTO\} base=\{base\} \/>/)
 })
 
 test('el alto del mapa descuenta el encabezado fijo del celular', () => {
   assert.match(leer('components/mapa/IsobarMap.tsx'), /height: 'clamp\(420px, calc\(100svh - 240px\), 720px\)'/)
 })
 
-test('la atribución de CARTO, OpenStreetMap y NOAA está en el mapa y se monta', () => {
+test('la atribución de NOAA y de Natural Earth está en el mapa y se monta', () => {
   const mapa = leer('components/mapa/IsobarMap.tsx')
-  assert.ok(mapa.includes('https://www.openstreetmap.org/copyright'))
-  assert.ok(mapa.includes('OpenStreetMap</a> contributors'))
-  assert.ok(mapa.includes('https://carto.com/attributions'))
   assert.ok(mapa.includes('Datos: NOAA GFS'))
-  assert.match(mapa, /attribution=\{ATRIBUCION_FONDO\}/)
+  assert.ok(mapa.includes('Costas y fronteras: Natural Earth'))
   assert.match(mapa, /<Atribucion \/>/)
 })

@@ -69,6 +69,7 @@ desde `main`. El trabajo `test` corre además en cada pull request que toque `sc
 | `centros.py` | Altas y bajas: extremo de una ventana de ~5° que se destaca 2 hPa, a más de 1° del borde y fuera de terreno de más de 1500 m. |
 | `formato.py` | El contrato v1: lee y valida (con topes de tamaño) y escribe el manifest y los archivos de hora. |
 | `hora.py` | Arma cada archivo de hora y el manifest, y los valida con el lector del contrato antes de escribirlos. |
+| `base.py` | Arma una sola vez el fondo del mapa (costas y fronteras de Natural Earth, recortadas y simplificadas). |
 | `pipeline.py` | La corrida completa que ejecuta el workflow. |
 | `descarga.py` | Baja una hora y la describe (para probar a mano). |
 
@@ -76,6 +77,20 @@ desde `main`. El trabajo `test` corre además en cada pull request que toque `sc
 
 Datos: NOAA GFS, del conjunto abierto `noaa-gfs-bdp-pds` (Open Data on AWS). Las isobaras son datos de NOAA
 **modificados por SkyPulse**: no se debe dar a entender que son originales ni que NOAA avala a SkyPulse ni está
-afiliada a él (así lo piden las condiciones de ese conjunto). Fondo del mapa: CARTO, con la atribución
-"© OpenStreetMap contributors, © CARTO" (clave gratuita en la variable `VITE_CARTO_API_KEY` de Vercel; si falta, el
-mapa muestra las isobaras sobre el color liso del tema). Los créditos están en la página "De dónde salen los datos".
+afiliada a él (así lo piden las condiciones de ese conjunto). Fondo del mapa (costas y fronteras): Natural Earth,
+de dominio público, de uso comercial permitido y sin atribución obligatoria (el mapa la nombra igual). No hay ninguna
+clave ni servidor de mapas de terceros. Los créditos están en la página "De dónde salen los datos".
+
+## El fondo del mapa (costas y fronteras)
+
+`apps/frontend/public/mapa/base.json` se genera una sola vez con `isobaras_core/base.py` y se commitea; la web lo lee
+de su propio sitio. Baja tres capas de Natural Earth (costa a 1:50 millones, fronteras entre países a 1:50 millones y
+límites de provincias a 1:10 millones: la de 1:50 solo trae las provincias de unos pocos países, entre los que no está
+Argentina), las recorta a una caja un poco más grande que lo que el mapa deja ver (lat −74 a 0, lon −102 a −18) y las
+simplifica (0,03°). Pesa ~50 KB (~20 KB con gzip). Solo hay que volver a generarlo si cambia la caja o la tolerancia:
+
+```bash
+uv run python -m isobaras_core.base      # baja ~25 MB de GitHub y reescribe apps/frontend/public/mapa/base.json
+```
+
+Las Malvinas salen como costa y sin ninguna línea de frontera (se bajan solo las fronteras terrestres).

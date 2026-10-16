@@ -1,14 +1,13 @@
-import { useMemo } from 'react'
 import { FadeContent } from '@/components/animated/FadeContent'
 import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { HourSlider } from '@/components/mapa/HourSlider'
 import { IsobarMap } from '@/components/mapa/IsobarMap'
+import { useBaseCartografica } from '@/hooks/useBaseCartografica'
 import { useIsobaras } from '@/hooks/useIsobaras'
 import type { LocationState } from '@/hooks/useLocation'
 import { textosDeLosCentros } from '@/lib/isobaras/centrosTexto'
 import { edadIsobaras } from '@/lib/isobaras/edad'
 import type { Bbox } from '@/lib/isobaras/formato'
-import { leerClaveCarto, urlsDelFondo } from '@/lib/mapa/fondo'
 
 interface Props {
   location: LocationState | null
@@ -25,7 +24,7 @@ const RECORTE_POR_DEFECTO: Bbox = { lonMin: -90, latMin: -62, lonMax: -30, latMa
 
 export function MapaPresion({ location }: Props) {
   const { manifest, hora, f, elegirHora, cargando, error, reintentar } = useIsobaras()
-  const fondo = useMemo(() => urlsDelFondo(leerClaveCarto(import.meta.env)), [])
+  const { base } = useBaseCartografica()
   const edad = manifest ? edadIsobaras(manifest.cycle, Date.now()) : null
   const indice = manifest && f !== null ? manifest.hours.findIndex((h) => h.f === f) : -1
   const textosCentros = hora ? textosDeLosCentros(hora.centros, location) : []
@@ -71,7 +70,7 @@ export function MapaPresion({ location }: Props) {
 
         {/* The map is always on screen (also while loading or after an error): the frame and the background stay,
             and the hour on screen is kept while the next one loads, so the zoom and the focus are never lost. */}
-        <IsobarMap hora={hora ?? null} bbox={manifest?.bbox ?? RECORTE_POR_DEFECTO} fondo={fondo} />
+        <IsobarMap hora={hora ?? null} bbox={manifest?.bbox ?? RECORTE_POR_DEFECTO} base={base} />
 
         {manifest && (
           <HourSlider horas={manifest.hours} indice={Math.max(0, indice)} onCambio={(i) => elegirHora(manifest.hours[i].f)} />

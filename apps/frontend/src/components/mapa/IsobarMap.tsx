@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, Marker, Pane, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, Pane, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Bbox, Centro, Hora } from '@/lib/isobaras/formato'
 import { puntosParaDibujar } from '@/lib/isobaras/formato'
 import { etiquetasDeLinea } from '@/lib/isobaras/etiquetas'
-import type { UrlsDelFondo } from '@/lib/mapa/fondo'
+import type { BaseCartografica } from '@/lib/mapa/base'
 import { MeasureTool } from './MeasureTool'
 
 interface IsobarMapProps {
   /** The hour to draw; null while there is none yet (or after an error): the map frame and the background still show. */
   hora: Hora | null
   bbox: Bbox
-  /** CARTO tile templates, or null without a key: then the map shows the theme's plain colour. */
-  fondo: UrlsDelFondo | null
+  /** Coastlines and borders (our own file), or null while it loads or if it is missing: then only the plain colour shows. */
+  base: BaseCartografica | null
 }
 
 const COLOR_LINEA = '#7dd3fc'
@@ -21,9 +21,21 @@ const COLOR_ALTA = '#93c5fd'
 const COLOR_BAJA = '#fca5a5'
 const MARGEN_MAXIMO_GRADOS = 10
 const ZOOM_INICIAL = 4
-const ATRIBUCION_FONDO =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>'
-const ATRIBUCION_DATOS = 'Datos: NOAA GFS'
+const ATRIBUCION_DATOS = 'Datos: NOAA GFS · Costas y fronteras: Natural Earth'
+
+/** How each layer of the background is drawn: quiet lines under the isobars, the coast the strongest. */
+const ESTILOS_BASE = {
+  provincias: { color: '#475569', weight: 0.7, opacity: 0.6 },
+  paises: { color: '#64748b', weight: 1, opacity: 0.8, dashArray: '6 4' },
+  costas: { color: '#94a3b8', weight: 1.1, opacity: 0.8 },
+} as const
+/**
+ * The background lives in its own pane, below Leaflet's overlay pane (400, where the isobars are drawn). With
+ * `preferCanvas` the vectors of one pane are painted in the order they were ADDED, not in JSX order: if `base.json`
+ * arrived after the first hour, a shared pane would paint the coastline over the isobars. A pane of its own has its
+ * own canvas, so the background is always underneath.
+ */
+const Z_INDEX_BASE = 350
 
 /** Small text on the map (hPa value of a line). `valor` is always an integer from the validated file. */
 function iconoDeEtiqueta(valor: number): L.DivIcon {
@@ -64,7 +76,7 @@ function Atribucion() {
   return null
 }
 
-export function IsobarMap({ hora, bbox, fondo }: IsobarMapProps) {
+export function IsobarMap({ hora, bbox, base }: IsobarMapProps) {
   const [zoom, setZoom] = useState(ZOOM_INICIAL)
   const centro: [number, number] = [(bbox.latMin + bbox.latMax) / 2, (bbox.lonMin + bbox.lonMax) / 2]
   // The geometry of an hour only changes with the hour: a zoom must not rebuild every line and icon.
@@ -76,6 +88,17 @@ export function IsobarMap({ hora, bbox, fondo }: IsobarMapProps) {
         icono: iconoDeEtiqueta(linea.p),
       })),
     [hora],
+  )
+  // The background never changes while the page is open: its positions are built once, in drawing order.
+  const capasDeLaBase = useMemo(
+    () =>
+      base
+        ? (['provincias', 'paises', 'costas'] as const).map((capa) => ({
+            capa,
+            posiciones: base[capa].map((linea) => linea.map((p) => [p.lat, p.lon] as [number, number])),
+          }))
+        : [],
+    [base],
   )
   const iconosDeCentros = useMemo(() => (hora?.centros ?? []).map(iconoDeCentro), [hora])
   const limites = useMemo(
@@ -102,15 +125,14 @@ export function IsobarMap({ hora, bbox, fondo }: IsobarMapProps) {
         preferCanvas
         style={{ height: '100%', width: '100%', background: 'var(--color-card)' }}
       >
-        {fondo && <TileLayer url={fondo.base} attribution={ATRIBUCION_FONDO} />}
-        {fondo && (
-          <Pane name="fondo-etiquetas" style={{ zIndex: 450, pointerEvents: 'none' }}>
-            <TileLayer url={fondo.etiquetas} pane="fondo-etiquetas" />
-          </Pane>
-        )}
         <Atribucion />
         <MeasureTool />
         <SeguirZoom onZoom={setZoom} />
+        <Pane name="base-cartografica" style={{ zIndex: Z_INDEX_BASE, pointerEvents: 'none' }}>
+          {capasDeLaBase.map(({ capa, posiciones }) => (
+            <Polyline key={`b-${capa}`} positions={posiciones} pathOptions={ESTILOS_BASE[capa]} interactive={false} />
+          ))}
+        </Pane>
         {lineas.map(({ linea, posiciones }, i) => (
           <Polyline
             key={`l-${hora?.f}-${i}`}

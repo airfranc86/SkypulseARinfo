@@ -99,8 +99,8 @@ export const DATA_SOURCES: readonly DataSource[] = [
     id: 'mapa-presion',
     title: 'Mapa de presión',
     summary:
-      'Las isobaras y los centros de alta y baja presión los calcula SkyPulse con la presión a nivel del mar del modelo GFS (NOAA, EE. UU.), a 0,25° de resolución, hasta 5 días (120 horas) desde la corrida del modelo, en pasos de 3 horas. Se recalculan 4 veces al día, unas 5 horas después de cada corrida del modelo (00, 06, 12 y 18 UTC). Los centros sobre terreno de más de 1500 m no se marcan, porque ahí el cálculo a nivel del mar inventa altas y bajas. Es un pronóstico de modelo, no es un aviso oficial: para avisos, consultá al SMN. Los datos son de NOAA, modificados por SkyPulse: SkyPulse no está afiliado a NOAA ni cuenta con su aval. El mapa de fondo es de CARTO, © OpenStreetMap contributors, © CARTO.',
-    providers: ['GFS (NOAA, EE. UU.)', 'CARTO', 'OpenStreetMap'],
+      'Las isobaras y los centros de alta y baja presión los calcula SkyPulse con la presión a nivel del mar del modelo GFS (NOAA, EE. UU.), a 0,25° de resolución, hasta 5 días (120 horas) desde la corrida del modelo, en pasos de 3 horas. Se recalculan 4 veces al día, unas 5 horas después de cada corrida del modelo (00, 06, 12 y 18 UTC). Los centros sobre terreno de más de 1500 m no se marcan, porque ahí el cálculo a nivel del mar inventa altas y bajas. Es un pronóstico de modelo, no es un aviso oficial: para avisos, consultá al SMN. Los datos son de NOAA, modificados por SkyPulse: SkyPulse no está afiliado a NOAA ni cuenta con su aval. El mapa de fondo (costas y fronteras) es de Natural Earth, de dominio público.',
+    providers: ['GFS (NOAA, EE. UU.)', 'Natural Earth'],
   },
   {
     id: 'explicativas',
