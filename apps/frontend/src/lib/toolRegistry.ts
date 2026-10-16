@@ -6,13 +6,13 @@
  *
  * Two looks:
  * - `legacy` (the 8 top-row tools): the colors and presence they had before, kept as approved.
- * - `layer` (the 8 bottom-row tools): "Estratos", approved by the user on 2026-10-06. The color says at
+ * - `layer` (the 9 bottom-row tools): "Estratos", approved by the user on 2026-10-06. The color says at
  *   what height the phenomenon lives, and a four-step staircase marks the same layer without color.
  *   No violet, lilac, magenta or pink; red and amber stay for severity only.
  */
 import {
   Activity, Car, Cloud, CloudRain, CloudSun, Eye, Gauge, Mountain, MountainSnow, Radar, Radio,
-  Shirt, TreePine, TriangleAlert, Waves, WindArrowDown, type LucideIcon,
+  Map as MapIcon, Shirt, TreePine, TriangleAlert, Waves, WindArrowDown, type LucideIcon,
 } from 'lucide-react'
 import type { PillColors, PillLook } from './navContrast.ts'
 
@@ -144,6 +144,10 @@ const SKY_TOOLS: readonly Tool[] = [
     id: 'fog', path: '/niebla', label: 'Niebla', title: 'Niebla y visibilidad',
     description: 'Visibilidad actual y pronóstico de niebla hora a hora.', Icon: Eye, family: 'sky',
   }, 'ground'),
+  onLayer({
+    id: 'pressure-map', path: '/mapa', label: 'Mapa de presión', title: 'Mapa de presión',
+    description: 'Dónde están las altas y las bajas, y hacia dónde se mueven, hasta 5 días adelante.', Icon: MapIcon, family: 'sky',
+  }, 'clouds'),
 ]
 
 /**
@@ -181,10 +185,10 @@ const BY_PATH = new Map(TOOLS.map((tool) => [tool.path, tool]))
 
 export type NavRowId = 'tools' | 'catalog'
 
-/** Menu rows by tool id: live-data tools on top, reference pages below. */
+/** Menu rows by tool id: the 8 legacy tools on top, the "Estratos" tools (layer look) below. */
 const NAV_ROWS: Record<NavRowId, readonly string[]> = {
   tools: ['forecast', 'sport', 'laundry', 'carwash', 'earthquakes', 'snow-line', 'volcanoes', 'fires'],
-  catalog: ['clouds', ...AERONAUTICS_TOOLS.map((tool) => tool.id), 'disasters', 'rain', 'radar', 'fog'],
+  catalog: ['clouds', ...AERONAUTICS_TOOLS.map((tool) => tool.id), 'disasters', 'rain', 'radar', 'fog', 'pressure-map'],
 }
 
 function toolById(id: string): Tool {

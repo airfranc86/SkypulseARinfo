@@ -26,10 +26,6 @@ test('la página tiene título de pestaña', () => {
   assert.match(leer('hooks/usePageTitle.ts'), /'\/mapa':\s*'SkyPulse — Mapa de presión'/)
 })
 
-test('todavía no hay entrada de menú ni tarjeta de portada para /mapa (eso es del PR 7b)', () => {
-  assert.doesNotMatch(leer('lib/toolRegistry.ts'), /\/mapa/)
-})
-
 test('la leyenda y el mensaje de error son los del plan y se muestran', () => {
   const pagina = leer('pages/MapaPresion.tsx')
   assert.ok(
