@@ -114,3 +114,28 @@ def test_main_un_grib_roto_sale_en_4_con_mensaje_propio(grib_norte_sur):
     codigo, _, errores = _correr(red, "--f", "0")
     assert codigo == 4
     assert "GRIB" in errores
+
+
+def test_bajar_campo_puede_pedir_otra_variable_como_la_altura_del_terreno(grib_norte_sur):
+    class RedConTerreno(RedFalsa):
+        def idx_texto(self) -> str:
+            n = len(self.grib)
+            lineas = [
+                "1:0:d=2026101512:PRMSL:mean sea level:anl:",
+                f"2:{n}:d=2026101512:CLMR:1 hybrid level:anl:",
+                f"3:{2 * n}:d=2026101512:HGT:surface:anl:",
+                f"4:{3 * n}:d=2026101512:TMP:surface:anl:",
+            ]
+            return "\n".join(lineas) + "\n"
+
+        def fetch(self, url, rango=None):
+            self.pedidos.append((url, rango))
+            if url.endswith(".idx"):
+                return self.idx_texto().encode()
+            assert rango == (2 * len(self.grib), 3 * len(self.grib) - 1)
+            return self.grib
+
+    red = RedConTerreno(grib_norte_sur)
+    campo = bajar_campo(CICLO, 0, fetch=red.fetch, variable="HGT", nivel="surface")
+    assert campo.valores.shape == (5, 8)
+    assert red.pedidos[1][1] == (2 * len(grib_norte_sur), 3 * len(grib_norte_sur) - 1)

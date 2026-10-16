@@ -26,20 +26,31 @@ def _campo_pa(centro=(-37.0, -60.0), amplitud=2000.0, s=4.0) -> Campo:
     return Campo(lat, lon, 101300.0 + amplitud * np.exp(-r2 / (2 * s * s)))
 
 
+def _llano(alto: float = 0.0, centro=None, radio=0.0) -> Campo:
+    """Terrain in meters on a coarse global grid: flat, optionally with a plateau."""
+    lat = np.arange(-90.0, 90.0 + 0.5, 1.0)
+    lon = np.arange(-180.0, 180.0, 1.0)
+    m = np.zeros((lat.size, lon.size))
+    if centro is not None:
+        la, lo = np.meshgrid(lat, lon, indexing="ij")
+        m[np.hypot(la - centro[0], lo - centro[1]) <= radio] = alto
+    return Campo(lat, lon, m)
+
+
 def _manifest(ciclo=CICLO, horas=(0, 3, 6, 9)):
     generado = datetime(2026, 10, 15, 16, 52, tzinfo=timezone.utc)
     return construir_manifest(ciclo, generado, horas)
 
 
 def test_la_hora_trae_el_ciclo_la_hora_y_el_momento_valido():
-    hora = construir_hora(_campo_pa(), ciclo=CICLO, f=6)
+    hora = construir_hora(_campo_pa(), ciclo=CICLO, f=6, terreno=_llano())
     assert hora.cycle == "2026-10-15T12:00Z"
     assert hora.f == 6
     assert hora.valid == "2026-10-15T18:00Z"
 
 
 def test_un_alto_gaussiano_da_cinco_anillos_cerrados_dentro_del_recorte():
-    hora = construir_hora(_campo_pa(), ciclo=CICLO, f=0)
+    hora = construir_hora(_campo_pa(), ciclo=CICLO, f=0, terreno=_llano())
     assert sorted(ln.p for ln in hora.lineas) == [1016, 1020, 1024, 1028, 1032]
     for ln in hora.lineas:
         assert ln.cerrada
@@ -49,7 +60,7 @@ def test_un_alto_gaussiano_da_cinco_anillos_cerrados_dentro_del_recorte():
 
 
 def test_las_curvas_se_simplifican_pero_siguen_pasando_por_el_validador():
-    hora = construir_hora(_campo_pa(), ciclo=CICLO, f=0)
+    hora = construir_hora(_campo_pa(), ciclo=CICLO, f=0, terreno=_llano())
     manifest = leer_manifest(json.loads(json.dumps(codificar_manifest(_manifest()))))
     leida = leer_hora(json.loads(json.dumps(codificar_hora(hora, 100))), manifest)
     assert [ln.p for ln in leida.lineas] == [ln.p for ln in hora.lineas]
@@ -78,7 +89,7 @@ def test_el_manifest_completo_tiene_41_horas():
 def test_escribir_deja_los_archivos_que_el_validador_acepta(tmp_path):
     campo = _campo_pa()
     manifest = _manifest(horas=(0, 3))
-    horas = {f: construir_hora(campo, ciclo=CICLO, f=f) for f in (0, 3)}
+    horas = {f: construir_hora(campo, ciclo=CICLO, f=f, terreno=_llano()) for f in (0, 3)}
     escribir(tmp_path, manifest, horas)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["isobaras_f000.json", "isobaras_f003.json", "manifest.json"]
     m = leer_manifest(json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8")))
@@ -88,7 +99,7 @@ def test_escribir_deja_los_archivos_que_el_validador_acepta(tmp_path):
 
 def test_escribir_no_deja_el_manifest_si_falta_una_hora(tmp_path):
     manifest = _manifest(horas=(0, 3))
-    horas = {0: construir_hora(_campo_pa(), ciclo=CICLO, f=0)}
+    horas = {0: construir_hora(_campo_pa(), ciclo=CICLO, f=0, terreno=_llano())}
     with pytest.raises(ValueError):
         escribir(tmp_path, manifest, horas)
     assert not (tmp_path / "manifest.json").exists()
@@ -96,7 +107,7 @@ def test_escribir_no_deja_el_manifest_si_falta_una_hora(tmp_path):
 
 def test_los_archivos_se_escriben_compactos(tmp_path):
     manifest = _manifest(horas=(0,))
-    escribir(tmp_path, manifest, {0: construir_hora(_campo_pa(), ciclo=CICLO, f=0)})
+    escribir(tmp_path, manifest, {0: construir_hora(_campo_pa(), ciclo=CICLO, f=0, terreno=_llano())})
     texto = (tmp_path / "isobaras_f000.json").read_text(encoding="utf-8")
     assert "\n" not in texto and ", " not in texto
 
@@ -117,7 +128,7 @@ def test_el_fixture_del_pozo_lo_acepta_el_validador_y_coincide_con_lo_que_se_gen
     hora = leer_hora(fixture, manifest)
     assert [ln.p for ln in hora.lineas] == [1016, 1020, 1024, 1028, 1032]
     ciclo = Ciclo(datetime(2026, 10, 14, 0, tzinfo=timezone.utc))
-    generada = codificar_hora(construir_hora(_campo_pa(s=4.0), ciclo=ciclo, f=0), 100)
+    generada = codificar_hora(construir_hora(_campo_pa(s=4.0), ciclo=ciclo, f=0, terreno=_llano()), 100)
     assert _resumen(generada) == _resumen(fixture)
 
 
@@ -130,3 +141,38 @@ def test_la_hora_de_generacion_se_pasa_a_utc():
 def test_una_hora_de_generacion_sin_zona_se_rechaza():
     with pytest.raises(ValueError):
         construir_manifest(CICLO, datetime(2026, 10, 15, 16, 52), (0,))
+
+
+# ── Centros H y L ────────────────────────────────────────────────────────────
+
+
+def test_la_hora_trae_el_centro_del_alto_con_su_valor_y_posicion():
+    hora = construir_hora(_campo_pa(centro=(-37.0, -60.0)), ciclo=CICLO, f=0, terreno=_llano())
+    assert [(c.t, c.p) for c in hora.centros] == [("H", 1033)]
+    assert abs(hora.centros[0].lat - -37.0) <= 0.25 and abs(hora.centros[0].lon - -60.0) <= 0.25
+
+
+def test_un_alto_sobre_la_cordillera_no_tiene_centro_pero_sus_isobaras_siguen():
+    campo = _campo_pa(centro=(-37.0, -70.0))
+    cordillera = _llano(alto=3000.0, centro=(-37.0, -70.0), radio=3.0)
+    hora = construir_hora(campo, ciclo=CICLO, f=0, terreno=cordillera)
+    assert hora.centros == ()
+    assert len(hora.lineas) == 5
+
+
+def test_los_centros_viajan_en_el_archivo_y_pasan_el_validador(tmp_path):
+    manifest = _manifest(horas=(0,))
+    hora = construir_hora(_campo_pa(), ciclo=CICLO, f=0, terreno=_llano())
+    escribir(tmp_path, manifest, {0: hora})
+    leido = leer_hora(
+        json.loads((tmp_path / "isobaras_f000.json").read_text(encoding="utf-8")),
+        leer_manifest(json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))),
+    )
+    assert [(c.t, c.p) for c in leido.centros] == [("H", 1033)]
+
+
+def test_los_centros_se_buscan_en_el_campo_suavizado_no_en_el_crudo():
+    """A one-cell-wide spike: raw it peaks at 1033 hPa, after the 2-cell Gaussian smoothing at about 1023."""
+    hora = construir_hora(_campo_pa(centro=(-37.0, -60.0), s=0.5), ciclo=CICLO, f=0, terreno=_llano())
+    assert [c.t for c in hora.centros] == ["H"]
+    assert 1022 <= hora.centros[0].p <= 1024

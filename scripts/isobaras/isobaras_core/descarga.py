@@ -21,14 +21,16 @@ from .idx import IdxInvalido, VariableAusente, parsear_idx, rango_de
 
 VARIABLE = "PRMSL"
 NIVEL = "mean sea level"
+VARIABLE_TERRENO = "HGT"
+NIVEL_TERRENO = "surface"
 
 Fetch = Callable[[str, tuple[int, int | None] | None], bytes]
 
 
-def bajar_campo(ciclo: Ciclo, f: int, *, fetch: Fetch) -> Campo:
-    """Pressure field (Pa) of hour `f`: read the index, request only PRMSL's bytes, decode them."""
+def bajar_campo(ciclo: Ciclo, f: int, *, fetch: Fetch, variable: str = VARIABLE, nivel: str = NIVEL) -> Campo:
+    """One field of hour `f` (PRMSL in Pa by default): read the index, request only its bytes, decode them."""
     entradas = parsear_idx(fetch(url_idx(ciclo, f), None).decode("utf-8"))
-    rango = rango_de(entradas, VARIABLE, NIVEL)
+    rango = rango_de(entradas, variable, nivel)
     return decodificar(fetch(url_grib(ciclo, f), rango))
 
 
