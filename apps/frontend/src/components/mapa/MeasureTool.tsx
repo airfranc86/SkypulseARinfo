@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { CircleMarker, Marker, Polyline, useMap, useMapEvents } from 'react-leaflet'
+import { CircleMarker, Marker, Pane, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { Check, ChevronDown, ChevronUp, Crosshair, Ruler, Trash2, Undo2, X } from 'lucide-react'
 import { densificar } from '@/lib/medicion/distancia'
@@ -17,6 +17,7 @@ import {
 import { LARGO_MINIMO_PX, etiquetasDeTramos } from '@/lib/medicion/etiquetas'
 import { TEXTOS, botonesHabilitados } from '@/lib/medicion/panel'
 import { esElMismoToque, type Toque } from '@/lib/medicion/toque'
+import { cajasDeLaInterfaz, puntoDelToque } from './puntoDelToque'
 
 const COLOR = '#fbbf24'
 const PASO_DENSIFICADO_KM = 50
@@ -28,6 +29,9 @@ const MARGEN_LATERAL_PX = 8
 const BORDE_INFERIOR_PX = 26
 /** Air between the bar and the credits above which it sits. */
 const AIRE_SOBRE_CREDITOS_PX = 6
+/** The measured points are drawn above the cities (pane 450), so a point fixed on a city shows as a ring around its dot. */
+const Z_INDEX_PUNTOS = 470
+const RADIO_ANILLO_PX = 9
 
 function estiloBoton(deshabilitado = false): CSSProperties {
   return {
@@ -63,9 +67,13 @@ function chipDeDistancia(texto: string, desplazamiento: string, fuente: string, 
   })
 }
 
-/** Label with the total next to the last point. */
-function iconoDelTotal(texto: string): L.DivIcon {
-  return chipDeDistancia(texto, 'translate(10px,-50%)', '600 12px/1.2', COLOR)
+/**
+ * Label with the total next to the last point. When that point is fixed on a city the name of the city is written right
+ * there, so the total goes above it instead of on top of the name.
+ */
+function iconoDelTotal(texto: string, enUnaCiudad: boolean): L.DivIcon {
+  const desplazamiento = enUnaCiudad ? 'translate(10px,calc(-100% - 10px))' : 'translate(10px,-50%)'
+  return chipDeDistancia(texto, desplazamiento, '600 12px/1.2', COLOR)
 }
 
 const iconosDeTramo = new Map<string, L.DivIcon>()
@@ -169,6 +177,11 @@ export function MeasureTool() {
     setBorde(Math.max(BORDE_INFERIOR_PX, creditos + AIRE_SOBRE_CREDITOS_PX))
   }
 
+  // The point to add for a spot of the screen: fixed on the city drawn nearby (never one hidden under the bar, the
+  // toggle button or the zoom control), or the spot itself.
+  const puntoDe = (lugar: { x: number; y: number }, latlng: L.LatLng) =>
+    puntoDelToque(map, lugar, latlng, cajasDeLaInterfaz(map, [panelRef.current, botonAbrirRef.current, map.zoomControl?.getContainer()]))
+
   useMapEvents({
     resize: medirBorde,
     click: (e) => {
@@ -177,8 +190,8 @@ export function MeasureTool() {
       const repetido = esElMismoToque(ultimoToque.current, toque)
       ultimoToque.current = toque
       if (repetido) return
-      const punto = e.latlng.wrap()
-      setEstado((previo) => agregar(previo, { lat: punto.lat, lon: punto.lng }))
+      const punto = puntoDe(e.containerPoint, e.latlng)
+      setEstado((previo) => agregar(previo, punto))
     },
     zoomend: () => setZoom(map.getZoom()),
   })
@@ -194,15 +207,16 @@ export function MeasureTool() {
     () => (estado.abierta ? etiquetasDeTramos(estado.puntos, (p) => map.project([p.lat, p.lon], zoom), LARGO_MINIMO_PX, estado.total) : []),
     [map, estado.abierta, estado.puntos, estado.total, zoom],
   )
-  const iconoTotal = useMemo(() => iconoDelTotal(estado.total), [estado.total])
+  const ultimoEnUnaCiudad = Boolean(estado.puntos[estado.puntos.length - 1]?.nombre)
+  const iconoTotal = useMemo(() => iconoDelTotal(estado.total, ultimoEnUnaCiudad), [estado.total, ultimoEnUnaCiudad])
   const ultimo = estado.puntos[estado.puntos.length - 1]
   const habilitados = botonesHabilitados(estado)
   const hayTramos = estado.tramos.length > 0
   const tramosAbiertos = verTramos && hayTramos
 
   const agregarEnElCentro = () => {
-    const c = map.getCenter().wrap()
-    setEstado((previo) => agregar(previo, { lat: c.lat, lon: c.lng }))
+    const punto = puntoDe(map.getSize().divideBy(2), map.getCenter())
+    setEstado((previo) => agregar(previo, punto))
   }
 
   return (
@@ -214,20 +228,33 @@ export function MeasureTool() {
           interactive={false}
         />
       )}
-      {estado.puntos.map((p, i) => (
-        <CircleMarker
-          key={`${i}-${p.lat}-${p.lon}`}
-          center={[p.lat, p.lon]}
-          radius={i === 0 ? 7 : 5}
-          pathOptions={{
-            color: COLOR,
-            weight: i === 0 ? 3 : 1,
-            fillColor: COLOR,
-            fillOpacity: i === 0 ? 0 : 1,
-          }}
-          interactive={false}
-        />
-      ))}
+      <Pane name="medicion-puntos" style={{ zIndex: Z_INDEX_PUNTOS, pointerEvents: 'none' }}>
+        {estado.puntos.map((p, i) => (
+          <CircleMarker
+            key={`${i}-${p.lat}-${p.lon}`}
+            center={[p.lat, p.lon]}
+            radius={i === 0 ? 7 : 5}
+            pathOptions={{
+              color: COLOR,
+              weight: i === 0 ? 3 : 1,
+              fillColor: COLOR,
+              fillOpacity: i === 0 ? 0 : 1,
+            }}
+            interactive={false}
+          />
+        ))}
+        {estado.puntos.map((p, i) =>
+          p.nombre ? (
+            <CircleMarker
+              key={`anillo-${i}-${p.lat}-${p.lon}`}
+              center={[p.lat, p.lon]}
+              radius={RADIO_ANILLO_PX}
+              pathOptions={{ color: COLOR, weight: 2, fillOpacity: 0 }}
+              interactive={false}
+            />
+          ) : null,
+        )}
+      </Pane>
       {etiquetas.map((e) => (
         <Marker key={`tramo-${e.indice}`} position={[e.posicion.lat, e.posicion.lon]} icon={iconoDeTramo(e.texto)} interactive={false} keyboard={false} />
       ))}

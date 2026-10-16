@@ -86,8 +86,8 @@ test('mientras se mide el doble clic no hace zoom, y al cerrar vuelve a como est
 test('dos toques seguidos cuentan como uno y cada punto pasa por wrap()', () => {
   assert.match(herramienta, /esElMismoToque\(ultimoToque\.current, toque\)/)
   assert.match(herramienta, /if \(repetido\) return/)
-  assert.match(herramienta, /const punto = e\.latlng\.wrap\(\)/)
-  assert.match(herramienta, /map\.getCenter\(\)\.wrap\(\)/)
+  assert.match(leer('components/mapa/puntoDelToque.ts'), /const punto = latlng\.wrap\(\)/)
+  assert.match(herramienta, /puntoDe\(map\.getSize\(\)\.divideBy\(2\), map\.getCenter\(\)\)/)
 })
 
 // ── El panel y el mapa ───────────────────────────────────────────────────────
@@ -237,5 +237,47 @@ test('el total sobre el mapa solo deja pasar números, signos y la unidad, y sol
 })
 
 test('el icono del total no se rehace en cada render', () => {
-  assert.match(herramienta, /useMemo\(\(\) => iconoDelTotal\(estado\.total\), \[estado\.total\]\)/)
+  assert.match(herramienta, /useMemo\(\(\) => iconoDelTotal\(estado\.total, ultimoEnUnaCiudad\), \[estado\.total, ultimoEnUnaCiudad\]\)/)
+})
+
+// ── Imán a ciudades ──────────────────────────────────────────────────────────
+
+const puntoDelToque = leer('components/mapa/puntoDelToque.ts')
+const ciudadesEnPantalla = leer('components/mapa/ciudadesEnPantalla.ts')
+
+test('un toque en el mapa y el botón de la mira pasan por el imán', () => {
+  assert.match(herramienta, /from '\.\/puntoDelToque'/)
+  assert.match(herramienta, /const punto = puntoDe\(e\.containerPoint, e\.latlng\)/)
+  assert.match(herramienta, /const punto = puntoDe\(map\.getSize\(\)\.divideBy\(2\), map\.getCenter\(\)\)/)
+})
+
+test('el imán solo mira las ciudades que se dibujan, con la misma función que usa la capa de ciudades', () => {
+  assert.match(puntoDelToque, /ciudadMasCercana\(ciudadesDibujadas\(map\), lugar, proyectarCiudad\(map\), RADIO_IMAN_PX, tapadas\)/)
+  assert.match(leer('components/mapa/CiudadesDelMapa.tsx'), /ciudadesDibujadas\(map\)/)
+  assert.match(ciudadesEnPantalla, /export function ciudadesDibujadas\(map: L\.Map\)/)
+})
+
+test('una ciudad escondida debajo de la barra, del botón o del zoom no atrae el toque', () => {
+  assert.match(herramienta, /cajasDeLaInterfaz\(map, \[panelRef\.current, botonAbrirRef\.current, map\.zoomControl\?\.getContainer\(\)\]\)/)
+  assert.match(puntoDelToque, /export function cajasDeLaInterfaz\(map: L\.Map, elementos: ReadonlyArray<Element \| null \| undefined>\): CajaEnPantalla\[\]/)
+  assert.match(puntoDelToque, /if \(r\.width === 0 && r\.height === 0\) return \[\]/)
+})
+
+test('el punto fijado en una ciudad lleva sus coordenadas y su nombre; el que no, pasa por wrap()', () => {
+  assert.match(puntoDelToque, /if \(ciudad\) return \{ lat: ciudad\.lat, lon: ciudad\.lon, nombre: ciudad\.nombre \}/)
+  assert.match(puntoDelToque, /const punto = latlng\.wrap\(\)\s*return \{ lat: punto\.lat, lon: punto\.lng \}/)
+})
+
+test('un punto fijado en una ciudad se ve: un anillo, en una capa por encima de las ciudades; y el total va arriba para no tapar el nombre', () => {
+  assert.match(herramienta, /const Z_INDEX_PUNTOS = 470/)
+  assert.match(herramienta, /<Pane name="medicion-puntos" style=\{\{ zIndex: Z_INDEX_PUNTOS, pointerEvents: 'none' \}\}>/)
+  assert.match(herramienta, /p\.nombre \? \(\s*<CircleMarker\s*key=\{`anillo-/)
+  assert.match(herramienta, /radius=\{RADIO_ANILLO_PX\}/)
+  assert.match(herramienta, /enUnaCiudad \? 'translate\(10px,calc\(-100% - 10px\)\)' : 'translate\(10px,-50%\)'/)
+  // The cities layer is the pane 450 of CiudadesDelMapa: the points must be above it.
+  assert.match(leer('components/mapa/CiudadesDelMapa.tsx'), /const Z_INDEX_CIUDADES = 450/)
+})
+
+test('el imán no agrega ninguna dependencia de red', () => {
+  for (const archivo of [herramienta, puntoDelToque, ciudadesEnPantalla]) assert.doesNotMatch(archivo, /fetch\(|https?:\/\//)
 })

@@ -14,17 +14,25 @@ const MIN_STEP_M = 1
 
 export const MAX_PUNTOS = 50
 
+/** A city name is kept up to this many characters. */
+const MAX_NOMBRE = 80
+
+/** A measured point: where it is and, when it was fixed on a city, that city's name. */
+export interface PuntoMedido extends LatLon {
+  readonly nombre?: string
+}
+
 const SIN_TOTAL = '—'
 
 export interface EstadoMedicion {
   /** Whether the measuring panel is open. */
   readonly abierta: boolean
-  readonly puntos: ReadonlyArray<LatLon>
+  readonly puntos: ReadonlyArray<PuntoMedido>
   /** True after "Terminar": the next added point starts a new measurement. */
   readonly terminada: boolean
   /** Total length text, "—" with fewer than two points. */
   readonly total: string
-  /** One line per leg: "Tramo 1: 647 km". */
+  /** One line per leg: "Tramo 1: 647 km", with the cities when the ends have one: "Tramo 1: 647 km (Córdoba → Buenos Aires)". */
   readonly tramos: ReadonlyArray<string>
   /** Message for the `aria-live` region. Empty before the first action. */
   readonly anuncio: string
@@ -42,14 +50,29 @@ export const ESTADO_INICIAL: EstadoMedicion = Object.freeze({
 
 const plural = (n: number) => (n === 1 ? '1 punto' : `${n} puntos`)
 
+/** A leg between two points: its number and length, and the cities at its ends when at least one has a name. */
+function textoDelTramo(puntos: ReadonlyArray<PuntoMedido>, i: number): string {
+  const desde = puntos[i]
+  const hasta = puntos[i + 1]
+  const base = `Tramo ${i + 1}: ${formatearKm(haversineKm(desde, hasta))}`
+  if (!desde.nombre && !hasta.nombre) return base
+  return `${base} (${desde.nombre ?? `punto ${i + 1}`} → ${hasta.nombre ?? `punto ${i + 2}`})`
+}
+
 function construir(
   base: Pick<EstadoMedicion, 'abierta' | 'terminada'>,
-  puntos: ReadonlyArray<LatLon>,
+  puntos: ReadonlyArray<PuntoMedido>,
   anuncio: (resumen: { total: string; cantidad: string }) => string,
 ): EstadoMedicion {
   const total = puntos.length >= 2 ? formatearKm(totalKm(puntos)) : SIN_TOTAL
-  const tramos = puntos.slice(1).map((p, i) => `Tramo ${i + 1}: ${formatearKm(haversineKm(puntos[i], p))}`)
+  const tramos = puntos.slice(1).map((_, i) => textoDelTramo(puntos, i))
   return { ...base, puntos, total, tramos, anuncio: anuncio({ total, cantidad: plural(puntos.length) }) }
+}
+
+/** The point to keep: a copy, with a `nombre` only when it is a non-blank text (cut to `MAX_NOMBRE`). */
+function copiarPunto(punto: PuntoMedido): PuntoMedido {
+  const nombre = typeof punto.nombre === 'string' ? punto.nombre.trim().slice(0, MAX_NOMBRE) : ''
+  return nombre ? { lat: punto.lat, lon: punto.lon, nombre } : { lat: punto.lat, lon: punto.lon }
 }
 
 /** Opens the panel with an empty measurement. */
@@ -62,9 +85,9 @@ export function abrir(): EstadoMedicion {
  * coordinates are not finite numbers is ignored (same state), so a NaN never reaches the total.
  * The full-list check comes before the "too close to the last point" one.
  */
-export function agregar(estado: EstadoMedicion, punto: LatLon): EstadoMedicion {
+export function agregar(estado: EstadoMedicion, punto: PuntoMedido): EstadoMedicion {
   if (!Number.isFinite(punto.lat) || !Number.isFinite(punto.lon)) return estado
-  const copia: LatLon = { lat: punto.lat, lon: punto.lon }
+  const copia = copiarPunto(punto)
   const previos = estado.terminada ? [] : estado.puntos
   if (previos.length >= MAX_PUNTOS) {
     return { ...estado, anuncio: `Llegaste al máximo de ${MAX_PUNTOS} puntos. Deshacé o borrá para seguir.` }
@@ -73,8 +96,9 @@ export function agregar(estado: EstadoMedicion, punto: LatLon): EstadoMedicion {
   if (ultimo && haversineKm(ultimo, copia) * 1000 < MIN_STEP_M) {
     return { ...estado, anuncio: 'Ese punto ya estaba: no se agregó.' }
   }
+  const fijado = copia.nombre ? `Punto fijado en ${copia.nombre}. ` : ''
   return construir({ abierta: estado.abierta, terminada: false }, [...previos, copia], ({ total, cantidad }) =>
-    previos.length === 0 ? `${cantidad}. Agregá otro para medir.` : `Total: ${total}, ${cantidad}.`,
+    previos.length === 0 ? `${fijado}${cantidad}. Agregá otro para medir.` : `${fijado}Total: ${total}, ${cantidad}.`,
   )
 }
 

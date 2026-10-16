@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react'
 import { Marker, Pane, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
-import { ciudadesVisibles, htmlDeCiudad, mismasCiudades, type CiudadEnPantalla, type LadoDelNombre } from '@/lib/mapa/ciudades'
-import { CIUDADES_DEL_MAPA, type CiudadDelMapa } from '@/lib/mapa/ciudadesDatos'
+import { htmlDeCiudad, mismasCiudades, type CiudadEnPantalla, type LadoDelNombre } from '@/lib/mapa/ciudades'
+import type { CiudadDelMapa } from '@/lib/mapa/ciudadesDatos'
+import { ciudadesDibujadas } from './ciudadesEnPantalla'
 
 /**
  * Between the isobars (overlay pane, 400) and the centres of high and low pressure and the pressure labels
@@ -29,10 +30,7 @@ function iconoDeCiudad(ciudad: CiudadDelMapa, lado: LadoDelNombre): L.DivIcon {
  */
 export function CiudadesDelMapa() {
   const map = useMap()
-  const elegir = useCallback(() => {
-    const tamano = map.getSize()
-    return ciudadesVisibles(CIUDADES_DEL_MAPA, map.getZoom(), (c) => map.latLngToContainerPoint([c.lat, c.lon]), { ancho: tamano.x, alto: tamano.y })
-  }, [map])
+  const elegir = useCallback(() => ciudadesDibujadas(map), [map])
   // The first list is worked out when the component is created; after that, every zoom, pan and resize redoes it.
   const [visibles, setVisibles] = useState<readonly CiudadEnPantalla[]>(elegir)
   // The same list keeps the same array: no new render, and the markers on screen are left alone.
