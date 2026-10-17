@@ -1,6 +1,7 @@
 """Forecast query for one alert zone (FRA-355, PR5b).
 
-One Open-Meteo request per zone: the ECMWF IFS series of `weather_code` and `cape` for two days, in the FORECAST
+One Open-Meteo request per zone: the ECMWF IFS series of `weather_code`, `cape`, `precipitation` and
+`precipitation_probability` for two days, in the FORECAST
 cache level and NOT persisted (the alert evaluation must not write a last-good copy of its own, nor read someone
 else's). The request goes through `openmeteo_source.fetch_series_or_raise`, so the 429 pause, the call budget and the
 usage counter apply as for every other caller; the budget applies to the evaluation because it runs under the fixed
@@ -36,7 +37,12 @@ from app.services.openmeteo_source import CacheLevel, SeriesRequest, fetch_serie
 logger = logging.getLogger(__name__)
 
 MODELO = "ecmwf_ifs025"
-CAMPOS_HORARIOS = ("weather_code", "cape")
+# The storm rule reads the first two variables; the rain rule (shadow mode) reads the last two. Still ONE request
+# per zone: the variables of one request count as one call. Accepted coupling: if Open-Meteo ever rejected the request
+# because of one of the rain variables, the storm series of every zone would fail with it (all zones `sin_datos`; the
+# Sentry alert on total `sin_datos` would flag it). Both names are valid today, and a variable the model lacks comes
+# back as a list of nulls, not as an error.
+CAMPOS_HORARIOS = ("weather_code", "cape", "precipitation", "precipitation_probability")
 DIAS_DE_PRONOSTICO = 2  # today and tomorrow: the 21 h review looks at tomorrow
 
 # The series must have been fetched at most this long before `ahora`.
@@ -49,7 +55,7 @@ _SEGUNDOS_POR_HORA = 3600
 
 
 def pedido_de_zona(zona: Zona) -> SeriesRequest:
-    """The Open-Meteo request of a zone: its exact coordinates, ECMWF, `weather_code` + `cape`, two days."""
+    """The Open-Meteo request of a zone: its exact coordinates, ECMWF, the four hourly variables, two days."""
     return SeriesRequest(
         lat=zona.lat,
         lon=zona.lon,

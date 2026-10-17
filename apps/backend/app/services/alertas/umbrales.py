@@ -32,3 +32,28 @@ SILENCIO_HASTA_H: int = 5
 # pero en la misma franja de silencio solo se manda el aviso de ESTE nivel; un
 # amarillo o naranja espera a la primera corrida de las 5 h. Lo decidió el dueño.
 SMN_NIVEL_QUE_PASA_DE_NOCHE: str = "rojo"
+
+# ---------------------------------------------------------------------------
+# Lluvia persistente (PR 1: MODO SOMBRA, solo se cuenta y no se manda nada).
+#
+# PROVISORIOS: salen de un backtest de 9 días en un solo punto y con otro modelo que el de las alertas (informe
+# `informe-alerta-de-lluvia-2026-10-16-noche`). Con "3 mm en 6 h y 70 %" habría avisado 1-2 veces por semana en
+# Córdoba, las dos veces con lluvia real; las reglas de lluvia FUERTE en mm no avisan casi nunca y las de solo
+# probabilidad avisan todos los días. El conteo `con_lluvia` del log sirve para confirmarlos con los datos reales de
+# ECMWF antes de ajustarlos. Ver `regla.evaluar_lluvia`.
+# ---------------------------------------------------------------------------
+
+# Una ventana de lluvia son estas horas seguidas.
+LLUVIA_VENTANA_HORAS: int = 6
+
+# Milímetros acumulados en la ventana a partir de los cuales es "lluvia persistente".
+LLUVIA_MM_VENTANA: float = 3.0
+
+# Probabilidad de precipitación MEDIA de las horas de la ventana (porcentaje). Solo se exige cuando ECMWF la dio para
+# todas las horas de la ventana.
+LLUVIA_PROBABILIDAD_MEDIA_MINIMA: float = 70.0
+
+# Sin probabilidad: una hora "con agua" es una de al menos estos mm, y hacen falta tantas horas con agua en la
+# ventana (distingue la lluvia persistente de un chaparrón corto que junta los mm en dos horas).
+LLUVIA_MM_HORA_CON_AGUA: float = 0.1
+LLUVIA_HORAS_CON_AGUA_MINIMAS: int = 4

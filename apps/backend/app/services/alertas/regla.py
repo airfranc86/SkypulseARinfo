@@ -1,11 +1,12 @@
-"""Regla de tormenta para alertas push (FRA-348 / FRA-351).
+"""Reglas de tormenta (FRA-348 / FRA-351) y de lluvia persistente (modo sombra) para alertas push.
 
 Funciones puras: reciben la serie horaria de ECMWF ya obtenida
-(`HourlyForecastExt` con `weather_codes` y `cape_j_kg` de ECMWF) y no hacen
+(`HourlyForecastExt` con `weather_codes`, `cape_j_kg`, `precipitations` y `precip_probs` de ECMWF) y no hacen
 red. Pedir el pronóstico de cada zona le toca a la evaluación programada.
 Los umbrales y horarios están en `umbrales.py`.
 """
 
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Literal
@@ -103,3 +104,115 @@ def evaluar_revision(hourly: HourlyForecastExt | None, ahora: datetime) -> Resul
     if ventana_ahora is None:
         return None
     return evaluar_tormenta(hourly, *ventana_ahora)
+
+
+# ---------------------------------------------------------------------------
+# Lluvia persistente (MODO SOMBRA: el resultado solo se cuenta, nunca dispara un aviso)
+# ---------------------------------------------------------------------------
+
+MotivoLluvia = Literal["probabilidad", "persistencia"]
+_SEGUNDOS_POR_HORA = 3600
+
+
+@dataclass(frozen=True)
+class VentanaLluvia:
+    """Una ventana móvil de `LLUVIA_VENTANA_HORAS` horas seguidas que cumple la regla."""
+
+    inicio: int  # epoch segundos: primera hora de la ventana
+    fin: int  # epoch segundos: fin (exclusivo) de la ventana
+    mm: float
+    probabilidad_media: float | None  # None si ECMWF no dio la probabilidad de todas las horas
+    horas_con_agua: int
+    motivo: MotivoLluvia  # "probabilidad": media >= 70 %; "persistencia": sin probabilidad, >= 4 horas con agua
+
+
+@dataclass(frozen=True)
+class ResultadoLluvia:
+    ventanas: tuple[VentanaLluvia, ...]
+
+    @property
+    def hay_lluvia(self) -> bool:
+        return bool(self.ventanas)
+
+
+def _numero(valor: object, minimo: float, maximo: float | None) -> float | None:
+    """`valor` si es un número finito dentro del rango; si no, `None` (sin dato: nunca se lee un hueco como lluvia)."""
+    if isinstance(valor, bool) or not isinstance(valor, int | float) or not math.isfinite(valor):
+        return None
+    if valor < minimo or (maximo is not None and valor > maximo):
+        return None
+    return float(valor)
+
+
+def evaluar_lluvia(hourly: HourlyForecastExt | None, inicio: int, fin: int) -> ResultadoLluvia:
+    """Ventanas de lluvia persistente que EMPIEZAN en `inicio <= timestamp < fin`.
+
+    Una ventana son `LLUVIA_VENTANA_HORAS` horas consecutivas, todas con precipitación en la serie (una hora sin dato
+    descarta la ventana: un hueco no es lluvia, y tampoco calma). Cumple la regla si:
+
+    - suma `LLUVIA_MM_VENTANA` mm o más; y
+    - si ECMWF dio la probabilidad de TODAS las horas de la ventana, su media es `LLUVIA_PROBABILIDAD_MEDIA_MINIMA` o
+      más (motivo "probabilidad"); si no la dio (lista vacía o con huecos), al menos `LLUVIA_HORAS_CON_AGUA_MINIMAS`
+      de las horas tienen `LLUVIA_MM_HORA_CON_AGUA` mm o más (motivo "persistencia").
+
+    Una ventana puede terminar DESPUÉS de `fin`: la revisión de las 19 h ve la lluvia de la noche aunque se extienda
+    de madrugada. Por eso las ventanas no se recortan a la revisión. Sin serie, o sin datos, no hay lluvia.
+    """
+    if hourly is None:
+        return ResultadoLluvia(ventanas=())
+    horas = umbrales.LLUVIA_VENTANA_HORAS
+    mm_por_hora: dict[int, float] = {}
+    probabilidad_por_hora: dict[int, float] = {}
+    for i, ts in enumerate(hourly.timestamps):
+        mm = _numero(_en(hourly.precipitations, i), 0.0, None)
+        if mm is not None:
+            mm_por_hora[ts] = mm
+        probabilidad = _numero(_en(hourly.precip_probs, i), 0.0, 100.0)
+        if probabilidad is not None:
+            probabilidad_por_hora[ts] = probabilidad
+    ventanas: list[VentanaLluvia] = []
+    for ts in hourly.timestamps:
+        if not inicio <= ts < fin:
+            continue
+        horas_de_la_ventana = [ts + k * _SEGUNDOS_POR_HORA for k in range(horas)]
+        if any(h not in mm_por_hora for h in horas_de_la_ventana):
+            continue
+        mms = [mm_por_hora[h] for h in horas_de_la_ventana]
+        total = round(sum(mms), 6)  # 0,05 + 0,05 + 0,05 + 0,57 + 1,13 + 1,15 da 2,9999999999999996 en coma flotante: sin redondear perdería el límite de 3 mm
+        if total < umbrales.LLUVIA_MM_VENTANA:
+            continue
+        con_agua = sum(1 for mm in mms if mm >= umbrales.LLUVIA_MM_HORA_CON_AGUA)
+        probabilidades = [probabilidad_por_hora.get(h) for h in horas_de_la_ventana]
+        if all(p is not None for p in probabilidades):
+            media = round(sum(p for p in probabilidades if p is not None) / horas, 6)
+            if media < umbrales.LLUVIA_PROBABILIDAD_MEDIA_MINIMA:
+                continue
+            motivo: MotivoLluvia = "probabilidad"
+            probabilidad_media: float | None = media
+        else:
+            if con_agua < umbrales.LLUVIA_HORAS_CON_AGUA_MINIMAS:
+                continue
+            motivo = "persistencia"
+            probabilidad_media = None
+        ventanas.append(
+            VentanaLluvia(
+                inicio=ts,
+                fin=ts + horas * _SEGUNDOS_POR_HORA,
+                mm=total,
+                probabilidad_media=probabilidad_media,
+                horas_con_agua=con_agua,
+                motivo=motivo,
+            )
+        )
+    return ResultadoLluvia(ventanas=tuple(ventanas))
+
+
+def evaluar_revision_lluvia(hourly: HourlyForecastExt | None, ahora: datetime) -> ResultadoLluvia | None:
+    """La lluvia de la revisión de `ahora`; `None` si esa hora no es de revisión (incluye el silencio).
+
+    Usa la MISMA ventana que la tormenta (`ventana`): las ventanas de lluvia empiezan dentro de ella.
+    """
+    ventana_ahora = ventana(ahora)
+    if ventana_ahora is None:
+        return None
+    return evaluar_lluvia(hourly, *ventana_ahora)

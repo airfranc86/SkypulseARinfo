@@ -102,9 +102,18 @@ def payload_horario(
     cape: Mapping[int, float | None] | None = None,
     codigo_base: int | None = 1,
     cape_base: float | None = 100.0,
+    lluvia: Mapping[int, float | None] | None = None,
+    probabilidad: Mapping[int, float | None] | None = None,
+    lluvia_base: float = 0.0,
+    probabilidad_base: float | None = None,
 ) -> dict:
     """An Open-Meteo hourly payload from 00:00 of the 14th. `codigos`/`cape` set values by hour index
-    (0 = 00:00 of the 14th, 24 = 00:00 of the 15th); the rest is calm (code 1, CAPE 100 J/kg)."""
+    (0 = 00:00 of the 14th, 24 = 00:00 of the 15th); the rest is calm (code 1, CAPE 100 J/kg).
+
+    Rain is added only when asked for, so the storm tests keep the payload they always had: `lluvia` (mm per hour) or
+    `probabilidad` (percent) set values by hour index over `lluvia_base` / `probabilidad_base`. With `lluvia` or
+    `lluvia_base != 0` the payload carries `precipitation`; it carries `precipitation_probability` only when
+    `probabilidad` or `probabilidad_base` is given (ECMWF answers both, but a payload without it must be handled too)."""
     tiempos = [(DIA0 + timedelta(hours=i)).strftime("%Y-%m-%dT%H:%M") for i in range(horas)]
     weather_code: list[int | None] = [codigo_base] * horas
     cape_lista: list[float | None] = [cape_base] * horas
@@ -112,7 +121,18 @@ def payload_horario(
         weather_code[indice] = valor
     for indice, valor in (cape or {}).items():
         cape_lista[indice] = valor
-    return {"hourly": {"time": tiempos, "weather_code": weather_code, "cape": cape_lista}, "elevation": 120.0}
+    hourly: dict = {"time": tiempos, "weather_code": weather_code, "cape": cape_lista}
+    if lluvia is not None or lluvia_base != 0.0:
+        precipitacion: list[float | None] = [lluvia_base] * horas
+        for indice, valor in (lluvia or {}).items():
+            precipitacion[indice] = valor
+        hourly["precipitation"] = precipitacion
+    if probabilidad is not None or probabilidad_base is not None:
+        probabilidades: list[float | None] = [probabilidad_base] * horas
+        for indice, valor in (probabilidad or {}).items():
+            probabilidades[indice] = valor
+        hourly["precipitation_probability"] = probabilidades
+    return {"hourly": hourly, "elevation": 120.0}
 
 
 TORMENTA = payload_horario(codigos={15: 95})
