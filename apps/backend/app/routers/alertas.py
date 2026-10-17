@@ -112,6 +112,7 @@ async def post_suscripcion(
         p256dh=payload.keys.p256dh,
         auth=payload.keys.auth,
         zona=payload.zona,
+        lluvia=payload.lluvia,
     )
     try:
         alta = await svc.alta_detallada(redis, suscripcion)

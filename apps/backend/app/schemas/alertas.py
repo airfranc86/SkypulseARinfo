@@ -8,7 +8,7 @@ ni un endpoint ni una clave inválidos vuelven en la respuesta.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator
 
 from app.services.alertas.suscripcion import (
     validar_auth,
@@ -42,6 +42,13 @@ class SuscripcionRequest(BaseModel):
     keys: PushKeys
     zona: str = Field(
         description="Slug de una de las ciudades de alertas, p. ej. `cordoba`."
+    )
+    lluvia: StrictBool | None = Field(
+        default=None,
+        description=(
+            "Aviso de lluvia persistente (opt-in). `true` / `false` lo fijan; si falta o es `null` no cambia lo que "
+            "ya tenía (una suscripción nueva queda con la lluvia apagada)."
+        ),
     )
 
     @field_validator("endpoint")
