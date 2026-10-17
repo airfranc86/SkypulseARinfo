@@ -277,6 +277,8 @@ export interface CuerpoDeAlta {
   endpoint: string
   keys: { p256dh: string; auth: string }
   zona: string
+  /** El aviso de lluvia (opt-in): `true` / `false` lo fijan; si falta, el servidor no cambia lo que tenía. */
+  lluvia?: boolean
 }
 
 function esTextoNoVacio(valor: unknown): valor is string {
@@ -286,16 +288,18 @@ function esTextoNoVacio(valor: unknown): valor is string {
 /**
  * El cuerpo del alta a partir de `PushSubscription.toJSON()` y el slug de la ciudad. Solo se copian
  * endpoint, p256dh y auth (se ignora `expirationTime` y cualquier otro campo). Lanza `SuscripcionIncompleta`
- * o `ZonaDesconocida`; el servidor valida otra vez el host del endpoint y las claves.
+ * o `ZonaDesconocida`; el servidor valida otra vez el host del endpoint y las claves. `lluvia` viaja solo si es
+ * un booleano: sin él (o con otra cosa) el cuerpo es el de siempre.
  */
-export function cuerpoDeAlta(subscriptionJson: unknown, zonaSlug: string): CuerpoDeAlta {
+export function cuerpoDeAlta(subscriptionJson: unknown, zonaSlug: string, lluvia?: boolean): CuerpoDeAlta {
   if (typeof subscriptionJson !== 'object' || subscriptionJson === null) throw new SuscripcionIncompleta()
   const { endpoint, keys } = subscriptionJson as Record<string, unknown>
   if (!esTextoNoVacio(endpoint) || typeof keys !== 'object' || keys === null) throw new SuscripcionIncompleta()
   const { p256dh, auth } = keys as Record<string, unknown>
   if (!esTextoNoVacio(p256dh) || !esTextoNoVacio(auth)) throw new SuscripcionIncompleta()
   if (typeof zonaSlug !== 'string' || zonaPorSlug(zonaSlug) === null) throw new ZonaDesconocida()
-  return { endpoint, keys: { p256dh, auth }, zona: zonaSlug }
+  const base = { endpoint, keys: { p256dh, auth }, zona: zonaSlug }
+  return typeof lluvia === 'boolean' ? { ...base, lluvia } : base
 }
 
 // ── Clave VAPID ──────────────────────────────────────────────────────────────
@@ -345,6 +349,8 @@ export interface EstadoGuardado {
   zona: string
   /** Milisegundos desde la época de la última vez que se repitió el alta. */
   ultimaRenovacion: number
+  /** Pidió además el aviso de lluvia. Ausente = apagado: solo se guarda cuando es `true`. */
+  lluvia?: boolean
 }
 
 /**
@@ -364,10 +370,12 @@ export function leerEstadoGuardado(raw: string | null): EstadoGuardado | null {
   if (!esIdSuscripcion(id)) return null
   if (typeof zona !== 'string' || zonaPorSlug(zona) === null) return null
   if (typeof ultimaRenovacion !== 'number' || !Number.isFinite(ultimaRenovacion)) return null
-  return { id, zona, ultimaRenovacion }
+  const base = { id, zona, ultimaRenovacion }
+  return (datos as Record<string, unknown>).lluvia === true ? { ...base, lluvia: true } : base
 }
 
-/** El texto a guardar en `claveEstadoGuardado`: solo id, zona y última renovación. */
+/** El texto a guardar en `claveEstadoGuardado`: id, zona, última renovación y, solo si la pidió, la lluvia. */
 export function serializarEstadoGuardado(estado: EstadoGuardado): string {
-  return JSON.stringify({ id: estado.id, zona: estado.zona, ultimaRenovacion: estado.ultimaRenovacion })
+  const base = { id: estado.id, zona: estado.zona, ultimaRenovacion: estado.ultimaRenovacion }
+  return JSON.stringify(estado.lluvia === true ? { ...base, lluvia: true } : base)
 }

@@ -7,6 +7,7 @@
  * no están acá: los fija `PASOS_INSTALAR_IOS` en `plataforma.ts`.
  */
 import { VERSION_MINIMA_IOS, type Disponibilidad } from './plataforma.ts'
+import { AVISO_LLUVIA_DISPONIBLE, type EstadoLluvia } from './lluvia.ts'
 import type { ErrorAvisos, EstadoAvisos, MotivoNoActivable } from './suscripcion.ts'
 
 /** Cómo va el aviso de prueba, aparte del estado de la suscripción. */
@@ -57,6 +58,17 @@ const TEXTOS_CON_ENVIO: TextosPorModo = Object.freeze({
   estadoActivo: (nombreZona: string | null) => (nombreZona === null ? 'Avisos activados.' : `Avisos activados para ${nombreZona}.`),
 })
 
+/**
+ * La introducción cuando el aviso de lluvia está disponible (PR 3b, BORRADOR a aprobar): la lluvia es un aviso aparte que
+ * hay que pedir, y se dice cuál (varias horas seguidas) y cuál no (llovizna y lluvias cortas).
+ */
+const INTRO_CON_LLUVIA =
+  'SkyPulse avisa a las 21 h cuando se esperan tormentas para mañana y, durante el día, si aparece una tormenta nueva. La primera revisión es a las 5 h, para quien sale temprano a trabajar. Si el pronóstico indica posible granizo, el aviso lo aclara. Si lo pedís aparte, también avisa cuando se espera lluvia persistente (varias horas seguidas), no por llovizna ni lluvias cortas. No manda nada entre las 22 y las 5.'
+
+/** El consentimiento propio del aviso de lluvia (BORRADOR a aprobar): una casilla aparte, desmarcada de entrada. */
+const CONSENTIMIENTO_LLUVIA =
+  'Quiero recibir también avisos de lluvia persistente (varias horas seguidas de lluvia, no llovizna ni chaparrones cortos). SkyPulse usa para eso la misma dirección técnica de entrega y mi ciudad. Puedo cambiarlo o darme de baja cuando quiera.'
+
 /** Los textos de hoy, sin envío automático. */
 const TEXTOS_SIN_ENVIO: TextosPorModo = Object.freeze({
   titulo: 'Avisos de tormenta: todavía no están activos',
@@ -73,11 +85,19 @@ const TEXTOS_SIN_ENVIO: TextosPorModo = Object.freeze({
  * Los textos de la pantalla según el modo. `envioAutomatico` es un parámetro (por defecto, la constante) para
  * que las pruebas puedan pedir cualquiera de los dos sin depender del estado del módulo.
  */
-export function copyDe(envioAutomatico: boolean = ENVIO_AUTOMATICO_ACTIVO) {
+export function copyDe(envioAutomatico: boolean = ENVIO_AUTOMATICO_ACTIVO, lluvia: boolean = AVISO_LLUVIA_DISPONIBLE) {
   const { titulo, intro, consentimiento, tituloInstalarIos } = envioAutomatico ? TEXTOS_CON_ENVIO : TEXTOS_SIN_ENVIO
+  // El aviso de lluvia solo existe con el envío automático: sin él no hay nada que pedir.
+  const conLluvia = envioAutomatico && lluvia
   return Object.freeze({
     titulo,
-    intro,
+    intro: conLluvia ? INTRO_CON_LLUVIA : intro,
+    /** ¿Se muestra la casilla del aviso de lluvia? */
+    lluviaDisponible: conLluvia,
+    consentimientoLluvia: CONSENTIMIENTO_LLUVIA,
+    guardandoLluvia: 'Guardando…',
+    lluviaActivada: 'Listo: también te avisamos si se espera lluvia persistente.',
+    lluviaDesactivada: 'Listo: ya no te avisamos por lluvia persistente.',
     /** La leyenda va en tres partes para que `smn.gob.ar` sea un enlace; los bordes van sin espacios (los pone quien arma la frase). */
     aclaracionOficial: Object.freeze({
       antes: 'Es un pronóstico de SkyPulse, no un aviso oficial. Los avisos oficiales están en',
@@ -184,6 +204,22 @@ export function mensajeDeEstado(
       return MENSAJE_BLOQUEADO
     case 'activo':
       return (envioAutomatico ? TEXTOS_CON_ENVIO : TEXTOS_SIN_ENVIO).estadoActivo(nombreZona)
+    case 'error':
+      return mensajeDeError(estado.error)
+    default:
+      return ''
+  }
+}
+
+/** El mensaje de la casilla de lluvia; vacío cuando no hay nada que decir. */
+export function mensajeDeLluvia(estado: EstadoLluvia): string {
+  switch (estado.tipo) {
+    case 'guardando':
+      return COPY.guardandoLluvia
+    case 'activada':
+      return COPY.lluviaActivada
+    case 'desactivada':
+      return COPY.lluviaDesactivada
     case 'error':
       return mensajeDeError(estado.error)
     default:

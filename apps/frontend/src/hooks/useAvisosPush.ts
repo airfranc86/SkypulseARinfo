@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { api } from '@/lib/api'
 import type { ConfigAlertas } from '@/lib/alertas/config'
 import type { EstadoPrueba } from '@/lib/alertas/copy'
+import { AVISO_LLUVIA_DISPONIBLE, lluviaDelAlta, type EstadoLluvia } from '@/lib/alertas/lluvia'
 import { detectarDisponibilidad, type Disponibilidad } from '@/lib/alertas/plataforma'
 import {
   ESTADO_INICIAL,
@@ -56,6 +57,13 @@ export interface AvisosPush {
   setZona: (slug: string | null) => void
   consentimiento: boolean
   setConsentimiento: (valor: boolean) => void
+  /** La casilla del aviso de lluvia (opt-in, desmarcada de entrada). Solo cuenta si `COPY.lluviaDisponible`. */
+  lluvia: boolean
+  /** Antes de activar: solo cambia la elección; se manda con el alta. */
+  setLluvia: (valor: boolean) => void
+  /** Con los avisos activos: reenvía el alta con la preferencia, sin desactivar ni volver a pedir permiso. */
+  cambiarLluvia: (valor: boolean) => Promise<void>
+  estadoLluvia: EstadoLluvia
   activar: () => Promise<void>
   probar: () => Promise<void>
   desactivar: () => Promise<void>
@@ -116,12 +124,14 @@ async function desuscribirLocal(): Promise<void> {
 }
 
 /** Suscribe en el navegador y da de alta en el servidor. No lanza: devuelve el evento que corresponde. */
-async function darDeAlta(clave: Uint8Array, zona: string): Promise<EventoAvisos> {
+async function darDeAlta(clave: Uint8Array, zona: string, lluvia: boolean): Promise<EventoAvisos> {
   let suscripcion: PushSubscription | null = null
   try {
     suscripcion = await conTope(suscribirEnNavegador(clave), TOPE_NAVEGADOR_MS)
-    const respuesta = await api.alertasSuscribir(cuerpoDeAlta(suscripcion.toJSON(), zona))
-    const guardado = estadoGuardadoDeRespuesta(respuesta, Date.now())
+    // Con el aviso de lluvia disponible el alta manda la preferencia explícita; sin él, el cuerpo es el de siempre.
+    const preferencia = lluviaDelAlta(AVISO_LLUVIA_DISPONIBLE, lluvia)
+    const respuesta = await api.alertasSuscribir(cuerpoDeAlta(suscripcion.toJSON(), zona, preferencia))
+    const guardado = estadoGuardadoDeRespuesta(respuesta, Date.now(), preferencia === true)
     if (guardado === null) throw new Error('respuesta_invalida')
     guardarEstadoLocal(guardado)
     return { tipo: 'suscripcion-ok', id: guardado.id, zona: guardado.zona }
@@ -285,6 +295,56 @@ function usePrueba(estado: EstadoAvisos, dispatch: Despachar) {
   return { prueba, esperaProbar: enEspera ? prueba.segundos : null, probar, reiniciar }
 }
 
+/**
+ * El cambio de la casilla de lluvia con los avisos activos: repite el alta con la suscripción que ya existe y la
+ * preferencia nueva (mismo `id`; no pide permiso ni registra nada). Si el servidor dice que ya no la tiene, se limpia
+ * todo y la persona vuelve a activar. Devuelve la preferencia que quedó vigente.
+ */
+function useCambiarLluvia(estado: EstadoAvisos, dispatch: Despachar, lluviaInicial: boolean) {
+  const [lluvia, setLluvia] = useState(lluviaInicial)
+  const [estadoLluvia, setEstadoLluvia] = useState<EstadoLluvia>({ tipo: 'libre' })
+  const guardando = useRef(false)
+
+  const cambiarLluvia = useCallback(
+    async (valor: boolean) => {
+      if (estado.tipo !== 'activo' || guardando.current) return
+      guardando.current = true
+      const anterior = lluvia
+      setLluvia(valor)
+      setEstadoLluvia({ tipo: 'guardando' })
+      try {
+        const suscripcion = await suscripcionActual()
+        if (suscripcion === null) throw new Error('sin_suscripcion')
+        const preferencia = lluviaDelAlta(AVISO_LLUVIA_DISPONIBLE, valor)
+        const respuesta = await api.alertasSuscribir(cuerpoDeAlta(suscripcion.toJSON(), estado.zona, preferencia))
+        const guardado = estadoGuardadoDeRespuesta(respuesta, Date.now(), preferencia === true)
+        if (guardado === null) throw new Error('respuesta_invalida')
+        guardarEstadoLocal(guardado)
+        setEstadoLluvia({ tipo: valor ? 'activada' : 'desactivada' })
+      } catch (error) {
+        setLluvia(anterior) // no quedó guardado: la casilla vuelve a lo que el servidor tiene
+        const motivo = motivoDeError(error)
+        setEstadoLluvia({ tipo: 'error', error: motivo })
+        if (motivo.motivo === 'vencida') {
+          borrarEstadoLocal()
+          void desuscribirLocal()
+          dispatch({ tipo: 'baja-ok' })
+        }
+      } finally {
+        guardando.current = false
+      }
+    },
+    [dispatch, estado, lluvia],
+  )
+
+  const elegirLluvia = useCallback((valor: boolean) => {
+    setLluvia(valor)
+    setEstadoLluvia({ tipo: 'libre' })
+  }, [])
+
+  return { lluvia, setLluvia: elegirLluvia, cambiarLluvia, estadoLluvia }
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -302,6 +362,11 @@ export function useAvisosPush(config: ConfigAlertas, zonaSugerida: string | null
   const activando = useRef(false)
   const desactivandoRef = useRef(false)
   const { prueba, esperaProbar, probar, reiniciar } = usePrueba(estado, dispatch)
+  const { lluvia, setLluvia, cambiarLluvia, estadoLluvia } = useCambiarLluvia(
+    estado,
+    dispatch,
+    guardadoInicial?.lluvia === true,
+  )
 
   useVerificarGuardado(guardadoInicial, dispatch)
   useObservarPermiso(estado, dispatch, setPermiso)
@@ -327,13 +392,13 @@ export function useAvisosPush(config: ConfigAlertas, zonaSugerida: string | null
       const concedido = normalizarPermiso(await Notification.requestPermission())
       setPermiso(concedido)
       dispatch({ tipo: 'permiso-resuelto', permiso: concedido })
-      if (concedido === 'granted') dispatch(await darDeAlta(clave, zona))
+      if (concedido === 'granted') dispatch(await darDeAlta(clave, zona, lluvia))
     } catch (error) {
       dispatch({ tipo: 'suscripcion-fallo', error: motivoDeError(error) })
     } finally {
       activando.current = false
     }
-  }, [config.claveVapid, consentimiento, disponibilidad, reiniciar, zonaElegida])
+  }, [config.claveVapid, consentimiento, disponibilidad, lluvia, reiniciar, zonaElegida])
 
   const desactivar = useCallback(async () => {
     if (desactivandoRef.current) return
@@ -343,12 +408,13 @@ export function useAvisosPush(config: ConfigAlertas, zonaSugerida: string | null
       await darDeBaja(estado.tipo === 'activo' ? estado.id : (leerEstadoLocal()?.id ?? null))
       reiniciar()
       setConsentimiento(false)
+      setLluvia(false) // darse de baja borra todo: el próximo alta pide el consentimiento de la lluvia de nuevo
       dispatch({ tipo: 'baja-ok' })
     } finally {
       setDesactivando(false)
       desactivandoRef.current = false
     }
-  }, [estado, reiniciar])
+  }, [estado, reiniciar, setLluvia])
 
   return {
     estado,
@@ -357,6 +423,10 @@ export function useAvisosPush(config: ConfigAlertas, zonaSugerida: string | null
     setZona,
     consentimiento,
     setConsentimiento,
+    lluvia,
+    setLluvia,
+    cambiarLluvia,
+    estadoLluvia,
     activar,
     probar,
     desactivar,

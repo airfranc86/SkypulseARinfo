@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { api } from '@/lib/api'
 import type { ConfigAlertas } from '@/lib/alertas/config'
+import { AVISO_LLUVIA_DISPONIBLE, lluviaDelAlta } from '@/lib/alertas/lluvia'
 import { detectarDisponibilidad, type EntornoPush } from '@/lib/alertas/plataforma'
 import {
   claveEstadoGuardado,
@@ -80,10 +81,10 @@ export function borrarEstadoLocal(): void {
  * El estado a guardar para la respuesta del alta (el servidor repite el `id` y la ciudad), o null si la
  * respuesta no trae un id de 22 caracteres base64url y una ciudad conocida.
  */
-export function estadoGuardadoDeRespuesta(respuesta: unknown, ahoraMs: number): EstadoGuardado | null {
+export function estadoGuardadoDeRespuesta(respuesta: unknown, ahoraMs: number, lluvia = false): EstadoGuardado | null {
   const { id, zona } = (typeof respuesta === 'object' && respuesta !== null ? respuesta : {}) as Record<string, unknown>
   if (!esIdSuscripcion(id) || typeof zona !== 'string' || zonaPorSlug(zona) === null) return null
-  return { id, zona, ultimaRenovacion: ahoraMs }
+  return lluvia ? { id, zona, ultimaRenovacion: ahoraMs, lluvia: true } : { id, zona, ultimaRenovacion: ahoraMs }
 }
 
 /** La suscripción push de este navegador, sin registrar nada: null si no hay service worker registrado o suscripción. */
@@ -102,8 +103,10 @@ async function renovar(guardado: EstadoGuardado): Promise<void> {
   try {
     const suscripcion = await suscripcionActual()
     if (suscripcion === null) return
-    const respuesta = await api.alertasSuscribir(cuerpoDeAlta(suscripcion.toJSON(), guardado.zona))
-    const nuevo = estadoGuardadoDeRespuesta(respuesta, Date.now())
+    // Con el aviso de lluvia disponible cada renovación manda la preferencia explícita (también repara el índice del servidor).
+    const lluvia = lluviaDelAlta(AVISO_LLUVIA_DISPONIBLE, guardado.lluvia === true)
+    const respuesta = await api.alertasSuscribir(cuerpoDeAlta(suscripcion.toJSON(), guardado.zona, lluvia))
+    const nuevo = estadoGuardadoDeRespuesta(respuesta, Date.now(), guardado.lluvia === true)
     if (nuevo !== null) guardarEstadoLocal(nuevo)
   } catch (error) {
     // Si el servidor ya no la tiene hay que volver a activar desde la página; cualquier otro fallo se reintenta en la próxima visita.

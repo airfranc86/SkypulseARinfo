@@ -642,6 +642,8 @@ export interface AlertaSuscripcionRequest {
   endpoint: string
   keys: { p256dh: string; auth: string }
   zona: string
+  /** Aviso de lluvia (opt-in): `true` / `false` lo fijan; si falta, el servidor no cambia lo que tenía. */
+  lluvia?: boolean
 }
 
 export interface AlertaSuscripcionResponse {
