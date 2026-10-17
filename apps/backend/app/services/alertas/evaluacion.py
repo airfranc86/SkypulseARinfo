@@ -81,10 +81,11 @@ from datetime import date, datetime, timedelta, timezone
 from app.core.client_context import ALERTAS_JOB_CLIENT_KEY, con_clave_de_cliente
 from app.core.config import settings
 from app.core.upstash import UpstashRedis, UpstashUnavailableError
-from app.services.alertas import avisos_smn, despacho, interruptor, pronostico, regla
+from app.services.alertas import avisos_smn, despacho, despacho_lluvia, interruptor, pronostico, regla
 from app.services.alertas import suscripcion as svc
 from app.services.alertas.despacho import AVISO_HOY, AVISO_MANANA, ResumenEnvio, ResumenSmn
-from app.services.alertas.regla import ResultadoRegla
+from app.services.alertas.despacho_lluvia import EnvioDeLluvia, ZonaConLluvia
+from app.services.alertas.regla import ResultadoLluvia, ResultadoRegla
 from app.services.alertas.zonas import ZONAS, Zona
 
 logger = logging.getLogger(__name__)
@@ -155,9 +156,11 @@ class ZonaEvaluada:
     aviso: str | None = None
     fecha_objetivo: date | None = None
     ventana: tuple[int, int] | None = None
-    # Rain shadow mode: the zone has persistent rain in this review. It is independent of the verdict (a zone can be
-    # `sin_tormenta` and `con_lluvia`), it never prepares or sends anything, and it is only COUNTED.
+    # The zone has persistent rain in this review. It is independent of the verdict (a zone can be `sin_tormenta` and
+    # `con_lluvia`) and it is always COUNTED. With `alertas_lluvia_activa` on, a zone with rain and no storm is also
+    # notified (`despacho_lluvia`), using `lluvia` (the windows) for the franjas of the text.
     con_lluvia: bool = False
+    lluvia: ResultadoLluvia | None = None
 
 
 @dataclass(frozen=True)
@@ -178,6 +181,9 @@ class ResultadoEvaluacion:
     con_lluvia: int = 0
     # What the sending did. None for a dry run (and for a run that never got as far as the zones).
     envio: ResumenEnvio | None = None
+    # What the rain notice did. None unless the run sent AND `alertas_lluvia_activa` is on: with the flag off the response
+    # and the log line keep their exact shape.
+    envio_lluvia: EnvioDeLluvia | None = field(default=None, compare=False)
     # Per-zone detail for the caller. Not part of the equality, not in the repr, never in the response or the log.
     zonas: tuple[ZonaEvaluada, ...] = field(default=(), repr=False, compare=False)
 
@@ -188,6 +194,8 @@ class ResultadoEvaluacion:
             respuesta.update({nombre: getattr(self, nombre) for nombre in CONTADORES})
             if self.envio is not None:
                 respuesta.update(self.envio.como_respuesta())
+            if self.envio_lluvia is not None:
+                respuesta.update(self.envio_lluvia.como_respuesta())
         return respuesta
 
 
@@ -249,6 +257,7 @@ def _cerrar(resultado: ResultadoEvaluacion) -> ResultadoEvaluacion:
         or resultado.errores
         or resultado.estado in (ESTADO_EVALUADA_INCOMPLETA, ESTADO_SIN_VAPID)
         or (envio is not None and envio.fallidos)
+        or (resultado.envio_lluvia is not None and (resultado.envio_lluvia.errores or resultado.envio_lluvia.resumen.fallidos))
     )
     formato = (
         "alertas: evaluation estado=%s zonas_con_suscriptores=%d evaluadas=%d con_tormenta=%d sin_tormenta=%d "
@@ -269,6 +278,10 @@ def _cerrar(resultado: ResultadoEvaluacion) -> ResultadoEvaluacion:
     if envio is not None:
         formato += " " + " ".join(f"{nombre}=%d" for nombre in despacho.CONTADORES_ENVIO)
         argumentos += [getattr(envio, nombre) for nombre in despacho.CONTADORES_ENVIO]
+    if resultado.envio_lluvia is not None:
+        respuesta_lluvia = resultado.envio_lluvia.como_respuesta()
+        formato += " " + " ".join(f"{nombre}=%d" for nombre in despacho_lluvia.CONTADORES_LLUVIA)
+        argumentos += [respuesta_lluvia[nombre] for nombre in despacho_lluvia.CONTADORES_LLUVIA]
     logger.log(logging.WARNING if algo_fallo else logging.INFO, formato, *argumentos)
     return resultado
 
@@ -304,15 +317,16 @@ def _aviso_de(ahora: datetime, ventana: tuple[int, int]) -> tuple[str, date]:
     return (AVISO_MANANA if fecha > ahora.astimezone(_AR).date() else AVISO_HOY), fecha
 
 
-def _lluvia_en_sombra(serie, ahora: datetime) -> bool:  # noqa: ANN001 - the series type is `HourlyForecastExt`
-    """True if the rain rule (shadow mode) finds persistent rain. It must NEVER affect the storm evaluation: its own
-    `try`, so a bug in the shadow rule is logged and counted as "no rain" and the zone keeps its real verdict."""
+def _lluvia_de_la_zona(serie, ahora: datetime) -> ResultadoLluvia | None:  # noqa: ANN001 - the series type is `HourlyForecastExt`
+    """The persistent rain the rule finds in this review, or None if there is none. It must NEVER affect the storm
+    evaluation: its own `try`, so a bug in the rain rule is logged and counted as "no rain" and the zone keeps its real
+    verdict."""
     try:
         lluvia = regla.evaluar_revision_lluvia(serie, ahora)
-        return lluvia is not None and lluvia.hay_lluvia
-    except Exception:  # noqa: BLE001 - shadow mode: nothing here may break the storm alerts
+        return lluvia if lluvia is not None and lluvia.hay_lluvia else None
+    except Exception:  # noqa: BLE001 - the rain rule must not break the storm alerts
         logger.exception("alertas: unexpected error in the rain shadow rule")
-        return False
+        return None
 
 
 async def _evaluar_zona(
@@ -330,7 +344,8 @@ async def _evaluar_zona(
         revision = regla.evaluar_revision(serie, ahora)
         if revision is None:  # cannot happen (the window exists), but never read it as calm
             return veredicto(VEREDICTO_SIN_DATOS)
-        con_lluvia = _lluvia_en_sombra(serie, ahora)  # counted only; it never changes the verdict below
+        lluvia = _lluvia_de_la_zona(serie, ahora)  # it never changes the verdict below
+        con_lluvia = lluvia is not None
         if revision.hay_tormenta:  # positive evidence counts even if some other hour has a hole
             return veredicto(
                 VEREDICTO_CON_TORMENTA,
@@ -339,11 +354,12 @@ async def _evaluar_zona(
                 fecha_objetivo=fecha,
                 ventana=ventana,
                 con_lluvia=con_lluvia,
+                lluvia=lluvia,
             )
         if pronostico.cubre_ventana(serie, ventana):
-            return veredicto(VEREDICTO_SIN_TORMENTA, con_lluvia=con_lluvia)
+            return veredicto(VEREDICTO_SIN_TORMENTA, con_lluvia=con_lluvia, lluvia=lluvia)
         # no storm in the data we have, but the data has holes: not "calm"
-        return veredicto(VEREDICTO_SIN_DATOS, con_lluvia=con_lluvia)
+        return veredicto(VEREDICTO_SIN_DATOS, con_lluvia=con_lluvia, lluvia=lluvia)
     except Exception:  # noqa: BLE001 - one zone failing must not hide the others, and it is NOT "no storm"
         # The traceback says what broke; the zone is not named (a zone with subscribers is not for the logs).
         logger.exception("alertas: unexpected error evaluating a zone")
@@ -351,7 +367,11 @@ async def _evaluar_zona(
 
 
 def _resultado(
-    estado: str, zonas: tuple[ZonaEvaluada, ...], desconocidas: int, envio: ResumenEnvio | None
+    estado: str,
+    zonas: tuple[ZonaEvaluada, ...],
+    desconocidas: int,
+    envio: ResumenEnvio | None,
+    envio_lluvia: EnvioDeLluvia | None = None,
 ) -> ResultadoEvaluacion:
     cuenta = Counter(z.veredicto for z in zonas)
     evaluadas = sum(
@@ -370,6 +390,7 @@ def _resultado(
         desconocidas=desconocidas,
         con_lluvia=sum(1 for z in zonas if z.con_lluvia),
         envio=envio,
+        envio_lluvia=envio_lluvia,
         zonas=zonas,
     )
 
@@ -394,6 +415,16 @@ async def _evaluar_paso(conocida: _ZonaConocida, corrida: _Corrida) -> tuple[Zon
     except TimeoutError:
         return None, despacho.CORTE_PLAZO  # the zone in flight is not known: it stays `diferida`
     return zona, None
+
+
+def _zonas_con_lluvia(hechas: dict[str, ZonaEvaluada]) -> list[ZonaConLluvia]:
+    """The zones of this run to send the rain notice to: persistent rain and NO storm (the storm notice already covers the
+    zone; one whose storm could not be dispatched is an `error` and is left out as well). In the order they were evaluated."""
+    return [
+        ZonaConLluvia(slug=z.slug, resultado=z.lluvia)
+        for z in hechas.values()
+        if z.con_lluvia and z.lluvia is not None and z.veredicto in (VEREDICTO_SIN_TORMENTA, VEREDICTO_SIN_DATOS)
+    ]
 
 
 async def _despachar(
@@ -561,6 +592,18 @@ async def evaluar(
         descartadas = min(await corrida.disyuntor.cerrar_corrida(redis, plazo, detenido), envio.vencidos)
         envio = envio.sumar(ResumenEnvio(vencidos=-descartadas, fallidos=descartadas))
 
+    envio_lluvia: EnvioDeLluvia | None = None
+    if corrida.enviar and settings.alertas_lluvia_activa and corte is None:
+        # The rain notice, after the storm's, sharing the run's breaker but with its own summary. Only zones with rain and NO storm.
+        envio_lluvia = await despacho_lluvia.despachar_lluvia(
+            redis, _zonas_con_lluvia(hechas), vapid=vapid, plazo=plazo, reloj=reloj, aviso=aviso, fecha=fecha,
+            disyuntor=corrida.disyuntor,
+        )
+        # Only an operator stop changes the state of the run (it also stops pruning the empty zones). A rain notice that ran
+        # out of time leaves the state as the storm left it: `lluvia_diferidos` says what is missing.
+        if envio_lluvia.corte in (despacho.CORTE_APAGADO, despacho.CORTE_ILEGIBLE):
+            corte = envio_lluvia.corte
+
     if corrida.enviar and corte not in (despacho.CORTE_APAGADO, despacho.CORTE_ILEGIBLE):
         await despacho.podar_zonas_vacias(redis, [z.zona.slug for z in listadas if z.suscriptores == 0])
 
@@ -571,7 +614,7 @@ async def evaluar(
         + tuple(_sin_evaluar(z, VEREDICTO_SIN_SUSCRIPTORES) for z in listadas if z.suscriptores == 0)
     )
     resumen = envio.sumar(ResumenEnvio(reintentadas=reintentadas)) if corrida.enviar else None
-    return _cerrar(_resultado(_estado_de_corte(corte), zonas, desconocidas, resumen))
+    return _cerrar(_resultado(_estado_de_corte(corte), zonas, desconocidas, resumen, envio_lluvia))
 
 
 # ---------------------------------------------------------------------------

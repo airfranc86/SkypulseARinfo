@@ -44,6 +44,7 @@ from typing import Protocol
 from app.core.upstash import UpstashRedis
 from app.services.alertas import evaluacion
 from app.services.alertas.despacho import CONTADORES_ENVIO, CONTADORES_SMN
+from app.services.alertas.despacho_lluvia import CONTADORES_LLUVIA
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,9 @@ ESTADO_DESCONOCIDO = "desconocido"
 # Open-Meteo 429s; the rest stay in the log line only. The SMN response has no field with these names (its own are
 # `smn_sin_datos`, `smn_errores`), so the one set serves both kinds of run.
 _CONTADORES_ZONA_PERSISTIDOS = ("sin_datos", "errores", "diferidas")
-_CONTADORES_PERSISTIDOS = frozenset(CONTADORES_ENVIO) | frozenset(CONTADORES_SMN) | frozenset(_CONTADORES_ZONA_PERSISTIDOS)
+_CONTADORES_PERSISTIDOS = (
+    frozenset(CONTADORES_ENVIO) | frozenset(CONTADORES_SMN) | frozenset(_CONTADORES_ZONA_PERSISTIDOS) | frozenset(CONTADORES_LLUVIA)
+)
 _MAX_LECTURAS_SIMULTANEAS = 10  # the fan-out of a range read is bounded, like the SCARDs of the evaluation
 
 _AR = timezone(timedelta(hours=-3))  # Argentina has no DST; the same offset `regla.py` uses

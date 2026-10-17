@@ -77,6 +77,7 @@ MAX_PAYLOAD_BYTES = 4096 - 86 - 1 - 16
 # Tags de la notificación: una nueva con el mismo tag reemplaza a la anterior en vez de apilarse.
 TAG_ALERTA = "skypulse-alerta"
 TAG_PRUEBA = "skypulse-prueba"
+TAG_LLUVIA = "skypulse-lluvia"  # el aviso de lluvia persistente nunca reemplaza al de tormenta, ni al revés
 TAG_SMN = "skypulse-smn"  # un aviso oficial del SMN (FRA-359) nunca reemplaza al del pronóstico propio, ni al revés
 
 VENTANA_PRUEBA_SEGUNDOS = 60  # una prueba por suscripción por minuto
@@ -201,6 +202,24 @@ def tag_de(zona: str, fecha: date) -> str:
     """El `tag` de la notificación de una ciudad y un día: un aviso repetido por accidente REEMPLAZA al anterior en el
     dispositivo (mismo tag) en vez de apilarse. Es el par de `topic_de`, que hace lo mismo en el servicio push."""
     return f"{TAG_ALERTA}-{zona}-{fecha:%Y-%m-%d}"
+
+
+def topic_lluvia(zona: str, fecha: date) -> str:
+    """El `Topic` RFC 8030 del aviso de LLUVIA de una ciudad y un día: 32 caracteres base64url de un SHA-256 de (zona, fecha).
+
+    El prefijo `lluvia:` lo separa del Topic de tormenta (`zona:fecha`) y del del SMN (`smn:...`): un aviso de lluvia no
+    reemplaza al de tormenta. Como el de tormenta, NO lleva el nivel del aviso (hoy / mañana): la lluvia avisada a las 21 h
+    para el día D y la avisada a las 7 h del día D son la misma fecha, y la segunda reemplaza a la primera en el servicio
+    push y en el dispositivo (un celular apagado de noche no recibe las dos apiladas).
+    """
+    digest = hashlib.sha256(f"lluvia:{zona}:{fecha:%Y-%m-%d}".encode()).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")[:_LARGO_TOPIC]
+
+
+def tag_lluvia(zona: str, fecha: date) -> str:
+    """El `tag` del aviso de lluvia: el par de `topic_lluvia` en el dispositivo (un aviso de lluvia de la misma ciudad y día
+    lo reemplaza; el de tormenta queda al lado)."""
+    return f"{TAG_LLUVIA}-{zona}-{fecha:%Y-%m-%d}"
 
 
 def _preimagen_smn(clave: ClaveDedupe) -> bytes:

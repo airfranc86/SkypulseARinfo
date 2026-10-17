@@ -158,6 +158,10 @@ class Settings(BaseSettings):
     # Evaluación en seco (FRA-355, PR5b): con `true` el endpoint evalúa las zonas y CUENTA, pero no manda nada
     # (mandar lo decide solo `alertas_envio_activo`). Apagada por defecto. La clave `alertas:apagado` también la detiene.
     alertas_evaluar_en_seco: bool = False
+    # Envio del aviso de LLUVIA persistente (opt-in, lluvia PR 3a): nace APAGADO. Solo cuenta en una corrida que ya manda
+    # (`alertas_envio_activo` y la clave `alertas:apagado` siguen mandando) y solo a quien pidio la lluvia. Apagado, la
+    # lluvia sigue solo contandose en el log (modo sombra) y el camino de la corrida es identico al de antes.
+    alertas_lluvia_activa: bool = False
     # Tope de zonas que consulta cada corrida (una consulta a Open-Meteo por zona); las que sobran quedan
     # `diferidas` (primero van las zonas con más suscriptores). El valor por defecto es el catálogo entero (50
     # ciudades) y no puede pasarlo. El presupuesto de Open-Meteo del trabajo (`job:alertas`) nunca es menor que
