@@ -18,8 +18,9 @@ De dónde sale cada número, para que coincida con lo que el usuario ve en la p�
 - `avisos`: el feed del SMN en memoria; `None` = no verificado ("no sé"), `()` = verificado y sin avisos.
 
 `generado_en` es la hora de pedido más vieja de los datos usados, así la hoja puede decir "el pronóstico es de hace N h".
-Una serie sin fecha de pedido no se usa: sin saber cuán vieja es no se puede avisar. Las herramientas, la niebla, el METAR,
-el TAF y el glosario llegan en el PR siguiente; mientras tanto esos bloques quedan sin dato.
+Una serie sin fecha de pedido no se usa: sin saber cuán vieja es no se puede avisar. Las herramientas, la niebla, el METAR
+y el TAF llegan en los PR siguientes; mientras tanto esos bloques quedan sin dato.
+- `glosario`: el dato estático de `glosario.py` (no mira ninguna caché ni hace red); la hoja filtra por los términos pedidos.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ from datetime import datetime
 from typing import Any
 
 from app.schemas.smn_alertas import SmnAlerta
+from app.services.asistente.glosario import GLOSARIO
 from app.services.asistente.hoja_datos import Fuentes
 from app.services.calculators import SnowLevelResult, compute_cota_de_nieve
 from app.services.hourly_slots import current_temp_850, upcoming_slots
@@ -123,6 +125,8 @@ class FuentesDeCache:
             campos["cota_nieve"] = _cota_de_nieve(ahora, serie, ahora_utc)
         if "avisos" in pedidos:
             campos["avisos"] = _avisos(lat, lon, ahora_utc)
+        if "glosario" in pedidos:
+            campos["glosario"] = GLOSARIO  # dato estático: la hoja se queda con los términos de la pregunta
 
         # La edad del pronóstico: la del dato más viejo de los que se usaron (la serie y/o lo actual).
         usados = [serie.fetched_at if serie is not None else None, actual.fetched_at if actual is not None else None]
