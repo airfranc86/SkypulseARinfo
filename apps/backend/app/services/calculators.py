@@ -539,7 +539,7 @@ def score_hacer_deporte(
         score += 25
         factors.append("sin lluvia")
     elif precip is not None and precip > 0:
-        # `precip` es el acumulado de las próximas 12 h (_SPORT_OUTLOOK_HOURS en routers/tools.py).
+        # `precip` es el acumulado de las próximas 12 h (_SPORT_OUTLOOK_HOURS en services/herramientas.py).
         penalties.append(f"Lluvia prevista: {_format_mm(precip)} en 12 h")
 
     if wind_speed_kmh is not None and wind_speed_kmh < 20:
