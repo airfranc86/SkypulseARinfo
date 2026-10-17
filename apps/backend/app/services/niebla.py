@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
+from app.core.config import settings
 from app.schemas.niebla import NieblaResponse, VisibilityHourlySlot
 from app.services.openmeteo import FogInferenceSlot, VisibilityData
 from app.services.reportes_aeronauticos.metar import MetarVisibility
@@ -32,6 +34,26 @@ def _slot(hour_label: str, visibility_m: float | None) -> VisibilityHourlySlot:
     return VisibilityHourlySlot(
         hour_label=hour_label, visibility_m=visibility_m, fog_level=level, fog_label=label, fog_color=color,
     )
+
+
+def crudo_vigente(crudo: dict | None, ar_now: datetime) -> dict | None:
+    """El JSON crudo de la niebla de Open-Meteo, solo si su "ahora" (`current.time`) no es más viejo que un METAR utilizable.
+
+    La página siempre pide un dato fresco, pero el asistente lee lo que haya en caché, que puede ser una copia de hace horas:
+    esa no dice cómo está la visibilidad AHORA. El límite es `settings.metar_max_age_minutes`, el mismo que descarta un METAR
+    viejo. `ar_now` es la hora argentina; el JSON trae horas locales sin zona. Sin `current.time` legible no se usa.
+    """
+    if not isinstance(crudo, dict):
+        return None
+    actual = crudo.get("current")
+    marca = actual.get("time") if isinstance(actual, dict) else None
+    try:
+        observado = datetime.fromisoformat(marca).replace(tzinfo=ar_now.tzinfo)
+    except (TypeError, ValueError):
+        return None
+    if ar_now - observado > timedelta(minutes=settings.metar_max_age_minutes):
+        return None
+    return crudo
 
 
 def armar_niebla(

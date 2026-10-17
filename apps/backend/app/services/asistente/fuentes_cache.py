@@ -24,28 +24,37 @@ los PR siguientes; mientras tanto esos bloques quedan sin dato.
   sobre la serie best_match de 7 días SIN la mezcla con ECMWF, que es la que piden esas páginas (`herramientas_de_mora.py`); una
   serie que ya terminó, sin fecha de pedido o que no tiene el día de hoy deja esa herramienta sin dato.
 - `glosario`: el dato estático de `glosario.py` (no mira ninguna caché ni hace red); la hoja filtra por los términos pedidos.
+- `niebla`: las mismas fuentes y reglas que la página de Niebla (`services/niebla.py`) leídas de la caché: el METAR del aeropuerto
+  más cercano (a menos de 20 km y de menos de 90 min), su TAF y el JSON de Open-Meteo de la niebla, este último solo si su "ahora"
+  no es más viejo que un METAR utilizable. Sin visibilidad actual de ninguna, queda sin dato.
 """
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.schemas.niebla import NieblaResponse
 from app.schemas.smn_alertas import SmnAlerta
 from app.services.asistente.glosario import GLOSARIO
 from app.services.asistente.herramientas_de_mora import BLOQUES_DE_HERRAMIENTA, armar_herramientas
 from app.services.asistente.hoja_datos import Fuentes
 from app.services.calculators import SnowLevelResult, compute_cota_de_nieve
 from app.services.hourly_slots import current_temp_850, upcoming_slots
+from app.services.niebla import armar_niebla, crudo_vigente
 from app.services.openmeteo import (
     HourlyForecastExt,
     OpenMeteoCurrent,
     merge_hourly_ecmwf,
     oldest_forecast_fetched_at,
+    parse_fog_inference,
+    parse_visibility_forecast,
     peek_current,
     peek_hourly_forecast_ecmwf,
     peek_hourly_forecast_ext,
+    peek_niebla,
 )
+from app.services.reportes_aeronauticos import peek_nearest_metar_visibility, peek_nearest_taf_hourly
 from app.services.smn_alertas import peek_smn_alertas
 from app.services.tools_builder import NowConditions, conditions_now, daily_aggregates
 
@@ -54,6 +63,8 @@ logger = logging.getLogger(__name__)
 _BLOQUES_DE_LA_SERIE = frozenset({"horas", "dias", "cota_nieve"})
 _BLOQUES_DE_AHORA = frozenset({"ahora", "cota_nieve"})
 _BLOQUES_DE_HERRAMIENTA = frozenset(BLOQUES_DE_HERRAMIENTA)
+_AR = timezone(timedelta(hours=-3))  # Argentina no tiene horario de verano; el mismo huso que usa `regla.py`
+_HORAS_DE_NIEBLA = 12  # las próximas 12 horas, como la página
 _FRANJAS = 4  # lo que la hoja muestra: las próximas cuatro franjas de 3 h
 _DIAS = 3  # hoy, mañana y uno más: entre las 00:00 y las 03:00 la copia en caché puede arrancar ayer
 
@@ -102,6 +113,19 @@ def _cota_de_nieve(
     )
 
 
+def _niebla(lat: float, lon: float, ahora_utc: datetime) -> NieblaResponse | None:
+    """La respuesta de la página de Niebla con lo que haya en caché; `None` si no hay visibilidad actual de ninguna fuente."""
+    ar_now = ahora_utc.astimezone(_AR)
+    metar = peek_nearest_metar_visibility(lat, lon, now=ahora_utc)
+    crudo = crudo_vigente(peek_niebla(lat, lon), ar_now)
+    return armar_niebla(
+        metar,
+        parse_visibility_forecast(crudo, ar_now),
+        peek_nearest_taf_hourly(lat, lon, hours=_HORAS_DE_NIEBLA, now=ahora_utc),
+        parse_fog_inference(crudo, _HORAS_DE_NIEBLA, ar_now),
+    )
+
+
 def _avisos(lat: float, lon: float, ahora_utc: datetime) -> tuple[SmnAlerta, ...] | None:
     """Los avisos de ese punto, o `None` si el feed no está verificado ("no sé"; una tupla vacía es "no hay")."""
     respuesta = peek_smn_alertas(lat, lon, now=ahora_utc)
@@ -135,6 +159,8 @@ class FuentesDeCache:
         herramientas_armadas = armar_herramientas(serie_herramientas, ahora_utc, pedidos)
         if herramientas_armadas:
             campos["herramientas"] = herramientas_armadas
+        if "niebla" in pedidos:
+            campos["niebla"] = _niebla(lat, lon, ahora_utc)
         if "glosario" in pedidos:
             campos["glosario"] = GLOSARIO  # dato estático: la hoja se queda con los términos de la pregunta
 

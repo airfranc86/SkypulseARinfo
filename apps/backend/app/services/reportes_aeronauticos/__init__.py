@@ -34,6 +34,7 @@ from app.services.reportes_aeronauticos.metar import (
     MetarVisibility,
     get_metar_visibility,
     get_nearest_metar_visibility,
+    peek_nearest_metar_visibility,
 )
 from app.services.reportes_aeronauticos.taf import (
     TafFetchError,
@@ -42,6 +43,8 @@ from app.services.reportes_aeronauticos.taf import (
     fetch_taf_entry,
     get_nearest_taf_hourly,
     get_taf_for_icao,
+    peek_nearest_taf_hourly,
+    taf_hourly_from_fcsts,
     taf_hourly_slots,
 )
 from app.services.taf_decoded import normalize_taf
@@ -66,7 +69,10 @@ __all__ = [
     "nearest_airport_with_distance",
     "normalize_icao",
     "normalize_taf",
+    "peek_nearest_metar_visibility",
+    "peek_nearest_taf_hourly",
     "set_source",
+    "taf_hourly_from_fcsts",
     "taf_hourly_slots",
 ]
 

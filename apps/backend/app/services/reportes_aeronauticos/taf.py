@@ -240,7 +240,17 @@ async def get_nearest_taf_hourly(
     Returns None if the TAF is not available or has no visibility data.
     """
     airport = nearest_airport(lat, lon)
-    fcsts = await get_taf_for_icao(airport.icao)
+    return taf_hourly_from_fcsts(await get_taf_for_icao(airport.icao), airport.icao, hours, now)
+
+
+def taf_hourly_from_fcsts(
+    fcsts: list[dict] | None, icao: str, hours: int = 12, now: datetime | None = None,
+) -> list[TafHourlySlot] | None:
+    """The hourly visibility of `get_nearest_taf_hourly` from forecast periods already in hand (no network).
+
+    `now` (any time zone) replaces the wall clock. Returns None without periods or without any visibility.
+    Shared by the network read and by `peek_nearest_taf_hourly`.
+    """
     if not fcsts:
         return None
 
@@ -255,8 +265,22 @@ async def get_nearest_taf_hourly(
     if all(s.visibility_m is None for s in slots):
         logger.info(
             "TAF %s: no visibility data across %d slots — returning None",
-            airport.icao, hours,
+            icao, hours,
         )
         return None
 
     return slots
+
+
+def peek_nearest_taf_hourly(
+    lat: float, lon: float, hours: int = 12, now: datetime | None = None,
+) -> list[TafHourlySlot] | None:
+    """`get_nearest_taf_hourly` reading ONLY the TAF cache: no request to AWC, no waiting for one in flight.
+
+    The last good copy counts (it carries its own validity) unless AWC just said the station has no TAF. Used by the assistant.
+    """
+    code = _station_key(nearest_airport(lat, lon).icao)
+    if code in _no_taf_cache:
+        return None
+    entry = _taf_cache.peek(code)
+    return taf_hourly_from_fcsts(entry["fcsts"] if entry else None, code, hours, now)
