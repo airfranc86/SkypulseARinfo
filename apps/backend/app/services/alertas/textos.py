@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from app.services.alertas import umbrales
-from app.services.alertas.regla import ResultadoRegla
+from app.services.alertas.regla import ResultadoLluvia, ResultadoRegla
 from app.services.alertas.zonas import Zona
 
 # Hora de Argentina (sin horario de verano), la misma que usa `regla.py` para sus ventanas.
@@ -72,6 +72,18 @@ def franjas_granizo(resultado: ResultadoRegla) -> tuple[str, ...]:
     )
 
 
+def franjas_de_lluvia(resultado: ResultadoLluvia, fecha: date) -> tuple[str, ...]:
+    """Las franjas del día `fecha` (hora de Argentina) que cubren las ventanas de lluvia, sin repetir y de la más temprana a
+    la más tardía. Una ventana puede terminar después de la medianoche: solo cuentan las horas del día del aviso."""
+    presentes: set[str] = set()
+    for ventana in resultado.ventanas:
+        for instante in range(ventana.inicio, ventana.fin, 3600):
+            local = datetime.fromtimestamp(instante, _AR)
+            if local.date() == fecha:
+                presentes.add(franja(local.hour))
+    return tuple(f for f in FRANJAS if f in presentes)
+
+
 def _frase(franjas: Sequence[str]) -> str:
     """Une las franjas en orden del día con su rango: «a la tarde (12 a 18 h) y a la noche (18 a 24 h)»."""
     if not franjas:
@@ -120,6 +132,20 @@ def texto_aviso_hoy(
 ) -> Mensaje:
     """El aviso de una revisión del día: posibles tormentas HOY en las franjas que quedan, y granizo si lo marca."""
     return Mensaje(titulo=_titulo(zona), cuerpo=_cuerpo("hoy", franjas, granizo))
+
+
+def _cuerpo_lluvia(dia: str, franjas: Sequence[str]) -> str:
+    return f"Posible lluvia persistente {dia} {_frase(franjas)}. {LEYENDA}"
+
+
+def texto_lluvia_hoy(zona: Zona, franjas: Sequence[str]) -> Mensaje:
+    """El aviso de lluvia persistente de una revisión del día: HOY en las franjas que quedan (BORRADOR a aprobar)."""
+    return Mensaje(titulo=_titulo(zona), cuerpo=_cuerpo_lluvia("hoy", franjas))
+
+
+def texto_lluvia_manana(zona: Zona, franjas: Sequence[str]) -> Mensaje:
+    """El aviso de lluvia persistente de la noche (21 h): MAÑANA en esas franjas (BORRADOR a aprobar)."""
+    return Mensaje(titulo=_titulo(zona), cuerpo=_cuerpo_lluvia("mañana", franjas))
 
 
 def texto_prueba(zona: Zona) -> Mensaje:

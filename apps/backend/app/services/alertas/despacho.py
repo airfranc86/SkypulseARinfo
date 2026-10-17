@@ -55,6 +55,10 @@ with a text already built and carries an `AvisoSmn` (its own push Topic, its own
 its own expiry, and when the notice expires). Everything else (batches, cuts, retries, the breaker, the stale members)
 is shared; a plan without one is the forecast notice, exactly as before.
 
+The persistent-RAIN notice (opt-in, `despacho_lluvia`) uses the same door: it carries an `AvisoSmn` for its own Topic and
+done-set, and `PlanDeZona.lluvia` makes the sender RE-READ every record before sending (`solo_lluvia`): the id must still
+ask for rain and belong to the zone, because the index `alertas:zona:{slug}:lluvia` is only an index.
+
 Nothing sensitive leaves this module: no id, endpoint, text, key or zone goes into a log line or into the counters.
 `Plazo` reads the event loop's monotonic clock, not the wall clock.
 """
@@ -234,8 +238,11 @@ class PlanDeZona:
     miembros: int = 0
     pendientes: tuple[str, ...] = ()
     error: bool = False
-    # Set only for an official SMN notice (`AVISO_SMN`). None = the forecast notice of `aviso` and `fecha`, as always.
+    # Set only for an official SMN notice (`AVISO_SMN`) or a rain notice. None = the forecast notice of `aviso` and
+    # `fecha`, as always.
     smn: AvisoSmn | None = None
+    # True for a rain notice: every record is re-read and must still ask for rain (see the module docstring).
+    lluvia: bool = False
 
 
 def _monotonico() -> float:
@@ -500,12 +507,19 @@ async def _sacar_de_la_zona(redis: UpstashRedis, sub_id: str, slug: str) -> None
         logger.warning("alertas: a stale member could not be taken out of a zone's set")
 
 
+async def _sacar_del_indice_de_lluvia(redis: UpstashRedis, sub_id: str, slug: str) -> None:
+    try:
+        await redis.srem(svc.clave_de_zona_lluvia(slug), sub_id)
+    except UpstashUnavailableError:
+        logger.warning("alertas: a stale member could not be taken out of a zone's rain index")
+
+
 async def _enviar_uno(
     redis: UpstashRedis, vapid: ClaveVapid, plazo: Plazo, sub_id: str, payload: str, slug: str, fecha: date, ttl: int,
-    topic: str | None = None,
+    topic: str | None = None, solo_lluvia: bool = False,
 ) -> tuple[str, str | None]:
     """First attempt for one id: read and judge the record, then send. Returns an outcome and, for a transient failure,
-    the record to retry with."""
+    the record to retry with. With `solo_lluvia` (a rain notice) the record must still ask for rain."""
     try:
         registro = await svc.registro_de(redis, sub_id)
     except (UpstashUnavailableError, svc.SuscripcionInvalida):
@@ -518,6 +532,9 @@ async def _enviar_uno(
         return _INVALIDO, None
     if suscripcion.zona != slug:  # a stale member: the person moved to another city
         await _sacar_de_la_zona(redis, sub_id, slug)
+        return _OMITIDO, None
+    if solo_lluvia and not svc.lluvia_guardada(registro):  # a stale rain index: the person no longer asks for rain
+        await _sacar_del_indice_de_lluvia(redis, sub_id, slug)
         return _OMITIDO, None
     return await _intento(redis, vapid, sub_id, registro, payload, slug, fecha, ttl, topic)
 
@@ -605,7 +622,7 @@ class _ResultadoDeZona:
 async def _enviar_a_todos(
     redis: UpstashRedis, vapid: ClaveVapid, plazo: Plazo, ids: Sequence[str], payload: str, slug: str, fecha: date,
     ttl: int, disyuntor: DisyuntorDeBajas, clave: str, ttl_enviados: int = ENVIADOS_TTL_SEGUNDOS,
-    topic: str | None = None,
+    topic: str | None = None, solo_lluvia: bool = False,
 ) -> _ResultadoDeZona:
     """Batches of `ENVIOS_POR_LOTE`. Before EACH batch (the first too) the zone cap, the deadline and the send switch are
     checked; after each, the ids reached are recorded (in the done-set `clave`, whose expiry `ttl_enviados` is set
@@ -620,7 +637,7 @@ async def _enviar_a_todos(
             sin_probar = sum(len(resto) for resto in lotes[n:])
             return _ResultadoDeZona(resumen.sumar(ResumenEnvio(fallidos=len(pendientes), diferidos=sin_probar)), corte)
         resultados = await asyncio.gather(
-            *(_enviar_uno(redis, vapid, plazo, i, payload, slug, fecha, ttl, topic) for i in lote),
+            *(_enviar_uno(redis, vapid, plazo, i, payload, slug, fecha, ttl, topic, solo_lluvia) for i in lote),
             return_exceptions=True,
         )
         contado = _contar_lote(lote, resultados, disyuntor, slug)
@@ -655,13 +672,13 @@ async def _enviar_a_todos(
 
 async def leer_plan(
     redis: UpstashRedis, *, slug: str, aviso: str, fecha: date, payload: str, clave_enviados: str,
-    smn: AvisoSmn | None = None,
+    smn: AvisoSmn | None = None, indice: str | None = None,
 ) -> PlanDeZona:
-    """Read what the zone has to send for a notice whose `payload` is already built: the members and the done-set
-    `clave_enviados` (SMEMBERS twice, nothing written). Either read failing is an `error` plan: the zone is not notified
-    (fail-closed)."""
+    """Read what the zone has to send for a notice whose `payload` is already built: the members (the zone's set, or
+    `indice` for a notice that goes to a subset, like the rain index) and the done-set `clave_enviados` (SMEMBERS twice,
+    nothing written). Either read failing is an `error` plan: the zone is not notified (fail-closed)."""
     try:
-        miembros = await redis.smembers(svc.clave_de_zona(slug))
+        miembros = await redis.smembers(indice or svc.clave_de_zona(slug))
     except UpstashUnavailableError:
         logger.warning("alertas: Upstash did not answer reading the recipients; the zone is not notified")
         return PlanDeZona(slug, aviso, fecha, error=True, smn=smn)
@@ -727,7 +744,7 @@ async def despachar_plan(
     ttl, clave, ttl_enviados, topic = _destino(plan, (reloj or _ahora_real)())
     hecho = await _enviar_a_todos(
         redis, vapid, plazo_de_zona, plan.pendientes, plan.payload, plan.slug, plan.fecha, ttl, disyuntor, clave,
-        ttl_enviados, topic,
+        ttl_enviados, topic, plan.lluvia,
     )
     detenido = hecho.corte in (CORTE_APAGADO, CORTE_ILEGIBLE)
     descartadas = await disyuntor.cerrar_zona(redis, plazo, detenido)  # deletions are decided when the zone is closed

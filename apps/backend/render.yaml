@@ -47,3 +47,9 @@ services:
       # la vida del lock).
       - key: ALERTAS_EVALUAR_EN_SECO
         value: "false"
+      # Aviso de LLUVIA persistente (opt-in, lluvia PR 3a): con "true", una corrida que ya manda (ALERTAS_ENVIO_ACTIVO y la
+      # clave `alertas:apagado` ausente) avisa además por lluvia a quien la pidió, después de la tormenta y solo en las
+      # zonas sin tormenta. Nace apagado: con "false" la lluvia solo se cuenta en el log (`con_lluvia`) y la corrida es la
+      # de siempre. Se enciende cambiando el valor en el panel de Render (que es el que vale, ver arriba).
+      - key: ALERTAS_LLUVIA_ACTIVA
+        value: "false"

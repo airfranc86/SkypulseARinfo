@@ -268,7 +268,7 @@ def _zona_guardada(registro: str | None) -> str | None:
     return zona if isinstance(zona, str) else None
 
 
-def _lluvia_guardada(registro: str | None) -> bool:
+def lluvia_guardada(registro: str | None) -> bool:
     """Si el registro guardado tiene la lluvia encendida; cualquier otra cosa (sin registro, ilegible, ausente o mal
     escrita) cuenta como apagada."""
     if registro is None:
@@ -307,7 +307,7 @@ async def alta_detallada(redis: UpstashRedis, suscripcion: Suscripcion) -> Resul
     if previo is None and await redis.scard(CLAVE_IDS) >= TOPE_SUSCRIPCIONES:
         raise TopeAlcanzadoError
 
-    lluvia_previa = _lluvia_guardada(previo)
+    lluvia_previa = lluvia_guardada(previo)
     lluvia = lluvia_previa if suscripcion.lluvia is None else suscripcion.lluvia  # None: no cambiar lo que tenía
     datos = {
         "endpoint": suscripcion.endpoint,

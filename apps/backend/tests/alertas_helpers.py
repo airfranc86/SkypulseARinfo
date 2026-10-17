@@ -406,12 +406,17 @@ def endpoint_de(slug: str, i: int) -> str:
     return f"https://fcm.googleapis.com/fcm/send/SECRETO-ENDPOINT-{slug}-{i:03d}"
 
 
-async def registrar(redis: UpstashRedis, slug: str, cantidad: int = 1) -> list[str]:
-    """Store `cantidad` REAL subscriptions (valid keys, so the real sender can encrypt to them); return their ids."""
+async def registrar(
+    redis: UpstashRedis, slug: str, cantidad: int = 1, *, lluvia: bool | None = None, desde: int = 0
+) -> list[str]:
+    """Store `cantidad` REAL subscriptions (valid keys, so the real sender can encrypt to them); return their ids.
+    `lluvia` is the rain preference of the alta (None = none); `desde` is the first endpoint number (to register a second
+    group of the same zone without repeating the endpoints of the first)."""
     ids: list[str] = []
-    for i in range(cantidad):
+    for i in range(desde, desde + cantidad):
         receptor = nuevo_receptor(endpoint_de(slug, i))
-        ids.append(await svc.alta(redis, svc.Suscripcion(receptor.endpoint, receptor.p256dh, receptor.auth, slug)))
+        suscripcion = svc.Suscripcion(receptor.endpoint, receptor.p256dh, receptor.auth, slug, lluvia)
+        ids.append(await svc.alta(redis, suscripcion))
     return ids
 
 
@@ -508,13 +513,13 @@ class PushFalso:
         return sum(len(v) for k, v in self._fake.sets.items() if k.startswith("alertas:enviado:"))
 
     async def __call__(  # noqa: ANN001
-        self, redis, sub_id, registro, payload, *, zona, fecha, ttl=None, vapid=None, borrar=True
+        self, redis, sub_id, registro, payload, *, zona, fecha, ttl=None, vapid=None, borrar=True, topic=None
     ):
         previas = sum(1 for c in self.llamadas if c.sub_id == sub_id)
         self.llamadas.append(
             SimpleNamespace(
                 sub_id=sub_id, registro=registro, payload=json.loads(payload), zona=zona, fecha=fecha, ttl=ttl,
-                vapid=vapid, borrar=borrar, hechos=self.hechos(),
+                vapid=vapid, borrar=borrar, hechos=self.hechos(), topic=topic,
             )
         )
         if self.al_llamar:
