@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.services.reportes_aeronauticos.aeropuertos import nearest_airport_with_distance
-from app.services.reportes_aeronauticos.awc_metar import fetch_metar_entries, latest_valid_entry
+from app.services.reportes_aeronauticos.awc_metar import fetch_metar_entries, latest_valid_entry, metar_entries_cache
 from app.services.visibilidad import awc_visibility_m
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,14 @@ async def _get_metar_reading(icao: str, now: datetime) -> _MetarReading | None:
       `settings.metar_max_age_minutes`. The age is checked on every read, also when the list is cached.
     - Visibility is capped at 10 km (consistent with the rest of the system).
     """
-    entries = await fetch_metar_entries(icao)
+    return _reading_from_entries(await fetch_metar_entries(icao), icao, now)
+
+
+def _reading_from_entries(entries: tuple[dict, ...] | None, icao: str, now: datetime) -> _MetarReading | None:
+    """The rules of `_get_metar_reading` on a list of reports already in hand (pure: no network, no clock).
+
+    Shared by the network read and by `peek_nearest_metar_visibility`, so the page and the assistant decide the same.
+    """
     if entries is None:
         logger.info("METAR: no data for %s", icao)
         return None
@@ -107,6 +114,10 @@ async def get_nearest_metar_visibility(
     else:
         reading = await _get_metar_reading(airport.icao, now)
 
+    return _metar_visibility(airport, dist_km, reading)
+
+
+def _metar_visibility(airport, dist_km: float, reading: _MetarReading | None) -> MetarVisibility:  # noqa: ANN001
     return MetarVisibility(
         visibility_m=reading.visibility_m if reading else None,
         icao=airport.icao,
@@ -114,3 +125,17 @@ async def get_nearest_metar_visibility(
         distance_km=round(dist_km, 1),
         observed_at=reading.observed_at if reading else None,
     )
+
+
+def peek_nearest_metar_visibility(lat: float, lon: float, now: datetime | None = None) -> MetarVisibility:
+    """`get_nearest_metar_visibility` reading ONLY what is already in the METAR cache: no request to AWC.
+
+    Same rules (distance, age, `visib`) because they are the same function. Without a cached list the visibility is
+    `None` (not "clear"): the station and the distance are reported anyway. Used by the assistant.
+    """
+    now = now or datetime.now(timezone.utc)
+    airport, dist_km = nearest_airport_with_distance(lat, lon)
+    reading: _MetarReading | None = None
+    if dist_km <= settings.metar_max_distance_km:
+        reading = _reading_from_entries(metar_entries_cache.peek(airport.icao.strip().upper()), airport.icao, now)
+    return _metar_visibility(airport, dist_km, reading)
