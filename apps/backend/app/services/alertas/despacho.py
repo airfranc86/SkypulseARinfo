@@ -468,6 +468,9 @@ async def _borrar(redis: UpstashRedis, sub_id: str, slug: str) -> bool:
     record that cannot be read has none, so the id is also taken out of the set it was found in."""
     try:
         await svc.baja(redis, sub_id)
+        # `baja` already cleaned the sets of the zone in the record; this repeats it on the slug it was found in, for a
+        # record that cannot be read (the rain index first, so a failure leaves the id where the next run finds it)
+        await redis.srem(svc.clave_de_zona_lluvia(slug), sub_id)
         await redis.srem(svc.clave_de_zona(slug), sub_id)
     except (UpstashUnavailableError, svc.SuscripcionInvalida):
         logger.warning("alertas: a subscription to remove could not be deleted; it will be tried again")
@@ -491,6 +494,7 @@ async def _sin_registro(redis: UpstashRedis, sub_id: str, slug: str) -> str:
 
 async def _sacar_de_la_zona(redis: UpstashRedis, sub_id: str, slug: str) -> None:
     try:
+        await redis.srem(svc.clave_de_zona_lluvia(slug), sub_id)  # first: a failure leaves the id in the zone's set
         await redis.srem(svc.clave_de_zona(slug), sub_id)
     except UpstashUnavailableError:
         logger.warning("alertas: a stale member could not be taken out of a zone's set")

@@ -10,6 +10,8 @@ cualquier URL, un atacante nos haría pedir recursos internos (p. ej. la metadat
 Datos en Upstash:
     alertas:sub:{id}     JSON de la suscripción, TTL 180 días (se renueva al repetir el POST)
     alertas:zona:{slug}  set de ids suscriptos a esa ciudad
+    alertas:zona:{slug}:lluvia  subconjunto de ese set: los que ademas pidieron el aviso de lluvia (opt-in). Es un
+                         INDICE: la fuente de la verdad es `"lluvia": true` en el registro, y quien lo use lo relee
     alertas:zonas        set de slugs con al menos un suscriptor
     alertas:ids          set de todos los ids (un SCARD alcanza para el tope)
 
@@ -205,20 +207,33 @@ def id_de_endpoint(endpoint: str) -> str:
     return base64.urlsafe_b64encode(digest).decode().rstrip("=")[:LARGO_ID]
 
 
+def validar_lluvia(valor: object) -> bool | None:
+    """`True`, `False` o `None` ("no cambiar lo que ya tenía"); cualquier otra cosa (incluidos 0 y 1) se rechaza."""
+    if valor is not None and not isinstance(valor, bool):
+        raise SuscripcionInvalida("lluvia_invalida")
+    return valor
+
+
 @dataclass(frozen=True)
 class Suscripcion:
-    """Una suscripción ya validada: no se puede construir con datos que `alta` no aceptaría."""
+    """Una suscripción ya validada: no se puede construir con datos que `alta` no aceptaría.
+
+    `lluvia` es el aviso de lluvia (opt-in): `True` / `False` lo fijan; `None` no cambia lo que ya tenía (una
+    suscripción nueva sin preferencia queda con la lluvia apagada).
+    """
 
     endpoint: str
     p256dh: str
     auth: str
     zona: str
+    lluvia: bool | None = None
 
     def __post_init__(self) -> None:
         validar_endpoint(self.endpoint)
         validar_p256dh(self.p256dh)
         validar_auth(self.auth)
         validar_zona(self.zona)
+        validar_lluvia(self.lluvia)
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +251,11 @@ def clave_de_zona(slug: str) -> str:
     return f"alertas:zona:{slug}"
 
 
+def clave_de_zona_lluvia(slug: str) -> str:
+    """La clave del índice de los suscriptos de una ciudad que además pidieron el aviso de lluvia."""
+    return f"alertas:zona:{slug}:lluvia"
+
+
 def _zona_guardada(registro: str | None) -> str | None:
     """La zona del registro guardado; None si no existe o no se puede leer (no es motivo de error)."""
     if registro is None:
@@ -246,6 +266,18 @@ def _zona_guardada(registro: str | None) -> str | None:
         return None
     zona = datos.get("zona") if isinstance(datos, dict) else None
     return zona if isinstance(zona, str) else None
+
+
+def _lluvia_guardada(registro: str | None) -> bool:
+    """Si el registro guardado tiene la lluvia encendida; cualquier otra cosa (sin registro, ilegible, ausente o mal
+    escrita) cuenta como apagada."""
+    if registro is None:
+        return False
+    try:
+        datos = json.loads(registro)
+    except ValueError:
+        return False
+    return isinstance(datos, dict) and datos.get("lluvia") is True
 
 
 @dataclass(frozen=True)
@@ -275,23 +307,35 @@ async def alta_detallada(redis: UpstashRedis, suscripcion: Suscripcion) -> Resul
     if previo is None and await redis.scard(CLAVE_IDS) >= TOPE_SUSCRIPCIONES:
         raise TopeAlcanzadoError
 
-    registro = json.dumps(
-        {
-            "endpoint": suscripcion.endpoint,
-            "p256dh": suscripcion.p256dh,
-            "auth": suscripcion.auth,
-            "zona": suscripcion.zona,
-            "actualizada": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        },
-        separators=(",", ":"),
-    )
+    lluvia_previa = _lluvia_guardada(previo)
+    lluvia = lluvia_previa if suscripcion.lluvia is None else suscripcion.lluvia  # None: no cambiar lo que tenía
+    datos = {
+        "endpoint": suscripcion.endpoint,
+        "p256dh": suscripcion.p256dh,
+        "auth": suscripcion.auth,
+        "zona": suscripcion.zona,
+        "actualizada": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    if lluvia:  # solo cuando la pidió: el registro de quien no la pidió es el de siempre
+        datos["lluvia"] = True
+    registro = json.dumps(datos, separators=(",", ":"))
+    if suscripcion.lluvia is False:
+        # Apagada de forma explicita: se saca del indice ANTES de guardar el registro y siempre (no solo si antes la
+        # tenia). Si el SREM falla, el registro sigue diciendo "true" y el reintento lo arregla; y un indice pegado por
+        # una falla vieja o una carrera se limpia en la proxima renovacion. Sin preferencia no se agrega ningun comando.
+        await redis.srem(clave_de_zona_lluvia(suscripcion.zona), sub_id)
     await redis.set(clave, registro, ex=TTL_SEGUNDOS)
     await redis.sadd(clave_de_zona(suscripcion.zona), sub_id)
     await redis.sadd(CLAVE_ZONAS, suscripcion.zona)
     await redis.sadd(CLAVE_IDS, sub_id)
+    if lluvia:  # despues del registro: si falla, el registro dice "true" y la proxima renovacion completa el indice
+        await redis.sadd(clave_de_zona_lluvia(suscripcion.zona), sub_id)
 
     zona_previa = _zona_guardada(previo)
     if zona_previa is not None and zona_previa != suscripcion.zona:
+        # Del indice viejo primero y siempre (sin mirar lluvia_previa): si falla, el id sigue en el set de la ciudad vieja,
+        # donde el despacho lo encuentra y lo limpia.
+        await redis.srem(clave_de_zona_lluvia(zona_previa), sub_id)
         await redis.srem(clave_de_zona(zona_previa), sub_id)
     return ResultadoAlta(sub_id=sub_id, nueva=previo is None)
 
@@ -311,7 +355,8 @@ async def baja_detallada(redis: UpstashRedis, sub_id: str) -> bool:
     zona = _zona_guardada(await redis.read(clave))
     borradas = await redis.delete(clave)
     await redis.srem(CLAVE_IDS, sub_id)
-    if zona is not None:
+    if zona is not None:  # el indice de lluvia primero: si falla, el id sigue en el set de la zona y se limpia desde alli
+        await redis.srem(clave_de_zona_lluvia(zona), sub_id)
         await redis.srem(clave_de_zona(zona), sub_id)
     return borradas > 0
 
@@ -365,6 +410,7 @@ async def limpiar_id_vencido(
     if await _leer_registro_estricto(redis, sub_id) is not None:
         return False
     await redis.srem(CLAVE_IDS, sub_id)
-    if zona is not None:
+    if zona is not None:  # el indice de lluvia primero: si falla, el id sigue en el set de la zona y se reintenta
+        await redis.srem(clave_de_zona_lluvia(zona), sub_id)
         await redis.srem(clave_de_zona(zona), sub_id)
     return True
