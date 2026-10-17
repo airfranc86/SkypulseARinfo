@@ -24,7 +24,11 @@ from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 from app.schemas.weather import MetarReason
 from app.services.reportes_aeronauticos.aeropuertos import nearest_airport_with_distance
-from app.services.reportes_aeronauticos.awc_metar import fetch_metar_entries, latest_valid_entry
+from app.services.reportes_aeronauticos.awc_metar import (
+    fetch_metar_entries,
+    latest_valid_entry,
+    metar_entries_cache,
+)
 from app.utils.parsing import parse_float
 
 logger = logging.getLogger(__name__)
@@ -101,13 +105,20 @@ def _parse_entry(icao: str, entry: dict, observed_at: datetime) -> MetarObservat
     )
 
 
-async def fetch_latest_observation(icao: str) -> MetarObservation | None:
-    """Latest METAR of `icao` as an observation, from the shared AWC list (cached there). Never raises."""
-    entries = await fetch_metar_entries(icao)
+def observation_from_entries(entries: tuple[dict, ...] | None, icao: str) -> MetarObservation | None:
+    """The latest report of a list already in hand as an observation (pure: no network, no clock).
+
+    Shared by the network read and by `peek_nearest_metar_observation`, so the dashboard and the assistant decide the same.
+    """
     latest = None if entries is None else latest_valid_entry(entries)
     if latest is None:
         return None
     return _parse_entry(icao, latest.entry, latest.observed_at)
+
+
+async def fetch_latest_observation(icao: str) -> MetarObservation | None:
+    """Latest METAR of `icao` as an observation, from the shared AWC list (cached there). Never raises."""
+    return observation_from_entries(await fetch_metar_entries(icao), icao)
 
 
 def classify_observation(
@@ -132,9 +143,14 @@ async def get_nearest_metar_observation(
     airport, distance_km = nearest_airport_with_distance(lat, lon)
     too_far = distance_km > settings.metar_max_distance_km
     observation = None if too_far else await fetch_latest_observation(airport.icao)
-    reason = classify_observation(distance_km, observation, now or datetime.now(timezone.utc))
-    if reason != "metar_ok":
-        logger.info("Dashboard now: METAR %s not used (%s)", airport.icao, reason)
+    selection = _selection(airport, distance_km, observation, now or datetime.now(timezone.utc))
+    if selection.reason != "metar_ok":
+        logger.info("Dashboard now: METAR %s not used (%s)", airport.icao, selection.reason)
+    return selection
+
+
+def _selection(airport, distance_km: float, observation: MetarObservation | None, now: datetime) -> MetarSelection:  # noqa: ANN001
+    reason = classify_observation(distance_km, observation, now)
     return MetarSelection(
         reason=reason,
         icao=airport.icao,
@@ -142,3 +158,14 @@ async def get_nearest_metar_observation(
         distance_km=round(distance_km, 1),
         observation=observation if reason == "metar_ok" else None,
     )
+
+
+def peek_nearest_metar_observation(lat: float, lon: float, now: datetime | None = None) -> MetarSelection:
+    """`get_nearest_metar_observation` reading ONLY the METAR cache: no request to AWC, no waiting for one in flight.
+
+    Same airport and same rules (distance, age, temperature and dew point) because the decision is the same function.
+    The last good copy counts; its age is judged like any other. Used by the assistant.
+    """
+    airport, distance_km = nearest_airport_with_distance(lat, lon)
+    observation = observation_from_entries(metar_entries_cache.peek(airport.icao.strip().upper()), airport.icao)
+    return _selection(airport, distance_km, observation, now or datetime.now(timezone.utc))

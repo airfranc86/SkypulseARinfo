@@ -34,8 +34,8 @@ EXPECTED_PUBLIC_NAMES = {
     "TafFetchError", "TafHourlySlot", "clear_caches", "fetch_taf_entry", "get_metar_visibility",
     "get_nearest_metar_visibility", "get_nearest_taf_hourly", "get_source", "get_taf_for_icao",
     "nearest_airport", "nearest_airport_with_distance", "normalize_icao", "normalize_taf",
-    "peek_nearest_metar_visibility", "peek_nearest_taf_hourly", "set_source", "taf_hourly_from_fcsts",
-    "taf_hourly_slots",
+    "peek_nearest_metar_visibility", "peek_nearest_taf_hourly", "peek_taf_entry", "set_source",
+    "taf_hourly_from_fcsts", "taf_hourly_slots",
 }
 
 AR = timezone(timedelta(hours=-3))

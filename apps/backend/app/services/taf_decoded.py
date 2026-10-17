@@ -234,3 +234,19 @@ def normalize_taf(entry: Any) -> TafDecoded | None:
         periods=periods,
         temperatures=_temperatures(kept),
     )
+
+
+def taf_vigente(taf: TafDecoded | None, now: datetime) -> TafDecoded | None:
+    """El TAF con solo los períodos que todavía no terminaron (`valid_to > now`); None si ya venció o no queda ninguno.
+
+    Función pura que devuelve una copia: el TAF recibido no se modifica. Un TAF cuya vigencia total terminó (o un período que
+    termina justo ahora) ya no dice cómo va a estar el tiempo. Lo usa el asistente; `/api/taf` sigue mostrando todo.
+    """
+    if taf is None:
+        return None
+    if taf.valid_to is not None and taf.valid_to <= now:
+        return None
+    periods = [period for period in taf.periods if period.valid_to > now]
+    if not periods:
+        return None
+    return taf.model_copy(update={"periods": periods})
