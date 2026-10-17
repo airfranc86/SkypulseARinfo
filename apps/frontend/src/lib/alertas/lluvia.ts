@@ -3,13 +3,14 @@ import type { ErrorAvisos } from './suscripcion.ts'
 /**
  * El aviso de lluvia persistente (opt-in), PR 3b: la bandera que lo muestra y qué viaja con el alta.
  *
- * `AVISO_LLUVIA_DISPONIBLE` nace en `false`: con ella apagada la pantalla de avisos, los textos y la política de
- * privacidad son los de siempre y el alta NO manda el campo `lluvia` (para el servidor, "no cambiar lo que ya tenía").
- * Orden para encenderla (PR 3c): (1) los textos de este aviso, aprobados por el dueño; (2) `ALERTAS_LLUVIA_ACTIVA=true`
- * en el servidor (Render); (3) esta constante en `true`, para que aparezca la casilla. Encenderla antes de (2) le
- * mostraría a la gente un aviso que el servidor todavía no manda.
+ * `AVISO_LLUVIA_DISPONIBLE` está en `true` desde el PR 3c: aparece la casilla, los textos y la política cuentan el aviso
+ * y cada alta manda `lluvia` explícito. Con ella en `false` la pantalla, los textos y la política vuelven a ser los de
+ * siempre y el alta NO manda el campo `lluvia` (para el servidor, "no cambiar lo que ya tenía"): sirve para apagar la
+ * casilla sin tocar el servidor. Orden en que se encendió: (1) los textos, aprobados por el dueño; (2)
+ * `ALERTAS_LLUVIA_ACTIVA=true` en el servidor (Render); (3) esta constante. Encenderla antes de (2) habría mostrado un
+ * aviso que el servidor todavía no mandaba.
  */
-export const AVISO_LLUVIA_DISPONIBLE = false
+export const AVISO_LLUVIA_DISPONIBLE = true
 
 /** Cómo va el cambio de la casilla de lluvia con los avisos activos (se reenvía el alta con la preferencia). */
 export type EstadoLluvia =

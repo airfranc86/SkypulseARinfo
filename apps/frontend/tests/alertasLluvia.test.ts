@@ -25,8 +25,8 @@ const codigo = (ruta: string): string => sinComentarios(leer(ruta))
 
 // ── La bandera ───────────────────────────────────────────────────────────────
 
-test('el aviso de lluvia nace oculto: la constante es false hasta que el servidor lo mande', () => {
-  assert.equal(AVISO_LLUVIA_DISPONIBLE, false)
+test('el aviso de lluvia está disponible: la constante es true (el servidor ya lo manda, ALERTAS_LLUVIA_ACTIVA)', () => {
+  assert.equal(AVISO_LLUVIA_DISPONIBLE, true)
 })
 
 test('con la bandera apagada el alta no manda lluvia; con la bandera encendida manda siempre true o false', () => {
@@ -80,11 +80,21 @@ test('solo un true exacto cuenta como lluvia encendida al leer lo guardado', () 
 
 // ── Textos ───────────────────────────────────────────────────────────────────
 
-test('con la bandera apagada los textos publicados son los de siempre', () => {
-  assert.deepEqual(COPY, copyDe(true, false))
-  assert.equal(COPY.lluviaDisponible, false)
-  assert.match(COPY.intro, /Solo avisa por tormentas, no por lluvia ni llovizna/)
-  assert.deepEqual(SECCIONES_PRIVACIDAD, seccionesPrivacidad(true, false))
+test('lo que se publica sigue a la bandera: con ella encendida es el texto con la lluvia', () => {
+  assert.deepEqual(COPY, copyDe(true, AVISO_LLUVIA_DISPONIBLE))
+  assert.equal(COPY.lluviaDisponible, true)
+  assert.match(COPY.intro, /lluvia persistente/)
+  assert.deepEqual(SECCIONES_PRIVACIDAD, seccionesPrivacidad(true, AVISO_LLUVIA_DISPONIBLE))
+})
+
+test('con la bandera apagada los textos son los de siempre y no hay casilla (se puede volver a apagar cambiando solo la constante)', () => {
+  const apagada = copyDe(true, false)
+  assert.equal(apagada.lluviaDisponible, false)
+  assert.match(apagada.intro, /Solo avisa por tormentas, no por lluvia ni llovizna/)
+  const texto = seccionesPrivacidad(true, false)
+    .flatMap((s) => s.parrafos)
+    .join('\n')
+  assert.doesNotMatch(texto, /lluvia persistente/)
 })
 
 test('con la bandera encendida la introducción dice que la lluvia es aparte y cuál', () => {
