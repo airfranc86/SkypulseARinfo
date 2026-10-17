@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef } from 'react'
 import type { AvisosPush } from '@/hooks/useAvisosPush'
 import { zonaPorSlug } from '@/lib/alertas/zonaSugerida'
+import { COPY } from '@/lib/alertas/copy'
 import { AccionesAvisos } from './AccionesAvisos'
+import { CasillaLluvia } from './CasillaLluvia'
 import { ConsentimientoAvisos } from './ConsentimientoAvisos'
 import { RegionEstado } from './RegionEstado'
 import { SelectorZona } from './SelectorZona'
@@ -43,6 +45,14 @@ export function ControlesAvisos({ avisos, nombreSugerida }: ControlesAvisosProps
           <SelectorZona valor={avisos.zonaElegida} onCambio={avisos.setZona} nombreSugerida={nombreSugerida} />
           <ConsentimientoAvisos marcado={avisos.consentimiento} onCambio={avisos.setConsentimiento} />
         </>
+      )}
+      {COPY.lluviaDisponible && (
+        <CasillaLluvia
+          marcada={avisos.lluvia}
+          estado={avisos.estadoLluvia}
+          onCambio={(valor) => (activo ? void avisos.cambiarLluvia(valor) : avisos.setLluvia(valor))}
+          conEnlacePrivacidad={activo}
+        />
       )}
       <AccionesAvisos
         estado={estado}

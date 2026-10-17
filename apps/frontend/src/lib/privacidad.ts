@@ -12,6 +12,7 @@
  */
 
 import { ENVIO_AUTOMATICO_ACTIVO } from './alertas/copy.ts'
+import { AVISO_LLUVIA_DISPONIBLE } from './alertas/lluvia.ts'
 
 export interface SeccionPrivacidad {
   titulo: string
@@ -88,9 +89,12 @@ export function leerContactoPrivacidad(env: Record<string, unknown> | undefined)
  * El párrafo de para qué se usan los datos de los avisos. Con el envío automático activo es el texto original;
  * sin él, dice lo verdadero hoy: el único aviso que se envía es el de prueba que la persona pide.
  */
-function parrafoDeUso(envioAutomatico: boolean): string {
+function parrafoDeUso(envioAutomatico: boolean, lluvia: boolean): string {
+  const adicional = lluvia
+    ? ' Si además pedís el aviso de lluvia persistente, los usamos también para avisarte cuando se espera lluvia durante varias horas seguidas, con los mismos horarios.'
+    : ''
   return envioAutomatico
-    ? 'Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día (desde las 5 h), si aparece una tormenta nueva; nunca entre las 22 y las 5. También para la notificación de prueba cuando la pedís. No los usamos para nada más ni los compartimos.'
+    ? `Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día (desde las 5 h), si aparece una tormenta nueva; nunca entre las 22 y las 5.${adicional} También para la notificación de prueba cuando la pedís. No los usamos para nada más ni los compartimos.`
     : 'Hoy usamos esos datos solo para mandarte el aviso de prueba cuando lo pedís: es el único aviso que se envía. Los avisos automáticos de tormenta todavía no están activos. Si se activan, vamos a actualizar esta política y a pedirte de nuevo tu consentimiento. No los usamos para nada más ni los compartimos.'
 }
 
@@ -100,7 +104,10 @@ function parrafoDeUso(envioAutomatico: boolean): string {
  */
 export function seccionesPrivacidad(
   envioAutomatico: boolean = ENVIO_AUTOMATICO_ACTIVO,
+  lluvia: boolean = AVISO_LLUVIA_DISPONIBLE,
 ): readonly SeccionPrivacidad[] {
+  // El aviso de lluvia solo existe con el envío automático (y con su bandera encendida, PR 3b).
+  const conLluvia = envioAutomatico && lluvia
   return Object.freeze([
     {
       titulo: 'Qué datos recolectamos',
@@ -121,8 +128,8 @@ export function seccionesPrivacidad(
       titulo: 'Avisos en el celular (opcional)',
       contacto: true,
       parrafos: [
-        'Si activás los avisos de tormenta en el celular, SkyPulse guarda: la dirección técnica de entrega que genera tu navegador para recibir notificaciones, dos claves de cifrado de esa suscripción, la ciudad que elegiste y la fecha de la última renovación. No guardamos tu nombre, email, teléfono ni tu ubicación exacta. La suscripción no incluye tu IP; igual que en cualquier otro pedido, la IP puede quedar en los registros de acceso descriptos arriba.',
-        parrafoDeUso(envioAutomatico),
+        'Si activás los avisos de tormenta en el celular, SkyPulse guarda: la dirección técnica de entrega que genera tu navegador para recibir notificaciones, dos claves de cifrado de esa suscripción, la ciudad que elegiste' + (conLluvia ? ', si pediste el aviso de lluvia persistente' : '') + ' y la fecha de la última renovación. No guardamos tu nombre, email, teléfono ni tu ubicación exacta. La suscripción no incluye tu IP; igual que en cualquier otro pedido, la IP puede quedar en los registros de acceso descriptos arriba.',
+        parrafoDeUso(envioAutomatico, conLluvia),
         'Cada aviso viaja cifrado a través del servicio de notificaciones de tu navegador (Google, Mozilla, Apple o Microsoft, según cuál uses), que recibe la dirección técnica de entrega y el momento en que llega el aviso. Es un pronóstico de SkyPulse, no un aviso oficial del SMN.',
         'Los datos se guardan en una base de datos de Upstash ubicada en Estados Unidos (Virginia). Se borran cuando desactivás los avisos, automáticamente a los 180 días sin abrir SkyPulse (la fecha se renueva cada vez que abrís la web con los avisos activados) y cuando el servicio de notificaciones informa que esa suscripción dejó de existir.',
         'Podés darte de baja cuando quieras: entrá a /alertas y tocá «Desactivar avisos». Eso borra tu suscripción de nuestra base. Bloquear las notificaciones desde los ajustes del navegador corta los avisos, pero no borra lo que ya guardamos: para eso tenés que desactivarlos desde esa página.',
