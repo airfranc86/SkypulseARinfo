@@ -157,9 +157,10 @@ async def test_pedir_solo_avisos_no_mira_las_series(sin_red, monkeypatch):
 
 async def test_los_bloques_que_este_armador_no_conoce_quedan_sin_dato(sin_red):
     await _sembrar(_serie())
-    f = await _obtener(["niebla", "metar", "taf", "herramienta:tender"])
+    f = await _obtener(["niebla", "metar", "taf"])
     assert (f.niebla, f.metar, f.taf) == (None, None, None) and not f.herramientas
     assert not f.glosario  # el glosario solo se carga si se pide (2d-4: ver test_glosario.py)
+    # Las herramientas tampoco se cargan sin que se pidan (2d-2: ver test_fuentes_herramientas.py).
 
 
 # --- La cota de nieve -----------------------------------------------------------------------------------------------------

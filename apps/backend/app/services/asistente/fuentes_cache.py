@@ -18,8 +18,11 @@ De dónde sale cada número, para que coincida con lo que el usuario ve en la p�
 - `avisos`: el feed del SMN en memoria; `None` = no verificado ("no sé"), `()` = verificado y sin avisos.
 
 `generado_en` es la hora de pedido más vieja de los datos usados, así la hoja puede decir "el pronóstico es de hace N h".
-Una serie sin fecha de pedido no se usa: sin saber cuán vieja es no se puede avisar. Las herramientas, la niebla, el METAR
-y el TAF llegan en los PR siguientes; mientras tanto esos bloques quedan sin dato.
+Una serie sin fecha de pedido no se usa: sin saber cuán vieja es no se puede avisar. La niebla, el METAR y el TAF llegan en
+los PR siguientes; mientras tanto esos bloques quedan sin dato.
+- `herramienta:tender`, `herramienta:deporte` y `herramienta:lavar_auto`: la misma cuenta que la página (`services/herramientas.py`)
+  sobre la serie best_match de 7 días SIN la mezcla con ECMWF, que es la que piden esas páginas (`herramientas_de_mora.py`); una
+  serie que ya terminó, sin fecha de pedido o que no tiene el día de hoy deja esa herramienta sin dato.
 - `glosario`: el dato estático de `glosario.py` (no mira ninguna caché ni hace red); la hoja filtra por los términos pedidos.
 """
 from __future__ import annotations
@@ -30,6 +33,7 @@ from typing import Any
 
 from app.schemas.smn_alertas import SmnAlerta
 from app.services.asistente.glosario import GLOSARIO
+from app.services.asistente.herramientas_de_mora import BLOQUES_DE_HERRAMIENTA, armar_herramientas
 from app.services.asistente.hoja_datos import Fuentes
 from app.services.calculators import SnowLevelResult, compute_cota_de_nieve
 from app.services.hourly_slots import current_temp_850, upcoming_slots
@@ -49,6 +53,7 @@ logger = logging.getLogger(__name__)
 
 _BLOQUES_DE_LA_SERIE = frozenset({"horas", "dias", "cota_nieve"})
 _BLOQUES_DE_AHORA = frozenset({"ahora", "cota_nieve"})
+_BLOQUES_DE_HERRAMIENTA = frozenset(BLOQUES_DE_HERRAMIENTA)
 _FRANJAS = 4  # lo que la hoja muestra: las próximas cuatro franjas de 3 h
 _DIAS = 3  # hoy, mañana y uno más: entre las 00:00 y las 03:00 la copia en caché puede arrancar ayer
 
@@ -125,10 +130,19 @@ class FuentesDeCache:
             campos["cota_nieve"] = _cota_de_nieve(ahora, serie, ahora_utc)
         if "avisos" in pedidos:
             campos["avisos"] = _avisos(lat, lon, ahora_utc)
+        # Las herramientas usan la serie best_match PELADA (la de sus páginas), no la mezclada con ECMWF de `serie`.
+        serie_herramientas = peek_hourly_forecast_ext(lat, lon) if pedidos & _BLOQUES_DE_HERRAMIENTA else None
+        herramientas_armadas = armar_herramientas(serie_herramientas, ahora_utc, pedidos)
+        if herramientas_armadas:
+            campos["herramientas"] = herramientas_armadas
         if "glosario" in pedidos:
             campos["glosario"] = GLOSARIO  # dato estático: la hoja se queda con los términos de la pregunta
 
         # La edad del pronóstico: la del dato más viejo de los que se usaron (la serie y/o lo actual).
-        usados = [serie.fetched_at if serie is not None else None, actual.fetched_at if actual is not None else None]
+        usados = [
+            serie.fetched_at if serie is not None else None,
+            actual.fetched_at if actual is not None else None,
+            serie_herramientas.fetched_at if herramientas_armadas and serie_herramientas is not None else None,
+        ]
         campos["generado_en"] = oldest_forecast_fetched_at(*usados)
         return Fuentes(**campos)
