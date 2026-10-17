@@ -44,6 +44,7 @@ from app.services.reportes_aeronauticos.taf import (
     get_nearest_taf_hourly,
     get_taf_for_icao,
     peek_nearest_taf_hourly,
+    peek_taf_entry,
     taf_hourly_from_fcsts,
     taf_hourly_slots,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "normalize_taf",
     "peek_nearest_metar_visibility",
     "peek_nearest_taf_hourly",
+    "peek_taf_entry",
     "set_source",
     "taf_hourly_from_fcsts",
     "taf_hourly_slots",

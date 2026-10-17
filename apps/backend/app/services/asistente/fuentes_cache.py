@@ -18,8 +18,7 @@ De dónde sale cada número, para que coincida con lo que el usuario ve en la p�
 - `avisos`: el feed del SMN en memoria; `None` = no verificado ("no sé"), `()` = verificado y sin avisos.
 
 `generado_en` es la hora de pedido más vieja de los datos usados, así la hoja puede decir "el pronóstico es de hace N h".
-Una serie sin fecha de pedido no se usa: sin saber cuán vieja es no se puede avisar. La niebla, el METAR y el TAF llegan en
-los PR siguientes; mientras tanto esos bloques quedan sin dato.
+Una serie sin fecha de pedido no se usa: sin saber cuán vieja es no se puede avisar.
 - `herramienta:tender`, `herramienta:deporte` y `herramienta:lavar_auto`: la misma cuenta que la página (`services/herramientas.py`)
   sobre la serie best_match de 7 días SIN la mezcla con ECMWF, que es la que piden esas páginas (`herramientas_de_mora.py`); una
   serie que ya terminó, sin fecha de pedido o que no tiene el día de hoy deja esa herramienta sin dato.
@@ -27,6 +26,10 @@ los PR siguientes; mientras tanto esos bloques quedan sin dato.
 - `niebla`: las mismas fuentes y reglas que la página de Niebla (`services/niebla.py`) leídas de la caché: el METAR del aeropuerto
   más cercano (a menos de 20 km y de menos de 90 min), su TAF y el JSON de Open-Meteo de la niebla, este último solo si su "ahora"
   no es más viejo que un METAR utilizable. Sin visibilidad actual de ninguna, queda sin dato.
+- `metar`: el METAR que usaría la tarjeta "Ahora" (`services/metar_observation.py`) leído de la caché de AWC: el del aeropuerto
+  más cercano, a menos de 20 km, de menos de 90 min y con temperatura y punto de rocío. Si no cumple, queda sin dato.
+- `taf`: el TAF del aeropuerto más cercano (a menos de 20 km) leído de la caché de AWC, con solo los períodos que todavía
+  no terminaron; un TAF vencido, o de una estación que AWC acaba de decir que no tiene TAF, queda sin dato.
 """
 from __future__ import annotations
 
@@ -34,13 +37,16 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.core.config import settings
 from app.schemas.niebla import NieblaResponse
 from app.schemas.smn_alertas import SmnAlerta
+from app.schemas.taf import TafDecoded
 from app.services.asistente.glosario import GLOSARIO
 from app.services.asistente.herramientas_de_mora import BLOQUES_DE_HERRAMIENTA, armar_herramientas
 from app.services.asistente.hoja_datos import Fuentes
 from app.services.calculators import SnowLevelResult, compute_cota_de_nieve
 from app.services.hourly_slots import current_temp_850, upcoming_slots
+from app.services.metar_observation import MetarObservation, peek_nearest_metar_observation
 from app.services.niebla import armar_niebla, crudo_vigente
 from app.services.openmeteo import (
     HourlyForecastExt,
@@ -54,8 +60,15 @@ from app.services.openmeteo import (
     peek_hourly_forecast_ext,
     peek_niebla,
 )
-from app.services.reportes_aeronauticos import peek_nearest_metar_visibility, peek_nearest_taf_hourly
+from app.services.reportes_aeronauticos import (
+    nearest_airport_with_distance,
+    normalize_taf,
+    peek_nearest_metar_visibility,
+    peek_nearest_taf_hourly,
+    peek_taf_entry,
+)
 from app.services.smn_alertas import peek_smn_alertas
+from app.services.taf_decoded import taf_vigente
 from app.services.tools_builder import NowConditions, conditions_now, daily_aggregates
 
 logger = logging.getLogger(__name__)
@@ -126,6 +139,19 @@ def _niebla(lat: float, lon: float, ahora_utc: datetime) -> NieblaResponse | Non
     )
 
 
+def _metar(lat: float, lon: float, ahora_utc: datetime) -> MetarObservation | None:
+    """El METAR que usaría la tarjeta "Ahora" (mismo aeropuerto y límites), de la caché; `None` si no los cumple."""
+    return peek_nearest_metar_observation(lat, lon, now=ahora_utc).observation
+
+
+def _taf(lat: float, lon: float, ahora_utc: datetime) -> TafDecoded | None:
+    """El TAF del aeropuerto más cercano (a menos de 20 km) con solo lo que todavía rige; `None` si no hay o ya venció."""
+    aeropuerto, distancia_km = nearest_airport_with_distance(lat, lon)
+    if distancia_km > settings.metar_max_distance_km:
+        return None
+    return taf_vigente(normalize_taf(peek_taf_entry(aeropuerto.icao)), ahora_utc)
+
+
 def _avisos(lat: float, lon: float, ahora_utc: datetime) -> tuple[SmnAlerta, ...] | None:
     """Los avisos de ese punto, o `None` si el feed no está verificado ("no sé"; una tupla vacía es "no hay")."""
     respuesta = peek_smn_alertas(lat, lon, now=ahora_utc)
@@ -161,6 +187,10 @@ class FuentesDeCache:
             campos["herramientas"] = herramientas_armadas
         if "niebla" in pedidos:
             campos["niebla"] = _niebla(lat, lon, ahora_utc)
+        if "metar" in pedidos:
+            campos["metar"] = _metar(lat, lon, ahora_utc)
+        if "taf" in pedidos:
+            campos["taf"] = _taf(lat, lon, ahora_utc)
         if "glosario" in pedidos:
             campos["glosario"] = GLOSARIO  # dato estático: la hoja se queda con los términos de la pregunta
 

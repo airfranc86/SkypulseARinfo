@@ -272,6 +272,17 @@ def taf_hourly_from_fcsts(
     return slots
 
 
+def peek_taf_entry(icao: str) -> dict | None:
+    """The cached AWC entry of a station, reading ONLY the TAF cache: no request to AWC, no waiting for one in flight.
+
+    The last good copy counts (it carries its own validity) unless AWC just said the station has no TAF. Used by the assistant.
+    """
+    code = _station_key(icao)
+    if code in _no_taf_cache:
+        return None
+    return _taf_cache.peek(code)
+
+
 def peek_nearest_taf_hourly(
     lat: float, lon: float, hours: int = 12, now: datetime | None = None,
 ) -> list[TafHourlySlot] | None:
@@ -280,7 +291,5 @@ def peek_nearest_taf_hourly(
     The last good copy counts (it carries its own validity) unless AWC just said the station has no TAF. Used by the assistant.
     """
     code = _station_key(nearest_airport(lat, lon).icao)
-    if code in _no_taf_cache:
-        return None
-    entry = _taf_cache.peek(code)
+    entry = peek_taf_entry(code)
     return taf_hourly_from_fcsts(entry["fcsts"] if entry else None, code, hours, now)
