@@ -45,7 +45,7 @@ def test_the_request_is_exactly_the_alert_series_of_ecmwf() -> None:
         lat=CORDOBA.lat,
         lon=CORDOBA.lon,
         level=CacheLevel.FORECAST,
-        hourly=("weather_code", "cape"),
+        hourly=("weather_code", "cape", "precipitation", "precipitation_probability"),
         models="ecmwf_ifs025",
         forecast_days=2,
         persist=False,
@@ -56,7 +56,7 @@ def test_the_query_string_has_the_exact_coordinates_and_nothing_else() -> None:
     assert pronostico.pedido_de_zona(CORDOBA).params() == {
         "latitude": -31.4135,
         "longitude": -64.181,
-        "hourly": "weather_code,cape",
+        "hourly": "weather_code,cape,precipitation,precipitation_probability",
         "models": "ecmwf_ifs025",
         "timezone": TZ,
         "forecast_days": 2,

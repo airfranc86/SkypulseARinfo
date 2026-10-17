@@ -484,7 +484,9 @@ def test_the_http_whitelist_is_explicit_and_every_field_of_the_result_is_account
     never reach the response by accident."""
     assert evaluacion.CONTADORES == CONTADORES_HTTP
     campos = {campo.name for campo in dataclasses.fields(ResultadoEvaluacion)}
-    assert campos == {"estado", "zonas", "envio", *CONTADORES_HTTP}  # PR5c: `envio` is the sending summary (below)
+    # PR5c: `envio` is the sending summary (below). Rain PR 1: `con_lluvia` is a log-only counter (shadow mode): declared
+    # here as internal on purpose, so it can never reach the response by accident.
+    assert campos == {"estado", "zonas", "envio", "con_lluvia", *CONTADORES_HTTP}
 
 
 def test_the_zone_detail_is_invisible_in_the_repr_and_ignored_by_equality() -> None:

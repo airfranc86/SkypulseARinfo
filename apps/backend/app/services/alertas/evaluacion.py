@@ -1,10 +1,12 @@
 """Scheduled alert evaluation, and the sending when asked to (FRA-355, PR5b and PR5c).
 
 `POST /api/alertas/evaluar` calls `evaluar(redis, ahora, enviar=...)` after QStash's signature was verified and the
-switch was read. A run:
+switch was read. Besides the storm, each zone's series is also checked for persistent rain in SHADOW MODE (`con_lluvia`):
+it is only counted in the log line, it never changes a verdict, prepares a notice or sends anything, and it cannot
+break the storm evaluation (see `_lluvia_en_sombra`). A run:
 
 1. refuses a naive `ahora` (the rule would read it in the server's time zone) and looks up the review window
-   (`regla.ventana`): outside the review hours and in the silence (22 to 7 h) the state is `fuera_de_ventana`, and
+   (`regla.ventana`): outside the review hours and in the silence (22 to 5 h) the state is `fuera_de_ventana`, and
    neither Upstash nor Open-Meteo is touched;
 2. if it must SEND, loads the VAPID key; without a usable one the state is `sin_vapid` and nothing else happens;
 3. takes the run lock `alertas:lock:evaluar` (SET NX EX): taken = `en_curso`; Upstash failing = `upstash_no_disponible`
@@ -153,6 +155,9 @@ class ZonaEvaluada:
     aviso: str | None = None
     fecha_objetivo: date | None = None
     ventana: tuple[int, int] | None = None
+    # Rain shadow mode: the zone has persistent rain in this review. It is independent of the verdict (a zone can be
+    # `sin_tormenta` and `con_lluvia`), it never prepares or sends anything, and it is only COUNTED.
+    con_lluvia: bool = False
 
 
 @dataclass(frozen=True)
@@ -168,6 +173,9 @@ class ResultadoEvaluacion:
     errores: int = 0  # unexpected exception while evaluating the zone (a bug, not a lack of data)
     diferidas: int = 0  # with subscribers but not evaluated in this run: over the cap, deadline or stopped run
     desconocidas: int = 0  # slugs in `alertas:zonas` that are not in the catalog (ignored, never pruned)
+    # Zones with persistent rain (shadow mode, see `ZonaEvaluada.con_lluvia`). A log counter only: it is NOT in
+    # `CONTADORES`, so it never reaches the HTTP response (QStash and the panel read that contract).
+    con_lluvia: int = 0
     # What the sending did. None for a dry run (and for a run that never got as far as the zones).
     envio: ResumenEnvio | None = None
     # Per-zone detail for the caller. Not part of the equality, not in the repr, never in the response or the log.
@@ -244,7 +252,7 @@ def _cerrar(resultado: ResultadoEvaluacion) -> ResultadoEvaluacion:
     )
     formato = (
         "alertas: evaluation estado=%s zonas_con_suscriptores=%d evaluadas=%d con_tormenta=%d sin_tormenta=%d "
-        "sin_datos=%d errores=%d diferidas=%d desconocidas=%d"
+        "sin_datos=%d errores=%d diferidas=%d desconocidas=%d con_lluvia=%d"
     )
     argumentos: list[str | int] = [
         resultado.estado,
@@ -256,6 +264,7 @@ def _cerrar(resultado: ResultadoEvaluacion) -> ResultadoEvaluacion:
         resultado.errores,
         resultado.diferidas,
         resultado.desconocidas,
+        resultado.con_lluvia,
     ]
     if envio is not None:
         formato += " " + " ".join(f"{nombre}=%d" for nombre in despacho.CONTADORES_ENVIO)
@@ -295,6 +304,17 @@ def _aviso_de(ahora: datetime, ventana: tuple[int, int]) -> tuple[str, date]:
     return (AVISO_MANANA if fecha > ahora.astimezone(_AR).date() else AVISO_HOY), fecha
 
 
+def _lluvia_en_sombra(serie, ahora: datetime) -> bool:  # noqa: ANN001 - the series type is `HourlyForecastExt`
+    """True if the rain rule (shadow mode) finds persistent rain. It must NEVER affect the storm evaluation: its own
+    `try`, so a bug in the shadow rule is logged and counted as "no rain" and the zone keeps its real verdict."""
+    try:
+        lluvia = regla.evaluar_revision_lluvia(serie, ahora)
+        return lluvia is not None and lluvia.hay_lluvia
+    except Exception:  # noqa: BLE001 - shadow mode: nothing here may break the storm alerts
+        logger.exception("alertas: unexpected error in the rain shadow rule")
+        return False
+
+
 async def _evaluar_zona(
     conocida: _ZonaConocida, ahora: datetime, ventana: tuple[int, int], aviso: str, fecha: date, referencia: datetime
 ) -> ZonaEvaluada:
@@ -310,11 +330,20 @@ async def _evaluar_zona(
         revision = regla.evaluar_revision(serie, ahora)
         if revision is None:  # cannot happen (the window exists), but never read it as calm
             return veredicto(VEREDICTO_SIN_DATOS)
+        con_lluvia = _lluvia_en_sombra(serie, ahora)  # counted only; it never changes the verdict below
         if revision.hay_tormenta:  # positive evidence counts even if some other hour has a hole
-            return veredicto(VEREDICTO_CON_TORMENTA, revision=revision, aviso=aviso, fecha_objetivo=fecha, ventana=ventana)
+            return veredicto(
+                VEREDICTO_CON_TORMENTA,
+                revision=revision,
+                aviso=aviso,
+                fecha_objetivo=fecha,
+                ventana=ventana,
+                con_lluvia=con_lluvia,
+            )
         if pronostico.cubre_ventana(serie, ventana):
-            return veredicto(VEREDICTO_SIN_TORMENTA)
-        return veredicto(VEREDICTO_SIN_DATOS)  # no storm in the data we have, but the data has holes: not "calm"
+            return veredicto(VEREDICTO_SIN_TORMENTA, con_lluvia=con_lluvia)
+        # no storm in the data we have, but the data has holes: not "calm"
+        return veredicto(VEREDICTO_SIN_DATOS, con_lluvia=con_lluvia)
     except Exception:  # noqa: BLE001 - one zone failing must not hide the others, and it is NOT "no storm"
         # The traceback says what broke; the zone is not named (a zone with subscribers is not for the logs).
         logger.exception("alertas: unexpected error evaluating a zone")
@@ -339,6 +368,7 @@ def _resultado(
         errores=cuenta[VEREDICTO_ERROR],
         diferidas=diferidas,
         desconocidas=desconocidas,
+        con_lluvia=sum(1 for z in zonas if z.con_lluvia),
         envio=envio,
         zonas=zonas,
     )
@@ -410,7 +440,12 @@ async def _despachar(
         por_enviar -= pendientes
         envio = envio.sumar(despachada.resumen)
         if despachada.error:  # the storm is real but it could not be dispatched: an error of the zone, never silent
-            hechas[zona.slug] = ZonaEvaluada(slug=zona.slug, veredicto=VEREDICTO_ERROR, suscriptores=zona.suscriptores)
+            hechas[zona.slug] = ZonaEvaluada(
+                slug=zona.slug,
+                veredicto=VEREDICTO_ERROR,
+                suscriptores=zona.suscriptores,
+                con_lluvia=zona.con_lluvia,  # the rain count is independent of the verdict
+            )
         corte = despachada.corte
     return hechas, envio, corte
 
