@@ -68,7 +68,8 @@ test('los avisos: no promete que la IP no existe en ningún lado (los registros 
 })
 
 test('con el envío automático activo, los avisos se usan solo para enviarte esos avisos (a las 21 h y durante el día)', () => {
-  const t = texto(porTitulo('Avisos en el celular', seccionesPrivacidad(true)))
+  // El texto de las tormentas, sin el aviso de lluvia (lo que suma la lluvia se prueba en alertasLluvia.test.ts).
+  const t = texto(porTitulo('Avisos en el celular', seccionesPrivacidad(true, false)))
   assert.match(t, /Usamos esos datos solo para enviarte esos avisos: a las 21 h para el día siguiente y, durante el día \(desde las 5 h\), si aparece una tormenta nueva; nunca entre las 22 y las 5\. También para la notificación de prueba cuando la pedís\./)
 })
 
@@ -90,8 +91,8 @@ test('la política que se publica es la del valor actual de ENVIO_AUTOMATICO_ACT
 
 test('el envío automático solo cambia un párrafo de la política: el de para qué se usan los datos', () => {
   const planos = (secciones: readonly SeccionPrivacidad[]) => secciones.flatMap((s) => s.parrafos)
-  const con = planos(seccionesPrivacidad(true))
-  const sin = planos(seccionesPrivacidad(false))
+  const con = planos(seccionesPrivacidad(true, false))
+  const sin = planos(seccionesPrivacidad(false, false))
   assert.equal(con.length, sin.length)
   const distintos = con.filter((parrafo, i) => parrafo !== sin[i])
   assert.equal(distintos.length, 1)

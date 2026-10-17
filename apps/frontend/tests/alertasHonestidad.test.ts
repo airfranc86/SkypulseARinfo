@@ -68,8 +68,9 @@ function textosDeAvisos(envio: boolean): string[] {
   ].filter((texto) => texto !== '')
 }
 
+// Sin el aviso de lluvia (PR 3b): estas pruebas fijan los textos de las tormentas; los de la lluvia, en alertasLluvia.test.ts.
 const textosDePrivacidad = (envio: boolean): string[] =>
-  seccionesPrivacidad(envio).flatMap((s) => [s.titulo, ...s.parrafos])
+  seccionesPrivacidad(envio, false).flatMap((s) => [s.titulo, ...s.parrafos])
 
 // ── Estado que se publica ────────────────────────────────────────────────────
 
@@ -129,7 +130,7 @@ test('lo que existe hoy sigue ofrecido sin envío automático: registrar, probar
 // ── Con envío automático: vuelven los textos originales, palabra por palabra ──
 
 test('con envío automático la pantalla vuelve a los textos originales', () => {
-  const copy = copyDe(true)
+  const copy = copyDe(true, false) // sin el aviso de lluvia: su introducción cambia (ver alertasLluvia.test.ts)
   assert.equal(copy.titulo, 'Avisos de tormenta en tu celular')
   assert.equal(
     copy.intro,
