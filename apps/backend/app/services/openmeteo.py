@@ -737,7 +737,7 @@ def _ar_now() -> datetime:
     return datetime.now(_AR_TZ)
 
 
-def _next_ar_hour_idx(time_list: list[str]) -> int:
+def _next_ar_hour_idx(time_list: list[str], ar_now: datetime | None = None) -> int:
     """
     Retorna el índice en `time_list` correspondiente a la próxima hora AR redonda.
 
@@ -747,8 +747,10 @@ def _next_ar_hour_idx(time_list: list[str]) -> int:
     Misma regla que el TAF: a las 22:50 la próxima es 23:00 y exactamente a las 17:00 es 18:00.
     Si la serie no llega a la próxima hora devuelve len(time_list) (recorte vacío): nunca
     se vuelve al inicio, que serían horas ya pasadas.
+
+    `ar_now` (hora argentina) reemplaza al reloj: lo usan los análisis puros de la niebla (`parse_*`); sin él se lee `_ar_now()`.
     """
-    ar_now   = _ar_now()
+    ar_now   = ar_now or _ar_now()
     next_ar  = ar_now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     next_str = next_ar.strftime("%Y-%m-%dT%H:%M")  # "2026-05-27T02:00"
 
@@ -828,12 +830,28 @@ async def _fetch_niebla_combined(lat: float, lon: float) -> dict | None:
     )
 
 
+def peek_niebla(lat: float, lon: float) -> dict | None:
+    """El JSON crudo de la niebla que ya está en caché (lo que trajo la página de Niebla): fresco o la última copia buena.
+
+    No hace ningún pedido. Se analiza con `parse_visibility_forecast` y `parse_fog_inference`, las mismas que usan las
+    funciones `get_*`: la página y el asistente salen del mismo análisis.
+    """
+    return peek_series(_niebla_request(lat, lon))
+
+
 async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | None:
     """
     Obtiene visibilidad actual y pronóstico 12h desde Open-Meteo.
     Devuelve None ante cualquier error.
     """
-    data = await _fetch_niebla_combined(lat, lon)
+    return parse_visibility_forecast(await _fetch_niebla_combined(lat, lon))
+
+
+def parse_visibility_forecast(data: dict | None, ar_now: datetime | None = None) -> VisibilityData | None:
+    """Analiza el JSON crudo de la niebla: visibilidad actual y las 12 horas que vienen. Pura (`ar_now` reemplaza al reloj).
+
+    Devuelve None si no hay datos o el JSON no tiene la forma esperada.
+    """
     if data is None:
         return None
 
@@ -850,7 +868,7 @@ async def get_visibility_forecast(lat: float, lon: float) -> VisibilityData | No
         # Empezar desde la próxima hora AR redonda para consistencia con TAF/fog inference
         all_times: list[str] = hourly.get("time", [])
         all_vis: list = hourly.get("visibility", [])
-        start_idx = _next_ar_hour_idx(all_times)
+        start_idx = _next_ar_hour_idx(all_times, ar_now)
 
         time_list: list[str] = all_times[start_idx:start_idx + 12]
         vis_list: list = all_vis[start_idx:start_idx + 12]
@@ -904,14 +922,24 @@ async def get_fog_inference_forecast(
     Los valores se clasifican con la escala oficial METAR/SMN (classify_visibility):
     niebla < 1 km, neblina o bruma 1–5 km.
     """
-    data = await _fetch_niebla_combined(lat, lon)
+    return parse_fog_inference(await _fetch_niebla_combined(lat, lon), hours)
+
+
+def parse_fog_inference(
+    data: dict | None, hours: int = 12, ar_now: datetime | None = None,
+) -> list[FogInferenceSlot] | None:
+    """Infiere la visibilidad horaria del JSON crudo de la niebla (algoritmo de `get_fog_inference_forecast`). Pura.
+
+    `ar_now` (hora argentina) reemplaza al reloj. Devuelve None si no hay datos, el JSON no tiene la forma esperada o la serie
+    ya no tiene horas por delante.
+    """
     if data is None:
         return None
 
     try:
         hourly = data["hourly"]
         all_times = hourly.get("time", [])
-        si = _next_ar_hour_idx(all_times)   # start index: próxima hora AR redonda
+        si = _next_ar_hour_idx(all_times, ar_now)   # start index: próxima hora AR redonda
 
         time_list: list[str]   = all_times[si:si + hours]
         rh_list                = hourly.get("relative_humidity_2m", [])[si:si + hours]
