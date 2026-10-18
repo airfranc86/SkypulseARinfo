@@ -1,10 +1,24 @@
-import { leerContactoPrivacidad, SECCIONES_PRIVACIDAD, type ContactoPrivacidad } from '@/lib/privacidad'
+import { leerConfigAsistente } from '@/lib/asistente/config'
+import {
+  leerContactoPrivacidad,
+  SECCIONES_PRIVACIDAD,
+  seccionesPrivacidad,
+  type ContactoPrivacidad,
+} from '@/lib/privacidad'
 
 const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-primary)]'
 
 /** El contacto sale del entorno de build (`VITE_PRIVACY_CONTACT_EMAIL`, en Vercel): en el repo no hay ninguna dirección. */
 const CONTACTO = leerContactoPrivacidad(import.meta.env)
+
+/**
+ * La sección de Mora solo se publica con la bandera del asistente encendida (`VITE_ASISTENTE_VISIBLE`): apagada, la
+ * página dibuja exactamente `SECCIONES_PRIVACIDAD`, la política de siempre.
+ */
+const SECCIONES = leerConfigAsistente(import.meta.env).visible
+  ? seccionesPrivacidad(undefined, undefined, true)
+  : SECCIONES_PRIVACIDAD
 
 /**
  * El botón abre el correo que la persona tenga configurado; la dirección queda a la vista para copiarla.
@@ -50,7 +64,7 @@ export function Privacidad() {
         SkyPulse es una herramienta de consulta meteorológica y sísmica sin registro de usuarios. Esta página explica, en criollo, qué datos tocamos y para qué.
       </p>
 
-      {SECCIONES_PRIVACIDAD.map(s => (
+      {SECCIONES.map(s => (
         <section key={s.titulo} className="space-y-1.5">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
             {s.titulo}
