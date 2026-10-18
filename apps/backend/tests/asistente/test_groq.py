@@ -349,3 +349,55 @@ def test_modelo_no_disponible_lleva_solo_una_etiqueta():
     excepcion = ModeloNoDisponible("timeout", 7)
     assert str(excepcion) == "timeout" and excepcion.motivo == "timeout" and excepcion.reintentar_en == 7
     assert ModeloNoDisponible("red").reintentar_en is None
+
+
+# --- Los tokens que gastó cada llamada (para calibrar el tope y los cupos), sin contenido ------------------------------------
+
+async def test_el_log_dice_cuantos_tokens_gasto_la_llamada_y_nada_de_su_contenido(caplog):
+    caplog.set_level(logging.INFO)
+    with respx.mock(assert_all_called=False) as http:
+        http.post(GROQ_URL).mock(return_value=exito())  # usage: 340 tokens en total
+        await generar("¿Va a llover en mi casa de la calle Falsa 123?")
+    linea = next(r.getMessage() for r in caplog.records if "groq estado=" in r.getMessage())
+    assert "estado=200" in linea and "tokens=340" in linea
+    assert "Falsa 123" not in caplog.text and TEXTO not in caplog.text
+
+
+async def test_el_modelo_guarda_los_tokens_de_su_ultima_llamada():
+    modelo = ModeloGroq()
+    assert modelo.tokens_ultima_llamada is None
+    with respx.mock(assert_all_called=False) as http:
+        http.post(GROQ_URL).mock(return_value=exito())
+        await modelo.generar("¿Qué temperatura hace?", hoja())
+    assert modelo.tokens_ultima_llamada == 340
+
+
+async def test_una_llamada_que_falla_no_deja_los_tokens_de_la_anterior():
+    modelo = ModeloGroq()
+    with respx.mock(assert_all_called=False) as http:
+        http.post(GROQ_URL).mock(side_effect=[exito(), httpx.Response(500)])
+        await modelo.generar("¿Qué temperatura hace?", hoja())
+        with pytest.raises(ModeloNoDisponible):
+            await modelo.generar("¿Qué temperatura hace?", hoja())
+    assert modelo.tokens_ultima_llamada is None
+
+
+@pytest.mark.parametrize("uso", [{}, {"usage": None}, {"usage": {}}, {"usage": {"total_tokens": "muchos"}}, {"usage": {"total_tokens": -5}}, {"usage": {"total_tokens": True}}])
+async def test_sin_un_uso_legible_los_tokens_son_desconocidos_y_la_respuesta_igual_sirve(caplog, uso):
+    caplog.set_level(logging.INFO)
+    cuerpo = {"choices": [{"message": {"content": TEXTO}, "finish_reason": "stop"}], **uso}
+    modelo = ModeloGroq()
+    with respx.mock(assert_all_called=False) as http:
+        http.post(GROQ_URL).mock(return_value=httpx.Response(200, json=cuerpo))
+        assert await modelo.generar("¿Qué temperatura hace?", hoja()) == TEXTO
+    assert modelo.tokens_ultima_llamada is None
+    assert "tokens=-" in caplog.text
+
+
+async def test_una_respuesta_cortada_por_el_tope_igual_deja_ver_los_tokens_que_gasto():
+    modelo = ModeloGroq()
+    with respx.mock(assert_all_called=False) as http:
+        http.post(GROQ_URL).mock(return_value=exito("Ahora hay", finish="length"))
+        with pytest.raises(ModeloNoDisponible):
+            await modelo.generar("¿Qué temperatura hace?", hoja())
+    assert modelo.tokens_ultima_llamada == 340  # es justo lo que sirve para calibrar ASISTENTE_MAX_TOKENS

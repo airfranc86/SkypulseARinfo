@@ -191,8 +191,10 @@ class Settings(BaseSettings):
     # (como si no existiera). La clave `skypulse:asistente:apagado` en Upstash es el segundo interruptor (apaga sin
     # redeploy). Los cupos son por día de Argentina: por cliente (se guarda un hash de la clave, nunca la IP) y global.
     asistente_enabled: bool = False
-    asistente_cupo_cliente_dia: int = Field(default=30, ge=1)
-    asistente_cupo_global_dia: int = Field(default=400, ge=1)
+    # Salen de los límites del plan gratuito de Groq (200K tokens por día; una pregunta gasta unos 1.400 a 1.900): unas 100
+    # preguntas al día entre todos y 10 por persona. Al 80, 95 y 100 % del global se avisa a Sentry (avisos_de_cupo.py).
+    asistente_cupo_cliente_dia: int = Field(default=10, ge=1)
+    asistente_cupo_global_dia: int = Field(default=100, ge=1)
     # Largo máximo de la pregunta, en caracteres (se cuenta después de recortar los espacios).
     asistente_pregunta_max: int = Field(default=300, ge=20, le=1000)
     # Plazo para que el modelo conteste; pasado ese tiempo la respuesta es 503 `asistente_no_disponible`.

@@ -14,10 +14,10 @@ def _pregunta(**cambios):
 
 # --- Settings -------------------------------------------------------------------------------------------------------
 
-def test_el_asistente_nace_apagado_y_con_los_cupos_del_plan():
+def test_el_asistente_nace_apagado_y_con_los_cupos_del_plan_gratuito_de_groq():
     s = Settings(_env_file=None)
     assert s.asistente_enabled is False
-    assert (s.asistente_cupo_cliente_dia, s.asistente_cupo_global_dia) == (30, 400)
+    assert (s.asistente_cupo_cliente_dia, s.asistente_cupo_global_dia) == (10, 100)  # 200K tokens por día / ~1.900 por pregunta: unas 100 entre todos, 10 por persona
     assert s.asistente_pregunta_max == 300
     assert s.asistente_timeout_segundos == 12.0
     assert s.asistente_interruptor_cache_segundos == 60
