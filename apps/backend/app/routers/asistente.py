@@ -23,7 +23,7 @@ y la duración. Los logs de error no llevan `exc_info`, y Sentry corre sin cuerp
 queda fuera de este módulo: la línea de "ratelimit exceeded" de slowapi escribe la IP.
 
 Los datos y el modelo entran por dependencias para poder reemplazarlos: hoy son `FuentesDeCache` (lee solo de las cachés,
-sin provocar pedidos de red; PR 2c) y `ModeloFalso` (la Fase 3 pone el proveedor real).
+sin provocar pedidos de red; PR 2c) y `ModeloGroq` si hay `GROQ_API_KEY` o, si no, `ModeloFalso` (Fase 3).
 """
 from __future__ import annotations
 
@@ -45,8 +45,9 @@ from app.services.asistente.enrutador import enrutar
 from app.services.asistente.fuentes import ProveedorDeFuentes
 from app.services.asistente.fuentes_cache import FuentesDeCache
 from app.services.asistente.hoja_datos import Fuentes
-from app.services.asistente.modelo import Modelo, ModeloFalso
+from app.services.asistente.modelo import Modelo, ModeloFalso, ModeloNoDisponible
 from app.services.asistente.nucleo import Respuesta, responder
+from app.services.asistente.proveedores.groq import ModeloGroq
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,8 @@ def fuentes_del_asistente() -> ProveedorDeFuentes:
 
 
 def modelo_del_asistente() -> Modelo:
-    return ModeloFalso()
+    """Groq si hay clave cargada; sin clave sigue `ModeloFalso` (cargarla en Render no enciende nada: falta la bandera)."""
+    return ModeloGroq() if settings.groq_api_key.strip() else ModeloFalso()
 
 
 def _no_disponible(reintentar_en: int) -> JSONResponse:
@@ -156,6 +158,9 @@ async def post_asistente(
         except asyncio.TimeoutError:
             logger.warning("asistente: se pasó el plazo de %.0f s", settings.asistente_timeout_segundos)
             return _no_disponible(_ESPERA_APAGADO_SEGUNDOS)
+        except ModeloNoDisponible as exc:
+            logger.warning("asistente: el modelo no está disponible (%s)", exc.motivo)
+            return _no_disponible(exc.reintentar_en or _ESPERA_APAGADO_SEGUNDOS)
         except Exception as exc:  # noqa: BLE001 - lo que falle (datos o modelo) es "no disponible"; sin mensaje ni traza
             logger.warning("asistente: falló la respuesta (%s)", type(exc).__name__)
             return _no_disponible(_ESPERA_APAGADO_SEGUNDOS)

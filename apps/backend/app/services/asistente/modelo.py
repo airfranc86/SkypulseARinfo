@@ -21,6 +21,16 @@ class Modelo(Protocol):
         ...
 
 
+class ModeloNoDisponible(Exception):
+    """El proveedor no pudo responder. `motivo` es una etiqueta corta (nunca datos del pedido, de la respuesta ni la clave);
+    `reintentar_en` son los segundos a esperar, si se saben."""
+
+    def __init__(self, motivo: str, reintentar_en: int | None = None) -> None:
+        super().__init__(motivo)
+        self.motivo = motivo
+        self.reintentar_en = reintentar_en
+
+
 def _fmt(valor: int | float) -> str:
     return str(valor).replace(".", ",")
 

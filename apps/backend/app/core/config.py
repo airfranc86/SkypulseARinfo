@@ -1,3 +1,4 @@
+from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
@@ -202,6 +203,15 @@ class Settings(BaseSettings):
     # log: sin él, un hash de la IP se podría revertir probando las 2^32 direcciones. Solo en Render y en el `.env` local;
     # vacío = el endpoint responde 503 y no cuenta nada (falla cerrado).
     asistente_cupo_secreto: str = Field(default="", repr=False)
+
+    # Modelo de lenguaje del asistente (Fase 3): Groq. Sin `GROQ_API_KEY` el asistente sigue con `ModeloFalso`. La clave va
+    # solo en Render y en el `.env` local, nunca en Vercel ni con prefijo `VITE_`. El ID del modelo es configurable por si Groq
+    # da de baja el actual. `ASISTENTE_RAZONAMIENTO` (low, medium o high) se manda solo con los `openai/gpt-oss-*` (con otro modelo se ignora,
+    # porque Groq rechazaría el parámetro con un 400). `ASISTENTE_MAX_TOKENS` incluye el razonamiento, si el modelo lo cuenta.
+    groq_api_key: str = Field(default="", repr=False)
+    asistente_modelo: str = Field(default="openai/gpt-oss-20b", min_length=1)
+    asistente_max_tokens: int = Field(default=400, ge=100, le=2000)
+    asistente_razonamiento: Literal["", "low", "medium", "high"] = "low"
 
     # Clave del límite de pedidos por IP (ver `core/rate_limit.py::client_key`). Render pone Cloudflare delante:
     # Cloudflare escribe `CF-Connecting-IP` con la IP real y agrega al `X-Forwarded-For` (el valor de la

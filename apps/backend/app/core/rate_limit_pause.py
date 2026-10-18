@@ -141,3 +141,7 @@ openmeteo_pause = RateLimitPause()
 # Instancia única de AWC (aviationweather.gov): ``services/reportes_aeronauticos/awc.py`` la consulta antes de
 # cada pedido de METAR o TAF y un 429 la abre para ambos.
 awc_pause = RateLimitPause()
+
+# Instancia única de Groq (el modelo del asistente): ``services/asistente/proveedores/groq.py`` la consulta antes de cada
+# pedido y un 429 la abre.
+groq_pause = RateLimitPause()
