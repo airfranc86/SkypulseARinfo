@@ -18,6 +18,12 @@ export const SMN_URL = 'https://www.smn.gob.ar/'
  */
 export const CC_BY_4_URL = 'https://creativecommons.org/licenses/by/4.0/'
 
+/** SIB (Sistema de Información de Biodiversidad, Parques Nacionales): where to learn about the species Mora is inspired by. */
+export const SIB_URL = 'https://sib.gob.ar/'
+
+/** Aves Argentinas (Asociación Ornitológica del Plata): its digital bird guide, for the same species. */
+export const AVES_ARGENTINAS_URL = 'https://www.avesargentinas.org.ar/'
+
 /** Voluntary contribution. It unlocks nothing: every feature is the same for everyone. */
 export const CAFECITO_URL = 'https://cafecito.app/skypulse-ar'
 

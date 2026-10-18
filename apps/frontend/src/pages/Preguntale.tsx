@@ -1,9 +1,12 @@
 import { useState } from 'react'
+import { ContenidoPanel } from '@/components/asistente/ContenidoPanel'
 import { Mascota, type TamanoMora } from '@/components/asistente/Mascota'
 import { useParpadeo } from '@/hooks/useParpadeo'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { HUMORES, type HumorMora } from '@/lib/asistente/humor'
+import { humorDelPanel, type EstadoPanel } from '@/lib/asistente/panel'
 import type { ParpadeoMora } from '@/lib/asistente/programarParpadeo'
+import type { RespuestaRapida } from '@/lib/asistente/respuestasRapidas'
 
 const FOCUS_RING =
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--color-primary)]'
@@ -50,6 +53,54 @@ function MoraEnVivo() {
     </div>
   )
 }
+
+const PREGUNTA_EJEMPLO = '¿Va a llover hoy?'
+
+const RAPIDAS_EJEMPLO: readonly RespuestaRapida[] = [
+  { id: 'dia', pregunta: '¿Cómo viene el día?', texto: 'Sin lluvia prevista hoy ni mañana.' },
+  { id: 'ropa', pregunta: '¿Cuándo conviene tender la ropa?', texto: 'El mejor día para tender la ropa es Sáb 10/10.' },
+]
+
+interface CasoPanel {
+  titulo: string
+  estado: EstadoPanel
+  /** The first-use notice has not been accepted. */
+  aviso?: boolean
+  texto?: string
+  espera?: number
+  validacion?: string
+  rapidas?: boolean
+}
+
+/** Every state the question panel can be in, with fixed data (no request is made on this page). */
+const CASOS_PANEL: readonly CasoPanel[] = [
+  { titulo: 'Primer uso: el aviso', estado: { fase: 'reposo' }, aviso: true },
+  { titulo: 'Listo para preguntar', estado: { fase: 'reposo' } },
+  { titulo: 'Con una pregunta escrita', estado: { fase: 'reposo' }, texto: PREGUNTA_EJEMPLO },
+  { titulo: 'Pensando', estado: { fase: 'enviando', pregunta: PREGUNTA_EJEMPLO }, texto: PREGUNTA_EJEMPLO },
+  {
+    titulo: 'Respuesta',
+    estado: { fase: 'respondida', pregunta: PREGUNTA_EJEMPLO, estado: 'ok', texto: 'Se espera lluvia entre las 15:00 y las 18:00 (4 mm).' },
+    texto: PREGUNTA_EJEMPLO,
+  },
+  {
+    titulo: 'Sin dato',
+    estado: {
+      fase: 'respondida',
+      pregunta: PREGUNTA_EJEMPLO,
+      estado: 'sin_dato',
+      texto: 'No tengo ese dato a mano. Probá de nuevo en un rato o mirá la página de Previsión.',
+    },
+    texto: PREGUNTA_EJEMPLO,
+  },
+  { titulo: 'La pregunta no se puede enviar', estado: { fase: 'reposo' }, validacion: 'Escribí tu pregunta.' },
+  { titulo: 'Demasiado seguido: el botón espera', estado: { fase: 'error', pregunta: PREGUNTA_EJEMPLO, error: { tipo: 'espera', motivo: 'ritmo', segundos: 30 } }, texto: PREGUNTA_EJEMPLO, espera: 30 },
+  { titulo: 'Cupo del día agotado', estado: { fase: 'error', pregunta: PREGUNTA_EJEMPLO, error: { tipo: 'cupo-diario', segundos: 7200 } }, texto: PREGUNTA_EJEMPLO, espera: 7200 },
+  { titulo: 'No disponible: respuestas rápidas', estado: { fase: 'error', pregunta: PREGUNTA_EJEMPLO, error: { tipo: 'no-disponible', segundos: null } }, texto: PREGUNTA_EJEMPLO, rapidas: true },
+  { titulo: 'Sin conexión', estado: { fase: 'error', pregunta: PREGUNTA_EJEMPLO, error: { tipo: 'sin-conexion' } }, texto: PREGUNTA_EJEMPLO },
+]
+
+const NADA = () => undefined
 
 export function Preguntale() {
   const movimientoReducido = useReducedMotion()
@@ -113,6 +164,36 @@ export function Preguntale() {
                 <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
                   {CUANDO[humor]}
                 </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="mora-panel" className="space-y-4">
+        <h2 id="mora-panel" className="text-lg font-semibold">
+          El panel de preguntas
+        </h2>
+        <p className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+          Cada estado con datos de ejemplo (aquí no se pide nada). El panel de verdad se abre con la burbuja de abajo a la izquierda.
+        </p>
+        <ul className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {CASOS_PANEL.map((caso) => (
+            <li key={caso.titulo} className="space-y-2">
+              <p className="text-sm font-medium">{caso.titulo}</p>
+              <div className="max-w-sm overflow-hidden rounded-2xl border border-[var(--color-border)]" style={{ background: 'var(--color-card)' }}>
+                <ContenidoPanel
+                  humor={humorDelPanel(caso.estado) ?? 'reposo'}
+                  avisoPendiente={caso.aviso === true}
+                  estado={caso.estado}
+                  texto={caso.texto ?? ''}
+                  mensajeValidacion={caso.validacion ?? null}
+                  esperaSegundos={caso.espera ?? 0}
+                  rapidas={caso.rapidas ? RAPIDAS_EJEMPLO : []}
+                  alCambiarTexto={NADA}
+                  alEnviar={NADA}
+                  alEntender={NADA}
+                />
               </div>
             </li>
           ))}

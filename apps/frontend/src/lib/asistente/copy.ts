@@ -5,7 +5,7 @@
  * always give a way forward. The first-use notice (D6) says the same as the "Asistente Mora (opcional)" section of
  * the privacy policy (`lib/privacidad.ts`); a test keeps them together. The owner approves every text before it ships.
  */
-import type { ErrorPanel } from './cliente.ts'
+import { MAX_PREGUNTA, type ErrorPanel } from './cliente.ts'
 
 export const AVISO_PRIMER_USO = Object.freeze({
   titulo: 'Antes de preguntar',
@@ -13,6 +13,13 @@ export const AVISO_PRIMER_USO = Object.freeze({
     'Lo que escribís se envía a un proveedor de IA en EE. UU. para redactar la respuesta. No incluyas datos personales. No guardamos lo que escribís.',
   boton: 'Entendido',
 })
+
+export const TITULO_PANEL = 'Preguntale a Mora'
+export const ETIQUETA_PREGUNTA = 'Tu pregunta'
+export const PLACEHOLDER_PREGUNTA = 'Preguntame por el clima, por ejemplo: ¿va a llover hoy?'
+export const BOTON_ENVIAR = 'Preguntar'
+export const BOTON_CERRAR = 'Cerrar'
+export const TEXTO_ENVIANDO = 'Mora está pensando…'
 
 /** The heading over the quick answers shown when the model cannot answer. */
 export const TITULO_RESPUESTAS_RAPIDAS = 'Mientras tanto, esto es lo que ya tengo cargado'
@@ -55,4 +62,14 @@ export function textoDeError(error: ErrorPanel): string {
     case 'sin-conexion':
       return 'No pude conectarme. Revisá tu conexión y probá de nuevo.'
   }
+}
+
+/** "12/300": the characters typed out of the limit, counted as the backend counts them (code points). */
+export function textoContador(texto: string): string {
+  return `${Array.from(texto).length}/${MAX_PREGUNTA}`
+}
+
+/** The label of the disabled button while the person has to wait: "Esperá 30 s". */
+export function textoEsperaBoton(segundos: number): string {
+  return `Esperá ${esperaLegible(segundos)}`
 }
