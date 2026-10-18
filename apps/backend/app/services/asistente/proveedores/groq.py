@@ -82,10 +82,27 @@ def _segundos(valor: float) -> int:
     return max(1, math.ceil(valor))
 
 
+def _tokens_de(response: httpx.Response) -> int | None:
+    """Los tokens que Groq dice haber gastado en la llamada (`usage.total_tokens`), o `None` si no los trae legibles."""
+    try:
+        total = response.json()["usage"]["total_tokens"]
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    return total if isinstance(total, int) and not isinstance(total, bool) and total >= 0 else None
+
+
 class ModeloGroq:
-    """Cumple el protocolo `Modelo`. La clave se lee de la configuración en cada llamada y no se guarda en el objeto."""
+    """Cumple el protocolo `Modelo`. La clave se lee de la configuración en cada llamada y no se guarda en el objeto.
+
+    `tokens_ultima_llamada` son los tokens que Groq dijo haber gastado en la última llamada (`None` si no hubo respuesta o no
+    los trajo): sirve para calibrar `ASISTENTE_MAX_TOKENS` y los cupos con datos reales. Es un número, nunca contenido.
+    """
+
+    def __init__(self) -> None:
+        self.tokens_ultima_llamada: int | None = None
 
     async def generar(self, pregunta: str, hoja: Hoja) -> str:
+        self.tokens_ultima_llamada = None
         clave = settings.groq_api_key.strip()
         if not clave:
             raise ModeloNoDisponible("sin_clave")
@@ -111,7 +128,12 @@ class ModeloGroq:
             raise ModeloNoDisponible("red") from None
 
         estado = response.status_code
-        logger.info("asistente: groq estado=%d ms=%d", estado, (time.monotonic() - inicio) * 1000)
+        if 200 <= estado < 300:
+            self.tokens_ultima_llamada = _tokens_de(response)  # antes de leer el texto: una respuesta cortada también gastó tokens
+        logger.info(
+            "asistente: groq estado=%d ms=%d tokens=%s", estado, (time.monotonic() - inicio) * 1000,
+            "-" if self.tokens_ultima_llamada is None else self.tokens_ultima_llamada,
+        )
         if estado == 429:
             groq_pause.trip(_reintentar_en(response))
             raise ModeloNoDisponible("limite", _segundos(groq_pause.remaining()))

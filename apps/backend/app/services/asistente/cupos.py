@@ -23,8 +23,8 @@ Argentina (Render corre una instancia): sus pedidos siguientes se rechazan sin i
 insistiendo a 6 por minuto gastaría unos 17.000 comandos por día del plan gratuito, que comparten las alertas. La
 memoria tiene tope; pasado el tope se sigue contando en Upstash, que es la fuente de verdad.
 
-Lo que NO resuelve (decisión de costo, no un descuido): el cupo global de 400 se puede agotar con pocas claves
-(400 / 30 = 14 clientes), y los clientes que comparten una clave (varios usuarios detrás de un mismo CGNAT móvil, o la
+Lo que NO resuelve (decisión de costo, no un descuido): el cupo global de 100 se puede agotar con pocas claves
+(100 / 10 = 10 clientes), y los clientes que comparten una clave (varios usuarios detrás de un mismo CGNAT móvil, o la
 clave `unverified`) comparten también su cupo diario.
 """
 from __future__ import annotations
@@ -76,6 +76,7 @@ class ResultadoCupo:
     permitido: bool
     motivo: Literal["cliente", "global"] | None = None
     reintentar_en_segundos: int = 0  # hasta la medianoche de Argentina; solo cuando no se permite
+    del_sitio: int | None = None  # cuántas preguntas lleva hoy el sitio entero; None si esta ni siquiera llegó a contarse
 
 
 def _en_argentina(ahora: datetime) -> datetime:
@@ -84,8 +85,13 @@ def _en_argentina(ahora: datetime) -> datetime:
     return ahora.astimezone(_AR)
 
 
+def dia_de_argentina(ahora: datetime) -> str:
+    """El día de Argentina de `ahora`, como `2026-10-17`."""
+    return _en_argentina(ahora).date().isoformat()
+
+
 def clave_del_dia(ahora: datetime) -> str:
-    return f"{PREFIJO}:{_en_argentina(ahora).date().isoformat()}"
+    return f"{PREFIJO}:{dia_de_argentina(ahora)}"
 
 
 def secreto_valido(secreto: str) -> bool:
@@ -133,5 +139,5 @@ async def consumir_cupo(
     del_sitio = await redis.hincrby(clave, CAMPO_GLOBAL, 1)
     if del_sitio > cupo_global:
         agotados.sitio = True
-        return ResultadoCupo(False, "global", segundos_hasta_medianoche(ahora))
-    return ResultadoCupo(True)
+        return ResultadoCupo(False, "global", segundos_hasta_medianoche(ahora), del_sitio)
+    return ResultadoCupo(True, del_sitio=del_sitio)

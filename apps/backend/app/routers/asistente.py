@@ -40,7 +40,7 @@ from app.core.config import settings
 from app.core.rate_limit import client_key, limiter
 from app.core.upstash import UpstashRedis, UpstashUnavailableError, get_redis
 from app.schemas.asistente import PreguntaRequest, RespuestaAsistente
-from app.services.asistente import cupos, interruptor
+from app.services.asistente import avisos_de_cupo, cupos, interruptor
 from app.services.asistente.enrutador import enrutar
 from app.services.asistente.fuentes import ProveedorDeFuentes
 from app.services.asistente.fuentes_cache import FuentesDeCache
@@ -142,6 +142,8 @@ async def post_asistente(
         except UpstashUnavailableError:
             logger.warning("asistente: no se pudieron contar los cupos")
             return _no_disponible(_ESPERA_APAGADO_SEGUNDOS)
+        if cupo.del_sitio is not None:  # el aviso a Sentry no puede demorar ni romper la respuesta: nunca levanta
+            await avisos_de_cupo.avisar_si_corresponde(redis, ahora, cupo.del_sitio, settings.asistente_cupo_global_dia)
         if not cupo.permitido:
             logger.info("asistente: cupo agotado motivo=%s", cupo.motivo)
             if cupo.motivo == "cliente":
