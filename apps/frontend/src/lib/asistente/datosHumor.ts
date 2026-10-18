@@ -31,7 +31,7 @@ const DESCONOCIDO: DatosHumor = Object.freeze({
 const EDAD_MAXIMA_MS = 3 * 3_600_000
 
 /** Older than `EDAD_MAXIMA_MS`. An unreadable date (or clock) is not "old": its age is unknown, not too big. */
-function esViejo(cargadoEn: string | null | undefined, ahoraMs: number): boolean {
+export function esViejo(cargadoEn: string | null | undefined, ahoraMs: number): boolean {
   const cargado = Date.parse(cargadoEn ?? '')
   return Number.isFinite(cargado) && Number.isFinite(ahoraMs) && ahoraMs - cargado > EDAD_MAXIMA_MS
 }

@@ -63,16 +63,17 @@ test('the hook cleans up everything it arms (no timers pile up when the data cha
   assert.match(HOOK, /clearInterval\(revision\)/)
 })
 
-test('the note listeners are removed when it closes (no listeners pile up)', () => {
+test('the Escape listener is removed when the panel closes (no listeners pile up)', () => {
   assert.match(BOTON, /removeEventListener\('keydown'/)
-  assert.match(BOTON, /removeEventListener\('pointerdown'/)
-  assert.match(BOTON, /clearTimeout\(cerrarSola\)/)
+  assert.doesNotMatch(BOTON, /pointerdown/, 'a tap outside does not close the panel: the page behind stays usable')
+  assert.doesNotMatch(BOTON, /setTimeout\(/, 'the one-line note that closed by itself is gone')
 })
 
-test('the live region is never taken out of the accessibility tree, so the note is announced when its text appears', () => {
-  const codigoBoton = BOTON.replace(/\/\*[\s\S]*?\*\//g, '')
-  assert.doesNotMatch(codigoBoton, /visibility/)
-  assert.match(BOTON, /role="status"/)
+test('the panel announces what appears in it: a live region that is always there and never hidden from assistive technology', () => {
+  const contenido = leer('components/asistente/ContenidoPanel.tsx').replace(/\/\*[\s\S]*?\*\//g, '')
+  assert.match(contenido, /role="status"/)
+  assert.match(contenido, /aria-live="polite"/)
+  assert.doesNotMatch(contenido, /visibility/)
 })
 
 test('one change per minute: the hook uses the shared evaluator and a single timer for the wait', () => {
@@ -92,9 +93,29 @@ test('the bubble sits next to the existing one (same shell) and does not appear 
   assert.doesNotMatch(leer('lib/toolRegistry.ts'), /Mora|asistente|preguntale/i)
 })
 
-test('a tap opens a one-line note that closes by itself, with Escape or with a tap outside', () => {
-  assert.match(BOTON, /Pronto vas a poder preguntarme por el clima/)
+test('a tap on the bubble opens and closes the panel; Escape closes it and gives the focus back to the bubble', () => {
+  assert.match(BOTON, /aria-haspopup="dialog"/)
+  assert.match(BOTON, /aria-expanded=\{abierta\}/)
+  assert.match(BOTON, /aria-controls=/)
+  assert.match(BOTON, /setAbierta\(\(v\) => !v\)/)
   assert.match(BOTON, /Escape/)
-  assert.match(BOTON, /setTimeout\(/)
-  assert.match(BOTON, /role="status"/)
+  assert.match(BOTON, /boton\.current\?\.focus\(\)/)
+  assert.doesNotMatch(BOTON, /Pronto vas a poder preguntarme por el clima/)
+})
+
+test('the panel is mounted the first time it opens and stays mounted, so closing it does not lose the answer', () => {
+  assert.match(BOTON, /\{montado && \(\s*<PanelAsistente/)
+  assert.match(BOTON, /abierto=\{abierta\}/)
+})
+
+test('the panel moods only show while the panel is open or a question is on its way, and a warning always wins', () => {
+  assert.match(BOTON, /const humorDelPanel = abierta \|\| uso\.estado\.fase === 'enviando' \? uso\.humor : null/)
+  assert.match(BOTON, /const humor = humorClima === 'alerta' \? humorClima : \(humorDelPanel \?\? humorClima\)/)
+  assert.doesNotMatch(BOTON, /uso\.humor \?\? humorClima/, 'a closed panel must not keep its mood forever')
+})
+
+test('Escape only closes the panel when the focus is on the bubble or inside the panel (the place search uses it too)', () => {
+  assert.match(BOTON, /contenedor\.current\?\.contains\(e\.target\)/)
+  assert.match(BOTON, /!e\.defaultPrevented/)
+  assert.match(BOTON, /<div ref=\{contenedor\}/)
 })

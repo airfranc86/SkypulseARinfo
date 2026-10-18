@@ -1,10 +1,14 @@
-import { DATA_SOURCES } from '@/data/dataSources'
+import { DATA_SOURCES, SOBRE_MORA } from '@/data/dataSources'
+import { leerConfigAsistente } from '@/lib/asistente/config'
 import { CafecitoButton } from '@/components/ui/CafecitoButton'
-import { CC_BY_4_URL, OPEN_METEO_LICENCE_URL, OPEN_METEO_URL, SMN_URL } from '@/lib/siteLinks'
+import { AVES_ARGENTINAS_URL, CC_BY_4_URL, OPEN_METEO_LICENCE_URL, OPEN_METEO_URL, SIB_URL, SMN_URL } from '@/lib/siteLinks'
 import { CREDITOS_FOTOS, FOTOS_COMPARTIR_IGUAL, TEXTO_CAMBIOS } from '@/lib/creditosFotos'
 
 const LINK_CLASS = 'inline-flex min-h-[44px] items-center underline hover:opacity-80'
 const CREDIT_LINK_CLASS = 'underline hover:opacity-80'
+
+/** The credit of Mora's species only shows with the assistant flag on (`VITE_ASISTENTE_VISIBLE`). */
+const ASISTENTE_VISIBLE = leerConfigAsistente(import.meta.env).visible
 
 /**
  * "De dónde salen los datos" (FRA-347): the main views never name a weather model, so whoever wants to
@@ -40,6 +44,27 @@ export function DatosFuentes() {
           )}
         </section>
       ))}
+
+      {ASISTENTE_VISIBLE && (
+        <section id={SOBRE_MORA.id} className="space-y-1.5">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>
+            {SOBRE_MORA.title}
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+            {SOBRE_MORA.summary}
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted-foreground)' }}>
+            <span style={{ color: 'var(--color-foreground)' }}>Para saber más: </span>
+            <a href={SIB_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK_CLASS}>
+              {SOBRE_MORA.providers[0]}
+            </a>
+            {' · '}
+            <a href={AVES_ARGENTINAS_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK_CLASS}>
+              {SOBRE_MORA.providers[1]}
+            </a>
+          </p>
+        </section>
+      )}
 
       <section id="creditos" className="space-y-1.5">
         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-foreground)' }}>

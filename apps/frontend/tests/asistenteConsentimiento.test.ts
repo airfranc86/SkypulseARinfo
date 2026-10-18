@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   aceptarAviso,
+  almacenLocal,
   avisoAceptado,
   CLAVE_AVISO,
   VERSION_AVISO,
@@ -69,4 +70,25 @@ test('a storage that throws never makes the functions throw', () => {
 
 test('the key is namespaced and says what it is', () => {
   assert.match(CLAVE_AVISO, /^skypulse[:.-]asistente/)
+})
+
+// ── almacenLocal ─────────────────────────────────────────────────────────────
+
+test('the browser storage is returned when it can be read', () => {
+  const almacen = almacenFalso()
+  assert.equal(almacenLocal({ localStorage: almacen }), almacen)
+})
+
+test('a browser that throws on the access to localStorage gives no storage (private window, blocked site data)', () => {
+  const bloqueado = {
+    get localStorage(): Almacen {
+      throw new Error('SecurityError')
+    },
+  }
+  assert.equal(almacenLocal(bloqueado), null)
+})
+
+test('no window or no localStorage gives no storage', () => {
+  assert.equal(almacenLocal(undefined), null)
+  assert.equal(almacenLocal({}), null)
 })

@@ -117,3 +117,17 @@ export const DATA_SOURCES: readonly DataSource[] = [
     providers: [],
   },
 ]
+
+/**
+ * The credit of the species Mora (the assistant's mascot) is inspired by (owner decision D10). It is NOT in `DATA_SOURCES`:
+ * the page shows it only with the assistant flag on (`VITE_ASISTENTE_VISIBLE`), so it never credits something the site
+ * does not show yet. "Águila mora" is the common name of Geranoaetus melanoleucus (not Geranoaetus polyosoma, which is the
+ * "aguilucho común"). It claims no data from the SIB or Aves Argentinas: it only says where to learn more about the species.
+ */
+export const SOBRE_MORA: DataSource = Object.freeze({
+  id: 'mora',
+  title: 'Mora, la mascota del asistente',
+  summary:
+    'Mora está inspirada en el águila mora (Geranoaetus melanoleucus), una gran rapaz de nuestra región. Para saber más sobre la especie y cómo cuidarla, podés consultar el Sistema de Información de Biodiversidad y Aves Argentinas.',
+  providers: Object.freeze(['Sistema de Información de Biodiversidad (SIB, Parques Nacionales)', 'Aves Argentinas']),
+})

@@ -19,6 +19,18 @@ export interface Almacen {
   setItem(clave: string, valor: string): void
 }
 
+/**
+ * The browser storage, or `null` when it cannot be reached: in a private window or with site data blocked, even reading
+ * `window.localStorage` throws. `origen` is `window` (a parameter, so it can be tested without a browser).
+ */
+export function almacenLocal(origen: { localStorage?: Almacen } | undefined): Almacen | null {
+  try {
+    return origen?.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+
 /** True only if this version of the notice was accepted. Never throws. */
 export function avisoAceptado(almacen: Almacen | null | undefined, version: number = VERSION_AVISO): boolean {
   if (!almacen) return false

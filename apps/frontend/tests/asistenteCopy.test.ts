@@ -2,10 +2,18 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   AVISO_PRIMER_USO,
+  BOTON_CERRAR,
+  BOTON_ENVIAR,
   esperaLegible,
-  TITULO_RESPUESTAS_RAPIDAS,
+  ETIQUETA_PREGUNTA,
+  PLACEHOLDER_PREGUNTA,
+  TEXTO_ENVIANDO,
+  textoContador,
   textoDeError,
   textoDeValidacion,
+  textoEsperaBoton,
+  TITULO_PANEL,
+  TITULO_RESPUESTAS_RAPIDAS,
 } from '../src/lib/asistente/copy.ts'
 import type { ErrorPanel } from '../src/lib/asistente/cliente.ts'
 
@@ -96,4 +104,29 @@ test('the first-use notice is the one the owner approved (D6) and has a button',
   )
   assert.equal(AVISO_PRIMER_USO.boton, 'Entendido')
   assert.ok(AVISO_PRIMER_USO.titulo.length > 0)
+})
+
+// ── The labels of the panel itself ───────────────────────────────────────────
+
+test('the panel labels are plain Spanish, without provider names or markup', () => {
+  const etiquetas = [TITULO_PANEL, ETIQUETA_PREGUNTA, PLACEHOLDER_PREGUNTA, BOTON_ENVIAR, BOTON_CERRAR, TEXTO_ENVIANDO]
+  for (const etiqueta of etiquetas) {
+    assert.ok(etiqueta.trim().length > 3, etiqueta)
+    assert.doesNotMatch(etiqueta, /groq|openai|llama|gpt|[<>`*]/i, etiqueta)
+  }
+  assert.equal(TITULO_PANEL, 'Preguntale a Mora')
+  assert.equal(BOTON_ENVIAR, 'Preguntar')
+})
+
+test('the counter counts characters as the backend does (code points) out of the limit', () => {
+  assert.equal(textoContador(''), '0/300')
+  assert.equal(textoContador('hola'), '4/300')
+  assert.equal(textoContador('😀'.repeat(10)), '10/300')
+  assert.equal(textoContador('a'.repeat(305)), '305/300')
+})
+
+test('the button says how long to wait while the person is blocked', () => {
+  assert.equal(textoEsperaBoton(30), 'Esperá 30 s')
+  assert.equal(textoEsperaBoton(125), 'Esperá 3 min')
+  assert.equal(textoEsperaBoton(7200), 'Esperá 2 h')
 })
