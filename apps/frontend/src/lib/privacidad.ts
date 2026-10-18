@@ -86,6 +86,22 @@ export function leerContactoPrivacidad(env: Record<string, unknown> | undefined)
 }
 
 /**
+ * La sección del asistente Mora. Solo se publica con la bandera del asistente encendida (`seccionesPrivacidad`): la
+ * política no puede hablar de algo que el sitio todavía no ofrece. Cada frase coincide con el código del backend:
+ * lo que viaja (`schemas/asistente.py`), lo que llega al proveedor (`services/asistente/prompt.py`: la hoja y la
+ * pregunta, sin coordenadas) y lo que se guarda para el cupo (`services/asistente/cupos.py`: un HMAC de la clave del
+ * cliente y un contador, por dos días). Los textos los aprueba el dueño antes de publicar.
+ */
+const SECCION_ASISTENTE: SeccionPrivacidad = Object.freeze({
+  titulo: 'Asistente Mora (opcional)',
+  parrafos: Object.freeze([
+    'Mora es el asistente de SkyPulse y es opcional: nada de lo que sigue ocurre si no tocás su burbuja ni le hacés una pregunta. Cuando preguntás, tu navegador envía al servidor de SkyPulse la pregunta que escribiste, la ubicación que tenés elegida redondeada a dos decimales (alrededor de un kilómetro) y la página del sitio en la que estás, sin parámetros de búsqueda.',
+    'Para redactar la respuesta, nuestro servidor le envía a un proveedor de inteligencia artificial en Estados Unidos tu pregunta y los datos del tiempo de ese lugar que ya tenía cargados. Al proveedor no le llega ni tu ubicación exacta ni tu dirección IP: ve la del servidor de SkyPulse. Por eso te pedimos que no incluyas datos personales en la pregunta.',
+    'No guardamos el texto de tu pregunta ni el de la respuesta. Para cuidar el cupo diario de preguntas guardamos, hasta dos días, un código irreversible derivado de tu conexión y cuántas preguntas hiciste, en la base de Upstash (Estados Unidos). Como en el resto del sitio, los registros de acceso del servidor pueden tener tu dirección IP. El proveedor aplica sus propias reglas de conservación, que nosotros no controlamos.',
+  ]),
+})
+
+/**
  * El párrafo de para qué se usan los datos de los avisos. Con el envío automático activo es el texto original;
  * sin él, dice lo verdadero hoy: el único aviso que se envía es el de prueba que la persona pide.
  */
@@ -100,11 +116,13 @@ function parrafoDeUso(envioAutomatico: boolean, lluvia: boolean): string {
 
 /**
  * Las secciones de la política según el modo. `envioAutomatico` es un parámetro (por defecto, la constante) para
- * que las pruebas puedan pedir cualquiera de los dos sin depender del estado del módulo.
+ * que las pruebas puedan pedir cualquiera de los dos sin depender del estado del módulo. `asistente` suma la sección de
+ * Mora y vale `false` por defecto: quien la publica pasa la bandera del asistente (`leerConfigAsistente`).
  */
 export function seccionesPrivacidad(
   envioAutomatico: boolean = ENVIO_AUTOMATICO_ACTIVO,
   lluvia: boolean = AVISO_LLUVIA_DISPONIBLE,
+  asistente: boolean = false,
 ): readonly SeccionPrivacidad[] {
   // El aviso de lluvia solo existe con el envío automático (y con su bandera encendida, PR 3b).
   const conLluvia = envioAutomatico && lluvia
@@ -136,6 +154,7 @@ export function seccionesPrivacidad(
         'Para consultas, o para pedir el acceso o el borrado de tus datos (por ejemplo, si ya no tenés el navegador donde activaste los avisos), escribinos. Como no guardamos tu nombre ni tu email, no podemos reconocerte: la forma más directa de borrar tus datos es desactivar los avisos desde la página.',
       ],
     },
+    ...(asistente ? [SECCION_ASISTENTE] : []),
     {
       titulo: 'Cookies y analítica',
       parrafos: [
