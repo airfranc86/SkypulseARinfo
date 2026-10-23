@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     # en Upstash (si existe, apaga; se maneja desde su consola sin redeploy). Apaga cualquiera de los dos.
     # Es el ÚNICO que hace que `/evaluar` mande notificaciones (PR5c), vía `services/alertas/interruptor.py`.
     alertas_envio_activo: bool = False
+    # Línea S (FRA-368 / SIGMETs). Apagada por defecto: con SIGMET_ENABLED=False la ruta /api/sigmet
+    # responde 404; activa solo tras T7b (FRA-357) confirmado por el dueño.
+    sigmet_enabled: bool = False
     # Evaluación en seco (FRA-355, PR5b): con `true` el endpoint evalúa las zonas y CUENTA, pero no manda nada
     # (mandar lo decide solo `alertas_envio_activo`). Apagada por defecto. La clave `alertas:apagado` también la detiene.
     alertas_evaluar_en_seco: bool = False
