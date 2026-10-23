@@ -188,3 +188,8 @@ def resolve_daily_icon(
     if rain_confirmed and code == 3 and precip_prob is not None and precip_prob >= rain_threshold:
         return "rain"
     return icon
+
+# Regla única de tormenta (Fase 5 — una sola fuente: umbrales.py con los valores actuales del dueño):
+# - Códigos: 95 (tormenta), 96/99 (granizo); rango 95-99 usado también para Instagram.
+# - CAPE >= 2500 J/kg; 97/98 no son códigos WMO válidos para Open-Meteo (se incluyen solo por Instagram).
+# Este archivo NO redefine umbrales; los lee de `app.services.alertas.umbrales`.
