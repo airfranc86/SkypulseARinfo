@@ -1,0 +1,11 @@
+{
+  "alert_id": "alert_20261022_145850_4987",
+  "image_id": "manual_01",
+  "level": "LOW",
+  "triggered": false,
+  "reason": "Tipo de nube 'storm' (tipo=1) con confianza 0.75 supera umbral 0.6",
+  "cloud_type": 1,
+  "confidence": 0.75,
+  "cloud_name": "storm",
+  "evaluated_at": "2026-10-22T14:58:50.498730"
+}

@@ -1,0 +1,18 @@
+# ----------------------------------------
+# Eventos: Nombre del evento
+# Cuenta: AJ Consulting IT
+# Propiedad: SkyPulseInfo
+# ----------------------------------------
+# 
+# Todos los usuarios
+# Fecha de inicio: 20260101
+# Fecha de finalización: 20260920
+Nombre del evento,Número de eventos,Total de usuarios,Número de eventos por usuario activo,Total de ingresos
+page_view,2487,114,21.81578947368421,0
+click_interaccion,1882,48,39.208333333333336,0
+scroll,593,87,6.895348837209302,0
+session_start,347,113,3.0707964601769913,0
+user_engagement,264,55,4.8,0
+first_visit,114,113,1.008849557522124,0
+click,27,14,1.9285714285714286,0
+form_start,2,1,2,0

@@ -1,0 +1,4 @@
+{"image_id": "49ba9322", "camera_id": "cam_sky", "timestamp": "2026-10-22T14:55:20.260478", "source_path": "synthetic", "stored_path": "dataset_frames\\20261022_145520_49ba9322.png", "width": 640, "height": 480, "synthetic_cloud_type": "clear"}
+{"image_id": "96f0dec6", "camera_id": "cam_sky", "timestamp": "2026-10-22T14:55:50.059529", "source_path": "synthetic", "stored_path": "dataset_frames\\20261022_145550_96f0dec6.png", "width": 640, "height": 480, "synthetic_cloud_type": "clear"}
+{"image_id": "9d984c4e", "camera_id": "cam_sky", "timestamp": "2026-10-22T14:55:50.076201", "source_path": "synthetic", "stored_path": "dataset_frames\\20261022_145550_9d984c4e.png", "width": 640, "height": 480, "synthetic_cloud_type": "cloud"}
+{"image_id": "1148cba3", "camera_id": "cam_sky", "timestamp": "2026-10-22T14:55:50.094828", "source_path": "synthetic", "stored_path": "dataset_frames\\20261022_145550_1148cba3.png", "width": 640, "height": 480, "synthetic_cloud_type": "storm"}

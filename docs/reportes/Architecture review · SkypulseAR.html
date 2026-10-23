@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review for SkypulseAR</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { border-style: dashed; }
+      .deepbox { background: linear-gradient(135deg, #0f172a, #1e293b); color: #f8fafc; }
+      .mod { border: 1.5px solid #475569; background: #fff; }
+      .leakline { border-left: 3px solid #dc2626; }
+      .mermaid { display: flex; justify-content: center; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-3">
+        <h1 class="font-serif text-4xl">Architecture review · SkypulseAR</h1>
+        <p class="text-sm text-slate-500">2026-10-06 · scope: <span class="font-mono">apps/backend</span>, <span class="font-mono">apps/frontend</span>, <span class="font-mono">scripts/</span> (legacy <span class="font-mono">src/</span> excluded) · hot spots by commits since 2026-09-15 · no <span class="font-mono">CONTEXT.md</span>, no ADRs</p>
+        <div class="flex flex-wrap gap-4 text-xs uppercase tracking-wider text-slate-600 items-center">
+          <span class="flex items-center gap-2"><span class="inline-block w-6 h-4 mod rounded-sm"></span>module</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-6 h-4 border-2 border-dashed border-slate-500 rounded-sm"></span>seam</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-6 h-0.5 bg-red-600"></span>leakage</span>
+          <span class="flex items-center gap-2"><span class="inline-block w-6 h-4 deepbox rounded-sm"></span>deep module</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-14">
+
+        <!-- 1 -->
+        <article id="c1" class="space-y-4">
+          <h2 class="font-serif text-2xl">1 · Deepen aviation-report access into one module</h2>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700">ports &amp; adapters</span>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-700 leading-relaxed">
+            apps/backend/app/services/metar.py (406) · services/metar_observation.py (180) · services/taf_decoded.py (237)<br />
+            routers/taf.py · routers/metar.py · routers/niebla.py:25-30
+          </p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before · six concepts in one file, privates leak</div>
+              <pre class="mermaid">
+flowchart LR
+  N[niebla router] --> M[metar.py]
+  N -.-> O[openmeteo private classify]
+  T[taf router] -.-> RM[metar router private validate]
+  T --> M
+  T --> TD[taf_decoded]
+  TD -.-> M
+  W[weather router] --> MO[metar_observation]
+  MO --> M
+  M --> AWC((AWC))
+  MO --> AWC
+  linkStyle 1,2,5 stroke:#dc2626,stroke-width:2px
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After · one deep module, one seam, two adapters</div>
+              <pre class="mermaid">
+flowchart LR
+  N[niebla router] --> A
+  T[taf router] --> A
+  M2[metar router] --> A
+  W[weather router] --> A
+  A[[Aviation-report module]] --> S{{AWC seam}}
+  S --> H[HTTP adapter]
+  S --> F[Fixture adapter]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc
+  class A deep
+              </pre>
+            </div>
+          </div>
+          <p><b>Problem.</b> <span class="font-mono text-sm">metar.py</span> mixes airports, <span class="font-mono text-sm">visib</span> parsing, METAR fetch, TAF fetch, Niebla slots and its own UTC-3 clock; <span class="font-mono text-sm">metar_observation.py</span> fetches the same AWC METAR URL again, with another cache. Three AWC fetch blocks, each with its own counter.</p>
+          <p><b>Solution.</b> One module owns airports, visibility parsing (written once), TAF normalisation, its Niebla projection, observation and ICAO validation, behind one AWC seam.</p>
+          <ul class="list-disc pl-6 text-sm space-y-1">
+            <li>locality: the "6+ means 10 km" rule lives once (today in <span class="font-mono">metar.py:163-177</span> and <span class="font-mono">taf_decoded.py:101-110</span>)</li>
+            <li>leverage: four callers, one small interface</li>
+            <li>Tests hit one interface with recorded AWC payloads</li>
+            <li>Two adapters justify the seam: HTTP in prod, fixtures in tests</li>
+            <li>Private cross-imports disappear (<span class="font-mono">_validate_icao</span>, <span class="font-mono">_parse_taf_visib_sm</span>)</li>
+          </ul>
+          <div class="rounded border border-amber-300 bg-amber-50 text-amber-900 text-sm px-3 py-2">Repo rule: <span class="font-mono">CLAUDE.md</span> asks for a P0–P3 audit report before any refactor. No ADR conflict.</div>
+        </article>
+
+        <!-- 2 -->
+        <article id="c2" class="space-y-4">
+          <h2 class="font-serif text-2xl">2 · One Open-Meteo request module for backend and scripts</h2>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700">ports &amp; adapters</span>
+          </div>
+          <p class="font-mono text-sm text-slate-700 leading-relaxed">
+            services/openmeteo.py (871; fetch blocks :120-159, ~:217, ~:464, :533-553, :724-738)<br />
+            scripts/instagram/fuente_horaria_ecmwf.py:44,131 · scripts/instagram/fuente_visibilidad.py:33,89
+          </p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4 space-y-1">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before · call-graph: seven near-identical blocks</div>
+              <div class="mod rounded p-2 text-xs uppercase tracking-wider">backend get_* #1 · params → client → counter → retry → catch → parse</div>
+              <div class="mod rounded p-2 text-xs uppercase tracking-wider">backend get_* #2 · params → client → counter → retry → catch → parse</div>
+              <div class="mod rounded p-2 text-xs uppercase tracking-wider">backend get_* #3 · params → client → counter → retry → catch → parse</div>
+              <div class="mod rounded p-2 text-xs uppercase tracking-wider">backend get_* #4 · params → client → counter → retry → catch → parse</div>
+              <div class="mod rounded p-2 text-xs uppercase tracking-wider">backend get_* #5 · params → client → counter → retry → catch → parse</div>
+              <div class="mod leakline rounded p-2 text-xs uppercase tracking-wider">script: ECMWF rain · own fetch, via sys.path into backend</div>
+              <div class="mod leakline rounded p-2 text-xs uppercase tracking-wider">script: visibility · own fetch, via sys.path into backend</div>
+              <div class="text-xs text-slate-500 pt-1">UTC-3 defined 4× in backend + 1× in scripts</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4 flex flex-col gap-3">
+              <div class="text-xs uppercase tracking-wider text-slate-500">After · collapsed behind one interface</div>
+              <div class="deepbox rounded-lg p-5 flex-1">
+                <div class="text-xs uppercase tracking-wider mb-3">Open-Meteo series module</div>
+                <div class="text-xs space-y-1 opacity-70">
+                  <div>time zone · units · cache tier</div>
+                  <div>usage counter · retry · failure-to-None</div>
+                  <div>parse → series</div>
+                </div>
+                <div class="mt-4 text-xs border-t border-slate-600 pt-2">callers say which series: fields, model, days</div>
+              </div>
+              <div class="border-2 border-dashed border-slate-500 rounded p-2 text-xs uppercase tracking-wider text-center">seam · HTTP adapter | fixture adapter</div>
+            </div>
+          </div>
+          <p><b>Problem.</b> Each block repeats params, client, counter, retry and parse; ECMWF hourly is fetched twice (backend 7 days, Instagram rain) with different cache keys, spending quota twice.</p>
+          <p><b>Solution.</b> Callers describe the series they want; one module owns the policy; scripts become ordinary callers.</p>
+          <ul class="list-disc pl-6 text-sm space-y-1">
+            <li>locality: quota, retry and time-zone policy in one place</li>
+            <li>leverage: Instagram shares the dashboard cache entries</li>
+            <li>One seam replaces URL-matching respx routes across tests</li>
+          </ul>
+          <div class="rounded border border-amber-300 bg-amber-50 text-amber-900 text-sm px-3 py-2">Changes the convention "the backend is imported, never modified" (<span class="font-mono">fuente_visibilidad.py:12</span>). A convention, not an ADR. The shared-httpx-client gotcha in <span class="font-mono">CLAUDE.md</span> is preserved.</div>
+        </article>
+
+        <!-- 3 -->
+        <article id="c3" class="space-y-4">
+          <h2 class="font-serif text-2xl">3 · Move dashboard assembly out of the route handler</h2>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">Strong</span>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-700 leading-relaxed">
+            routers/weather.py:124-366 (<span>get_dashboard, ~243 lines</span>) · services/dashboard_builder.py (354) · scripts/instagram/fuente_datos.py:25-36
+          </p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before · the route is the implementation</div>
+              <pre class="mermaid">
+flowchart LR
+  R[get_dashboard route] --> A1[aggregate_current]
+  R --> A2[multi-model daily]
+  R --> A3[hourly ext]
+  R --> A4[metar_observation]
+  R --> A5[dashboard_builder]
+  R --> A6[calculators + moon_phase]
+  I[Instagram] --> A5
+  I --> A2
+  I --> E[own ECMWF fetcher]
+  linkStyle 6,7,8 stroke:#dc2626,stroke-width:2px
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After · route is a pass-through</div>
+              <pre class="mermaid">
+flowchart LR
+  R[get_dashboard route] --> D
+  I[Instagram 7-day part] --> D
+  D[[Dashboard module]] --> S{{fetch seam}}
+  S --> P[production adapter]
+  S --> T[fake adapter + fixed clock]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc
+  class D deep
+              </pre>
+            </div>
+          </div>
+          <p><b>Problem.</b> The handler fans out six fetches, decides <span class="font-mono text-sm">is_day</span>, formats the day arc, computes snow level with a hard-coded <span class="font-mono text-sm">500.0</span> and handles the ECMWF fallback. Tests patch router names: 12 patches in two files, 6 in a third.</p>
+          <p><b>Solution.</b> A dashboard module takes location, time and model choice, with its fetchers supplied from outside; the route and Instagram both call it.</p>
+          <ul class="list-disc pl-6 text-sm space-y-1">
+            <li>locality: day-arc, <span class="font-mono">is_day</span> and fallback rules in one module</li>
+            <li>leverage: web and plates show the same numbers</li>
+            <li>Tests inject fakes and a clock, no namespace patching</li>
+          </ul>
+          <div class="rounded border border-slate-300 bg-slate-50 text-slate-700 text-sm px-3 py-2">Easiest after candidates 1 and 2. No ADR conflict.</div>
+        </article>
+
+        <!-- 4 -->
+        <article id="c4" class="space-y-4">
+          <h2 class="font-serif text-2xl">4 · A frontend aerodrome-report module behind Metar and Niebla</h2>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-700 leading-relaxed">
+            apps/frontend/src/pages/Metar.tsx (1200; :13-36, :268-284, :642-690) · pages/Niebla.tsx:678-700 (979)<br />
+            lib/api.ts:516-535,654-656 · lib/windShear.ts:349-355 · tests/metarIcao.test.ts
+          </p>
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before · three ways to read the same report</div>
+              <pre class="mermaid">
+flowchart LR
+  MP[Metar.tsx 1200 lines] --> RF[raw fetch + own retry loop]
+  MP --> MD[api.metarDecoded]
+  MP -.-> L1[own MetarData type]
+  NP[Niebla.tsx] --> TR[api.tafRaw]
+  WS[windShear.ts] -.-> L2[own ICAO rule]
+  L3[3 airport lists] -.-> MP
+  linkStyle 2,4,5 stroke:#dc2626,stroke-width:2px
+              </pre>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After · one module, pages only render</div>
+              <pre class="mermaid">
+flowchart LR
+  MP[Metar page] --> H
+  NP[Niebla TAF card] --> H
+  WS[wind-shear prefill] --> H
+  H[[Aerodrome-report module]] --> API["api.ts: /api/metar + /api/taf"]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc
+  class H deep
+              </pre>
+            </div>
+          </div>
+          <p><b>Problem.</b> Metar.tsx redefines <span class="font-mono text-sm">MetarData</span>, hand-rolls the cold-start retry, uses raw fetch; ICAO validation differs in three places; the frontend airport list differs from the backend's by 3 each way (SARP, SANC, SANL vs SAAG, SAMM, SAMR); <span class="font-mono text-sm">visNote</span> uses metre cut-offs while the backend uses FAA miles.</p>
+          <p><b>Solution.</b> One frontend module (hook plus pure decoding) turns an ICAO into a decoded METAR plus TAF state, reusing the shared retry policy and the backend's decoded TAF.</p>
+          <ul class="list-disc pl-6 text-sm space-y-1">
+            <li>locality: METAR/TAF semantics in one module</li>
+            <li>leverage: both pages and the prefill share it</li>
+            <li>Tests become plain imports, not source-text reads</li>
+            <li>TAF reads move off the CheckWX 198/day quota</li>
+          </ul>
+          <div class="rounded border border-slate-300 bg-slate-50 text-slate-700 text-sm px-3 py-2">The decoded-TAF PR for the frontend (FRA-365, in progress) is the first step: it wires <span class="font-mono">/api/taf</span> into Metar.tsx through a new module.</div>
+        </article>
+
+        <!-- 5 -->
+        <article id="c5" class="space-y-4">
+          <h2 class="font-serif text-2xl">5 · One storm rule</h2>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-1 rounded bg-amber-100 text-amber-800 font-semibold">Worth exploring</span>
+            <span class="px-2 py-1 rounded bg-slate-200 text-slate-700">in-process</span>
+          </div>
+          <p class="font-mono text-sm text-slate-700 leading-relaxed">
+            services/calculators.py:31,43,83-107 · services/alertas/umbrales.py:10-14 · scripts/instagram/reglas.py:38-39,91-92 · apps/frontend/src/lib/weatherVerdict.ts:259
+          </p>
+          <div class="rounded-lg border border-slate-200 bg-white p-4 overflow-x-auto">
+            <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before · four definitions of "storm", four places to recalibrate</div>
+            <table class="w-full text-sm">
+              <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500"><th class="py-1 pr-4">Module</th><th class="pr-4">Weather codes</th><th>CAPE rule</th></tr></thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr><td class="py-1 pr-4 font-mono">calculators.py (tools)</td><td class="pr-4">{95, 96, 99}</td><td>≥ 1000 J/kg</td></tr>
+                <tr><td class="py-1 pr-4 font-mono">alertas/umbrales.py (push)</td><td class="pr-4">95–99</td><td>≥ 2500 J/kg</td></tr>
+                <tr><td class="py-1 pr-4 font-mono">instagram/reglas.py (plates)</td><td class="pr-4">95–99</td><td>convective_risk high/severe (≥ 2500)</td></tr>
+                <tr><td class="py-1 pr-4 font-mono">weatherVerdict.ts (frontend)</td><td class="pr-4">ignored</td><td>convective_risk high/severe only</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">After · one module, named strictness levels</div>
+            <pre class="mermaid">
+flowchart LR
+  C[tools] --> S
+  U[push alerts] --> S
+  P[Instagram plates] --> S
+  F[frontend verdict, via a response field] --> S
+  S[[Storm-rule module]]
+  classDef deep fill:#0f172a,stroke:#0f172a,color:#f8fafc
+  class S deep
+            </pre>
+          </div>
+          <p><b>Problem.</b> <span class="font-mono text-sm">umbrales.py</span> says it is the only place for the numbers, but that holds only for the push alerts; the rest drift, guarded today by parity tests.</p>
+          <p><b>Solution.</b> One module owns classification; if tools, alerts and plates truly need different strictness, it names the levels explicitly and the others read its verdict.</p>
+          <ul class="list-disc pl-6 text-sm space-y-1">
+            <li>locality: one place to recalibrate (FRA-191 touched only one copy)</li>
+            <li>Parity tests stop being necessary</li>
+          </ul>
+          <div class="rounded border border-amber-300 bg-amber-50 text-amber-900 text-sm px-3 py-2">Some differences may be product decisions (tools at 1000 J/kg, alerts at 2500): the owner must confirm which are intentional before merging rules.</div>
+        </article>
+      </section>
+
+      <section id="rejected" class="space-y-2">
+        <h2 class="font-serif text-xl">Checked and rejected</h2>
+        <ul class="list-disc pl-6 text-sm space-y-1">
+          <li>City lists (<span class="font-mono">cities-ar.ts</span>, <span class="font-mono">alertas/zonas.py</span>, <span class="font-mono">instagram/ciudades.py</span>): parity tests already guard the seam; no module earns merging them.</li>
+          <li>Admin quotas (<span class="font-mono">scripts/admin/monitor_core/quotas.py:30-35</span> repeats 198 and 10,000): the admin tool is standalone on purpose; the copy is cheap and contained.</li>
+        </ul>
+      </section>
+
+      <section id="top-recommendation">
+        <div class="rounded-xl bg-slate-900 text-slate-50 p-6 space-y-2">
+          <div class="text-xs uppercase tracking-wider text-emerald-300">Top recommendation</div>
+          <h2 class="font-serif text-2xl">1 · Deepen aviation-report access into one module</h2>
+          <p class="text-sm text-slate-300">The TAF work just merged added private cross-imports and a second copy of the "6+" rule, so this is the cheapest moment to fix it. The AWC fixtures already exist, so the second adapter is ready and the seam is real, not hypothetical. It also unlocks candidate 4.</p>
+          <a href="#c1" class="inline-block text-sm text-emerald-300 underline">Go to candidate 1</a>
+        </div>
+      </section>
+
+      <footer class="text-xs text-slate-500 pt-4 border-t border-slate-200">
+        Evidence read by an Opus 5.5 explorer. Spot-checked here: airport lists differ by 3 and 3 (SARP/SANC/SANL vs SAAG/SAMM/SAMR), UTC-3 is defined 4× in the backend, file sizes, and the "only place" claim in <span class="font-mono">umbrales.py</span>. Interfaces are intentionally not proposed yet.
+      </footer>
+    </main>
+  </body>
+</html>

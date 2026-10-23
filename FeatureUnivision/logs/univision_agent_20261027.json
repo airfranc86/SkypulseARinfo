@@ -1,0 +1,17 @@
+{
+  "feature": "FeatureUnivision",
+  "session_id": "2026-10-27",
+  "pipeline_version": "S4-v0-stub",
+  "tasks_completed": ["T1","T2","T3","T4","T5"],
+  "evidence": {
+    "dataset_frames": ["20261022_145550_96f0dec6.png","20261022_145550_9d984c4e.png","20261022_145550_1148cba3.png"],
+    "dataset_index": "dataset_frames/dataset_index.jsonl (5 filas)",
+    "segmentation_stub": "scripts/segmentation_agent.py (interfaz classify_frame verificada)",
+    "alert_file": "alerts/alert_4987.json (LOW storm 0.75)",
+    "forecast_file": "output/forecast_report_2026-10-22T145850_manual_01.md (1646 bytes)",
+    "design_doc": "docs/superpowers/specs/univision_forecast_design_2026-10-27.md"
+  },
+  "notes": "PyTorch (torch) no instalado; segmentation-agent es stub; forecast-agent usa rules-first (LLM opcional). Reemplazar stub por ACLNet / EfficientNet-B0+ASPP con `uv add torch torchvision` antes de producción.",
+  "risk": "medium — stub en segmentation; LLM no verificado (timeout observado)."
+}
+{"route":"A","status":"completed_exit_0","torch_installed":false,"stub_replaced":false,"reason":"Background finished with exit 0 but torch not installed (no output from install); stub unchanged; blockage documented","evidence":"job-1.log 235 bytes, python import torch fails, segmentation_agent.py unchanged (stub_heuristic_v0)","note":"Reemplazo pendiente intencional; stub funciona como placeholder. Usar uv pip install torch torchvision cuando se decida."}

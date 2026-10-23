@@ -1,5 +1,7 @@
 # CLAUDE.md — SkyPulse
 
+> Reglas transversales (Regla Cero, 3R, autoverificación): ver `G:\Developer\CLAUDE.md`. Este archivo solo agrega lo específico del proyecto.
+
 ## Generación de tarjetas de contenido (Nubes / Desastres)
 
 Para generar, redactar o ajustar tarjetas de contenido de fenómenos (meteorológicos en Nubes, o de impacto global en Desastres) — prompt de imagen + tarjeta corta con formato fijo —, usá el skill `skypulse-content-card`. Ese skill define el formato completo, el catálogo, los guardrails y el módulo extendido de Desastres Naturales; no lo dupliques acá.

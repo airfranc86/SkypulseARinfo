@@ -333,6 +333,13 @@ function RootLayout(props: RootLayoutProps) {
         <InfiniteNavRail tools={navTools} catalog={NAV_CATALOG} />
       </header>
 
+      <section className="max-w-5xl mx-auto px-4 py-4">
+        <PressureIsobarMap lat={location?.lat ?? -34.6} lon={location?.lon ?? -58.4} model="ecmwf" pressureLines={[{value_hpa:1013,label:'Base'},{value_hpa:1010,label:'Frente frío'},{value_hpa:1025,label:'Anticiclón'}]} fronts={[{type:'cold',lat:-34.6,lon:-58.4}]} />
+        {import.meta.env.VITE_SIGMET_VISIBLE === 'true' && (
+          <Suspense fallback={<div>SIGMET cargando...</div>}><SigmetCard lat={location?.lat ?? -34.6} lon={location?.lon ?? -58.4} /></Suspense>
+        )}
+      </section>
+
       <main
         id={MAIN_ID}
         tabIndex={-1}
@@ -410,6 +417,9 @@ function RootLayout(props: RootLayoutProps) {
     </div>
   )
 }
+
+import { SigmetCard } from "./components/sigmet/SigmetCard";
+import PressureIsobarMap from '@/components/weather/PressureIsobarMap'
 
 // ── App — top-level provider tree ─────────────────────────────────────────────
 
